@@ -161,6 +161,14 @@ The setup skill asks about your project and generates routing tailored to it: we
 
 `claude code best setup` `claude code workflow` `gstack superpowers together` `best claude code plugins` `claude code TDD workflow` `ai coding workflow` `claude code skills` `agentic development workflow` `claude code framework comparison` `how to use gstack and superpowers` `claude code project setup` `CLAUDE.md generator` `claude code routing` `ai-assisted software development`
 
+## A Note on How This Was Built
+
+This entire project — the workflow manual, the routing plugin, the skill evaluation tables, the consistency checks, and even this README — was developed by Claude Code using the very workflow it documents. No human wrote or edited the content. A human guided the direction and reviewed the results, but every line was authored by AI.
+
+This was deliberate. The workflow needed to make sense to an AI that would actually follow it, not just read well to a human skimming a README. The result is a set of instructions that Claude Code genuinely works well with — because it wrote them for itself.
+
+Whether that's reassuring or unsettling is left as an exercise for the reader.
+
 ## License
 
 MIT
