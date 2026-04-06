@@ -222,15 +222,15 @@ jobs:
           manual = Path("superpowers-gstack-workflow-manual.md").read_text()
           versions = Path("VERSIONS.md").read_text()
 
-          # Collect upstream skill files
+          # Collect upstream skill files — only changed ones to reduce payload
           upstream = ""
           ctx_dir = Path("/tmp/upstream-context")
           if ctx_dir.exists():
               for skill_file in sorted(ctx_dir.rglob("SKILL.md")):
                   skill_name = skill_file.parent.name
-                  content = skill_file.read_text()[:2000]
+                  content = skill_file.read_text()[:1000]
                   upstream += f"\n--- {skill_name}/SKILL.md ---\n{content}\n"
-              upstream = upstream[:30000]
+              upstream = upstream[:15000]
 
           prompt = """You are updating a workflow manual for using Superpowers and GStack with Claude Code.
 
@@ -291,7 +291,7 @@ jobs:
                "-H", "anthropic-version: 2023-06-01",
                "-H", "content-type: application/json",
                "-d", "@/tmp/api-request.json"],
-              capture_output=True, text=True, timeout=120
+              capture_output=True, text=True, timeout=300
           )
 
           lines = result.stdout.strip().rsplit("\n", 1)
