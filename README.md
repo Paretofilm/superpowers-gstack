@@ -2,7 +2,7 @@
 
 > **"Superpowers owns the implementation loop, GStack owns everything before and after it."**
 
-The missing guide for using [Superpowers](https://github.com/obra/superpowers) and [GStack](https://github.com/garrytan/gstack) together with Claude Code. Every comparison says "install both" — this project explains exactly how, with a phase-by-phase workflow, routing rules, and a plugin that auto-configures your project.
+The missing guide for using [Superpowers](https://github.com/obra/superpowers) and [GStack](https://github.com/garrytan/gstack) together with Claude Code. Every comparison says "install both" — this project explains exactly how, with a phase-by-phase workflow, routing rules, and a plugin that auto-configures your project. Already have an existing project? Run `/superpowers-gstack:adapt` and it analyzes your setup, preserves your CLAUDE.md, and adds routing — so you can jump right in.
 
 **Status: Work in Progress** — Actively developed. Contributions, feedback, and ideas are very welcome. See [Contributing](#contributing).
 
