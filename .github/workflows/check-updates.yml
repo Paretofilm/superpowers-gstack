@@ -106,35 +106,69 @@ jobs:
 
       - name: Build report
         id: detect
+        env:
+          GSTACK_CHANGED: ${{ steps.gstack.outputs.changed }}
+          GSTACK_TAG: ${{ steps.gstack.outputs.latest_tag }}
+          GSTACK_COMMIT: ${{ steps.gstack.outputs.latest_commit }}
+          GSTACK_CHANGELOG: ${{ steps.gstack.outputs.changelog }}
+          GSTACK_SKILLS: ${{ steps.gstack.outputs.skill_changes }}
+          SP_CHANGED: ${{ steps.superpowers.outputs.changed }}
+          SP_VERSION: ${{ steps.superpowers.outputs.latest_version }}
+          SP_CHANGELOG: ${{ steps.superpowers.outputs.changelog }}
+          CC_CHANGED: ${{ steps.claude_code.outputs.changed }}
+          CC_VERSION: ${{ steps.claude_code.outputs.latest_version }}
+          CC_PREV: ${{ steps.current.outputs.claude_version }}
         run: |
           changes_found=false
-          report=""
+          report_file=$(mktemp)
 
-          if [[ "${{ steps.gstack.outputs.changed }}" == "true" ]]; then
+          if [[ "$GSTACK_CHANGED" == "true" ]]; then
             changes_found=true
-            report+="## GStack updated\n"
-            report+="**New version:** ${{ steps.gstack.outputs.latest_tag }} (${{ steps.gstack.outputs.latest_commit }})\n\n"
-            report+="### Commits\n\`\`\`\n${{ steps.gstack.outputs.changelog }}\n\`\`\`\n\n"
-            report+="### Changed skills\n\`\`\`\n${{ steps.gstack.outputs.skill_changes }}\n\`\`\`\n\n"
+            cat >> "$report_file" << EOF
+          ## GStack updated
+          **New version:** $GSTACK_TAG ($GSTACK_COMMIT)
+
+          ### Commits
+          \`\`\`
+          $GSTACK_CHANGELOG
+          \`\`\`
+
+          ### Changed skills
+          \`\`\`
+          $GSTACK_SKILLS
+          \`\`\`
+
+          EOF
           fi
 
-          if [[ "${{ steps.superpowers.outputs.changed }}" == "true" ]]; then
+          if [[ "$SP_CHANGED" == "true" ]]; then
             changes_found=true
-            report+="## Superpowers updated\n"
-            report+="**New version:** ${{ steps.superpowers.outputs.latest_version }}\n\n"
-            report+="### Changelog\n${{ steps.superpowers.outputs.changelog }}\n\n"
+            cat >> "$report_file" << EOF
+          ## Superpowers updated
+          **New version:** $SP_VERSION
+
+          ### Changelog
+          $SP_CHANGELOG
+
+          EOF
           fi
 
-          if [[ "${{ steps.claude_code.outputs.changed }}" == "true" ]]; then
+          if [[ "$CC_CHANGED" == "true" ]]; then
             changes_found=true
-            report+="## Claude Code updated\n"
-            report+="**New version:** ${{ steps.claude_code.outputs.latest_version }} (was: ${{ steps.current.outputs.claude_version }})\n\n"
+            cat >> "$report_file" << EOF
+          ## Claude Code updated
+          **New version:** $CC_VERSION (was: $CC_PREV)
+
+          EOF
           fi
 
           echo "changes_found=$changes_found" >> "$GITHUB_OUTPUT"
-          echo "report<<REPORT_EOF" >> "$GITHUB_OUTPUT"
-          echo -e "$report" >> "$GITHUB_OUTPUT"
-          echo "REPORT_EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "report<<REPORT_EOF"
+            cat "$report_file"
+            echo "REPORT_EOF"
+          } >> "$GITHUB_OUTPUT"
+          rm -f "$report_file"
 
       - name: Upload upstream sources
         if: steps.detect.outputs.changes_found == 'true'
@@ -178,6 +212,7 @@ jobs:
       - name: Update manual with Claude
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REPORT: ${{ needs.check.outputs.report }}
         run: |
           # Build context for Claude
           cat > /tmp/update-prompt.md << 'PROMPT_EOF'
@@ -204,7 +239,6 @@ jobs:
           # Build the API request
           MANUAL=$(cat superpowers-gstack-workflow-manual.md)
           VERSIONS=$(cat VERSIONS.md)
-          REPORT='${{ needs.check.outputs.report }}'
 
           # Collect upstream skill files for context
           UPSTREAM_SKILLS=""
@@ -301,25 +335,25 @@ jobs:
         if: steps.diff.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT: ${{ needs.check.outputs.report }}
         run: |
           branch="auto-update/$(date +%Y%m%d)"
           git checkout -b "$branch"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add superpowers-gstack-workflow-manual.md VERSIONS.md
-          git commit -m "Auto-update manual for upstream changes
 
-          ${{ needs.check.outputs.report }}
+          git commit -m "$(cat <<EOF
+          Auto-update manual for upstream changes
 
-          Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+          Co-Authored-By: Claude Sonnet <noreply@anthropic.com>
+          EOF
+          )"
           git push -u origin "$branch"
 
-          gh pr create \
-            --title "Auto-update: upstream changes detected" \
-            --body "$(cat <<'EOF'
-          ## Upstream changes detected
+          pr_body="## Upstream changes detected
 
-          ${{ needs.check.outputs.report }}
+          ${REPORT}
 
           ## What happened
           The weekly update checker found changes in GStack, Superpowers, or Claude Code.
@@ -329,31 +363,31 @@ jobs:
           Review the diff to verify the updates are accurate, then merge.
 
           ---
-          *This PR was created automatically by the check-updates workflow.*
-          EOF
-          )" \
+          *This PR was created automatically by the check-updates workflow.*"
+
+          gh pr create \
+            --title "Auto-update: upstream changes detected" \
+            --body "$pr_body" \
             --label "auto-update"
 
-      - name: Create notification file
+      - name: Create notification issue
         if: steps.diff.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT: ${{ needs.check.outputs.report }}
         run: |
-          # Get PR number
           pr_url=$(gh pr list --head "auto-update/$(date +%Y%m%d)" --json url -q '.[0].url')
 
-          # Store notification as a GitHub issue comment for easy retrieval
-          gh issue create \
-            --title "Manual update ready for review — $(date +%Y-%m-%d)" \
-            --body "$(cat <<EOF
-          An automated update to the Superpowers + GStack manual is ready for review.
+          issue_body="An automated update to the Superpowers + GStack manual is ready for review.
 
-          **PR:** $pr_url
+          **PR:** ${pr_url}
 
-          ${{ needs.check.outputs.report }}
+          ${REPORT}
 
           ---
-          *Close this issue after reviewing the PR.*
-          EOF
-          )" \
+          *Close this issue after reviewing the PR.*"
+
+          gh issue create \
+            --title "Manual update ready for review — $(date +%Y-%m-%d)" \
+            --body "$issue_body" \
             --label "notification"
