@@ -13,7 +13,7 @@ A GitHub Action (`.github/workflows/check-updates.yml`) runs weekly and:
 
 A SessionStart hook (`scripts/notify-pending-updates.sh`) notifies the user of pending updates when starting Claude Code.
 
-The update pipeline also keeps `skills/setup-routing/SKILL.md` in sync — if upstream adds, removes, or renames skills, the skill evaluation tables are updated automatically.
+The update pipeline also keeps `skills/setup-routing/SKILL.md` and `skills/adapt/SKILL.md` in sync — if upstream adds, removes, or renames skills, the skill evaluation tables in both skills are updated automatically.
 
 ### Required secret
 `ANTHROPIC_API_KEY` must be set in GitHub repo secrets for the Claude API call.

@@ -222,11 +222,16 @@ jobs:
           from datetime import date
           today = date.today().isoformat()
 
-          # Read setup-routing skill if it exists
+          # Read skill files if they exist
           setup_routing_skill = ""
           skill_path = Path("skills/setup-routing/SKILL.md")
           if skill_path.exists():
               setup_routing_skill = skill_path.read_text()
+
+          adapt_skill = ""
+          adapt_path = Path("skills/adapt/SKILL.md")
+          if adapt_path.exists():
+              adapt_skill = adapt_path.read_text()
 
           prompt = f"""You are updating a workflow manual for using Superpowers and GStack with Claude Code.
           Today's date is {today}.
@@ -243,8 +248,9 @@ jobs:
           - Only change sections directly affected by upstream changes
           - Keep the same structure, style, and tone
           - If a skill was renamed, update all references in ALL files (manual + SKILL.md)
-          - If a skill was added, add it to Quick Reference, relevant manual sections, AND the skill evaluation tables in setup-routing/SKILL.md
-          - If a skill was removed, remove it from all sections and skill evaluation tables
+          - If a skill was added, add it to Quick Reference, relevant manual sections, AND the skill evaluation tables in BOTH setup-routing/SKILL.md and adapt/SKILL.md
+          - If a skill was removed, remove it from all sections and both skill evaluation tables
+          - The evaluation tables in setup-routing/SKILL.md and adapt/SKILL.md MUST remain identical
           - If behavior changed, update the description
           - Do NOT add speculative content — only document what the upstream changes confirm
           - Do NOT rewrite sections that aren't affected"""
@@ -256,6 +262,13 @@ jobs:
           ## Current setup-routing SKILL.md
 
           {setup_routing_skill}"""
+
+          if adapt_skill:
+              skill_section += f"""
+
+          ## Current adapt SKILL.md
+
+          {adapt_skill}"""
 
           user_content = f"""{prompt}
 
@@ -283,7 +296,10 @@ jobs:
           3. The complete updated VERSIONS.md
           4. If the setup-routing SKILL.md needs updates (skills added/removed/renamed), also include:
              - The marker `===SKILL.md===`
-             - The complete updated SKILL.md
+             - The complete updated setup-routing SKILL.md
+          5. If the adapt SKILL.md needs updates (must stay in sync with setup-routing tables), also include:
+             - The marker `===ADAPT_SKILL.md===`
+             - The complete updated adapt SKILL.md
 
           Output ONLY the file contents and markers, no markdown fences or commentary."""
 
@@ -320,15 +336,26 @@ jobs:
           if "===VERSIONS.md===" in content:
               manual_part, rest = content.split("===VERSIONS.md===", 1)
               Path("superpowers-gstack-workflow-manual.md").write_text(manual_part.strip() + "\n")
+              updated = ["manual"]
 
               if "===SKILL.md===" in rest:
-                  versions_part, skill_part = rest.split("===SKILL.md===", 1)
+                  versions_part, skill_rest = rest.split("===SKILL.md===", 1)
                   Path("VERSIONS.md").write_text(versions_part.strip() + "\n")
-                  Path("skills/setup-routing/SKILL.md").write_text(skill_part.strip() + "\n")
-                  print("Files updated: manual, VERSIONS.md, SKILL.md")
+                  updated.append("VERSIONS.md")
+
+                  if "===ADAPT_SKILL.md===" in skill_rest:
+                      setup_part, adapt_part = skill_rest.split("===ADAPT_SKILL.md===", 1)
+                      Path("skills/setup-routing/SKILL.md").write_text(setup_part.strip() + "\n")
+                      Path("skills/adapt/SKILL.md").write_text(adapt_part.strip() + "\n")
+                      updated.extend(["setup-routing/SKILL.md", "adapt/SKILL.md"])
+                  else:
+                      Path("skills/setup-routing/SKILL.md").write_text(skill_rest.strip() + "\n")
+                      updated.append("setup-routing/SKILL.md")
               else:
                   Path("VERSIONS.md").write_text(rest.strip() + "\n")
-                  print("Files updated: manual, VERSIONS.md")
+                  updated.append("VERSIONS.md")
+
+              print(f"Files updated: {', '.join(updated)}")
           else:
               Path("superpowers-gstack-workflow-manual.md").write_text(content.strip() + "\n")
               print("Warning: VERSIONS.md marker not found, only manual updated")
@@ -356,7 +383,7 @@ jobs:
           git checkout -b "$branch"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add superpowers-gstack-workflow-manual.md VERSIONS.md skills/setup-routing/SKILL.md
+          git add superpowers-gstack-workflow-manual.md VERSIONS.md skills/setup-routing/SKILL.md skills/adapt/SKILL.md
 
           git commit -m "Auto-update manual for upstream changes
 

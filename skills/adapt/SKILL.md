@@ -63,7 +63,8 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | `/superpowers:finishing-a-development-branch` | Projects using feature branches and PRs |
 | `/superpowers:test-driven-development` | Projects with testable code (most projects) |
 | `/superpowers:verification-before-completion` | Complex projects where correctness is critical |
-| `/superpowers:requesting-code-review` | Multi-file changes |
+| `/superpowers:requesting-code-review` | Multi-file changes (runs automatically during SDD, but can be invoked manually) |
+| `/superpowers:receiving-code-review` | After `/review` or PR feedback requires code changes — structures the response with TDD |
 | `/superpowers:writing-skills` | Only for Claude Code plugin/skill projects |
 
 **GStack skills — Phase 1 (Planning):**
@@ -74,7 +75,7 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | `/plan-ceo-review` | Projects with strategic decisions or significant scope |
 | `/plan-eng-review` | Projects needing architecture decisions |
 | `/plan-design-review` | Projects with UI/UX components |
-| `/autoplan` | When all three plan reviews are relevant |
+| `/autoplan` | When all three plan reviews are relevant — chains them automatically |
 
 **GStack skills — Phase 3 (Review & QA):**
 
@@ -82,10 +83,10 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 |---|---|
 | `/review` | Almost always — pre-merge code review |
 | `/qa <url>` | Projects with a browser-accessible UI (include the URL) |
-| `/qa-only <url>` | Same, but report-only |
-| `/cso` | Projects handling auth, user data, payments, or external APIs |
-| `/design-review` | Projects with visual UI |
-| `/investigate` | Bugs discovered AFTER Phase 2 — in QA, staging, or production |
+| `/qa-only <url>` | Same, but report-only (no auto-fixes) |
+| `/cso` | Projects handling auth, user data, payments, or external APIs. For security-critical features, run BEFORE `/review` |
+| `/design-review` | Projects with visual UI — catches spacing, alignment, inconsistencies |
+| `/investigate` | Bugs discovered AFTER Phase 2 — in QA, staging, or production. Do NOT use during Phase 2 implementation (use `/superpowers:systematic-debugging` instead) |
 
 **GStack skills — Phase 4 (Ship & Monitor):**
 
@@ -96,15 +97,15 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | `/canary` | Projects with production monitoring needs |
 | `/document-release` | Projects with documentation to maintain |
 | `/retro` | Team projects with regular sprint cadence |
-| `/learn` | Long-running projects (> 2 weeks) |
+| `/learn` | Long-running projects (> 2 weeks) — saves cross-session learnings |
 | `/health` | Projects with existing linting, type checking, or test suites |
 
 **GStack skills — Utility:**
 
 | Skill | Consider relevant when... |
 |---|---|
-| `/careful` | Projects where destructive commands are risky |
-| `/freeze` | Monorepos or projects with sensitive directories |
+| `/careful` | Projects where destructive commands are risky (production DBs, shared infra) |
+| `/freeze` | Monorepos or projects with sensitive directories that shouldn't be edited |
 | `/browse` | Projects needing headless browser interaction beyond QA |
 
 ### Step 4: Identify gaps and plan changes
