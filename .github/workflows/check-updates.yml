@@ -214,9 +214,25 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           REPORT: ${{ needs.check.outputs.report }}
         run: |
-          # Build context for Claude
-          cat > /tmp/update-prompt.md << 'PROMPT_EOF'
-          You are updating a workflow manual for using Superpowers and GStack with Claude Code.
+          python3 << 'PYTHON_EOF'
+          import json, os, subprocess, sys
+          from pathlib import Path
+
+          report = os.environ.get("REPORT", "")
+          manual = Path("superpowers-gstack-workflow-manual.md").read_text()
+          versions = Path("VERSIONS.md").read_text()
+
+          # Collect upstream skill files
+          upstream = ""
+          ctx_dir = Path("/tmp/upstream-context")
+          if ctx_dir.exists():
+              for skill_file in sorted(ctx_dir.rglob("SKILL.md")):
+                  skill_name = skill_file.parent.name
+                  content = skill_file.read_text()[:2000]
+                  upstream += f"\n--- {skill_name}/SKILL.md ---\n{content}\n"
+              upstream = upstream[:30000]
+
+          prompt = """You are updating a workflow manual for using Superpowers and GStack with Claude Code.
 
           ## Your task
           1. Read the current manual and the upstream changes report
@@ -233,43 +249,9 @@ jobs:
           - If a skill was removed, remove it from all sections
           - If behavior changed, update the description
           - Do NOT add speculative content — only document what the upstream changes confirm
-          - Do NOT rewrite sections that aren't affected
-          PROMPT_EOF
+          - Do NOT rewrite sections that aren't affected"""
 
-          # Build the API request
-          MANUAL=$(cat superpowers-gstack-workflow-manual.md)
-          VERSIONS=$(cat VERSIONS.md)
-
-          # Collect upstream skill files for context
-          UPSTREAM_SKILLS=""
-          if [ -d /tmp/upstream-context ]; then
-            UPSTREAM_SKILLS=$(find /tmp/upstream-context -name "SKILL.md" -exec sh -c 'echo "--- $(dirname {} | xargs basename)/SKILL.md ---"; cat {}; echo ""' \; | head -5000)
-          fi
-
-          python3 << 'PYTHON_EOF'
-          import json, os, subprocess
-
-          prompt = open("/tmp/update-prompt.md").read()
-          manual = open("superpowers-gstack-workflow-manual.md").read()
-          versions = open("VERSIONS.md").read()
-          report = os.environ.get("REPORT", "")
-
-          upstream = ""
-          if os.path.exists("/tmp/upstream-context"):
-              for root, dirs, files in os.walk("/tmp/upstream-context"):
-                  for f in files:
-                      if f == "SKILL.md":
-                          path = os.path.join(root, f)
-                          skill_name = os.path.basename(os.path.dirname(path))
-                          content = open(path).read()[:2000]  # Truncate long skills
-                          upstream += f"\n--- {skill_name}/SKILL.md ---\n{content}\n"
-
-          request = {
-              "model": "claude-sonnet-4-20250514",
-              "max_tokens": 16000,
-              "messages": [{
-                  "role": "user",
-                  "content": f"""{prompt}
+          user_content = f"""{prompt}
 
           ## Changes detected
 
@@ -285,37 +267,51 @@ jobs:
 
           ## Upstream skill definitions (for reference)
 
-          {upstream[:30000]}
+          {upstream}
 
           ## Output format
 
           Return TWO files separated by the marker `===VERSIONS.md===`.
           First the complete updated manual, then the marker, then the complete updated VERSIONS.md.
-          Output ONLY the file contents, no markdown fences or commentary.
-          """
-              }]
+          Output ONLY the file contents, no markdown fences or commentary."""
+
+          request = {
+              "model": "claude-sonnet-4-20250514",
+              "max_tokens": 16000,
+              "messages": [{"role": "user", "content": user_content}]
           }
 
+          # Write request to file to avoid shell argument limits
+          Path("/tmp/api-request.json").write_text(json.dumps(request))
+
           result = subprocess.run(
-              ["curl", "-s", "https://api.anthropic.com/v1/messages",
+              ["curl", "-s", "-w", "\n%{http_code}",
+               "https://api.anthropic.com/v1/messages",
                "-H", f"x-api-key: {os.environ['ANTHROPIC_API_KEY']}",
                "-H", "anthropic-version: 2023-06-01",
                "-H", "content-type: application/json",
-               "-d", json.dumps(request)],
-              capture_output=True, text=True
+               "-d", "@/tmp/api-request.json"],
+              capture_output=True, text=True, timeout=120
           )
 
-          response = json.loads(result.stdout)
+          lines = result.stdout.strip().rsplit("\n", 1)
+          body = lines[0] if len(lines) > 1 else result.stdout
+          status = lines[1] if len(lines) > 1 else "unknown"
+
+          if status != "200":
+              print(f"API error (HTTP {status}): {body[:500]}", file=sys.stderr)
+              sys.exit(1)
+
+          response = json.loads(body)
           content = response["content"][0]["text"]
 
           if "===VERSIONS.md===" in content:
               manual_part, versions_part = content.split("===VERSIONS.md===", 1)
-              open("superpowers-gstack-workflow-manual.md", "w").write(manual_part.strip() + "\n")
-              open("VERSIONS.md", "w").write(versions_part.strip() + "\n")
+              Path("superpowers-gstack-workflow-manual.md").write_text(manual_part.strip() + "\n")
+              Path("VERSIONS.md").write_text(versions_part.strip() + "\n")
               print("Files updated successfully")
           else:
-              # If marker not found, assume only manual was updated
-              open("superpowers-gstack-workflow-manual.md", "w").write(content.strip() + "\n")
+              Path("superpowers-gstack-workflow-manual.md").write_text(content.strip() + "\n")
               print("Warning: VERSIONS.md marker not found, only manual updated")
           PYTHON_EOF
 
