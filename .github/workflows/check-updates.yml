@@ -19,6 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate workflow YAML
+        run: python3 -c "import yaml; yaml.safe_load(open('.github/workflows/check-updates.yml')); print('Workflow YAML is valid')"
+
       - name: Read current versions
         id: current
         run: |
