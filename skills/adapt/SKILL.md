@@ -182,7 +182,33 @@ Report to the user:
 >
 > **Preserved:**
 > - [existing CLAUDE.md content that was kept]
+
+Then ask:
+
+> Would you like me to run a comprehensive review of the adaptation? This will check that:
+> - All routing rules are consistent with your project structure
+> - No existing CLAUDE.md content was lost or corrupted
+> - The selected skills match your actual tech stack, test setup, and deployment
+> - docs/superpowers/ structure is correct
+> - There are no conflicts between existing project conventions and the new workflow
 >
+> The review takes a minute but catches issues before you start using the workflow. Recommended for projects with complex existing setups.
+
+If the user says yes, run the review:
+
+1. **Re-read the updated CLAUDE.md** end-to-end and check for internal consistency
+2. **Cross-check routing against project files** — does the routing reference skills that don't make sense? (e.g., `/qa` listed but no browser UI, `/cso` listed but no auth/user data)
+3. **Verify preserved content** — diff the old vs new CLAUDE.md mentally. Was anything accidentally removed or mangled?
+4. **Check for contradictions** — do existing CLAUDE.md instructions conflict with the new routing rules?
+5. **Validate structure** — do all referenced directories exist? (`docs/superpowers/specs/`, `docs/superpowers/plans/`)
+6. **Test routing logic** — walk through 3-4 common scenarios for this project type and verify the decision tree produces the right skill
+
+Report findings. If issues are found, fix them immediately and re-verify.
+
+### Step 7: Suggest next steps
+
+After the review (or if the user skipped it):
+
 > **Next steps:**
 > - [suggest the appropriate first action based on project state]
 >   - Working on a new feature? → `/superpowers:brainstorming`
