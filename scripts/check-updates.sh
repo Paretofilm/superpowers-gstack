@@ -57,7 +57,7 @@ fi
 
 # --- Superpowers ---
 SUPERPOWERS_DIR=""
-for dir in "$HOME/.claude/plugins/superpowers" "$HOME/.claude/plugins/"*superpowers*; do
+for dir in "$HOME/.claude/plugins/cache/claude-plugins-official/superpowers"/* "$HOME/.claude/plugins/cache/"*"/superpowers"/*; do
   if [ -d "$dir" ] 2>/dev/null; then
     SUPERPOWERS_DIR="$dir"
     break

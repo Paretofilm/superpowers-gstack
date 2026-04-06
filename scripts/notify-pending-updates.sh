@@ -1,11 +1,12 @@
 #!/bin/bash
-# Check for pending manual update PRs/issues on kjetilge/superpowers-gstack
+# Check for pending manual update PRs/issues on Paretofilm/superpowers-gstack
 # Used as a SessionStart hook notification
 
 # Only run if gh is available and authenticated
 command -v gh &>/dev/null || exit 0
+gh auth status &>/dev/null || exit 0
 
-# Check for open issues with notification label
+# Check for open issues with notification label (public repo, works with any authenticated user)
 notifications=$(gh issue list --repo Paretofilm/superpowers-gstack --label notification --state open --json title,url,createdAt --limit 3 2>/dev/null)
 
 if [ -z "$notifications" ] || [ "$notifications" = "[]" ]; then

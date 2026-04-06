@@ -32,7 +32,7 @@ jobs:
       - name: Check GStack
         id: gstack
         run: |
-          git clone --depth 50 https://github.com/garrytan/gstack.git /tmp/gstack
+          git clone --depth 200 https://github.com/garrytan/gstack.git /tmp/gstack
           cd /tmp/gstack
           latest_commit=$(git rev-parse --short HEAD)
           latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "unknown")
@@ -84,7 +84,7 @@ jobs:
             echo "SP_EOF" >> "$GITHUB_OUTPUT"
 
             # List changed skills
-            skill_files=$(find skills -name "SKILL.md" | sort)
+            skill_files=$(find . -name "SKILL.md" | sort)
             echo "skill_files<<SP_SKILLS_EOF" >> "$GITHUB_OUTPUT"
             echo "$skill_files" >> "$GITHUB_OUTPUT"
             echo "SP_SKILLS_EOF" >> "$GITHUB_OUTPUT"
@@ -207,7 +207,13 @@ jobs:
           path: /tmp
 
       - name: Extract upstream context
-        run: tar xzf /tmp/upstream-context.tar.gz -C /tmp
+        run: |
+          if [ -f /tmp/upstream-context.tar.gz ]; then
+            tar xzf /tmp/upstream-context.tar.gz -C /tmp
+          else
+            echo "Warning: no upstream context artifact found, continuing without skill files"
+            mkdir -p /tmp/upstream-context
+          fi
 
       - name: Update manual with Claude
         env:
@@ -232,7 +238,11 @@ jobs:
                   upstream += f"\n--- {skill_name}/SKILL.md ---\n{content}\n"
               upstream = upstream[:15000]
 
-          prompt = """You are updating a workflow manual for using Superpowers and GStack with Claude Code.
+          from datetime import date
+          today = date.today().isoformat()
+
+          prompt = f"""You are updating a workflow manual for using Superpowers and GStack with Claude Code.
+          Today's date is {today}.
 
           ## Your task
           1. Read the current manual and the upstream changes report
@@ -277,7 +287,7 @@ jobs:
 
           request = {
               "model": "claude-sonnet-4-20250514",
-              "max_tokens": 16000,
+              "max_tokens": 32000,
               "messages": [{"role": "user", "content": user_content}]
           }
 
@@ -333,18 +343,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPORT: ${{ needs.check.outputs.report }}
         run: |
-          branch="auto-update/$(date +%Y%m%d)"
+          branch="auto-update/$(date +%Y%m%d-%H%M%S)"
           git checkout -b "$branch"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add superpowers-gstack-workflow-manual.md VERSIONS.md
 
-          git commit -m "$(cat <<EOF
-          Auto-update manual for upstream changes
+          git commit -m "Auto-update manual for upstream changes
 
-          Co-Authored-By: Claude Sonnet <noreply@anthropic.com>
-          EOF
-          )"
+          Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
           git push -u origin "$branch"
 
           pr_body="## Upstream changes detected
@@ -372,7 +379,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPORT: ${{ needs.check.outputs.report }}
         run: |
-          pr_url=$(gh pr list --head "auto-update/$(date +%Y%m%d)" --json url -q '.[0].url')
+          pr_url=$(gh pr list --label auto-update --state open --json url -q '.[0].url')
 
           issue_body="An automated update to the Superpowers + GStack manual is ready for review.
 
