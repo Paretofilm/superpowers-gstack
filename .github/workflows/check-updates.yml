@@ -1,0 +1,359 @@
+name: Check for upstream updates
+
+on:
+  schedule:
+    - cron: '23 7 * * 1'  # Mondays at 07:23 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      changes_found: ${{ steps.detect.outputs.changes_found }}
+      report: ${{ steps.detect.outputs.report }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read current versions
+        id: current
+        run: |
+          gstack_commit=$(grep 'GStack' VERSIONS.md | grep -oE '[a-f0-9]{7}' | head -1)
+          superpowers_version=$(grep 'Superpowers' VERSIONS.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          claude_version=$(grep 'Claude Code' VERSIONS.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          echo "gstack_commit=$gstack_commit" >> "$GITHUB_OUTPUT"
+          echo "superpowers_version=$superpowers_version" >> "$GITHUB_OUTPUT"
+          echo "claude_version=$claude_version" >> "$GITHUB_OUTPUT"
+
+      - name: Check GStack
+        id: gstack
+        run: |
+          git clone --depth 50 https://github.com/garrytan/gstack.git /tmp/gstack
+          cd /tmp/gstack
+          latest_commit=$(git rev-parse --short HEAD)
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "unknown")
+
+          if [[ "$latest_commit" != "${{ steps.current.outputs.gstack_commit }}" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "latest_commit=$latest_commit" >> "$GITHUB_OUTPUT"
+            echo "latest_commit_full=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            echo "latest_tag=$latest_tag" >> "$GITHUB_OUTPUT"
+
+            # Get changelog since our known commit
+            changelog=$(git log --oneline ${{ steps.current.outputs.gstack_commit }}..HEAD 2>/dev/null | head -30 || echo "Could not diff — full clone needed")
+            echo "changelog<<GSTACK_EOF" >> "$GITHUB_OUTPUT"
+            echo "$changelog" >> "$GITHUB_OUTPUT"
+            echo "GSTACK_EOF" >> "$GITHUB_OUTPUT"
+
+            # Capture changed skill files
+            skill_changes=$(git diff --name-only ${{ steps.current.outputs.gstack_commit }}..HEAD -- 'skills/' 2>/dev/null | head -30 || echo "unknown")
+            echo "skill_changes<<GSTACK_SKILLS_EOF" >> "$GITHUB_OUTPUT"
+            echo "$skill_changes" >> "$GITHUB_OUTPUT"
+            echo "GSTACK_SKILLS_EOF" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check Superpowers
+        id: superpowers
+        run: |
+          git clone --depth 1 https://github.com/obra/superpowers.git /tmp/superpowers
+          cd /tmp/superpowers
+
+          # Get version from plugin.json
+          latest_version=$(python3 -c "import json; print(json.load(open('.claude-plugin/plugin.json')).get('version', 'unknown'))" 2>/dev/null || echo "unknown")
+
+          if [[ "$latest_version" != "${{ steps.current.outputs.superpowers_version }}" ]] && [[ "$latest_version" != "unknown" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "latest_version=$latest_version" >> "$GITHUB_OUTPUT"
+
+            # Get changelog if exists
+            if [ -f CHANGELOG.md ]; then
+              changelog=$(head -80 CHANGELOG.md)
+            elif [ -f RELEASE-NOTES.md ]; then
+              changelog=$(head -80 RELEASE-NOTES.md)
+            else
+              changelog="No changelog found — review repo manually"
+            fi
+            echo "changelog<<SP_EOF" >> "$GITHUB_OUTPUT"
+            echo "$changelog" >> "$GITHUB_OUTPUT"
+            echo "SP_EOF" >> "$GITHUB_OUTPUT"
+
+            # List changed skills
+            skill_files=$(find skills -name "SKILL.md" | sort)
+            echo "skill_files<<SP_SKILLS_EOF" >> "$GITHUB_OUTPUT"
+            echo "$skill_files" >> "$GITHUB_OUTPUT"
+            echo "SP_SKILLS_EOF" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check Claude Code
+        id: claude_code
+        run: |
+          latest_version=$(npm view @anthropic-ai/claude-code version 2>/dev/null || echo "unknown")
+
+          if [[ "$latest_version" != "${{ steps.current.outputs.claude_version }}" ]] && [[ "$latest_version" != "unknown" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "latest_version=$latest_version" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build report
+        id: detect
+        run: |
+          changes_found=false
+          report=""
+
+          if [[ "${{ steps.gstack.outputs.changed }}" == "true" ]]; then
+            changes_found=true
+            report+="## GStack updated\n"
+            report+="**New version:** ${{ steps.gstack.outputs.latest_tag }} (${{ steps.gstack.outputs.latest_commit }})\n\n"
+            report+="### Commits\n\`\`\`\n${{ steps.gstack.outputs.changelog }}\n\`\`\`\n\n"
+            report+="### Changed skills\n\`\`\`\n${{ steps.gstack.outputs.skill_changes }}\n\`\`\`\n\n"
+          fi
+
+          if [[ "${{ steps.superpowers.outputs.changed }}" == "true" ]]; then
+            changes_found=true
+            report+="## Superpowers updated\n"
+            report+="**New version:** ${{ steps.superpowers.outputs.latest_version }}\n\n"
+            report+="### Changelog\n${{ steps.superpowers.outputs.changelog }}\n\n"
+          fi
+
+          if [[ "${{ steps.claude_code.outputs.changed }}" == "true" ]]; then
+            changes_found=true
+            report+="## Claude Code updated\n"
+            report+="**New version:** ${{ steps.claude_code.outputs.latest_version }} (was: ${{ steps.current.outputs.claude_version }})\n\n"
+          fi
+
+          echo "changes_found=$changes_found" >> "$GITHUB_OUTPUT"
+          echo "report<<REPORT_EOF" >> "$GITHUB_OUTPUT"
+          echo -e "$report" >> "$GITHUB_OUTPUT"
+          echo "REPORT_EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Upload upstream sources
+        if: steps.detect.outputs.changes_found == 'true'
+        run: |
+          mkdir -p /tmp/upstream-context
+
+          # GStack skill files (only SKILL.md files — the actual skill definitions)
+          if [[ "${{ steps.gstack.outputs.changed }}" == "true" ]]; then
+            find /tmp/gstack/skills -name "SKILL.md" -exec sh -c 'mkdir -p /tmp/upstream-context/gstack/$(basename $(dirname "$1")) && cp "$1" /tmp/upstream-context/gstack/$(basename $(dirname "$1"))/' _ {} \;
+          fi
+
+          # Superpowers skill files
+          if [[ "${{ steps.superpowers.outputs.changed }}" == "true" ]]; then
+            find /tmp/superpowers/skills -name "SKILL.md" -exec sh -c 'mkdir -p /tmp/upstream-context/superpowers/$(basename $(dirname "$1")) && cp "$1" /tmp/upstream-context/superpowers/$(basename $(dirname "$1"))/' _ {} \;
+          fi
+
+          tar czf /tmp/upstream-context.tar.gz -C /tmp upstream-context
+
+      - uses: actions/upload-artifact@v4
+        if: steps.detect.outputs.changes_found == 'true'
+        with:
+          name: upstream-context
+          path: /tmp/upstream-context.tar.gz
+          retention-days: 1
+
+  update-manual:
+    needs: check
+    if: needs.check.outputs.changes_found == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: upstream-context
+          path: /tmp
+
+      - name: Extract upstream context
+        run: tar xzf /tmp/upstream-context.tar.gz -C /tmp
+
+      - name: Update manual with Claude
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Build context for Claude
+          cat > /tmp/update-prompt.md << 'PROMPT_EOF'
+          You are updating a workflow manual for using Superpowers and GStack with Claude Code.
+
+          ## Your task
+          1. Read the current manual and the upstream changes report
+          2. Identify which sections of the manual are affected by the changes
+          3. Update ONLY the affected sections — preserve everything else exactly
+          4. Update VERSIONS.md with new version numbers and today's date
+          5. Output the complete updated files
+
+          ## Rules
+          - Only change sections directly affected by upstream changes
+          - Keep the same structure, style, and tone
+          - If a skill was renamed, update all references
+          - If a skill was added, add it to Quick Reference and relevant sections
+          - If a skill was removed, remove it from all sections
+          - If behavior changed, update the description
+          - Do NOT add speculative content — only document what the upstream changes confirm
+          - Do NOT rewrite sections that aren't affected
+          PROMPT_EOF
+
+          # Build the API request
+          MANUAL=$(cat superpowers-gstack-workflow-manual.md)
+          VERSIONS=$(cat VERSIONS.md)
+          REPORT='${{ needs.check.outputs.report }}'
+
+          # Collect upstream skill files for context
+          UPSTREAM_SKILLS=""
+          if [ -d /tmp/upstream-context ]; then
+            UPSTREAM_SKILLS=$(find /tmp/upstream-context -name "SKILL.md" -exec sh -c 'echo "--- $(dirname {} | xargs basename)/SKILL.md ---"; cat {}; echo ""' \; | head -5000)
+          fi
+
+          python3 << 'PYTHON_EOF'
+          import json, os, subprocess
+
+          prompt = open("/tmp/update-prompt.md").read()
+          manual = open("superpowers-gstack-workflow-manual.md").read()
+          versions = open("VERSIONS.md").read()
+          report = os.environ.get("REPORT", "")
+
+          upstream = ""
+          if os.path.exists("/tmp/upstream-context"):
+              for root, dirs, files in os.walk("/tmp/upstream-context"):
+                  for f in files:
+                      if f == "SKILL.md":
+                          path = os.path.join(root, f)
+                          skill_name = os.path.basename(os.path.dirname(path))
+                          content = open(path).read()[:2000]  # Truncate long skills
+                          upstream += f"\n--- {skill_name}/SKILL.md ---\n{content}\n"
+
+          request = {
+              "model": "claude-sonnet-4-20250514",
+              "max_tokens": 16000,
+              "messages": [{
+                  "role": "user",
+                  "content": f"""{prompt}
+
+          ## Changes detected
+
+          {report}
+
+          ## Current manual
+
+          {manual}
+
+          ## Current VERSIONS.md
+
+          {versions}
+
+          ## Upstream skill definitions (for reference)
+
+          {upstream[:30000]}
+
+          ## Output format
+
+          Return TWO files separated by the marker `===VERSIONS.md===`.
+          First the complete updated manual, then the marker, then the complete updated VERSIONS.md.
+          Output ONLY the file contents, no markdown fences or commentary.
+          """
+              }]
+          }
+
+          result = subprocess.run(
+              ["curl", "-s", "https://api.anthropic.com/v1/messages",
+               "-H", f"x-api-key: {os.environ['ANTHROPIC_API_KEY']}",
+               "-H", "anthropic-version: 2023-06-01",
+               "-H", "content-type: application/json",
+               "-d", json.dumps(request)],
+              capture_output=True, text=True
+          )
+
+          response = json.loads(result.stdout)
+          content = response["content"][0]["text"]
+
+          if "===VERSIONS.md===" in content:
+              manual_part, versions_part = content.split("===VERSIONS.md===", 1)
+              open("superpowers-gstack-workflow-manual.md", "w").write(manual_part.strip() + "\n")
+              open("VERSIONS.md", "w").write(versions_part.strip() + "\n")
+              print("Files updated successfully")
+          else:
+              # If marker not found, assume only manual was updated
+              open("superpowers-gstack-workflow-manual.md", "w").write(content.strip() + "\n")
+              print("Warning: VERSIONS.md marker not found, only manual updated")
+          PYTHON_EOF
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "diff<<DIFF_EOF" >> "$GITHUB_OUTPUT"
+            git diff --stat >> "$GITHUB_OUTPUT"
+            echo "DIFF_EOF" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create PR
+        if: steps.diff.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          branch="auto-update/$(date +%Y%m%d)"
+          git checkout -b "$branch"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add superpowers-gstack-workflow-manual.md VERSIONS.md
+          git commit -m "Auto-update manual for upstream changes
+
+          ${{ needs.check.outputs.report }}
+
+          Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+          git push -u origin "$branch"
+
+          gh pr create \
+            --title "Auto-update: upstream changes detected" \
+            --body "$(cat <<'EOF'
+          ## Upstream changes detected
+
+          ${{ needs.check.outputs.report }}
+
+          ## What happened
+          The weekly update checker found changes in GStack, Superpowers, or Claude Code.
+          Claude Sonnet analyzed the changes and updated the manual accordingly.
+
+          ## Action needed
+          Review the diff to verify the updates are accurate, then merge.
+
+          ---
+          *This PR was created automatically by the check-updates workflow.*
+          EOF
+          )" \
+            --label "auto-update"
+
+      - name: Create notification file
+        if: steps.diff.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get PR number
+          pr_url=$(gh pr list --head "auto-update/$(date +%Y%m%d)" --json url -q '.[0].url')
+
+          # Store notification as a GitHub issue comment for easy retrieval
+          gh issue create \
+            --title "Manual update ready for review — $(date +%Y-%m-%d)" \
+            --body "$(cat <<EOF
+          An automated update to the Superpowers + GStack manual is ready for review.
+
+          **PR:** $pr_url
+
+          ${{ needs.check.outputs.report }}
+
+          ---
+          *Close this issue after reviewing the PR.*
+          EOF
+          )" \
+            --label "notification"
