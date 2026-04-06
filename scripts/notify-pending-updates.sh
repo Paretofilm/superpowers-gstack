@@ -6,7 +6,7 @@
 command -v gh &>/dev/null || exit 0
 
 # Check for open issues with notification label
-notifications=$(gh issue list --repo kjetilge/superpowers-gstack --label notification --state open --json title,url,createdAt --limit 3 2>/dev/null)
+notifications=$(gh issue list --repo Paretofilm/superpowers-gstack --label notification --state open --json title,url,createdAt --limit 3 2>/dev/null)
 
 if [ -z "$notifications" ] || [ "$notifications" = "[]" ]; then
   exit 0
