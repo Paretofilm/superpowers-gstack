@@ -34,7 +34,9 @@ This repo is also a Claude Code plugin (`superpowers-gstack`). The skill `setup-
 
 - Install: `./scripts/install-plugin.sh` (creates symlink in `~/.claude/plugins/`)
 - The install is verified automatically on every `check-updates.sh` run
-- After install, use `/superpowers-gstack:setup-routing` in any project
+- Skills:
+  - `/superpowers-gstack:setup-routing` — generate CLAUDE.md for new projects
+  - `/superpowers-gstack:adapt` — adapt existing projects (preserves CLAUDE.md content)
 
 ## Setup
 

@@ -49,13 +49,19 @@ Restart Claude Code after installation.
 
 ### 2. Generate your project's CLAUDE.md
 
-In your project directory (even if empty), run:
+**New project** (empty or no CLAUDE.md):
 
 ```
 /superpowers-gstack:setup-routing
 ```
 
-This asks about your project type, evaluates which Superpowers and GStack skills are relevant, and generates a tailored `CLAUDE.md` with routing rules. The routing ensures Claude picks the right framework for each task.
+**Existing project** (already has CLAUDE.md, code, conventions):
+
+```
+/superpowers-gstack:adapt
+```
+
+`setup-routing` creates a CLAUDE.md from scratch. `adapt` analyzes your existing project, preserves everything, and adds only the routing section needed for Superpowers + GStack.
 
 ### 3. Start working
 
@@ -592,13 +598,12 @@ These GStack skills can be used at any point in the workflow:
 
 **This is critical.** Without routing rules in your project's CLAUDE.md, Claude will not consistently choose the right framework for each phase.
 
-**Recommended:** Use the setup-routing skill to generate a tailored CLAUDE.md:
+**Recommended:** Use the appropriate skill:
 
-```
-/superpowers-gstack:setup-routing
-```
+- **New project:** `/superpowers-gstack:setup-routing` — generates CLAUDE.md from scratch
+- **Existing project:** `/superpowers-gstack:adapt` — analyzes the project, preserves existing CLAUDE.md content, adds routing
 
-This asks about your project type, evaluates which skills from both frameworks are relevant, and generates a project-specific routing plan. See [Quick Start](#quick-start).
+See [Quick Start](#quick-start).
 
 **Manual alternative:** If you prefer to write it yourself, use the template below.
 

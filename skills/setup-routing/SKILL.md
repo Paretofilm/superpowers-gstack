@@ -5,9 +5,11 @@ description: Generate a tailored CLAUDE.md with routing rules for the Superpower
 
 # Setup Routing — CLAUDE.md Generator
 
-You are setting up the Superpowers + GStack combined workflow for a new project. Your job is to generate a `CLAUDE.md` file with routing rules tailored to this specific project.
+You are setting up the Superpowers + GStack combined workflow for a **new project**. Your job is to generate a `CLAUDE.md` file with routing rules tailored to this specific project.
 
 Invoke this skill with: `/superpowers-gstack:setup-routing`
+
+**Important:** If the project already has a `CLAUDE.md` file with existing content, STOP and suggest the user runs `/superpowers-gstack:adapt` instead — it preserves existing content while adding routing.
 
 ## Process
 
