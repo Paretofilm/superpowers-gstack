@@ -124,42 +124,20 @@ jobs:
 
           if [[ "$GSTACK_CHANGED" == "true" ]]; then
             changes_found=true
-            cat >> "$report_file" << EOF
-          ## GStack updated
-          **New version:** $GSTACK_TAG ($GSTACK_COMMIT)
-
-          ### Commits
-          \`\`\`
-          $GSTACK_CHANGELOG
-          \`\`\`
-
-          ### Changed skills
-          \`\`\`
-          $GSTACK_SKILLS
-          \`\`\`
-
-          EOF
+            printf '## GStack updated\n**New version:** %s (%s)\n\n### Commits\n```\n%s\n```\n\n### Changed skills\n```\n%s\n```\n\n' \
+              "$GSTACK_TAG" "$GSTACK_COMMIT" "$GSTACK_CHANGELOG" "$GSTACK_SKILLS" >> "$report_file"
           fi
 
           if [[ "$SP_CHANGED" == "true" ]]; then
             changes_found=true
-            cat >> "$report_file" << EOF
-          ## Superpowers updated
-          **New version:** $SP_VERSION
-
-          ### Changelog
-          $SP_CHANGELOG
-
-          EOF
+            printf '## Superpowers updated\n**New version:** %s\n\n### Changelog\n%s\n\n' \
+              "$SP_VERSION" "$SP_CHANGELOG" >> "$report_file"
           fi
 
           if [[ "$CC_CHANGED" == "true" ]]; then
             changes_found=true
-            cat >> "$report_file" << EOF
-          ## Claude Code updated
-          **New version:** $CC_VERSION (was: $CC_PREV)
-
-          EOF
+            printf '## Claude Code updated\n**New version:** %s (was: %s)\n\n' \
+              "$CC_VERSION" "$CC_PREV" >> "$report_file"
           fi
 
           echo "changes_found=$changes_found" >> "$GITHUB_OUTPUT"
@@ -355,18 +333,16 @@ jobs:
           git push -u origin "$branch"
 
           pr_body="## Upstream changes detected
+${REPORT}
+## What happened
+The weekly update checker found changes in GStack, Superpowers, or Claude Code.
+Claude Sonnet analyzed the changes and updated the manual accordingly.
 
-          ${REPORT}
+## Action needed
+Review the diff to verify the updates are accurate, then merge.
 
-          ## What happened
-          The weekly update checker found changes in GStack, Superpowers, or Claude Code.
-          Claude Sonnet analyzed the changes and updated the manual accordingly.
-
-          ## Action needed
-          Review the diff to verify the updates are accurate, then merge.
-
-          ---
-          *This PR was created automatically by the check-updates workflow.*"
+---
+*This PR was created automatically by the check-updates workflow.*"
 
           gh pr create \
             --title "Auto-update: upstream changes detected" \
@@ -383,12 +359,12 @@ jobs:
 
           issue_body="An automated update to the Superpowers + GStack manual is ready for review.
 
-          **PR:** ${pr_url}
+**PR:** ${pr_url}
 
-          ${REPORT}
+${REPORT}
 
-          ---
-          *Close this issue after reviewing the PR.*"
+---
+*Close this issue after reviewing the PR.*"
 
           gh issue create \
             --title "Manual update ready for review — $(date +%Y-%m-%d)" \
