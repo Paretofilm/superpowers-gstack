@@ -2,9 +2,19 @@
 
 > **"Superpowers owns the implementation loop, GStack owns everything before and after it."**
 
-A structured workflow and Claude Code plugin for using [Superpowers](https://github.com/obra/superpowers) and [GStack](https://github.com/garrytan/gstack) together. Instead of choosing one framework, use both — each in the phase where it excels.
+The missing guide for using [Superpowers](https://github.com/obra/superpowers) and [GStack](https://github.com/garrytan/gstack) together with Claude Code. Every comparison says "install both" — this project explains exactly how, with a phase-by-phase workflow, routing rules, and a plugin that auto-configures your project.
 
-**Status: Work in Progress** — This project is actively being developed. Contributions, feedback, and ideas are very welcome. See [Contributing](#contributing).
+**Status: Work in Progress** — Actively developed. Contributions, feedback, and ideas are very welcome. See [Contributing](#contributing).
+
+### What problem does this solve?
+
+If you've installed both Superpowers and GStack, you've probably run into these issues:
+- Claude picks the **wrong framework** for the task (GStack's `/investigate` when you wanted Superpowers' debugging)
+- **No clear handoff** between planning (GStack) and implementation (Superpowers)
+- **Context bleed** when switching between frameworks mid-session
+- You don't know **which skills to use when**, or which to skip for your project type
+
+This project solves all of that with routing rules in your CLAUDE.md and a structured 4-phase workflow.
 
 ## Why Both?
 
@@ -123,6 +133,33 @@ No contribution is too small. Even fixing a typo or clarifying a sentence helps.
 A GitHub Actions workflow runs weekly and checks for new versions of GStack, Superpowers, and Claude Code. When changes are found, it automatically updates the manual and creates a PR. A self-repair workflow handles failures automatically.
 
 See [VERSIONS.md](VERSIONS.md) for currently tracked versions.
+
+## Frequently Asked Questions
+
+**Should I use GStack or Superpowers?**
+Both. They cover different phases. GStack handles planning, code review, QA, security, and shipping. Superpowers handles implementation with TDD, debugging, and structured coding. This project gives you the workflow to combine them.
+
+**Can I use this with an existing project?**
+Yes. Run `/superpowers-gstack:adapt` — it analyzes your project, preserves your existing CLAUDE.md content, and adds only the routing section needed.
+
+**Do I need both frameworks installed?**
+Yes. This workflow requires both [Superpowers](https://github.com/obra/superpowers) (Claude Code plugin) and [GStack](https://github.com/garrytan/gstack) (Claude Code skills). Install both, then add this plugin for routing.
+
+**What if I only want GStack or only Superpowers?**
+Each works fine on its own. This project is specifically for people who want to use both together. If you only use one, you don't need this.
+
+**Does this work with Cursor / Windsurf / other AI editors?**
+No. This is built for [Claude Code](https://claude.ai/code) (Anthropic's CLI). Both Superpowers and GStack are Claude Code frameworks.
+
+**How is this different from the comparison articles?**
+Articles compare the frameworks. This project integrates them — with a concrete workflow, routing rules that prevent conflicts, a CLAUDE.md generator, and an automated pipeline that keeps everything in sync with upstream changes.
+
+**What project types does this support?**
+The setup skill asks about your project and generates routing tailored to it: web apps, APIs, mobile, CLI tools, libraries, data pipelines, monorepos, Claude Code plugins, and more.
+
+## Keywords
+
+`claude code best setup` `claude code workflow` `gstack superpowers together` `best claude code plugins` `claude code TDD workflow` `ai coding workflow` `claude code skills` `agentic development workflow` `claude code framework comparison` `how to use gstack and superpowers` `claude code project setup` `CLAUDE.md generator` `claude code routing` `ai-assisted software development`
 
 ## License
 
