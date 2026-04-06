@@ -13,11 +13,30 @@ A GitHub Action (`.github/workflows/check-updates.yml`) runs weekly and:
 
 A SessionStart hook notifies the user of pending updates when starting Claude Code.
 
+The update pipeline also keeps `skills/setup-routing/SKILL.md` in sync — if upstream adds, removes, or renames skills, the skill evaluation tables are updated automatically.
+
 ### Required secret
 `ANTHROPIC_API_KEY` must be set in GitHub repo secrets for the Claude API call.
 
 ### Manual check
 Run `./scripts/check-updates.sh` locally for an immediate check.
+
+## Plugin
+
+This repo is also a Claude Code plugin (`superpowers-gstack`). The skill `setup-routing` generates tailored CLAUDE.md files for new projects.
+
+- Install: `./scripts/install-plugin.sh` (creates symlink in `~/.claude/plugins/`)
+- The install is verified automatically on every `check-updates.sh` run
+- After install, use `/superpowers-gstack:setup-routing` in any project
+
+## Setup
+
+Run all setup scripts after cloning:
+
+```bash
+./scripts/install-plugin.sh   # Symlink plugin to ~/.claude/plugins/
+./scripts/setup-hooks.sh      # Add SessionStart hook for update notifications
+```
 
 ## Upstream sources
 

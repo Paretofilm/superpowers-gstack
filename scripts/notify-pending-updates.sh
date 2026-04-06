@@ -6,8 +6,15 @@
 command -v gh &>/dev/null || exit 0
 gh auth status &>/dev/null || exit 0
 
+# Detect repo from git remote (fallback to hardcoded)
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+if [ -d "$REPO_DIR/.git" ]; then
+  REPO=$(cd "$REPO_DIR" && git remote get-url origin 2>/dev/null | sed 's|.*github.com[:/]||;s|\.git$||')
+fi
+REPO="${REPO:-Paretofilm/superpowers-gstack}"
+
 # Check for open issues with notification label (public repo, works with any authenticated user)
-notifications=$(gh issue list --repo Paretofilm/superpowers-gstack --label notification --state open --json title,url,createdAt --limit 3 2>/dev/null)
+notifications=$(gh issue list --repo "$REPO" --label notification --state open --json title,url,createdAt --limit 3 2>/dev/null)
 
 if [ -z "$notifications" ] || [ "$notifications" = "[]" ]; then
   exit 0

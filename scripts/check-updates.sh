@@ -85,6 +85,9 @@ cat > "$STATE_FILE" << EOF
 }
 EOF
 
+# --- Ensure plugin is installed ---
+"$REPO_DIR/scripts/install-plugin.sh" 2>/dev/null || true
+
 # --- Output ---
 if [ "$CHANGES_FOUND" = true ]; then
   echo "---"

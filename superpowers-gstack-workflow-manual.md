@@ -6,19 +6,70 @@ A practical guide to using Superpowers and GStack together for AI-assisted devel
 
 ## Table of Contents
 
-1. [Philosophy](#philosophy)
-2. [Installation](#installation)
-3. [The Combined Workflow](#the-combined-workflow)
-4. [Phase 1: Discovery and Planning (GStack)](#phase-1-discovery-and-planning-gstack)
-5. [Phase 2: Implementation (Superpowers)](#phase-2-implementation-superpowers)
-6. [Phase 3: Review and QA (GStack)](#phase-3-review-and-qa-gstack)
-7. [Phase 4: Ship and Monitor (GStack)](#phase-4-ship-and-monitor-gstack)
-8. [Project CLAUDE.md Setup](#project-claudemd-setup)
-9. [Session Management](#session-management)
-10. [Common Scenarios](#common-scenarios)
-11. [Troubleshooting](#troubleshooting)
-12. [Anti-Patterns](#anti-patterns)
-13. [Quick Reference](#quick-reference)
+1. [Quick Start](#quick-start)
+2. [Philosophy](#philosophy)
+3. [Installation](#installation)
+4. [The Combined Workflow](#the-combined-workflow)
+5. [Phase 1: Discovery and Planning (GStack)](#phase-1-discovery-and-planning-gstack)
+6. [Phase 2: Implementation (Superpowers)](#phase-2-implementation-superpowers)
+7. [Phase 3: Review and QA (GStack)](#phase-3-review-and-qa-gstack)
+8. [Phase 4: Ship and Monitor (GStack)](#phase-4-ship-and-monitor-gstack)
+9. [Project CLAUDE.md Setup](#project-claudemd-setup)
+10. [Session Management](#session-management)
+11. [Common Scenarios](#common-scenarios)
+12. [Troubleshooting](#troubleshooting)
+13. [Anti-Patterns](#anti-patterns)
+14. [Quick Reference](#quick-reference)
+
+---
+
+## Quick Start
+
+Three steps to get going with a new project:
+
+### 1. Install the frameworks (once per machine)
+
+```bash
+# Superpowers (in Claude Code)
+/plugin marketplace add claude-plugins-official
+/plugin install superpowers
+
+# GStack
+git clone https://github.com/garrytan/gstack.git ~/.claude/skills/gstack
+cd ~/.claude/skills/gstack && ./setup
+
+# Routing plugin
+git clone https://github.com/Paretofilm/superpowers-gstack.git ~/Developer/superpowers-gstack
+cd ~/Developer/superpowers-gstack
+./scripts/install-plugin.sh
+./scripts/setup-hooks.sh
+```
+
+Restart Claude Code after installation.
+
+### 2. Generate your project's CLAUDE.md
+
+In your project directory (even if empty), run:
+
+```
+/superpowers-gstack:setup-routing
+```
+
+This asks about your project type, evaluates which Superpowers and GStack skills are relevant, and generates a tailored `CLAUDE.md` with routing rules. The routing ensures Claude picks the right framework for each task.
+
+### 3. Start working
+
+With routing in place, follow the workflow that matches your situation:
+
+| Situation | Start with |
+|-----------|-----------|
+| New idea, unclear scope | `/office-hours` |
+| Scope is clear, ready to build | `/superpowers:brainstorming` |
+| Bug fix | `/superpowers:systematic-debugging` |
+| Code is written, ready to review | `/review` |
+| Ready to ship | `/ship` |
+
+See [Common Scenarios](#common-scenarios) for full workflow examples.
 
 ---
 
@@ -429,6 +480,22 @@ Chief Security Officer role runs:
 
 80-item visual audit with before/after screenshots and atomic commits.
 
+### Step 5: Root Cause Investigation (When Needed)
+
+```
+/investigate
+```
+
+Use `/investigate` for bugs discovered **during Phase 3** — issues found by `/qa`, `/cso`, or manual testing that weren't caught during Phase 2 implementation. GStack's `/investigate` does root cause analysis without TDD enforcement.
+
+**Important:** Do NOT use `/investigate` during Phase 2 implementation. Use `/superpowers:systematic-debugging` instead — it enforces TDD (writes a failing test reproducing the bug, then fixes it).
+
+| Bug discovered during... | Use |
+|--------------------------|-----|
+| Phase 2 (implementation) | `/superpowers:systematic-debugging` |
+| Phase 3 (QA/review) | `/investigate` |
+| Production | `/investigate` |
+
 ---
 
 ## Phase 4: Ship and Monitor (GStack)
@@ -507,11 +574,33 @@ Technical Writer role auto-updates all project docs to match what shipped.
 
 Engineering Manager role runs a weekly retrospective with per-person breakdowns and shipping streaks. Use `/retro global` to span all projects.
 
+### Utility Skills (Any Phase)
+
+These GStack skills can be used at any point in the workflow:
+
+| Skill | Purpose |
+|-------|---------|
+| `/learn` | Save and search project learnings across sessions. Useful for long-running projects (> 2 weeks) to preserve decisions and context. |
+| `/health` | Code quality dashboard. Wraps existing tools (type checker, linter, test runner) into a single report. Run before `/ship` to catch issues early. |
+| `/careful` | Enables warnings before destructive commands (`rm -rf`, `git reset --hard`, etc.). Recommended for projects with production databases or shared infrastructure. |
+| `/freeze` | Restricts file edits to a specific directory. Essential for monorepos — prevents accidental changes to other team's code. |
+| `/browse` | Headless browser for ad-hoc testing and site interaction beyond what `/qa` covers. |
+
 ---
 
 ## Project CLAUDE.md Setup
 
-**This is critical.** Create a `CLAUDE.md` file in your project root with the following routing rules. Without this, Claude will not consistently choose the right framework for each phase.
+**This is critical.** Without routing rules in your project's CLAUDE.md, Claude will not consistently choose the right framework for each phase.
+
+**Recommended:** Use the setup-routing skill to generate a tailored CLAUDE.md:
+
+```
+/superpowers-gstack:setup-routing
+```
+
+This asks about your project type, evaluates which skills from both frameworks are relevant, and generates a project-specific routing plan. See [Quick Start](#quick-start).
+
+**Manual alternative:** If you prefer to write it yourself, use the template below.
 
 Create the file at: `<your-project>/CLAUDE.md`
 
@@ -520,53 +609,63 @@ Create the file at: `<your-project>/CLAUDE.md`
 **GStack routing conflict:** GStack checks for a `## Skill routing` section in CLAUDE.md. The template below uses this exact header to prevent GStack from prompting you to add its own routing rules. This saves you one first-run prompt per project.
 
 ```markdown
-# Development Workflow: Superpowers + GStack
+# [Project Name]
 
 ## Skill routing
 
-This project uses two complementary frameworks. Each owns a distinct phase:
+This project uses Superpowers + GStack. Each owns a distinct phase:
 
 ### GStack — Planning, Review, QA, and Shipping
-Use GStack skills for all non-coding phases:
-- Product discovery: `/office-hours`, `/plan-ceo-review`
-- Architecture: `/plan-eng-review`, `/plan-design-review`
-- Combined planning: `/autoplan`
-- Code review: `/review`
-- QA testing: `/qa <url>`, `/qa-only <url>`
-- Security: `/cso`
-- Visual audit: `/design-review`
-- Shipping: `/ship`, `/land-and-deploy`, `/canary`
-- Docs: `/document-release`
-- Retro: `/retro`
+
+**Planning:**
+- `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/autoplan`
+
+**Review & QA:**
+- `/review`, `/qa <url>`, `/qa-only <url>`, `/cso`, `/design-review`, `/investigate`
+
+**Ship & Monitor:**
+- `/ship`, `/land-and-deploy`, `/canary`, `/document-release`, `/retro`
+
+**Utility:**
+- `/learn`, `/health`, `/careful`, `/freeze`, `/browse`
 
 ### Superpowers — Implementation
-Use Superpowers skills for all coding work:
-- Technical brainstorming: `/superpowers:brainstorming`
-- Planning implementation: `/superpowers:writing-plans`
-- Execution with TDD: `/superpowers:subagent-driven-development`
-- Inline execution: `/superpowers:executing-plans`
-- Debugging: `/superpowers:systematic-debugging`
-- Parallel tasks: `/superpowers:dispatching-parallel-agents`
-- Feature branches: `/superpowers:using-git-worktrees`
-- Branch completion: `/superpowers:finishing-a-development-branch`
+- `/superpowers:brainstorming` — technical approach
+- `/superpowers:writing-plans` — TDD task breakdown
+- `/superpowers:subagent-driven-development` — execute with subagents + TDD
+- `/superpowers:executing-plans` — inline execution with checkpoints
+- `/superpowers:systematic-debugging` — root cause analysis (Phase 2 bugs)
+- `/superpowers:dispatching-parallel-agents` — independent parallel tasks
+- `/superpowers:using-git-worktrees` — feature branch isolation
+- `/superpowers:finishing-a-development-branch` — merge/PR/discard
+- `/superpowers:test-driven-development` — manual TDD enforcement
+- `/superpowers:verification-before-completion` — verify before claiming done
+- `/superpowers:requesting-code-review` — dispatch review subagent
+- `/superpowers:writing-skills` — for Claude Code plugin/skill projects only
 
 ### Routing Logic
-- New feature or project idea → Start with `/office-hours` (GStack)
-- "Build this", "implement", "code this" → Start with `/superpowers:brainstorming` (Superpowers)
-- Bug fix → `/superpowers:systematic-debugging` (Superpowers)
-- "Review my code", "check the diff" → `/review` (GStack)
-- "Test this", "find bugs" → `/qa` (GStack)
-- "Is this secure?" → `/cso` (GStack)
-- "Ship it", "create PR" → `/ship` (GStack)
-- Small/trivial changes → No framework needed, just do it
+- New feature or project idea → `/office-hours` (GStack)
+- Ready to build → `/superpowers:brainstorming` (Superpowers)
+- Bug during implementation → `/superpowers:systematic-debugging` (Superpowers)
+- Bug found in QA or production → `/investigate` (GStack)
+- Code complete → `/review` (GStack)
+- Has browser UI → `/qa <url>` (GStack)
+- Security-sensitive → `/cso` before `/review` (GStack)
+- Ready to ship → `/ship` (GStack)
+- Trivial change → No framework needed
 
 ### Rules
 - Never run GStack and Superpowers skills in the same phase
 - Never nest subagents from different frameworks
-- Consider `/clear` when transitioning between frameworks
+- Use `/superpowers:systematic-debugging` for Phase 2 bugs, `/investigate` for Phase 3+ bugs
 - Superpowers specs go in `docs/superpowers/`
 - GStack state lives in `~/.gstack/projects/`
-- When in doubt, ask which framework to use
+
+### Session Management
+- `/clear` when transitioning between GStack and Superpowers phases
+- Save architecture decisions to `docs/` before clearing after Phase 1
+- Reference key changes when starting Phase 3 review
+- Skip `/clear` for small projects (< 5 tasks, < 30 min)
 ```
 
 ### Adapting to Your Project
@@ -848,6 +947,7 @@ They are complementary layers, not alternatives. Don't skip either.
 | `/superpowers:test-driven-development` | Manual TDD enforcement |
 | `/superpowers:verification-before-completion` | Verify before claiming done |
 | `/superpowers:requesting-code-review` | Dispatch review subagent (during Phase 2 only) |
+| `/superpowers:writing-skills` | Claude Code plugin/skill projects only |
 
 ### Decision Tree
 
