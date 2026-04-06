@@ -50,7 +50,7 @@ jobs:
             echo "GSTACK_EOF" >> "$GITHUB_OUTPUT"
 
             # Capture changed skill files
-            skill_changes=$(git diff --name-only ${{ steps.current.outputs.gstack_commit }}..HEAD -- 'skills/' 2>/dev/null | head -30 || echo "unknown")
+            skill_changes=$(git diff --name-only ${{ steps.current.outputs.gstack_commit }}..HEAD -- '*/SKILL.md' 2>/dev/null | head -30 || echo "unknown")
             echo "skill_changes<<GSTACK_SKILLS_EOF" >> "$GITHUB_OUTPUT"
             echo "$skill_changes" >> "$GITHUB_OUTPUT"
             echo "GSTACK_SKILLS_EOF" >> "$GITHUB_OUTPUT"
@@ -175,14 +175,14 @@ jobs:
         run: |
           mkdir -p /tmp/upstream-context
 
-          # GStack skill files (only SKILL.md files — the actual skill definitions)
+          # GStack skill files — skills are directories in the repo root, each with SKILL.md
           if [[ "${{ steps.gstack.outputs.changed }}" == "true" ]]; then
-            find /tmp/gstack/skills -name "SKILL.md" -exec sh -c 'mkdir -p /tmp/upstream-context/gstack/$(basename $(dirname "$1")) && cp "$1" /tmp/upstream-context/gstack/$(basename $(dirname "$1"))/' _ {} \;
+            find /tmp/gstack -maxdepth 2 -name "SKILL.md" -exec sh -c 'mkdir -p /tmp/upstream-context/gstack/$(basename $(dirname "$1")) && cp "$1" /tmp/upstream-context/gstack/$(basename $(dirname "$1"))/' _ {} \;
           fi
 
-          # Superpowers skill files
+          # Superpowers skill files — under skills/ directory
           if [[ "${{ steps.superpowers.outputs.changed }}" == "true" ]]; then
-            find /tmp/superpowers/skills -name "SKILL.md" -exec sh -c 'mkdir -p /tmp/upstream-context/superpowers/$(basename $(dirname "$1")) && cp "$1" /tmp/upstream-context/superpowers/$(basename $(dirname "$1"))/' _ {} \;
+            find /tmp/superpowers -name "SKILL.md" -exec sh -c 'mkdir -p /tmp/upstream-context/superpowers/$(basename $(dirname "$1")) && cp "$1" /tmp/upstream-context/superpowers/$(basename $(dirname "$1"))/' _ {} \;
           fi
 
           tar czf /tmp/upstream-context.tar.gz -C /tmp upstream-context
