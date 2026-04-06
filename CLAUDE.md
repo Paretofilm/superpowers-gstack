@@ -11,7 +11,7 @@ A GitHub Action (`.github/workflows/check-updates.yml`) runs weekly and:
 3. Creates a PR with the changes
 4. Creates a GitHub issue with `notification` label
 
-A SessionStart hook notifies the user of pending updates when starting Claude Code.
+A SessionStart hook (`scripts/notify-pending-updates.sh`) notifies the user of pending updates when starting Claude Code.
 
 The update pipeline also keeps `skills/setup-routing/SKILL.md` in sync — if upstream adds, removes, or renames skills, the skill evaluation tables are updated automatically.
 
