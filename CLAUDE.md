@@ -18,6 +18,13 @@ The update pipeline also keeps `skills/setup-routing/SKILL.md` in sync — if up
 ### Required secret
 `ANTHROPIC_API_KEY` must be set in GitHub repo secrets for the Claude API call.
 
+### Self-repair
+If the update workflow fails, a second workflow (`.github/workflows/self-repair.yml`) automatically:
+1. Reads the error logs from the failed run
+2. Sends them to Claude API for diagnosis
+3. Applies the fix and validates YAML
+4. Creates a PR with label `auto-repair`
+
 ### Manual check
 Run `./scripts/check-updates.sh` locally for an immediate check.
 

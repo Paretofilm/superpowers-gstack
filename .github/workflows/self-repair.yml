@@ -1,0 +1,229 @@
+name: Self-repair on workflow failure
+
+on:
+  workflow_run:
+    workflows: ["Check for upstream updates"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  repair:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get failed workflow logs
+        id: logs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          run_id=${{ github.event.workflow_run.id }}
+
+          # Get failed job IDs
+          failed_jobs=$(gh api "repos/${{ github.repository }}/actions/runs/${run_id}/jobs" \
+            --jq '.jobs[] | select(.conclusion == "failure") | .id')
+
+          # Collect error logs (last 100 lines per job)
+          log_output=""
+          for job_id in $failed_jobs; do
+            job_log=$(gh api "repos/${{ github.repository }}/actions/jobs/${job_id}/logs" 2>/dev/null | tail -100 || echo "Could not fetch logs for job $job_id")
+            log_output="${log_output}
+          --- Job ${job_id} ---
+          ${job_log}"
+          done
+
+          # Also check for annotation errors (YAML syntax errors show here)
+          annotations=$(gh api "repos/${{ github.repository }}/actions/runs/${run_id}" \
+            --jq '.conclusion' 2>/dev/null || echo "unknown")
+
+          # Get annotations from check runs
+          check_annotations=$(gh api "repos/${{ github.repository }}/check-runs" \
+            --method GET \
+            -f filter=latest \
+            --jq '.check_runs[] | select(.conclusion == "failure") | .output.annotations[]? | .message' 2>/dev/null | head -20 || echo "")
+
+          {
+            echo "error_logs<<LOGS_EOF"
+            echo "$log_output"
+            echo "$check_annotations"
+            echo "LOGS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Attempt repair with Claude
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ERROR_LOGS: ${{ steps.logs.outputs.error_logs }}
+        run: |
+          python3 << 'PYTHON_EOF'
+          import json, os, subprocess, sys
+          from pathlib import Path
+
+          error_logs = os.environ.get("ERROR_LOGS", "")
+
+          if not error_logs.strip():
+              print("No error logs found, skipping repair")
+              sys.exit(0)
+
+          # Read the workflow file that likely needs fixing
+          workflow_file = Path(".github/workflows/check-updates.yml")
+          workflow_content = workflow_file.read_text() if workflow_file.exists() else ""
+
+          # Read other files that might be involved
+          files_context = f"## .github/workflows/check-updates.yml\n```yaml\n{workflow_content}\n```\n"
+
+          # Check if SKILL.md might be involved
+          skill_file = Path("skills/setup-routing/SKILL.md")
+          if skill_file.exists():
+              files_context += f"\n## skills/setup-routing/SKILL.md\n```markdown\n{skill_file.read_text()[:3000]}\n```\n"
+
+          prompt = f"""You are a CI/CD repair agent. A GitHub Actions workflow has failed.
+          Your job is to diagnose the error and produce a minimal fix.
+
+          ## Error logs
+
+          {error_logs[:5000]}
+
+          ## Current files
+
+          {files_context}
+
+          ## Rules
+          - Only fix the specific error shown in the logs
+          - Make the SMALLEST possible change
+          - Do NOT refactor, restructure, or improve unrelated code
+          - If the error is in YAML, validate your fix mentally
+          - If you cannot determine the fix with confidence, output SKIP
+
+          ## Output format
+
+          If you can fix it, output EXACTLY:
+          1. The marker `===FILE: path/to/file===`
+          2. The complete fixed file content
+          3. Repeat for each file that needs fixing
+
+          If multiple files need fixing, separate them with the marker.
+          If you cannot fix it, output only the word SKIP.
+          Output ONLY file markers and content, no commentary."""
+
+          request = {
+              "model": "claude-sonnet-4-20250514",
+              "max_tokens": 16000,
+              "messages": [{"role": "user", "content": prompt}]
+          }
+
+          Path("/tmp/repair-request.json").write_text(json.dumps(request))
+
+          result = subprocess.run(
+              ["curl", "-s", "-w", "\n%{http_code}",
+               "https://api.anthropic.com/v1/messages",
+               "-H", f"x-api-key: {os.environ['ANTHROPIC_API_KEY']}",
+               "-H", "anthropic-version: 2023-06-01",
+               "-H", "content-type: application/json",
+               "-d", "@/tmp/repair-request.json"],
+              capture_output=True, text=True, timeout=120
+          )
+
+          lines = result.stdout.strip().rsplit("\n", 1)
+          body = lines[0] if len(lines) > 1 else result.stdout
+          status = lines[1] if len(lines) > 1 else "unknown"
+
+          if status != "200":
+              print(f"API error (HTTP {status}): {body[:500]}", file=sys.stderr)
+              sys.exit(1)
+
+          response = json.loads(body)
+          content = response["content"][0]["text"].strip()
+
+          if content == "SKIP":
+              print("Claude could not determine a fix. Manual intervention needed.")
+              sys.exit(0)
+
+          if "===FILE:" not in content:
+              print("Unexpected response format, skipping repair")
+              print(content[:500])
+              sys.exit(0)
+
+          # Parse and write fixed files
+          parts = content.split("===FILE: ")
+          files_written = []
+          for part in parts:
+              if not part.strip():
+                  continue
+              marker_end = part.index("===")
+              file_path = part[:marker_end].strip()
+              file_content = part[marker_end + 3:].strip()
+
+              # Remove markdown fences if present
+              if file_content.startswith("```"):
+                  first_newline = file_content.index("\n")
+                  file_content = file_content[first_newline + 1:]
+              if file_content.endswith("```"):
+                  file_content = file_content[:-3].rstrip()
+
+              Path(file_path).write_text(file_content + "\n")
+              files_written.append(file_path)
+              print(f"Fixed: {file_path}")
+
+          # Validate YAML if a workflow file was fixed
+          for f in files_written:
+              if f.endswith(".yml") or f.endswith(".yaml"):
+                  import yaml
+                  try:
+                      yaml.safe_load(Path(f).read_text())
+                      print(f"YAML validation passed: {f}")
+                  except yaml.YAMLError as e:
+                      print(f"YAML validation FAILED for {f}: {e}", file=sys.stderr)
+                      print("Repair produced invalid YAML, aborting")
+                      sys.exit(1)
+
+          # Write list of fixed files for next step
+          Path("/tmp/fixed-files.txt").write_text("\n".join(files_written))
+          PYTHON_EOF
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create repair PR
+        if: steps.diff.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          branch="auto-repair/$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$branch"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Stage only the files that were fixed
+          while IFS= read -r file; do
+            git add "$file"
+          done < /tmp/fixed-files.txt
+
+          git commit -m "Auto-repair: fix workflow failure
+
+          Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
+          git push -u origin "$branch"
+
+          gh pr create \
+            --title "Auto-repair: fix workflow failure" \
+            --body "## Self-repair
+
+          The \`Check for upstream updates\` workflow failed. Claude analyzed the error logs and produced this fix.
+
+          **Failed run:** ${{ github.event.workflow_run.html_url }}
+
+          Review the fix before merging.
+
+          ---
+          *This PR was created automatically by the self-repair workflow.*" \
+            --label "auto-repair"
