@@ -61,7 +61,7 @@ cd ~/.claude/skills/gstack
 The setup script:
 1. Installs npm dependencies and builds the Playwright browser daemon (~58MB)
 2. Creates symlinks in `~/.claude/skills/` for each GStack skill (office-hours, review, qa, etc.)
-3. Generates SKILL.md files for all 37 skills
+3. Generates SKILL.md files for all skills
 
 **Prerequisites:** [Bun](https://bun.sh) must be installed (`brew install oven-sh/bun/bun`).
 
@@ -418,7 +418,8 @@ For report-only mode (no code changes):
 Chief Security Officer role runs:
 - OWASP Top 10 analysis
 - STRIDE threat modeling
-- 17 false-positive exclusions to reduce noise
+- Infrastructure-first security audit including secrets archaeology, dependency supply chain, and CI/CD pipeline security
+- LLM/AI security and skill supply chain scanning
 - 8/10+ confidence gate (only reports high-confidence findings)
 
 ### Step 4: Visual Audit (Optional)
@@ -427,7 +428,7 @@ Chief Security Officer role runs:
 /design-review
 ```
 
-80-item visual audit with before/after screenshots and atomic commits.
+Designer's eye QA with before/after screenshots and atomic commits for each fix found.
 
 ---
 
@@ -816,12 +817,17 @@ They are complementary layers, not alternatives. Don't skip either.
 | `/plan-ceo-review` | Validating scope and strategy |
 | `/plan-eng-review` | Locking architecture |
 | `/plan-design-review` | Validating design |
+| `/plan-devex-review` | Developer experience planning |
 | `/autoplan` | All three reviews chained |
 | `/review` | Pre-merge code review |
 | `/qa <url>` | Browser-based testing |
 | `/qa-only <url>` | Testing without fixes |
 | `/cso` | Security audit |
 | `/design-review` | Visual audit |
+| `/design-consultation` | Create design system |
+| `/design-html` | Generate production HTML/CSS |
+| `/design-shotgun` | Explore design variants |
+| `/devex-review` | Live developer experience audit |
 | `/investigate` | Production bug root cause |
 | `/ship` | Create PR and deploy |
 | `/land-and-deploy` | Merge and verify |
@@ -830,8 +836,16 @@ They are complementary layers, not alternatives. Don't skip either.
 | `/retro` | Sprint retrospective |
 | `/learn` | Save/search project learnings |
 | `/health` | Code quality dashboard |
+| `/benchmark` | Performance regression detection |
+| `/browse` | Fast headless browser for testing |
+| `/checkpoint` | Save/resume working state |
+| `/codex` | OpenAI Codex second opinion |
 | `/careful` | Enable destructive command warnings |
 | `/freeze` | Lock edits to one directory |
+| `/open-gstack-browser` | Browser utilities |
+| `/setup-browser-cookies` | Browser cookie management |
+| `/setup-deploy` | Deployment configuration |
+| `/gstack-upgrade` | Upgrade GStack installation |
 
 ### Superpowers Commands (Implementation)
 
