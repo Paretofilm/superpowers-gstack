@@ -29,15 +29,14 @@ They never overlap. GStack focuses on *what roles review the work*. Superpowers 
 
 ## What's Included
 
-- **[Workflow Manual](superpowers-gstack-workflow-manual.md)** — Phase-by-phase guide with routing logic, session management, and common scenarios
-- **[Appendix](appendix-reference.md)** — Skill internals, troubleshooting, and anti-patterns
 - **Claude Code Plugin** with three skills:
   - `/setup-routing` — Generates a tailored CLAUDE.md for new projects
   - `/adapt` — Adds routing to existing projects without losing your CLAUDE.md content
-  - `/context-guard` — Lightweight context management inspired by [GSD](https://github.com/gsd-build/get-shit-done) — saves session state, auto-resumes after `/clear` or `/compact`, and proactively suggests context resets when sessions get long
+  - `/context-guard` — Saves session state, auto-resumes after `/clear` or `/compact`, and proactively suggests context resets when sessions get long
+- **[Appendix](appendix-reference.md)** — Skill internals, troubleshooting, and anti-patterns
+- **Automated update pipeline** — GitHub Actions keeps the plugin in sync when upstream frameworks change
 
 > **Tip:** In autocomplete, type `/setup-routing`, `/adapt`, or `/context-guard` — Claude Code matches on the skill name. The full prefixed form (e.g. `/superpowers-gstack:adapt`) also works.
-- **Automated update pipeline** — GitHub Actions keeps the manual in sync when upstream frameworks change
 
 ## Kickstart
 
@@ -66,13 +65,6 @@ cd ~/.claude/skills/gstack && ./setup
 
 Restart Claude Code after installation.
 
-Optionally, set up the update notification hook:
-
-```bash
-git clone https://github.com/Paretofilm/superpowers-gstack.git ~/Developer/superpowers-gstack
-cd ~/Developer/superpowers-gstack && ./scripts/setup-hooks.sh
-```
-
 **Important:** Start Claude Code from your project directory before running setup:
 
 ```bash
@@ -90,8 +82,6 @@ claude
 /adapt
 ```
 
-> These are shorthand for `/superpowers-gstack:setup-routing` and `/superpowers-gstack:adapt`. Both forms work — the short form is easier to find in autocomplete.
-
 This generates a CLAUDE.md with routing rules tailored to your project type, tech stack, and deployment target.
 
 ### 4. Start working
@@ -105,9 +95,57 @@ This generates a CLAUDE.md with routing rules tailored to your project type, tec
 | Ready to ship | `/ship` |
 | Long session, save state | `/context-guard` |
 
+## The Workflow
+
+```
+┌─────────────────────────────────────────────────┐
+│  PHASE 1: DISCOVERY & PLANNING (GStack)         │
+│                                                  │
+│  /office-hours    → Product framing              │
+│  /plan-ceo-review → Strategic validation         │
+│  /plan-eng-review → Architecture lock            │
+│  /plan-design-review → Design validation         │
+│  /autoplan        → Chains all three reviews     │
+├─────────────────────────────────────────────────┤
+│  PHASE 2: IMPLEMENTATION (Superpowers)           │
+│                                                  │
+│  /superpowers:brainstorming           → Refine   │
+│  /superpowers:writing-plans           → TDD tasks│
+│  /superpowers:subagent-driven-development → Build│
+│  /superpowers:systematic-debugging    → Fix bugs │
+├─────────────────────────────────────────────────┤
+│  PHASE 3: REVIEW & QA (GStack)                   │
+│                                                  │
+│  /review          → Pre-landing code review      │
+│  /qa <url>        → Browser-based testing        │
+│  /cso             → Security audit               │
+│  /design-review   → Visual audit                 │
+├─────────────────────────────────────────────────┤
+│  PHASE 4: SHIP & MONITOR (GStack)                │
+│                                                  │
+│  /ship            → Tests, coverage, PR          │
+│  /canary          → Post-deploy monitoring       │
+│  /retro           → Sprint retrospective         │
+│  /document-release → Update docs                 │
+└─────────────────────────────────────────────────┘
+```
+
+### Phase transitions
+
+Use `/clear` when switching between GStack and Superpowers phases (skip for small projects < 5 tasks). Before clearing after Phase 1, save key decisions:
+
+```
+# Save decisions, then clear
+/clear
+/superpowers:brainstorming
+Adopt the design as-is from the Phase 1 design doc — focus on technical details only.
+```
+
+If review feedback needs code changes: `/superpowers:receiving-code-review` → fix → `/review` again.
+
 ## Context Management
 
-Long sessions degrade Claude's output quality — a problem known as context rot. GSD solves this with a full orchestration layer, but that creates nesting issues when combined with Superpowers' subagent-driven development. This plugin takes a lighter approach:
+Long sessions degrade Claude's output quality — a problem known as context rot. [GSD](https://github.com/gsd-build/get-shit-done) solves this with a full orchestration layer, but that creates nesting issues when combined with Superpowers' subagent-driven development (three layers of orchestration). This plugin takes a lighter approach:
 
 **How it works:**
 1. After `/compact`, Claude asks if you want to activate auto context guard for the session
@@ -119,41 +157,151 @@ Long sessions degrade Claude's output quality — a problem known as context rot
 
 No hooks, no orchestration overhead, no nesting. Just save and restore.
 
-## The Workflow at a Glance
+## Common Scenarios
+
+### New Feature (Full Workflow)
 
 ```
-Phase 1: Planning (GStack)        Phase 2: Implementation (Superpowers)
-/office-hours → frame idea         /superpowers:brainstorming → refine
-/plan-ceo-review → validate        /superpowers:writing-plans → TDD tasks
-/plan-eng-review → architecture    /superpowers:subagent-driven-development → build
-                                   /superpowers:systematic-debugging → fix bugs
-        │                                    │
-        └──── /clear ────────────────────────┘
-                                             │
-Phase 3: Review & QA (GStack)      Phase 4: Ship (GStack)
-/review → code review              /ship → PR and deploy
-/qa <url> → browser testing        /canary → monitor
-/cso → security audit              /retro → retrospective
+/office-hours          → Frame the idea
+/plan-ceo-review       → Validate scope
+/plan-eng-review       → Lock architecture
+  → Save key decisions to docs/
+/clear
+/superpowers:brainstorming         → Adopt design, refine technical approach
+/superpowers:writing-plans         → Break into TDD tasks
+/superpowers:subagent-driven-development → Build it
+/clear
+/review                → Code review
+/qa http://localhost:3000 → Browser testing
+/cso                   → Security check
+/ship                  → PR and deploy
 ```
 
-Read the full [Workflow Manual](superpowers-gstack-workflow-manual.md) for details.
+### Bug Fix
+
+```
+/superpowers:systematic-debugging  → Find root cause + fix with TDD
+/clear
+/review                → Verify the fix
+/ship                  → Deploy
+```
+
+### Small Feature (Skip Planning)
+
+```
+/superpowers:brainstorming         → Quick technical refinement
+/superpowers:writing-plans         → TDD tasks
+/superpowers:subagent-driven-development → Build it
+/clear
+/review → /ship
+```
+
+### Tiny Project (< 5 tasks)
+
+```
+/superpowers:brainstorming         → Adopt quickly
+/superpowers:writing-plans         → TDD breakdown
+/superpowers:executing-plans       → Inline execution (no subagents)
+/review → /ship
+```
+
+Skip Phase 1, skip `/clear` between phases, skip subagents, skip review specialists for < 200 LOC.
+
+### Security-Critical Feature
+
+```
+/office-hours → /plan-eng-review (security focus)
+/clear
+/superpowers:brainstorming → /superpowers:writing-plans → SDD
+/clear
+/cso                   → Security audit FIRST
+/review → /qa → /ship → /canary
+```
+
+## Quick Reference
+
+### Decision Tree
+
+```
+New idea or feature?
+  YES → /office-hours (GStack)
+  NO  →
+    Bug?
+      During coding?    → /superpowers:systematic-debugging
+      During QA/prod?   → /investigate (GStack)
+    Scope clear?
+      YES → /superpowers:brainstorming
+      NO  → /office-hours
+
+Code written?  → /clear → /review
+Review feedback needs changes? → /superpowers:receiving-code-review → fix → /review
+Review passed? → /qa → /cso → /ship
+```
+
+### GStack Commands
+
+| Command | When to Use |
+|---------|------------|
+| `/office-hours` | Starting something new |
+| `/plan-ceo-review` | Validating scope and strategy |
+| `/plan-eng-review` | Locking architecture |
+| `/plan-design-review` | Validating design |
+| `/autoplan` | Chains all three reviews |
+| `/review` | Pre-merge code review |
+| `/qa <url>` | Browser-based testing |
+| `/cso` | Security audit |
+| `/design-review` | Visual audit |
+| `/investigate` | Bug root cause (QA/production) |
+| `/ship` | Create PR and deploy |
+| `/land-and-deploy` | Merge and verify |
+| `/canary` | Post-deploy monitoring |
+| `/document-release` | Update docs |
+| `/retro` | Sprint retrospective |
+| `/health` | Code quality dashboard |
+| `/checkpoint` | End-of-day git snapshot |
+| `/context-guard` | Save session state before /clear |
+| `/careful` | Destructive command warnings |
+| `/freeze` | Restrict edits to one directory |
+| `/browse` | Headless browser |
+
+### Superpowers Commands
+
+| Command | When to Use |
+|---------|------------|
+| `/superpowers:brainstorming` | Refining technical approach |
+| `/superpowers:writing-plans` | Creating TDD task breakdown |
+| `/superpowers:subagent-driven-development` | Executing with subagents + TDD |
+| `/superpowers:executing-plans` | Inline execution (small projects) |
+| `/superpowers:dispatching-parallel-agents` | Independent parallel tasks |
+| `/superpowers:systematic-debugging` | Finding root cause of bugs |
+| `/superpowers:using-git-worktrees` | Feature branch isolation |
+| `/superpowers:finishing-a-development-branch` | Merge/PR/discard |
+| `/superpowers:test-driven-development` | Manual TDD enforcement |
+| `/superpowers:verification-before-completion` | Verify before claiming done |
+| `/superpowers:requesting-code-review` | Dispatch review subagent |
+| `/superpowers:receiving-code-review` | Handle review feedback |
+| `/superpowers:writing-skills` | Plugin/skill projects only |
+
+## How It Stays Up to Date
+
+A GitHub Actions workflow runs weekly and checks for new versions of GStack, Superpowers, and Claude Code. When changes are found, it automatically updates the plugin and creates a PR. A self-repair workflow handles failures automatically.
+
+See [VERSIONS.md](VERSIONS.md) for currently tracked versions.
 
 ## Contributing
 
-This is a work in progress and **any help is welcome**. Here are some ways to contribute:
+This is a work in progress and **any help is welcome**:
 
 - **Try it out** — Use the workflow on a real project and report what works and what doesn't
 - **Open issues** — Bug reports, unclear documentation, missing scenarios
 - **Submit PRs** — Fixes, improvements, new common scenarios
-- **Share your experience** — Write about your setup, what you added to your CLAUDE.md, or workflow adaptations that worked for your team
-- **Suggest skills** — If upstream adds new skills that should be in the routing tables, let us know
+- **Share your experience** — Write about your setup or workflow adaptations
 
 ### Areas that need help
 
 - Testing with more project types (mobile, data pipelines, monorepos, infrastructure)
 - Better routing heuristics for edge cases
 - Integration testing after upstream framework updates
-- Documentation improvements and examples
 
 ### How to contribute
 
@@ -162,39 +310,28 @@ This is a work in progress and **any help is welcome**. Here are some ways to co
 3. Make your changes
 4. Submit a PR
 
-No contribution is too small. Even fixing a typo or clarifying a sentence helps.
-
-## How It Stays Up to Date
-
-A GitHub Actions workflow runs weekly and checks for new versions of GStack, Superpowers, and Claude Code. When changes are found, it automatically updates the manual and creates a PR. A self-repair workflow handles failures automatically.
-
-See [VERSIONS.md](VERSIONS.md) for currently tracked versions.
-
 ## Frequently Asked Questions
 
 **Should I use GStack or Superpowers?**
-Both. They cover different phases. GStack handles planning, code review, QA, security, and shipping. Superpowers handles implementation with TDD, debugging, and structured coding. This project gives you the workflow to combine them.
+Both. They cover different phases. This project gives you the workflow to combine them.
 
 **Can I use this with an existing project?**
-Yes. Run `/superpowers-gstack:adapt` — it analyzes your project, preserves your existing CLAUDE.md content, and adds only the routing section needed.
+Yes. Run `/adapt` — it preserves your existing CLAUDE.md and adds only the routing section.
 
 **Do I need both frameworks installed?**
-Yes. This workflow requires both [Superpowers](https://github.com/obra/superpowers) (Claude Code plugin) and [GStack](https://github.com/garrytan/gstack) (Claude Code skills). Install both, then add this plugin for routing.
+Yes. Install both [Superpowers](https://github.com/obra/superpowers) and [GStack](https://github.com/garrytan/gstack), then add this plugin for routing.
 
-**What if I only want GStack or only Superpowers?**
-Each works fine on its own. This project is specifically for people who want to use both together. If you only use one, you don't need this.
+**What if I only want one framework?**
+Each works fine on its own. This project is for people who want to use both together.
 
 **How does context management compare to GSD?**
-GSD (Get Shit Done) is a full orchestration framework with wave-based execution, state machines, and hooks. It's powerful but creates nesting problems when combined with Superpowers' subagent-driven development (three layers of orchestration). This plugin takes GSD's best idea — context hygiene — and implements it as a lightweight save/restore mechanism with no orchestration overhead. If you want full GSD, install it separately; if you want context management that plays nicely with the Superpowers + GStack workflow, use `/context-guard`.
+GSD is a full orchestration framework with wave-based execution and state machines. It's powerful but creates nesting problems with Superpowers' SDD (three layers of orchestration). This plugin takes GSD's best idea — context hygiene — and implements it as a lightweight save/restore mechanism. If you want full GSD, install it separately.
 
-**Does this work with Cursor / Windsurf / other AI editors?**
-No. This is built for [Claude Code](https://claude.ai/code) (Anthropic's CLI). Both Superpowers and GStack are Claude Code frameworks.
-
-**How is this different from the comparison articles?**
-Articles compare the frameworks. This project integrates them — with a concrete workflow, routing rules that prevent conflicts, a CLAUDE.md generator, and an automated pipeline that keeps everything in sync with upstream changes.
+**Does this work with Cursor / Windsurf?**
+No. Built for [Claude Code](https://claude.ai/code) only.
 
 **What project types does this support?**
-The setup skill asks about your project and generates routing tailored to it: web apps, APIs, mobile, CLI tools, libraries, data pipelines, monorepos, Claude Code plugins, and more.
+Web apps, APIs, mobile, CLI tools, libraries, data pipelines, monorepos, Claude Code plugins, and more. The setup skill tailors routing to your project.
 
 ## Keywords
 
@@ -202,9 +339,9 @@ The setup skill asks about your project and generates routing tailored to it: we
 
 ## A Note on How This Was Built
 
-This entire project — the workflow manual, the routing plugin, the skill evaluation tables, the consistency checks, and even this README — was developed by Claude Code using the very workflow it documents. No human wrote or edited the content. A human guided the direction and reviewed the results, but every line was authored by AI.
+This entire project — the routing plugin, the skill evaluation tables, the consistency checks, and even this README — was developed by Claude Code using the very workflow it documents. No human wrote or edited the content. A human guided the direction and reviewed the results, but every line was authored by AI.
 
-This was deliberate. The workflow needed to make sense to an AI that would actually follow it, not just read well to a human skimming a README. The result is a set of instructions that Claude Code genuinely works well with — because it wrote them for itself.
+The workflow needed to make sense to an AI that would actually follow it, not just read well to a human skimming a README. The result is a set of instructions that Claude Code genuinely works well with — because it wrote them for itself.
 
 Whether that's reassuring or unsettling is left as an exercise for the reader.
 

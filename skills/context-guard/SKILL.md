@@ -9,13 +9,15 @@ Lightweight context hygiene inspired by GSD. Prevents context rot without adding
 
 ## When this skill activates
 
-- User says "save state", "context getting long", "about to clear"
+- User says "context getting long", "about to clear", "save before clear"
 - CLAUDE.md sensor triggers after /compact (user opts in to auto-modus)
 - User explicitly invokes /context-guard
 
 ## Save state
 
-1. **Write handoff file** at `docs/superpowers/handoff.md` (overwrite if exists):
+1. **Create `docs/superpowers/` directory** if it doesn't exist.
+
+2. **Write handoff file** at `docs/superpowers/handoff.md` (overwrite if exists):
 
    ```markdown
    # Session Handoff — {YYYY-MM-DD HH:MM}
@@ -42,7 +44,7 @@ Lightweight context hygiene inspired by GSD. Prevents context rot without adding
    - {anything unresolved, or "None"}
    ```
 
-2. Tell the user: "State saved. You can `/clear` now — I'll pick up automatically."
+3. Tell the user: "State saved. You can `/clear` now — I'll pick up automatically."
 
 **STOP HERE.** Do not continue or suggest next steps.
 
@@ -50,16 +52,15 @@ Lightweight context hygiene inspired by GSD. Prevents context rot without adding
 
 When the user opts in to auto context guard after a compact trigger:
 
-1. **Update handoff.md after each significant milestone** — completing a task, making a key decision, finishing a file. Don't update on every small change.
+1. **Append `## Mode: auto` to handoff.md** immediately. This marker tells the CLAUDE.md sensor not to re-ask after subsequent compacts.
 
-2. **Suggest /clear proactively** when you estimate context is getting heavy again:
-   - Multiple large file reads since last compact
-   - Many sequential tool calls (20+) since last compact/clear
-   - You're about to start a new major task that would benefit from fresh context
+2. **Update handoff.md after each significant milestone** — completing a task, making a key decision, finishing a file. Don't update on every small change. Always preserve the `## Mode: auto` marker when updating.
 
-   Say: "Context is getting heavy again. handoff.md is up to date — safe to /clear."
+3. **Suggest /clear proactively** when you're about to start a new major task that would benefit from fresh context, or when the session has been through multiple large operations since last compact/clear.
 
-3. **Do NOT ask repeatedly.** Suggest /clear once. If the user continues, respect that and keep working. You may suggest again only if another compact happens.
+   Say: "Context is getting heavy. handoff.md is up to date — safe to /clear."
+
+4. **Do NOT ask repeatedly.** Suggest /clear once. If the user continues, respect that and keep working. You may suggest again only if another compact happens.
 
 ## Resume is automatic
 

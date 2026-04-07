@@ -61,9 +61,9 @@ For the update notification hook (optional, after cloning the repo):
 
 ## Session continuity
 
-On session start or after /compact: if `docs/superpowers/handoff.md` exists and contains content, read it and present a one-line summary of where you left off. Then proceed normally — do not ask "ready to continue?". Clear the file (write empty string) once work has resumed.
+On session start or after /compact: if `docs/superpowers/handoff.md` exists and contains content, read it and present a one-line summary of where you left off. Then proceed normally — do not ask "ready to continue?". Clear the file (write empty string) immediately after presenting the summary.
 
-After /compact: if no auto context guard is active, ask the user once: "Context was compressed. Want me to activate auto context guard for this session? I'll keep handoff.md updated and suggest /clear when context gets heavy." If yes, invoke the context-guard skill.
+After /compact: if handoff.md does not contain `## Mode: auto`, ask the user once: "Context was compressed. Want me to activate auto context guard for this session? I'll keep handoff.md updated and suggest /clear when context gets heavy." If yes, invoke the context-guard skill.
 
 ## Skill conversation discipline
 
@@ -86,6 +86,6 @@ Key routing rules:
 - Design system, brand → invoke design-consultation
 - Visual audit, design polish → invoke design-review
 - Architecture review → invoke plan-eng-review
-- Save progress, checkpoint, resume → invoke checkpoint
-- Save state, context long, before /clear → invoke context-guard
+- End of day, switch project, checkpoint, git snapshot → invoke checkpoint
+- Context long, before /clear, before /compact → invoke context-guard
 - Code quality, health check → invoke health

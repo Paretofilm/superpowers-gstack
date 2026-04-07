@@ -163,7 +163,12 @@ Apply the changes identified in Step 4. Follow these rules strictly:
 - If a `## Skill routing` section already exists: REPLACE only that section
 - If no `## Skill routing` section exists: ADD it after the first heading (or at the top if no heading)
 - The routing section follows the same template as `setup-routing` Step 6, adapted to this project
-- If no `## Session Continuity` section exists in CLAUDE.md: ADD the session continuity block (same as `setup-routing` Step 6 template). If it already exists, leave it unchanged.
+- If no `## Session Continuity` section exists in CLAUDE.md: ADD the following block. If it already exists, leave it unchanged:
+  ```
+  ## Session Continuity
+  On session start or after /compact: if `docs/superpowers/handoff.md` exists and contains content, read it and present a one-line summary of where you left off. Then proceed normally — do not ask "ready to continue?". Clear the file (write empty string) immediately after presenting the summary.
+  After /compact: if handoff.md does not contain `## Mode: auto`, ask the user once: "Context was compressed. Want me to activate auto context guard for this session? I'll keep handoff.md updated and suggest /clear when context gets heavy." If yes, invoke the context-guard skill.
+  ```
 
 **Structure setup:**
 - Create `docs/superpowers/specs/` and `docs/superpowers/plans/` if they don't exist

@@ -1,6 +1,6 @@
 # Appendix: Detailed Reference
 
-This appendix contains operational details, skill internals, troubleshooting, and anti-patterns for the Superpowers + GStack workflow. The [main manual](superpowers-gstack-workflow-manual.md) covers the workflow itself.
+This appendix contains operational details, skill internals, troubleshooting, and anti-patterns for the Superpowers + GStack workflow. See the [README](README.md) for the workflow overview.
 
 ---
 
@@ -256,7 +256,7 @@ Then reinstall via marketplace (see [Kickstart](README.md#kickstart) for the com
 
 **Symptom:** You ask to implement something and GStack's `/investigate` activates instead of Superpowers' debugging.
 
-**Fix:** Add the `## Skill routing` section to your project's CLAUDE.md (see [Project CLAUDE.md Setup](superpowers-gstack-workflow-manual.md#project-claudemd-setup)). Without routing rules, Claude guesses based on context and often picks wrong.
+**Fix:** Run `/setup-routing` (new project) or `/adapt` (existing project) to generate routing rules in your CLAUDE.md. Without routing rules, Claude guesses based on context and often picks wrong.
 
 ### `/review` says "nothing to review"
 

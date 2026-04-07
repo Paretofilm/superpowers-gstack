@@ -95,7 +95,7 @@ if [ "$CHANGES_FOUND" = true ]; then
   echo ""
   echo -e "$REPORT"
   echo "### Action needed"
-  echo "Review changes above and update superpowers-gstack-workflow-manual.md if affected."
+  echo "Review changes above and update README.md if affected."
   exit 2  # Signal: changes found
 else
   echo "No updates detected. Last check: $now"

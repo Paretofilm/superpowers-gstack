@@ -206,7 +206,7 @@ jobs:
           from pathlib import Path
 
           report = os.environ.get("REPORT", "")
-          manual = Path("superpowers-gstack-workflow-manual.md").read_text()
+          manual = Path("README.md").read_text()
           versions = Path("VERSIONS.md").read_text()
 
           # Collect upstream skill files — only changed ones to reduce payload
@@ -233,12 +233,12 @@ jobs:
           if adapt_path.exists():
               adapt_skill = adapt_path.read_text()
 
-          prompt = f"""You are updating a workflow manual for using Superpowers and GStack with Claude Code.
+          prompt = f"""You are updating the README for the Superpowers + GStack Claude Code plugin.
           Today's date is {today}.
 
           ## Your task
-          1. Read the current manual and the upstream changes report
-          2. Identify which sections of the manual are affected by the changes
+          1. Read the current README and the upstream changes report
+          2. Identify which sections of the README are affected by the changes
           3. Update ONLY the affected sections — preserve everything else exactly
           4. Update VERSIONS.md with new version numbers and today's date
           5. If skills were added/removed/renamed upstream, update the setup-routing SKILL.md skill evaluation tables
@@ -247,8 +247,8 @@ jobs:
           ## Rules
           - Only change sections directly affected by upstream changes
           - Keep the same structure, style, and tone
-          - If a skill was renamed, update all references in ALL files (manual + SKILL.md)
-          - If a skill was added, add it to Quick Reference, relevant manual sections, AND the skill evaluation tables in BOTH setup-routing/SKILL.md and adapt/SKILL.md
+          - If a skill was renamed, update all references in ALL files (README + SKILL.md)
+          - If a skill was added, add it to Quick Reference, relevant README sections, AND the skill evaluation tables in BOTH setup-routing/SKILL.md and adapt/SKILL.md
           - If a skill was removed, remove it from all sections and both skill evaluation tables
           - The evaluation tables in setup-routing/SKILL.md and adapt/SKILL.md MUST remain identical
           - If behavior changed, update the description
@@ -276,7 +276,7 @@ jobs:
 
           {report}
 
-          ## Current manual
+          ## Current README
 
           {manual}
 
@@ -291,7 +291,7 @@ jobs:
           ## Output format
 
           Return the files separated by markers. Always include:
-          1. The complete updated manual
+          1. The complete updated README
           2. The marker `===VERSIONS.md===`
           3. The complete updated VERSIONS.md
           4. If the setup-routing SKILL.md needs updates (skills added/removed/renamed), also include:
@@ -335,7 +335,7 @@ jobs:
 
           if "===VERSIONS.md===" in content:
               manual_part, rest = content.split("===VERSIONS.md===", 1)
-              Path("superpowers-gstack-workflow-manual.md").write_text(manual_part.strip() + "\n")
+              Path("README.md").write_text(manual_part.strip() + "\n")
               updated = ["manual"]
 
               if "===SKILL.md===" in rest:
@@ -357,7 +357,7 @@ jobs:
 
               print(f"Files updated: {', '.join(updated)}")
           else:
-              Path("superpowers-gstack-workflow-manual.md").write_text(content.strip() + "\n")
+              Path("README.md").write_text(content.strip() + "\n")
               print("Warning: VERSIONS.md marker not found, only manual updated")
           PYTHON_EOF
 
@@ -383,9 +383,9 @@ jobs:
           git checkout -b "$branch"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add superpowers-gstack-workflow-manual.md VERSIONS.md skills/setup-routing/SKILL.md skills/adapt/SKILL.md
+          git add README.md VERSIONS.md skills/setup-routing/SKILL.md skills/adapt/SKILL.md
 
-          git commit -m "Auto-update manual for upstream changes
+          git commit -m "Auto-update README for upstream changes
 
           Co-Authored-By: Claude Sonnet <noreply@anthropic.com>"
           git push -u origin "$branch"
