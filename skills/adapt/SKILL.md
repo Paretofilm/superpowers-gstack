@@ -18,6 +18,8 @@ Invoke this skill with: `/superpowers-gstack:adapt`
 > ```
 > Then run `/superpowers-gstack:adapt` again.
 
+**Version check:** This skill is version **1.3.0**. If the project's CLAUDE.md contains a version marker (`<!-- superpowers-gstack: X.Y.Z -->`) with an older version, inform the user that routing and session rules will be updated to the current version as part of this adaptation.
+
 ## Process
 
 Follow these steps in order. Do NOT skip steps.
@@ -164,7 +166,7 @@ Apply the changes identified in Step 4. Follow these rules strictly:
 - If a `## Skill routing` section already exists: REPLACE only that section
 - If no `## Skill routing` section exists: ADD it after the first heading (or at the top if no heading)
 - The routing section follows the same template as `setup-routing` Step 6, adapted to this project
-- If no `## Session Continuity` section exists in CLAUDE.md: ADD the following block. If it already exists, leave it unchanged:
+- If no `## Session Continuity` section exists in CLAUDE.md: ADD the following block. If it already exists, REPLACE it with the current version:
   ```
   ## Session Continuity
   On session start or after /compact: if `docs/superpowers/handoff.md` exists and contains content, read it and present a one-line summary of where you left off. Then proceed normally — do not ask "ready to continue?". Clear the file (write empty string) immediately after presenting the summary.
