@@ -36,7 +36,10 @@ They never overlap. GStack focuses on *what roles review the work*. Superpowers 
   - `/superpowers-gstack:adapt` — Adds routing to existing projects without losing your CLAUDE.md content
 - **Automated update pipeline** — GitHub Actions keeps the manual in sync when upstream frameworks change
 
-## Quick Start
+## Kickstart
+
+> *Vibe coding with a flight plan.*
+> *Because your AI already has opinions. Might as well make them good.*
 
 ### 1. Install the frameworks
 
@@ -52,14 +55,27 @@ cd ~/.claude/skills/gstack && ./setup
 
 ### 2. Install this plugin
 
-```bash
-git clone https://github.com/Paretofilm/superpowers-gstack.git ~/Developer/superpowers-gstack
-cd ~/Developer/superpowers-gstack
-./scripts/install-plugin.sh
-./scripts/setup-hooks.sh
+```
+# In Claude Code:
+/plugin marketplace add kjetilge/kjetil-claude-marketplace
+/plugin install superpowers-gstack@kjetil-plugins
 ```
 
 Restart Claude Code after installation.
+
+Optionally, set up the update notification hook:
+
+```bash
+git clone https://github.com/Paretofilm/superpowers-gstack.git ~/Developer/superpowers-gstack
+cd ~/Developer/superpowers-gstack && ./scripts/setup-hooks.sh
+```
+
+**Important:** Start Claude Code from your project directory before running setup:
+
+```bash
+cd ~/Developer/my-project
+claude
+```
 
 ### 3. Set up your project
 
