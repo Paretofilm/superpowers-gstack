@@ -1,7 +1,7 @@
 {
   "name": "superpowers-gstack",
   "description": "Setup and configure the Superpowers + GStack combined workflow for any project type",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "Kjetil Geirbo"
   }
