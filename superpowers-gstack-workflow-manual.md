@@ -6,7 +6,7 @@ A practical guide to using Superpowers and GStack together for AI-assisted devel
 
 ## Table of Contents
 
-1. [Quick Start](#quick-start)
+1. [Kickstart](#kickstart)
 2. [Philosophy](#philosophy)
 3. [Installation](#installation)
 4. [The Combined Workflow](#the-combined-workflow)
@@ -23,9 +23,11 @@ For troubleshooting, anti-patterns, and skill internals, see the [Appendix](appe
 
 ---
 
-## Quick Start
+## Kickstart
 
 Three steps to get going with a new project:
+
+> **Important:** Always start Claude Code from your project directory (`cd my-project && claude`). GStack and the routing skills detect project context from the working directory. Running from a different directory causes wrong project detection, misplaced design docs, and incorrect CLAUDE.md checks.
 
 ### 1. Install the frameworks (once per machine)
 
@@ -38,42 +40,43 @@ Three steps to get going with a new project:
 git clone https://github.com/garrytan/gstack.git ~/.claude/skills/gstack
 cd ~/.claude/skills/gstack && ./setup
 
-# Routing plugin
-git clone https://github.com/Paretofilm/superpowers-gstack.git ~/Developer/superpowers-gstack
-cd ~/Developer/superpowers-gstack
-./scripts/install-plugin.sh
-./scripts/setup-hooks.sh
+# Routing plugin (in Claude Code)
+/plugin marketplace add kjetilge/kjetil-claude-marketplace
+/plugin install superpowers-gstack@kjetil-plugins
 ```
 
 Restart Claude Code after installation.
 
-### 2. Generate your project's CLAUDE.md
+### 2. Start working
+
+Open Claude Code from your project directory and follow the path that matches your situation:
 
 **New project** (empty or no CLAUDE.md):
 
+```bash
+cd ~/Developer/my-project && claude
 ```
-/superpowers-gstack:setup-routing
+```
+/superpowers-gstack:setup-routing       → Generates tailored CLAUDE.md with routing rules
+# Then:
+#   Scope unclear?     → /office-hours
+#   Scope clear?       → /superpowers:brainstorming
+#   Small project?     → /superpowers:brainstorming (skip Phase 1)
 ```
 
 **Existing project** (already has CLAUDE.md, code, conventions):
 
+```bash
+cd ~/Developer/my-project && claude
 ```
-/superpowers-gstack:adapt
 ```
-
-`setup-routing` creates a CLAUDE.md from scratch. `adapt` analyzes your existing project, preserves everything, and adds only the routing section needed for Superpowers + GStack.
-
-### 3. Start working
-
-With routing in place, follow the workflow that matches your situation:
-
-| Situation | Start with |
-|-----------|-----------|
-| New idea, unclear scope | `/office-hours` |
-| Scope is clear, ready to build | `/superpowers:brainstorming` |
-| Bug fix | `/superpowers:systematic-debugging` |
-| Code is written, ready to review | `/review` |
-| Ready to ship | `/ship` |
+/superpowers-gstack:adapt               → Adds routing to existing CLAUDE.md, preserves everything
+# Then:
+#   New feature?       → /superpowers:brainstorming
+#   Bug fix?           → /superpowers:systematic-debugging
+#   Code ready?        → /review
+#   Ready to ship?     → /ship
+```
 
 See [Common Scenarios](#common-scenarios) for full workflow examples.
 
@@ -161,7 +164,7 @@ GStack will ask 4-5 setup questions on first use (telemetry, proactive mode, etc
 
 Start every new feature or project with `/office-hours`. GStack asks forcing questions to reframe your idea and produces a design doc saved to `~/.gstack/projects/`.
 
-**When to skip:** Bug fixes, small refactors, or tasks where scope is already clear. Jump to Phase 2.
+**When to skip:** Bug fixes, small refactors, tasks where scope is already clear, or small projects (< 5 tasks, buildable in under 30 minutes). For these, jump directly to Phase 2. Office-hours adds ~10 minutes of ceremony that won't pay off for simple work.
 
 | Step | Command | Purpose |
 |------|---------|---------|
@@ -187,6 +190,15 @@ I need to implement the notification service. Key architecture
 decisions are in docs/architecture-decisions.md — read that first.
 ```
 
+> **If Phase 1 produced a design doc:** Tell brainstorming to "adopt the design as-is" — this skips redundant questioning about scope and approach that office-hours already answered. Brainstorming will still add technical clarifications (storage, libraries, patterns) but won't re-tread product decisions.
+>
+> ```
+> /superpowers:brainstorming
+> Adopt the design as-is from the Phase 1 design doc at
+> ~/.gstack/projects/<slug>/design.md — focus on technical 
+> implementation details only.
+> ```
+
 ---
 
 ## Phase 2: Implementation (Superpowers)
@@ -203,8 +215,6 @@ decisions are in docs/architecture-decisions.md — read that first.
 **Parallel work:** For independent tasks, `/superpowers:dispatching-parallel-agents` spins up concurrent subagents.
 
 **Feature isolation:** `/superpowers:using-git-worktrees` creates an isolated worktree on a new branch.
-
-**Tip:** If Phase 1 already produced a detailed design doc, tell brainstorming to "adopt the design as-is" to skip redundant questioning.
 
 See [Appendix: Skill Deep Dives](appendix-reference.md#skill-deep-dives) for internal process details.
 
@@ -260,7 +270,7 @@ See [Appendix: `/ship` Full Process](appendix-reference.md#ship--full-process) f
 
 **This is critical.** Without routing rules in your project's CLAUDE.md, Claude will not consistently choose the right framework.
 
-**Recommended:** Use `/superpowers-gstack:setup-routing` (new project) or `/superpowers-gstack:adapt` (existing project). See [Quick Start](#quick-start).
+**Recommended:** Use `/superpowers-gstack:setup-routing` (new project) or `/superpowers-gstack:adapt` (existing project). See [Kickstart](#kickstart).
 
 **Manual alternative:** Create `<your-project>/CLAUDE.md` with the template below. Keep total CLAUDE.md under 150 lines — compliance drops beyond that.
 
@@ -358,7 +368,7 @@ See [Appendix: Session Management Details](appendix-reference.md#session-managem
 /plan-eng-review       → Lock architecture
   → Save key decisions to docs/architecture-decisions.md
 /clear
-/superpowers:brainstorming         → Reference architecture-decisions.md
+/superpowers:brainstorming         → "Adopt the design as-is" if office-hours produced a design doc
 /superpowers:writing-plans         → Break into TDD tasks
 /superpowers:subagent-driven-development → Build it
 /clear
@@ -391,6 +401,26 @@ See [Appendix: Session Management Details](appendix-reference.md#session-managem
 /review                → Code review
 /ship                  → Deploy
 ```
+
+### Tiny Project (CLI Tool, Script, Single-Purpose App)
+
+For projects with fewer than 5 tasks — small CLI tools, scripts, single-file utilities:
+
+```
+/superpowers:brainstorming         → 2-3 clarifying questions, adopt quickly
+/superpowers:writing-plans         → TDD task breakdown
+/superpowers:executing-plans       → Inline execution (no subagents needed)
+# Tests passing = spec compliance. Skip per-task reviews.
+/review                            → Manual diff review (skip specialists for < 200 LOC)
+/ship                              → Create PR
+```
+
+**What to skip and why:**
+- **Phase 1 entirely** — Office-hours, CEO/eng review add ~10-15 min of ceremony for a project specifiable in one sentence
+- **Subagent-driven development** — Use `/superpowers:executing-plans` instead; subagent dispatch overhead isn't worth it for < 5 tasks
+- **Per-task SDD reviews** — Passing tests ARE the spec compliance check for simple tasks
+- **Review specialists** — For diffs under 200 lines of actual code, run the core `/review` and skip specialist dispatch (security, performance, etc.)
+- **`/clear` between phases** — Not needed; context won't overflow for a 30-minute project
 
 ### Refactoring
 
