@@ -236,6 +236,29 @@ If you need to stop mid-implementation:
 
 **Fix:** Check `/plugin list` — Superpowers should be listed. If not, reinstall: `/plugin marketplace add claude-plugins-official` then `/plugin install superpowers`. Restart Claude Code.
 
+### superpowers-gstack skills not found
+
+**Symptom:** Running `/superpowers-gstack:setup-routing` or `/superpowers-gstack:adapt` returns "Unknown skill" even though the plugin files exist.
+
+**Cause:** The plugin was installed via symlink (`./scripts/install-plugin.sh` without `--dev`) instead of via marketplace. Symlinks place the files in `~/.claude/plugins/` but don't register in `installed_plugins.json`, so Claude Code's skill discovery doesn't find the skills.
+
+**Fix:** Remove the symlink and install via marketplace:
+
+```bash
+rm ~/.claude/plugins/superpowers-gstack   # remove symlink
+```
+
+Then in Claude Code:
+
+```
+/plugin marketplace add kjetilge/kjetil-claude-marketplace
+/plugin install superpowers-gstack@kjetil-plugins
+```
+
+Restart Claude Code. Verify with `/plugin list` — `superpowers-gstack` should appear.
+
+**Note:** `./scripts/install-plugin.sh --dev` is for local development only — skills won't be discoverable but you can read them directly.
+
 ### Wrong framework responds
 
 **Symptom:** You ask to implement something and GStack's `/investigate` activates instead of Superpowers' debugging.
@@ -253,6 +276,21 @@ If you need to stop mid-implementation:
 **Symptom:** Tests pass but PR creation fails.
 
 **Fix:** Ensure: (1) you're on a feature branch, not main; (2) the branch is pushed to remote with `-u`; (3) `gh auth status` shows you're authenticated.
+
+### Wrong project detected / design docs filed under wrong project
+
+**Symptom:** GStack detects the wrong project slug (e.g., `Paretofilm-superpowers-gstack` instead of your project). Design docs are saved under `~/.gstack/projects/` with the wrong name. `/review` checks the wrong CLAUDE.md.
+
+**Cause:** Claude Code was started from a different directory than the target project.
+
+**Fix:** Start a new Claude Code session from the project directory:
+
+```bash
+cd /path/to/your-project
+claude
+```
+
+Both GStack and the routing skills detect project context from the working directory. There is no way to override this mid-session.
 
 ### Subagent runs out of context
 
