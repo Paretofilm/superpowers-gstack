@@ -30,7 +30,7 @@ Ask the user ONE question:
 
 > What kind of project is this? (e.g., Swift iOS app, React/Next.js web app, Python API, Node.js backend, Flutter mobile app, Claude Code plugin/skill, data pipeline, infrastructure/Terraform, monorepo, static site, or describe it)
 
-Wait for their answer before proceeding.
+**STOP HERE.** Do not continue to the next step until the user responds. End your message with the question.
 
 ### Step 2: Ask follow-up questions
 
@@ -46,7 +46,7 @@ Based on the project type, ask 3-5 focused follow-up questions. Always include q
 8. Do you have existing linting, type checking, or test suites? (helps evaluate `/health`)
 9. Is this a monorepo? Which directory will you work in? (helps evaluate `/freeze`)
 
-Ask all follow-up questions in a single message. Wait for answers.
+Ask all follow-up questions in a single message. **STOP HERE.** Do not continue to the next step until the user responds. Do not add suggestions or any other content after the questions. End your message with the questions.
 
 ### Step 3: Evaluate relevant Superpowers skills
 
@@ -110,8 +110,9 @@ Think through each GStack skill, organized by phase:
 | Skill | Consider relevant when... |
 |---|---|
 | `/careful` | Projects where destructive commands are risky (production DBs, shared infra) |
-| `/freeze` | Monorepos or projects with sensitive directories that shouldn't be edited |
+| `/freeze` | Monorepos or projects where edits should be restricted TO a specific directory (allow-list, not block-list) |
 | `/browse` | Projects needing headless browser interaction beyond QA |
+| `/context-guard` | Long implementation sessions, projects using SDD, or any multi-step workflow |
 
 ### Step 5: Present the routing plan
 
@@ -129,6 +130,8 @@ Show the user which skills from each framework you've selected and why. Format a
 - Skill — why it's not relevant for this project
 
 Ask: "Does this look right? Any skills to add or remove?"
+
+**STOP HERE.** Do not continue to the next step until the user responds. Do not generate the CLAUDE.md or add any other content. End your message with the question.
 
 If the user wants changes, update your selection and re-present. Repeat until confirmed.
 
@@ -167,6 +170,12 @@ This project uses Superpowers + GStack. Each owns a distinct phase:
 - Use `/investigate` only for bugs found in QA or production (Phase 3+)
 - Superpowers specs go in `docs/superpowers/`
 - GStack state lives in `~/.gstack/projects/`
+
+### Session Continuity
+
+On session start or after /compact: if `docs/superpowers/handoff.md` exists and contains content, read it and present a one-line summary of where you left off. Then proceed normally — do not ask "ready to continue?". Clear the file (write empty string) once work has resumed.
+
+After /compact: if no auto context guard is active, ask the user once: "Context was compressed. Want me to activate auto context guard for this session? I'll keep handoff.md updated and suggest /clear when context gets heavy." If yes, invoke the context-guard skill.
 
 ### Session Management
 - `/clear` when transitioning between GStack and Superpowers phases

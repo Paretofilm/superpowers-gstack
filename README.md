@@ -1,8 +1,8 @@
-# Superpowers + GStack: The Combined Workflow
+# Superpowers + GStack: Routing, Context Management & Workflow
 
-> **"Superpowers owns the implementation loop, GStack owns everything before and after it."**
+> **"Superpowers owns the implementation loop, GStack owns everything before and after it. Context Guard keeps the session clean."**
 
-The missing guide for using [Superpowers](https://github.com/obra/superpowers) and [GStack](https://github.com/garrytan/gstack) together with Claude Code. Every comparison says "install both" — this project explains exactly how, with a phase-by-phase workflow, routing rules, and a plugin that auto-configures your project. Already have an existing project? Run `/superpowers-gstack:adapt` and it analyzes your setup, preserves your CLAUDE.md, and adds routing — so you can jump right in.
+A Claude Code plugin that integrates [Superpowers](https://github.com/obra/superpowers) and [GStack](https://github.com/garrytan/gstack) into one workflow — with skill routing, automatic context management, and project auto-configuration. Already have an existing project? Run `/adapt` and it analyzes your setup, preserves your CLAUDE.md, and adds routing — so you can jump right in.
 
 **Status: Work in Progress** — Actively developed. Contributions, feedback, and ideas are very welcome. See [Contributing](#contributing).
 
@@ -11,10 +11,10 @@ The missing guide for using [Superpowers](https://github.com/obra/superpowers) a
 If you've installed both Superpowers and GStack, you've probably run into these issues:
 - Claude picks the **wrong framework** for the task (GStack's `/investigate` when you wanted Superpowers' debugging)
 - **No clear handoff** between planning (GStack) and implementation (Superpowers)
-- **Context bleed** when switching between frameworks mid-session
+- **Context rot** in long sessions — quality degrades as the context window fills up
 - You don't know **which skills to use when**, or which to skip for your project type
 
-This project solves all of that with routing rules in your CLAUDE.md and a structured 4-phase workflow.
+This project solves all of that with routing rules, automatic context management, and a structured 4-phase workflow.
 
 ## Why Both?
 
@@ -31,9 +31,12 @@ They never overlap. GStack focuses on *what roles review the work*. Superpowers 
 
 - **[Workflow Manual](superpowers-gstack-workflow-manual.md)** — Phase-by-phase guide with routing logic, session management, and common scenarios
 - **[Appendix](appendix-reference.md)** — Skill internals, troubleshooting, and anti-patterns
-- **Claude Code Plugin** with two skills:
-  - `/superpowers-gstack:setup-routing` — Generates a tailored CLAUDE.md for new projects
-  - `/superpowers-gstack:adapt` — Adds routing to existing projects without losing your CLAUDE.md content
+- **Claude Code Plugin** with three skills:
+  - `/setup-routing` — Generates a tailored CLAUDE.md for new projects
+  - `/adapt` — Adds routing to existing projects without losing your CLAUDE.md content
+  - `/context-guard` — Lightweight context management inspired by [GSD](https://github.com/gsd-build/get-shit-done) — saves session state, auto-resumes after `/clear` or `/compact`, and proactively suggests context resets when sessions get long
+
+> **Tip:** In autocomplete, type `/setup-routing`, `/adapt`, or `/context-guard` — Claude Code matches on the skill name. The full prefixed form (e.g. `/superpowers-gstack:adapt`) also works.
 - **Automated update pipeline** — GitHub Actions keeps the manual in sync when upstream frameworks change
 
 ## Kickstart
@@ -81,11 +84,13 @@ claude
 
 ```
 # New project:
-/superpowers-gstack:setup-routing
+/setup-routing
 
 # Existing project:
-/superpowers-gstack:adapt
+/adapt
 ```
+
+> These are shorthand for `/superpowers-gstack:setup-routing` and `/superpowers-gstack:adapt`. Both forms work — the short form is easier to find in autocomplete.
 
 This generates a CLAUDE.md with routing rules tailored to your project type, tech stack, and deployment target.
 
@@ -98,6 +103,21 @@ This generates a CLAUDE.md with routing rules tailored to your project type, tec
 | Bug fix | `/superpowers:systematic-debugging` |
 | Code complete, ready for review | `/review` |
 | Ready to ship | `/ship` |
+| Long session, save state | `/context-guard` |
+
+## Context Management
+
+Long sessions degrade Claude's output quality — a problem known as context rot. GSD solves this with a full orchestration layer, but that creates nesting issues when combined with Superpowers' subagent-driven development. This plugin takes a lighter approach:
+
+**How it works:**
+1. After `/compact`, Claude asks if you want to activate auto context guard for the session
+2. If yes, it keeps `docs/superpowers/handoff.md` updated as a living document — current task, decisions, next step
+3. When context gets heavy again, Claude suggests `/clear`
+4. After `/clear`, Claude automatically reads the handoff file, presents where you left off, and clears it — no "resume" command needed
+
+**Manual use:** Run `/context-guard` anytime to save state before a `/clear`.
+
+No hooks, no orchestration overhead, no nesting. Just save and restore.
 
 ## The Workflow at a Glance
 
@@ -164,6 +184,9 @@ Yes. This workflow requires both [Superpowers](https://github.com/obra/superpowe
 **What if I only want GStack or only Superpowers?**
 Each works fine on its own. This project is specifically for people who want to use both together. If you only use one, you don't need this.
 
+**How does context management compare to GSD?**
+GSD (Get Shit Done) is a full orchestration framework with wave-based execution, state machines, and hooks. It's powerful but creates nesting problems when combined with Superpowers' subagent-driven development (three layers of orchestration). This plugin takes GSD's best idea — context hygiene — and implements it as a lightweight save/restore mechanism with no orchestration overhead. If you want full GSD, install it separately; if you want context management that plays nicely with the Superpowers + GStack workflow, use `/context-guard`.
+
 **Does this work with Cursor / Windsurf / other AI editors?**
 No. This is built for [Claude Code](https://claude.ai/code) (Anthropic's CLI). Both Superpowers and GStack are Claude Code frameworks.
 
@@ -175,7 +198,7 @@ The setup skill asks about your project and generates routing tailored to it: we
 
 ## Keywords
 
-`claude code best setup` `claude code workflow` `gstack superpowers together` `best claude code plugins` `claude code TDD workflow` `ai coding workflow` `claude code skills` `agentic development workflow` `claude code framework comparison` `how to use gstack and superpowers` `claude code project setup` `CLAUDE.md generator` `claude code routing` `ai-assisted software development`
+`claude code best setup` `claude code workflow` `gstack superpowers together` `best claude code plugins` `claude code TDD workflow` `ai coding workflow` `claude code skills` `agentic development workflow` `claude code framework comparison` `how to use gstack and superpowers` `claude code project setup` `CLAUDE.md generator` `claude code routing` `ai-assisted software development` `claude code context management` `context rot prevention` `claude code session management` `gsd alternative`
 
 ## A Note on How This Was Built
 

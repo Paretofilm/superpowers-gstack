@@ -52,7 +52,7 @@ Present this to the user for confirmation:
 >
 > Is this correct? Anything to add?
 
-Wait for confirmation.
+**STOP HERE.** Do not continue to the next step until the user responds. Do not add "Next steps", suggestions, or any other content after the question. End your message with the question.
 
 ### Step 3: Evaluate relevant skills
 
@@ -114,8 +114,9 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | Skill | Consider relevant when... |
 |---|---|
 | `/careful` | Projects where destructive commands are risky (production DBs, shared infra) |
-| `/freeze` | Monorepos or projects with sensitive directories that shouldn't be edited |
+| `/freeze` | Monorepos or projects where edits should be restricted TO a specific directory (allow-list, not block-list) |
 | `/browse` | Projects needing headless browser interaction beyond QA |
+| `/context-guard` | Long implementation sessions, projects using SDD, or any multi-step workflow |
 
 ### Step 4: Identify gaps and plan changes
 
@@ -150,7 +151,7 @@ Present the gap analysis to the user:
 >
 > Shall I proceed with these changes?
 
-Wait for confirmation.
+**STOP HERE.** Do not continue to the next step until the user responds. Do not add "Next steps", suggestions, or any other content after the question. End your message with the question.
 
 ### Step 5: Apply changes
 
@@ -162,6 +163,7 @@ Apply the changes identified in Step 4. Follow these rules strictly:
 - If a `## Skill routing` section already exists: REPLACE only that section
 - If no `## Skill routing` section exists: ADD it after the first heading (or at the top if no heading)
 - The routing section follows the same template as `setup-routing` Step 6, adapted to this project
+- If no `## Session Continuity` section exists in CLAUDE.md: ADD the session continuity block (same as `setup-routing` Step 6 template). If it already exists, leave it unchanged.
 
 **Structure setup:**
 - Create `docs/superpowers/specs/` and `docs/superpowers/plans/` if they don't exist
@@ -203,6 +205,8 @@ Then ask:
 > - There are no conflicts between existing project conventions and the new workflow
 >
 > The review takes a minute but catches issues before you start using the workflow. Recommended for projects with complex existing setups.
+
+**STOP HERE.** Do not continue to Step 7 or add any other content. End your message with the question above. Wait for the user's response before proceeding.
 
 If the user says yes, run the review:
 

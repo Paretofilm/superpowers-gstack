@@ -61,7 +61,7 @@ Open Claude Code from your project directory and follow the path that matches yo
 cd ~/Developer/my-project && claude
 ```
 ```
-/superpowers-gstack:setup-routing       → Generates tailored CLAUDE.md with routing rules
+/setup-routing                          → Generates tailored CLAUDE.md with routing rules
 # Then:
 #   Scope unclear?     → /office-hours
 #   Scope clear?       → /superpowers:brainstorming
@@ -74,13 +74,15 @@ cd ~/Developer/my-project && claude
 cd ~/Developer/my-project && claude
 ```
 ```
-/superpowers-gstack:adapt               → Adds routing to existing CLAUDE.md, preserves everything
+/adapt                                  → Adds routing to existing CLAUDE.md, preserves everything
 # Then:
 #   New feature?       → /superpowers:brainstorming
 #   Bug fix?           → /superpowers:systematic-debugging
 #   Code ready?        → /review
 #   Ready to ship?     → /ship
 ```
+
+> **Tip:** `/setup-routing` and `/adapt` are shorthand for `/superpowers-gstack:setup-routing` and `/superpowers-gstack:adapt`. The short form is easier to find in autocomplete.
 
 See [Common Scenarios](#common-scenarios) for full workflow examples.
 

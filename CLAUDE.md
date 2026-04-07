@@ -59,6 +59,16 @@ For the update notification hook (optional, after cloning the repo):
 | Superpowers | `obra/superpowers` | plugin.json version |
 | Claude Code | `@anthropic-ai/claude-code` npm | npm version |
 
+## Session continuity
+
+On session start or after /compact: if `docs/superpowers/handoff.md` exists and contains content, read it and present a one-line summary of where you left off. Then proceed normally — do not ask "ready to continue?". Clear the file (write empty string) once work has resumed.
+
+After /compact: if no auto context guard is active, ask the user once: "Context was compressed. Want me to activate auto context guard for this session? I'll keep handoff.md updated and suggest /clear when context gets heavy." If yes, invoke the context-guard skill.
+
+## Skill conversation discipline
+
+When a skill instructs you to ask the user a question or wait for confirmation, always end your message at that question. Never continue with subsequent steps, suggestions, or "next steps" in the same message. Wait for the user to respond before proceeding.
+
 ## Skill routing
 
 When the user's request matches an available skill, ALWAYS invoke it using the Skill
@@ -77,4 +87,5 @@ Key routing rules:
 - Visual audit, design polish → invoke design-review
 - Architecture review → invoke plan-eng-review
 - Save progress, checkpoint, resume → invoke checkpoint
+- Save state, context long, before /clear → invoke context-guard
 - Code quality, health check → invoke health
