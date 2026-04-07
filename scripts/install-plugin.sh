@@ -12,6 +12,12 @@ PLUGIN_DIR="$HOME/.claude/plugins"
 LINK_NAME="superpowers-gstack"
 LINK_PATH="$PLUGIN_DIR/$LINK_NAME"
 
+if [ $# -gt 0 ] && [ "$1" != "--dev" ]; then
+  echo "Unknown argument: $1" >&2
+  echo "Usage: $0 [--dev]" >&2
+  exit 1
+fi
+
 if [ "${1:-}" = "--dev" ]; then
   # Dev mode: symlink for local iteration (skills won't be discoverable)
   mkdir -p "$PLUGIN_DIR"

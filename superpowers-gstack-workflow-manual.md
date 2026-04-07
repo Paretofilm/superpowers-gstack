@@ -32,15 +32,19 @@ Three steps to get going with a new project:
 ### 1. Install the frameworks (once per machine)
 
 ```bash
-# Superpowers (in Claude Code)
-/plugin marketplace add claude-plugins-official
-/plugin install superpowers
-
 # GStack
 git clone https://github.com/garrytan/gstack.git ~/.claude/skills/gstack
 cd ~/.claude/skills/gstack && ./setup
+```
 
-# Routing plugin (in Claude Code)
+Then in Claude Code:
+
+```
+# Superpowers
+/plugin marketplace add claude-plugins-official
+/plugin install superpowers
+
+# Routing plugin
 /plugin marketplace add kjetilge/kjetil-claude-marketplace
 /plugin install superpowers-gstack@kjetil-plugins
 ```

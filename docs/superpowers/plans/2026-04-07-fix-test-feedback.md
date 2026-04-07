@@ -1,5 +1,7 @@
 # Fix Test Feedback — Implementation Plan
 
+**Status: COMPLETED** (2026-04-07)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix the 4 actionable issues found during the todo-cli test of the superpowers-gstack workflow: broken plugin discovery, missing directory guidance, weak small-project guidance, and buried design-doc handoff tip.

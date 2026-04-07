@@ -9,6 +9,7 @@ You are adapting an existing project to the Superpowers + GStack combined workfl
 
 Invoke this skill with: `/superpowers-gstack:adapt`
 
+<!-- Keep in sync with skills/setup-routing/SKILL.md directory check -->
 **Directory check:** Verify that Claude Code's working directory is the target project. If the current directory appears to be a different project (e.g., the superpowers-gstack repo itself rather than the user's project), STOP and tell the user:
 
 > You're currently in `[cwd]`. This skill needs to run from your target project directory. Start a new Claude Code session:

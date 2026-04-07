@@ -248,14 +248,7 @@ If you need to stop mid-implementation:
 rm ~/.claude/plugins/superpowers-gstack   # remove symlink
 ```
 
-Then in Claude Code:
-
-```
-/plugin marketplace add kjetilge/kjetil-claude-marketplace
-/plugin install superpowers-gstack@kjetil-plugins
-```
-
-Restart Claude Code. Verify with `/plugin list` — `superpowers-gstack` should appear.
+Then reinstall via marketplace (see [Kickstart](README.md#kickstart) for the commands). Restart Claude Code. Verify with `/plugin list` — `superpowers-gstack` should appear.
 
 **Note:** `./scripts/install-plugin.sh --dev` is for local development only — skills won't be discoverable but you can read them directly.
 
