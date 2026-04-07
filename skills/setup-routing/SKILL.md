@@ -139,7 +139,10 @@ If the user wants changes, update your selection and re-present. Repeat until co
 
 Generate the `CLAUDE.md` file in the project root. Adapt the structure below based on what's relevant — omit entire sections that don't apply.
 
+Before writing the file, read the plugin version from `.claude-plugin/plugin.json` in the superpowers-gstack plugin directory (check `~/.claude/plugins/cache/*/superpowers-gstack/*/plugin.json`, use the latest). Include this version as an HTML comment at the top of the generated CLAUDE.md:
+
 ```markdown
+<!-- superpowers-gstack: {version} -->
 # [Project Name]
 
 ## Skill routing

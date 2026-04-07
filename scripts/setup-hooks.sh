@@ -6,11 +6,16 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 NOTIFY_SCRIPT="$REPO_DIR/scripts/notify-pending-updates.sh"
+VERSION_CHECK_SCRIPT="$REPO_DIR/scripts/check-plugin-version.sh"
 SETTINGS_FILE="$HOME/.claude/settings.json"
 
-# Verify the notify script exists
+# Verify scripts exist
 if [ ! -f "$NOTIFY_SCRIPT" ]; then
   echo "Error: $NOTIFY_SCRIPT not found"
+  exit 1
+fi
+if [ ! -f "$VERSION_CHECK_SCRIPT" ]; then
+  echo "Error: $VERSION_CHECK_SCRIPT not found"
   exit 1
 fi
 
@@ -20,26 +25,15 @@ if [ ! -f "$SETTINGS_FILE" ]; then
   echo '{}' > "$SETTINGS_FILE"
 fi
 
-# Check if hook already configured
-if python3 -c "
-import json, sys
-settings = json.load(open('$SETTINGS_FILE'))
-hooks = settings.get('hooks', {})
-for hook in hooks.get('SessionStart', []):
-    if 'notify-pending-updates' in hook.get('command', ''):
-        sys.exit(0)
-sys.exit(1)
-" 2>/dev/null; then
-  echo "Hook already configured in $SETTINGS_FILE"
-  exit 0
-fi
-
-# Add the hook
+# Add hooks (skip any already configured)
 python3 << PYEOF
 import json
 
 settings_path = "$SETTINGS_FILE"
-notify_script = "$NOTIFY_SCRIPT"
+scripts = {
+    "notify-pending-updates": "$NOTIFY_SCRIPT",
+    "check-plugin-version": "$VERSION_CHECK_SCRIPT",
+}
 
 with open(settings_path) as f:
     settings = json.load(f)
@@ -49,17 +43,25 @@ if "hooks" not in settings:
 if "SessionStart" not in settings["hooks"]:
     settings["hooks"]["SessionStart"] = []
 
-settings["hooks"]["SessionStart"].append({
-    "type": "command",
-    "command": notify_script
-})
+existing = [h.get("command", "") for h in settings["hooks"]["SessionStart"]]
+added = []
 
-with open(settings_path, "w") as f:
-    json.dump(settings, f, indent=2)
-    f.write("\n")
+for name, script in scripts.items():
+    if not any(name in cmd for cmd in existing):
+        settings["hooks"]["SessionStart"].append({
+            "type": "command",
+            "command": script
+        })
+        added.append(name)
 
-print(f"Hook added to {settings_path}")
-print(f"  Command: {notify_script}")
-print()
-print("Restart Claude Code to activate.")
+if added:
+    with open(settings_path, "w") as f:
+        json.dump(settings, f, indent=2)
+        f.write("\n")
+    for name in added:
+        print(f"  Added: {name}")
+    print(f"\nHooks saved to {settings_path}")
+    print("Restart Claude Code to activate.")
+else:
+    print("All hooks already configured.")
 PYEOF

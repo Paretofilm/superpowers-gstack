@@ -158,6 +158,7 @@ Present the gap analysis to the user:
 Apply the changes identified in Step 4. Follow these rules strictly:
 
 **CLAUDE.md updates:**
+- Read the plugin version from `.claude-plugin/plugin.json` in the superpowers-gstack plugin directory (check `~/.claude/plugins/cache/*/superpowers-gstack/*/plugin.json`, use the latest). Add or update an HTML comment at the very top of CLAUDE.md: `<!-- superpowers-gstack: {version} -->`
 - If CLAUDE.md exists: READ it first, then INSERT or UPDATE the `## Skill routing` section
 - NEVER delete or rewrite existing sections (conventions, tech stack, project-specific rules)
 - If a `## Skill routing` section already exists: REPLACE only that section
