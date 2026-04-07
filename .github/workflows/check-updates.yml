@@ -208,6 +208,7 @@ jobs:
           report = os.environ.get("REPORT", "")
           manual = Path("README.md").read_text()
           versions = Path("VERSIONS.md").read_text()
+          changelog = Path("CHANGELOG.md").read_text() if Path("CHANGELOG.md").exists() else ""
 
           # Collect upstream skill files — only changed ones to reduce payload
           upstream = ""
@@ -241,8 +242,9 @@ jobs:
           2. Identify which sections of the README are affected by the changes
           3. Update ONLY the affected sections — preserve everything else exactly
           4. Update VERSIONS.md with new version numbers and today's date
-          5. If skills were added/removed/renamed upstream, update the setup-routing SKILL.md skill evaluation tables
-          6. Output the complete updated files
+          5. Add a new entry at the top of CHANGELOG.md summarizing the upstream changes
+          6. If skills were added/removed/renamed upstream, update the setup-routing SKILL.md skill evaluation tables
+          7. Output the complete updated files
 
           ## Rules
           - Only change sections directly affected by upstream changes
@@ -282,7 +284,11 @@ jobs:
 
           ## Current VERSIONS.md
 
-          {versions}{skill_section}
+          {versions}
+
+          ## Current CHANGELOG.md
+
+          {changelog}{skill_section}
 
           ## Upstream skill definitions (for reference)
 
@@ -294,10 +300,12 @@ jobs:
           1. The complete updated README
           2. The marker `===VERSIONS.md===`
           3. The complete updated VERSIONS.md
-          4. If the setup-routing SKILL.md needs updates (skills added/removed/renamed), also include:
+          4. The marker `===CHANGELOG.md===`
+          5. The complete updated CHANGELOG.md
+          6. If the setup-routing SKILL.md needs updates (skills added/removed/renamed), also include:
              - The marker `===SKILL.md===`
              - The complete updated setup-routing SKILL.md
-          5. If the adapt SKILL.md needs updates (must stay in sync with setup-routing tables), also include:
+          7. If the adapt SKILL.md needs updates (must stay in sync with setup-routing tables), also include:
              - The marker `===ADAPT_SKILL.md===`
              - The complete updated adapt SKILL.md
 
@@ -336,29 +344,55 @@ jobs:
           if "===VERSIONS.md===" in content:
               manual_part, rest = content.split("===VERSIONS.md===", 1)
               Path("README.md").write_text(manual_part.strip() + "\n")
-              updated = ["manual"]
+              updated = ["README.md"]
 
-              if "===SKILL.md===" in rest:
-                  versions_part, skill_rest = rest.split("===SKILL.md===", 1)
+              # Split CHANGELOG if present
+              if "===CHANGELOG.md===" in rest:
+                  versions_part, changelog_rest = rest.split("===CHANGELOG.md===", 1)
                   Path("VERSIONS.md").write_text(versions_part.strip() + "\n")
                   updated.append("VERSIONS.md")
+                  rest = changelog_rest
 
-                  if "===ADAPT_SKILL.md===" in skill_rest:
-                      setup_part, adapt_part = skill_rest.split("===ADAPT_SKILL.md===", 1)
-                      Path("skills/setup-routing/SKILL.md").write_text(setup_part.strip() + "\n")
-                      Path("skills/adapt/SKILL.md").write_text(adapt_part.strip() + "\n")
-                      updated.extend(["setup-routing/SKILL.md", "adapt/SKILL.md"])
+                  # Split skills from changelog
+                  if "===SKILL.md===" in rest:
+                      changelog_part, skill_rest = rest.split("===SKILL.md===", 1)
+                      Path("CHANGELOG.md").write_text(changelog_part.strip() + "\n")
+                      updated.append("CHANGELOG.md")
+
+                      if "===ADAPT_SKILL.md===" in skill_rest:
+                          setup_part, adapt_part = skill_rest.split("===ADAPT_SKILL.md===", 1)
+                          Path("skills/setup-routing/SKILL.md").write_text(setup_part.strip() + "\n")
+                          Path("skills/adapt/SKILL.md").write_text(adapt_part.strip() + "\n")
+                          updated.extend(["setup-routing/SKILL.md", "adapt/SKILL.md"])
+                      else:
+                          Path("skills/setup-routing/SKILL.md").write_text(skill_rest.strip() + "\n")
+                          updated.append("setup-routing/SKILL.md")
                   else:
-                      Path("skills/setup-routing/SKILL.md").write_text(skill_rest.strip() + "\n")
-                      updated.append("setup-routing/SKILL.md")
+                      Path("CHANGELOG.md").write_text(rest.strip() + "\n")
+                      updated.append("CHANGELOG.md")
               else:
-                  Path("VERSIONS.md").write_text(rest.strip() + "\n")
-                  updated.append("VERSIONS.md")
+                  # Fallback: no CHANGELOG marker
+                  if "===SKILL.md===" in rest:
+                      versions_part, skill_rest = rest.split("===SKILL.md===", 1)
+                      Path("VERSIONS.md").write_text(versions_part.strip() + "\n")
+                      updated.append("VERSIONS.md")
+
+                      if "===ADAPT_SKILL.md===" in skill_rest:
+                          setup_part, adapt_part = skill_rest.split("===ADAPT_SKILL.md===", 1)
+                          Path("skills/setup-routing/SKILL.md").write_text(setup_part.strip() + "\n")
+                          Path("skills/adapt/SKILL.md").write_text(adapt_part.strip() + "\n")
+                          updated.extend(["setup-routing/SKILL.md", "adapt/SKILL.md"])
+                      else:
+                          Path("skills/setup-routing/SKILL.md").write_text(skill_rest.strip() + "\n")
+                          updated.append("setup-routing/SKILL.md")
+                  else:
+                      Path("VERSIONS.md").write_text(rest.strip() + "\n")
+                      updated.append("VERSIONS.md")
 
               print(f"Files updated: {', '.join(updated)}")
           else:
               Path("README.md").write_text(content.strip() + "\n")
-              print("Warning: VERSIONS.md marker not found, only manual updated")
+              print("Warning: markers not found, only README updated")
           PYTHON_EOF
 
       - name: Check for changes
@@ -383,7 +417,7 @@ jobs:
           git checkout -b "$branch"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md VERSIONS.md skills/setup-routing/SKILL.md skills/adapt/SKILL.md
+          git add README.md VERSIONS.md CHANGELOG.md skills/setup-routing/SKILL.md skills/adapt/SKILL.md
 
           git commit -m "Auto-update README for upstream changes
 

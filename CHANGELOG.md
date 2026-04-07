@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.0] - 2026-04-07
+
+### Added
+- Context Guard skill (`/context-guard`) — lightweight context management inspired by GSD. Saves session state to `docs/superpowers/handoff.md`, auto-resumes after `/clear` or `/compact`, and proactively suggests context resets.
+- Session continuity rules in CLAUDE.md template — auto-reads handoff.md on session start, offers auto context guard after `/compact`.
+- Auto-mode marker (`## Mode: auto`) in handoff.md for persistent state across compacts.
+- CHANGELOG.md is now automatically updated by the GitHub Actions update pipeline.
+
+### Changed
+- Consolidated workflow manual into README. Single source of truth — scenarios, quick reference, decision tree all in README now.
+- Routing rules clarified: checkpoint = git snapshot (end of day), context-guard = session state (before /clear).
+- Stronger "wait for confirmation" instructions in adapt and setup-routing skills (STOP HERE blocks).
+- Fixed `/freeze` description in evaluation tables — now correctly described as allow-list, not block-list.
+- Plugin description updated to mention context management.
+- GitHub Actions workflow updated to use README instead of removed workflow manual.
+
+### Removed
+- `superpowers-gstack-workflow-manual.md` — content merged into README.
+
 ## [0.0.1.0] - 2026-04-07
 
 ### Added
