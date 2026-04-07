@@ -1,6 +1,6 @@
 #!/bin/bash
-# Configure the SessionStart hook for update notifications
-# Adds the notify-pending-updates.sh script to ~/.claude/settings.json
+# Configure SessionStart hooks for update notifications and version checks
+# Adds hooks to ~/.claude/settings.json
 
 set -euo pipefail
 
@@ -25,7 +25,7 @@ if [ ! -f "$SETTINGS_FILE" ]; then
   echo '{}' > "$SETTINGS_FILE"
 fi
 
-# Add hooks (skip any already configured)
+# Add hooks using correct Claude Code format: { hooks: [{ type, command, timeout }] }
 python3 << PYEOF
 import json
 
@@ -43,14 +43,23 @@ if "hooks" not in settings:
 if "SessionStart" not in settings["hooks"]:
     settings["hooks"]["SessionStart"] = []
 
-existing = [h.get("command", "") for h in settings["hooks"]["SessionStart"]]
-added = []
+# Check existing hooks — look inside the nested hooks array
+existing_commands = []
+for entry in settings["hooks"]["SessionStart"]:
+    for hook in entry.get("hooks", []):
+        existing_commands.append(hook.get("command", ""))
 
+added = []
 for name, script in scripts.items():
-    if not any(name in cmd for cmd in existing):
+    if not any(name in cmd for cmd in existing_commands):
         settings["hooks"]["SessionStart"].append({
-            "type": "command",
-            "command": script
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": script,
+                    "timeout": 10
+                }
+            ]
         })
         added.append(name)
 
