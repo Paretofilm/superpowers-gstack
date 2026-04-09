@@ -6,7 +6,7 @@ CLAUDE_MD="CLAUDE.md"
 
 # Only run if CLAUDE.md exists and uses superpowers-gstack
 [ -f "$CLAUDE_MD" ] || exit 0
-grep -q "Skill routing" "$CLAUDE_MD" || exit 0
+grep -qiE "Skill routing|superpowers|gstack|/review|/ship|/adapt" "$CLAUDE_MD" || exit 0
 
 # Find installed plugin version from cache
 plugin_json=$(find ~/.claude/plugins/cache -path "*/superpowers-gstack/*/plugin.json" 2>/dev/null | sort -V | tail -1)
