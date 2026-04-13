@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.3.0] - 2026-04-13
+
+### Added
+- **Cross-model quality review** — GStack now includes AI slop reduction with cross-model quality review (v0.16.3.0), improving output quality across all planning and review skills
+- **Browser data platform** — New browser data platform for AI agents (v0.16.0.0), enhancing QA and testing capabilities
+- **Content security improvements** — 4-layer prompt injection defense for pair-agent and enhanced community security features
+- **Team-friendly install mode** — GStack v0.15.7.0 adds team-friendly install mode with automatic symlink detection and vendored copy cleanup
+
+### Changed
+- **Office-hours relationship closing** — Office-hours now adapts to repeat users with relationship closing patterns (v0.16.2.0), making subsequent sessions more focused
+- **Improved snapshot interactivity** — GStack's snapshot tool now auto-detects dropdown/popover interactive elements, improving QA workflow
+- **Enhanced pair-agent reliability** — Fixed pair-agent tunnel drops and improved session stability
+- **Better session isolation** — TabSession extraction provides improved per-tab state isolation
+- **Deterministic slugs** — gstack-slug now produces consistent slugs across sessions
+
+### Fixed
+- **Cookie picker security** — Resolved auth token leak in cookie picker (v0.15.17.0)
+- **Auto-symlink detection** — GStack now auto-symlinks into ~/.claude/skills/ when cloned elsewhere
+- **Team detection improvements** — gstack-team-init better detects and removes vendored copies
+
+### Technical
+- Updated to Claude Code 2.1.104 with improved plugin stability
+- All GStack skills updated with latest security and reliability improvements
+- Enhanced error handling and session management across both frameworks
+
 ## [1.2.0] - 2026-04-07
 
 ### Added
