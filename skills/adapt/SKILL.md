@@ -18,7 +18,7 @@ Invoke this skill with: `/superpowers-gstack:adapt`
 > ```
 > Then run `/superpowers-gstack:adapt` again.
 
-**Version check:** This skill is version **1.3.0**. If the project's CLAUDE.md contains a version marker (`<!-- superpowers-gstack: X.Y.Z -->`) with an older version, inform the user that routing and session rules will be updated to the current version as part of this adaptation.
+**Version check:** This skill is version **1.4.0**. If the project's CLAUDE.md contains a version marker (`<!-- superpowers-gstack: X.Y.Z -->`) with an older version, inform the user that routing and session rules will be updated to the current version as part of this adaptation.
 
 ## Process
 
@@ -110,6 +110,7 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | `/retro` | Team projects with regular sprint cadence |
 | `/learn` | Long-running projects (> 2 weeks) — saves cross-session learnings |
 | `/health` | Projects with existing linting, type checking, or test suites |
+| `/make-pdf` | Projects needing publication-quality documentation or reports |
 
 **GStack skills — Utility:**
 
@@ -119,6 +120,11 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | `/freeze` | Monorepos or projects where edits should be restricted TO a specific directory (allow-list, not block-list) |
 | `/browse` | Projects needing headless browser interaction beyond QA |
 | `/context-guard` | Long implementation sessions, projects using SDD, or any multi-step workflow |
+| `/context-save` | Save progress and working state |
+| `/context-restore` | Resume where you left off |
+| `/benchmark` | Projects with performance monitoring needs |
+| `/benchmark-models` | Projects comparing AI model performance |
+| `/codex` | Projects needing second opinions or adversarial code review |
 
 ### Step 4: Identify gaps and plan changes
 

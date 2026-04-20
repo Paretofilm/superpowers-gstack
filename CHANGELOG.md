@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.4.0] - 2026-04-20
+
+### Added
+- **New skill**: `/make-pdf` — Markdown to publication-quality PDFs for technical documents and reports
+- **New skill**: `/benchmark-models` — Cross-model benchmark comparing Claude, GPT, and Gemini side-by-side for latency, tokens, cost, and quality
+- **New skill**: `/learn` — Save cross-session learnings for long-running projects (> 2 weeks)
+- **New skill**: `/codex` — OpenAI Codex CLI wrapper with three modes: code review, adversarial challenge, and consultation
+
+### Changed
+- **Skill renamed**: `/checkpoint` → `/context-save` and `/context-restore` — Claude Code was treating `/checkpoint` as a native rewind alias, causing conflicts
+- `/cso` upgraded to version 2.0.0 with enhanced security audit capabilities
+- `/browse` upgraded to version 1.1.0 with Puppeteer parity features including load-html, screenshot selectors, viewport scaling, and file:// support
+- Updated Quick Reference with new and renamed skills
+- All routing rules and CLAUDE.md templates updated to use new skill names
+
+### Updated upstream versions
+- GStack: Major version 1.0.0+ with simpler prompts and improved performance metrics
+- Claude Code: 2.1.114 (from 2.1.92) with various stability improvements
+
+### Fixed
+- `/ship` now detects and repairs VERSION/package.json drift in Step 12
+- Context management improvements for `/plan-ceo-review` and `/office-hours`
+- Browser session management with auto-shutdown and disconnect cleanup
+- Windows ngrok build issues resolved
+- Security hardening with 12 fixes across multiple areas
+
 ## [1.2.0] - 2026-04-07
 
 ### Added
