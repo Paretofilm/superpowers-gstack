@@ -32,7 +32,7 @@ Run `./scripts/check-updates.sh` locally for an immediate check.
 
 This repo is also a Claude Code plugin (`superpowers-gstack`). The skill `setup-routing` generates tailored CLAUDE.md files for new projects.
 
-- Install via marketplace: `/plugin marketplace add kjetilge/kjetil-claude-marketplace` then `/plugin install superpowers-gstack@kjetil-plugins`
+- Install via marketplace: `/plugin marketplace add Paretofilm/claude-marketplace` then `/plugin install superpowers-gstack@paretofilm-plugins`
 - Dev mode: `./scripts/install-plugin.sh --dev` (creates symlink, skills won't be discoverable in the skills list)
 - Skills:
   - `/superpowers-gstack:setup-routing` — generate CLAUDE.md for new projects
@@ -42,8 +42,8 @@ This repo is also a Claude Code plugin (`superpowers-gstack`). The skill `setup-
 
 Install via marketplace (in Claude Code):
 ```
-/plugin marketplace add kjetilge/kjetil-claude-marketplace
-/plugin install superpowers-gstack@kjetil-plugins
+/plugin marketplace add Paretofilm/claude-marketplace
+/plugin install superpowers-gstack@paretofilm-plugins
 ```
 
 For the update notification hook (optional, after cloning the repo):

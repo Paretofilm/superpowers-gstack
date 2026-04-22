@@ -60,8 +60,8 @@ cd ~/.claude/skills/gstack && ./setup
 
 ```
 # In Claude Code:
-/plugin marketplace add kjetilge/kjetil-claude-marketplace
-/plugin install superpowers-gstack@kjetil-plugins
+/plugin marketplace add Paretofilm/claude-marketplace
+/plugin install superpowers-gstack@paretofilm-plugins
 ```
 
 Restart Claude Code after installation.
