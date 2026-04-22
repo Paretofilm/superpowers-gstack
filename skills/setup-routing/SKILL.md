@@ -9,7 +9,26 @@ You are setting up the Superpowers + GStack combined workflow for a **new projec
 
 Invoke this skill with: `/superpowers-gstack:setup-routing`
 
-<!-- Keep in sync with skills/adapt/SKILL.md directory check -->
+<!-- Keep in sync with skills/adapt/SKILL.md dependency + directory checks -->
+**Dependency check:** Before anything else, verify both upstream frameworks are installed. Run:
+
+```bash
+ls -d ~/.claude/plugins/cache/claude-plugins-official/superpowers/*/ 2>/dev/null | head -1
+ls -d ~/.claude/skills/gstack/ 2>/dev/null
+```
+
+If either path is missing, STOP and tell the user:
+
+> This plugin is glue for two upstream frameworks. Install them first:
+>
+> **Missing: Superpowers** — `/plugin marketplace add claude-plugins-official` then `/plugin install superpowers`
+>
+> **Missing: GStack** — `git clone https://github.com/garrytan/gstack.git ~/.claude/skills/gstack && cd ~/.claude/skills/gstack && ./setup`
+>
+> Only mention the framework(s) that are actually missing. Restart Claude Code after installing, then run `/superpowers-gstack:setup-routing` again.
+
+Do NOT proceed until both frameworks are present.
+
 **Directory check:** Verify that Claude Code's working directory is the target project. If the current directory appears to be a different project (e.g., the superpowers-gstack repo itself rather than the user's project), STOP and tell the user:
 
 > You're currently in `[cwd]`. This skill needs to run from your target project directory. Start a new Claude Code session:
@@ -20,7 +39,7 @@ Invoke this skill with: `/superpowers-gstack:setup-routing`
 
 **Important:** If the project already has a `CLAUDE.md` file with existing content, STOP and suggest the user runs `/superpowers-gstack:adapt` instead — it preserves existing content while adding routing.
 
-**Version:** This skill writes version **1.5.0** into the CLAUDE.md version marker.
+**Version:** This skill writes version **1.6.0** into the CLAUDE.md version marker.
 
 ## Process
 

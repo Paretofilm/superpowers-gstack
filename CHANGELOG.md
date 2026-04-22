@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.0] - 2026-04-22
+
+### Added
+- **Dependency check** in `setup-routing` and `adapt` — before any other action, the skills now verify that both upstream frameworks (Superpowers, GStack) are installed at their expected paths. If either is missing, the skill stops and prints the exact install commands for the missing framework(s). Prevents cryptic mid-flow failures for new users and keeps the plugin's "glue layer" contract explicit: the underlying tools are not bundled — they must be installed separately.
+
+### Changed
+- Corrected marketplace instructions across README, CLAUDE.md, and install-plugin.sh — plugin lives in `Paretofilm/claude-marketplace` (`paretofilm-plugins`), not `kjetilge/kjetil-claude-marketplace` (`kjetil-plugins`).
+
 ## [1.5.0] - 2026-04-22
 
 ### Added
