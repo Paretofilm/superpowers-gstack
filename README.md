@@ -258,11 +258,17 @@ Review passed? → /qa → /cso → /ship
 | `/document-release` | Update docs |
 | `/retro` | Sprint retrospective |
 | `/health` | Code quality dashboard |
-| `/checkpoint` | End-of-day git snapshot |
+| `/context-save` | Save progress, save state |
+| `/context-restore` | Resume where left off |
 | `/context-guard` | Save session state before /clear |
 | `/careful` | Destructive command warnings |
 | `/freeze` | Restrict edits to one directory |
 | `/browse` | Headless browser |
+| `/benchmark` | Performance regression detection |
+| `/benchmark-models` | Cross-model benchmark |
+| `/make-pdf` | Markdown to publication-quality PDFs |
+| `/learn` | Save cross-session learnings |
+| `/codex` | OpenAI Codex CLI second opinion |
 
 ### Superpowers Commands
 

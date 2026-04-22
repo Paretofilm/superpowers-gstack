@@ -20,7 +20,7 @@ Invoke this skill with: `/superpowers-gstack:setup-routing`
 
 **Important:** If the project already has a `CLAUDE.md` file with existing content, STOP and suggest the user runs `/superpowers-gstack:adapt` instead — it preserves existing content while adding routing.
 
-**Version:** This skill writes version **1.3.0** into the CLAUDE.md version marker.
+**Version:** This skill writes version **1.4.0** into the CLAUDE.md version marker.
 
 ## Process
 
@@ -106,6 +106,7 @@ Think through each GStack skill, organized by phase:
 | `/retro` | Team projects with regular sprint cadence |
 | `/learn` | Long-running projects (> 2 weeks) — saves cross-session learnings |
 | `/health` | Projects with existing linting, type checking, or test suites |
+| `/make-pdf` | Projects needing publication-quality documentation or reports |
 
 **Utility (any phase):**
 
@@ -115,6 +116,11 @@ Think through each GStack skill, organized by phase:
 | `/freeze` | Monorepos or projects where edits should be restricted TO a specific directory (allow-list, not block-list) |
 | `/browse` | Projects needing headless browser interaction beyond QA |
 | `/context-guard` | Long implementation sessions, projects using SDD, or any multi-step workflow |
+| `/context-save` | Save progress and working state |
+| `/context-restore` | Resume where you left off |
+| `/benchmark` | Projects with performance monitoring needs |
+| `/benchmark-models` | Projects comparing AI model performance |
+| `/codex` | Projects needing second opinions or adversarial code review |
 
 ### Step 5: Present the routing plan
 
