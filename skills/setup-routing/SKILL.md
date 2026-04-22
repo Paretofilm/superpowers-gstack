@@ -20,7 +20,7 @@ Invoke this skill with: `/superpowers-gstack:setup-routing`
 
 **Important:** If the project already has a `CLAUDE.md` file with existing content, STOP and suggest the user runs `/superpowers-gstack:adapt` instead — it preserves existing content while adding routing.
 
-**Version:** This skill writes version **1.4.0** into the CLAUDE.md version marker.
+**Version:** This skill writes version **1.5.0** into the CLAUDE.md version marker.
 
 ## Process
 

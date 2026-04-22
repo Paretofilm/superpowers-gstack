@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.5.0] - 2026-04-22
+
+### Added
+- **Pitfall verification skill** (`/superpowers-gstack:pitfall-verification`) — targeted final-check skill that runs after any PRD, spec, plan, or code artifact. Not a generic review: it checks that typical pitfalls for that artifact type and domain (security, idempotency, integration contracts, edge cases, LLM output) actually do not apply. Two rounds max, domain-specific inference encouraged.
+
+### Changed
+- Plugin.json bumped to 1.5.0 (1.4.0 in CHANGELOG was auto-generated but plugin.json was not bumped in PR #6 — this release re-aligns the two).
+- VERSIONS.md: GStack version label corrected from `unknown (d0782c4)` to `v1.4.0.0 (d0782c4)`; verification date rolled forward to 2026-04-22.
+- Supersedes PR #4 (conflicting auto-update branch) — closes issues #5 and #7.
+
 ## [1.4.0] - 2026-04-20
 
 ### Added

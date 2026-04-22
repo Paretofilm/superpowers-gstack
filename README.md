@@ -29,10 +29,11 @@ They never overlap. GStack focuses on *what roles review the work*. Superpowers 
 
 ## What's Included
 
-- **Claude Code Plugin** with three skills:
+- **Claude Code Plugin** with four skills:
   - `/setup-routing` — Generates a tailored CLAUDE.md for new projects
   - `/adapt` — Adds routing to existing projects without losing your CLAUDE.md content
   - `/context-guard` — Saves session state, auto-resumes after `/clear` or `/compact`, and proactively suggests context resets when sessions get long
+  - `/pitfall-verification` — Final-check skill run after any PRD, spec, plan, or code artifact. Targeted check that typical pitfalls for that artifact type and domain (security, idempotency, contracts, edge cases, LLM output) actually do not apply. Two rounds max.
 - **[Appendix](appendix-reference.md)** — Skill internals, troubleshooting, and anti-patterns
 - **Automated update pipeline** — GitHub Actions keeps the plugin in sync when upstream frameworks change
 
