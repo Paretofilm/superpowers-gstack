@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.1] - 2026-04-26
+
+### Fixed
+- **`CLAUDE.md` routing rule** — replaced the stale `→ invoke checkpoint` rule with explicit rules for `/context-save`, `/context-restore`, and `/context-guard`. The `/checkpoint` command was removed from gstack in plugin v1.4.0 but the routing rule was missed at the time.
+
+### Changed
+- **Routing tables synced with gstack v1.14.0.0** — added 14 new gstack skills to `setup-routing/SKILL.md`, `adapt/SKILL.md`, and `README.md` Quick Reference: `/design-consultation`, `/design-html`, `/design-shotgun`, `/devex-review`, `/guard`, `/landing-report`, `/open-gstack-browser`, `/pair-agent`, `/plan-devex-review`, `/plan-tune`, `/setup-browser-cookies`, `/setup-deploy`, `/setup-gbrain`, `/unfreeze`.
+- `VERSIONS.md` updated: GStack v1.4.0.0 → v1.14.0.0 (verified 2026-04-26).
+- `.update-state.json` refreshed (last successful check was 2026-04-06).
+
+### Notes for users
+- No behavior changes to existing routing rules.
+- gstack v1.x ships several internal behavior changes that don't affect plugin routing but are worth knowing about: workspace-aware `/ship` (auto-detects PR queue collisions), plan-mode review skills now run inline without an exit-and-rerun handshake, and the browser sidebar is now an interactive Claude Code REPL.
+
 ## [1.6.0] - 2026-04-22
 
 ### Added

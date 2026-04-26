@@ -86,6 +86,7 @@ Key routing rules:
 - Design system, brand → invoke design-consultation
 - Visual audit, design polish → invoke design-review
 - Architecture review → invoke plan-eng-review
-- End of day, switch project, checkpoint, git snapshot → invoke checkpoint
+- End of day, switch project, save progress → invoke context-save
+- Resume previous session, restore state → invoke context-restore
 - Context long, before /clear, before /compact → invoke context-guard
 - Code quality, health check → invoke health

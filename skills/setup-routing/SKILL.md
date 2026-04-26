@@ -101,6 +101,10 @@ Think through each GStack skill, organized by phase:
 | `/plan-ceo-review` | Projects with strategic decisions or significant scope |
 | `/plan-eng-review` | Projects needing architecture decisions |
 | `/plan-design-review` | Projects with UI/UX components |
+| `/design-consultation` | New projects defining a design system from scratch (creates DESIGN.md) |
+| `/design-shotgun` | When you want multiple design variants to compare before committing |
+| `/plan-devex-review` | Projects with developer-facing surfaces (APIs, CLIs, SDKs, libraries) |
+| `/plan-tune` | Tune plan-skill question preferences (one-time, per-project) |
 | `/autoplan` | When all three plan reviews are relevant — chains them automatically |
 
 **Phase 3 — Review & QA:**
@@ -112,6 +116,8 @@ Think through each GStack skill, organized by phase:
 | `/qa-only <url>` | Same, but report-only (no auto-fixes) |
 | `/cso` | Projects handling auth, user data, payments, or external APIs. For security-critical features, run BEFORE `/review` |
 | `/design-review` | Projects with visual UI — catches spacing, alignment, inconsistencies |
+| `/design-html` | When you have an approved design and need production HTML/CSS |
+| `/devex-review` | Developer-facing projects — live audit of onboarding flow, docs, CLI help |
 | `/investigate` | Bugs discovered AFTER Phase 2 — in QA, staging, or production. Do NOT use during Phase 2 implementation (use `/superpowers:systematic-debugging` instead) |
 
 **Phase 4 — Ship & Monitor:**
@@ -121,9 +127,12 @@ Think through each GStack skill, organized by phase:
 | `/ship` | Projects using git with feature branches and PRs |
 | `/land-and-deploy` | Projects with CI/CD deployment pipelines |
 | `/canary` | Projects with production monitoring needs |
+| `/landing-report` | Read-only PR queue + sibling-workspace dashboard (workspace-aware ship) |
+| `/setup-deploy` | One-time: configure deploy platform (Fly.io, Vercel, Render, etc.) for `/land-and-deploy` |
 | `/document-release` | Projects with documentation to maintain |
 | `/retro` | Team projects with regular sprint cadence |
 | `/learn` | Long-running projects (> 2 weeks) — saves cross-session learnings |
+| `/setup-gbrain` | Long-running projects wanting cross-session memory (PGLite local or Supabase) |
 | `/health` | Projects with existing linting, type checking, or test suites |
 | `/make-pdf` | Projects needing publication-quality documentation or reports |
 
@@ -133,7 +142,12 @@ Think through each GStack skill, organized by phase:
 |---|---|
 | `/careful` | Projects where destructive commands are risky (production DBs, shared infra) |
 | `/freeze` | Monorepos or projects where edits should be restricted TO a specific directory (allow-list, not block-list) |
+| `/unfreeze` | Clear the `/freeze` boundary mid-session without ending the session |
+| `/guard` | Production / shared-infra work — combines `/careful` warnings with `/freeze` directory lock |
 | `/browse` | Projects needing headless browser interaction beyond QA |
+| `/open-gstack-browser` | Projects wanting a visible AI-controlled Chromium with live activity feed |
+| `/pair-agent` | When pairing a remote AI agent with your browser session |
+| `/setup-browser-cookies` | One-time: import cookies for authenticated `/qa` and `/browse` testing |
 | `/context-guard` | Long implementation sessions, projects using SDD, or any multi-step workflow |
 | `/context-save` | Save progress and working state |
 | `/context-restore` | Resume where you left off |

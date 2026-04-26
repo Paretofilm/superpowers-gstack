@@ -247,15 +247,23 @@ Review passed? → /qa → /cso → /ship
 | `/plan-ceo-review` | Validating scope and strategy |
 | `/plan-eng-review` | Locking architecture |
 | `/plan-design-review` | Validating design |
+| `/plan-devex-review` | Validating developer experience |
+| `/plan-tune` | Tune plan-skill question preferences (one-time, per-project) |
 | `/autoplan` | Chains all three reviews |
 | `/review` | Pre-merge code review |
 | `/qa <url>` | Browser-based testing |
 | `/cso` | Security audit |
 | `/design-review` | Visual audit |
+| `/design-consultation` | Design system from scratch |
+| `/design-shotgun` | Generate multiple design variants |
+| `/design-html` | Finalize design as production HTML/CSS |
+| `/devex-review` | Live developer experience audit |
 | `/investigate` | Bug root cause (QA/production) |
 | `/ship` | Create PR and deploy |
 | `/land-and-deploy` | Merge and verify |
 | `/canary` | Post-deploy monitoring |
+| `/landing-report` | Read-only PR queue + sibling-workspace dashboard |
+| `/setup-deploy` | Configure deploy platform (one-time) |
 | `/document-release` | Update docs |
 | `/retro` | Sprint retrospective |
 | `/health` | Code quality dashboard |
@@ -264,11 +272,17 @@ Review passed? → /qa → /cso → /ship
 | `/context-guard` | Save session state before /clear |
 | `/careful` | Destructive command warnings |
 | `/freeze` | Restrict edits to one directory |
+| `/unfreeze` | Clear the freeze boundary mid-session |
+| `/guard` | Full safety: `/careful` + `/freeze` combined |
 | `/browse` | Headless browser |
+| `/open-gstack-browser` | Launch GStack Browser (Chromium + sidebar) |
+| `/pair-agent` | Pair a remote AI agent with your browser |
+| `/setup-browser-cookies` | Import cookies for authenticated tests |
 | `/benchmark` | Performance regression detection |
 | `/benchmark-models` | Cross-model benchmark |
 | `/make-pdf` | Markdown to publication-quality PDFs |
 | `/learn` | Save cross-session learnings |
+| `/setup-gbrain` | Onboard cross-session memory (gbrain) |
 | `/codex` | OpenAI Codex CLI second opinion |
 
 ### Superpowers Commands
