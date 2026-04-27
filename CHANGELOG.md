@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7.1] - 2026-04-27
+
+### Changed
+- **Claude Code** bumped to 2.1.119 (was 2.1.114). No skill or behavior changes detected; version tracking updated.
+
 ## [1.7.0] - 2026-04-27
 
 ### Added
