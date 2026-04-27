@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0] - 2026-04-27
+
+### Added
+- **`/context-handoff` skill** — renamed from `/context-guard` to better describe what it does: writes a human-readable handoff file (`docs/superpowers/handoff.md`) in the project repo before `/clear` or `/compact`. Not the same as gstack's `/context-save` (which stores machine-local state in `~/.gstack/`) — this lives in the repo and works cross-machine without gstack installed.
+
+### Fixed
+- **GitHub Actions model ID** — both `check-updates.yml` and `self-repair.yml` used the retired `claude-sonnet-4-20250514` model ID, causing all CI API calls to fail. Updated to `claude-sonnet-4-6`.
+
+### Changed
+- **VERSIONS.md** — GStack bumped to v1.15.0.0 (dde5510), verified 2026-04-27.
+- All references to `/context-guard` updated to `/context-handoff` across CLAUDE.md, README.md, setup-routing, adapt, and the generated CLAUDE.md template.
+
 ## [1.6.1] - 2026-04-26
 
 ### Fixed

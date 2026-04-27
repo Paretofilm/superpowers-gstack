@@ -1,17 +1,19 @@
 ---
-name: context-guard
-description: Context hygiene — saves work state and monitors session length. Invoke to save state, or auto-activated after compact.
+name: context-handoff
+description: Write a human-readable handoff file in the repo before /clear or /compact. Different from /context-save (gstack) — this writes to docs/superpowers/handoff.md for cross-machine and post-clear continuity.
 ---
 
-# Context Guard
+# Context Handoff
 
-Lightweight context hygiene inspired by GSD. Prevents context rot without adding orchestration overhead.
+Writes a human-readable session handoff to `docs/superpowers/handoff.md` in the project repo. Use this before `/clear` or `/compact` to capture where you left off.
+
+**Not the same as `/context-save`:** `/context-save` (gstack) stores machine-local session state in `~/.gstack/projects/` and is restored by `/context-restore`. This skill writes a Markdown file directly into the repo — readable by anyone, on any machine, without gstack installed.
 
 ## When this skill activates
 
 - User says "context getting long", "about to clear", "save before clear"
 - CLAUDE.md sensor triggers after /compact (user opts in to auto-modus)
-- User explicitly invokes /context-guard
+- User explicitly invokes /context-handoff
 
 ## Save state
 
@@ -50,7 +52,7 @@ Lightweight context hygiene inspired by GSD. Prevents context rot without adding
 
 ## Auto-modus (activated after compact)
 
-When the user opts in to auto context guard after a compact trigger:
+When the user opts in to auto context handoff after a compact trigger:
 
 1. **Append `## Mode: auto` to handoff.md** immediately. This marker tells the CLAUDE.md sensor not to re-ask after subsequent compacts.
 

@@ -32,12 +32,12 @@ They never overlap. GStack focuses on *what roles review the work*. Superpowers 
 - **Claude Code Plugin** with four skills:
   - `/setup-routing` — Generates a tailored CLAUDE.md for new projects
   - `/adapt` — Adds routing to existing projects without losing your CLAUDE.md content
-  - `/context-guard` — Saves session state, auto-resumes after `/clear` or `/compact`, and proactively suggests context resets when sessions get long
+  - `/context-handoff` — Writes a human-readable handoff to `docs/superpowers/handoff.md` before `/clear` or `/compact`. Auto-resumes on next session start. Different from gstack's `/context-save` — this lives in the repo and works cross-machine.
   - `/pitfall-verification` — Final-check skill run after any PRD, spec, plan, or code artifact. Targeted check that typical pitfalls for that artifact type and domain (security, idempotency, contracts, edge cases, LLM output) actually do not apply. Two rounds max.
 - **[Appendix](appendix-reference.md)** — Skill internals, troubleshooting, and anti-patterns
 - **Automated update pipeline** — GitHub Actions keeps the plugin in sync when upstream frameworks change
 
-> **Tip:** In autocomplete, type `/setup-routing`, `/adapt`, or `/context-guard` — Claude Code matches on the skill name. The full prefixed form (e.g. `/superpowers-gstack:adapt`) also works.
+> **Tip:** In autocomplete, type `/setup-routing`, `/adapt`, or `/context-handoff` — Claude Code matches on the skill name. The full prefixed form (e.g. `/superpowers-gstack:adapt`) also works.
 
 ## Kickstart
 
@@ -94,7 +94,7 @@ This generates a CLAUDE.md with routing rules tailored to your project type, tec
 | Bug fix | `/superpowers:systematic-debugging` |
 | Code complete, ready for review | `/review` |
 | Ready to ship | `/ship` |
-| Long session, save state | `/context-guard` |
+| Long session, save state | `/context-handoff` |
 
 ## The Workflow
 
@@ -149,12 +149,12 @@ If review feedback needs code changes: `/superpowers:receiving-code-review` → 
 Long sessions degrade Claude's output quality — a problem known as context rot. [GSD](https://github.com/gsd-build/get-shit-done) solves this with a full orchestration layer, but that creates nesting issues when combined with Superpowers' subagent-driven development (three layers of orchestration). This plugin takes a lighter approach:
 
 **How it works:**
-1. After `/compact`, Claude asks if you want to activate auto context guard for the session
+1. After `/compact`, Claude asks if you want to activate auto context handoff for the session
 2. If yes, it keeps `docs/superpowers/handoff.md` updated as a living document — current task, decisions, next step
 3. When context gets heavy again, Claude suggests `/clear`
 4. After `/clear`, Claude automatically reads the handoff file, presents where you left off, and clears it — no "resume" command needed
 
-**Manual use:** Run `/context-guard` anytime to save state before a `/clear`.
+**Manual use:** Run `/context-handoff` anytime to save state before a `/clear`.
 
 No hooks, no orchestration overhead, no nesting. Just save and restore.
 
@@ -269,7 +269,7 @@ Review passed? → /qa → /cso → /ship
 | `/health` | Code quality dashboard |
 | `/context-save` | Save progress, save state |
 | `/context-restore` | Resume where left off |
-| `/context-guard` | Save session state before /clear |
+| `/context-handoff` | Write handoff to repo before /clear (cross-machine, no gstack required) |
 | `/careful` | Destructive command warnings |
 | `/freeze` | Restrict edits to one directory |
 | `/unfreeze` | Clear the freeze boundary mid-session |

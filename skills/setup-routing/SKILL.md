@@ -148,7 +148,7 @@ Think through each GStack skill, organized by phase:
 | `/open-gstack-browser` | Projects wanting a visible AI-controlled Chromium with live activity feed |
 | `/pair-agent` | When pairing a remote AI agent with your browser session |
 | `/setup-browser-cookies` | One-time: import cookies for authenticated `/qa` and `/browse` testing |
-| `/context-guard` | Long implementation sessions, projects using SDD, or any multi-step workflow |
+| `/context-handoff` | Long implementation sessions, projects using SDD, or any multi-step workflow |
 | `/context-save` | Save progress and working state |
 | `/context-restore` | Resume where you left off |
 | `/benchmark` | Projects with performance monitoring needs |
@@ -219,7 +219,7 @@ This project uses Superpowers + GStack. Each owns a distinct phase:
 
 On session start or after /compact: if `docs/superpowers/handoff.md` exists and contains content, read it and present a one-line summary of where you left off. Then proceed normally — do not ask "ready to continue?". Clear the file (write empty string) immediately after presenting the summary.
 
-After /compact: if handoff.md does not contain `## Mode: auto`, ask the user once: "Context was compressed. Want me to activate auto context guard for this session? I'll keep handoff.md updated and suggest /clear when context gets heavy." If yes, invoke the context-guard skill.
+After /compact: if handoff.md does not contain `## Mode: auto`, ask the user once: "Context was compressed. Want me to activate auto context handoff for this session? I'll keep handoff.md updated and suggest /clear when context gets heavy." If yes, invoke the context-handoff skill.
 
 ### Session Management
 - `/clear` when transitioning between GStack and Superpowers phases
