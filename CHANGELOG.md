@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0] - 2026-04-28
+
+### Added
+- **`/quality-review` skill** — perceived-quality gate run after a PRD, spec, or implementation plan, before implementation begins. Walks 15 categories of "feels cheap" risks (silent failures, missing loading/empty states, error recovery, state drift, scope leakage in workspaced apps, animations, AI structured output, sudo flows, sort order, localization-readiness) and produces severity-tiered findings (CRITICAL / SIGNIFICANT / POLISH) with concrete file/section-anchored fixes. Complementary to `/pitfall-verification`: that one asks *"will this work?"*, this one asks *"will this feel like a premium product, on the level of CleanMyMac, Raycast, Linear, Things, Stripe Dashboard?"*. Recommended flow on a fresh artifact: `/pitfall-verification` → fix bugs → `/quality-review` → fix feel → hand off to implementation.
+
+### Changed
+- `setup-routing` and `adapt` version markers bumped to 1.8.0.
+
 ## [1.7.0] - 2026-04-27
 
 ### Added

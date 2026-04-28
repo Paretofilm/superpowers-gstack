@@ -29,11 +29,12 @@ They never overlap. GStack focuses on *what roles review the work*. Superpowers 
 
 ## What's Included
 
-- **Claude Code Plugin** with four skills:
+- **Claude Code Plugin** with five skills:
   - `/setup-routing` — Generates a tailored CLAUDE.md for new projects
   - `/adapt` — Adds routing to existing projects without losing your CLAUDE.md content
   - `/context-handoff` — Writes a human-readable handoff to `docs/superpowers/handoff.md` before `/clear` or `/compact`. Auto-resumes on next session start. Different from gstack's `/context-save` — this lives in the repo and works cross-machine.
   - `/pitfall-verification` — Final-check skill run after any PRD, spec, plan, or code artifact. Targeted check that typical pitfalls for that artifact type and domain (security, idempotency, contracts, edge cases, LLM output) actually do not apply. Two rounds max.
+  - `/quality-review` — Perceived-quality gate run after a PRD, spec, or implementation plan, before implementation begins. Hunts pitfalls that make a product feel cheap or broken even when it technically works (silent failures, missing loading/empty states, error recovery, state drift, animations, AI output, sudo flows). Complementary to `/pitfall-verification`: that one asks "will this work?", this one asks "will this feel good?".
 - **[Appendix](appendix-reference.md)** — Skill internals, troubleshooting, and anti-patterns
 - **Automated update pipeline** — GitHub Actions keeps the plugin in sync when upstream frameworks change
 
