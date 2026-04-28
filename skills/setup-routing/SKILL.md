@@ -39,7 +39,7 @@ Do NOT proceed until both frameworks are present.
 
 **Important:** If the project already has a `CLAUDE.md` file with existing content, STOP and suggest the user runs `/superpowers-gstack:adapt` instead — it preserves existing content while adding routing.
 
-**Version:** This skill writes version **1.9.1** into the CLAUDE.md version marker.
+**Version:** This skill writes version **1.10.0** into the CLAUDE.md version marker.
 
 ## Process
 
