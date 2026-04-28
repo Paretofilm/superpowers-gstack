@@ -300,6 +300,7 @@ Be honest about severity. POLISH must not be escalated to CRITICAL to force fix.
 - Not release engineering (code signing, notarization, Sparkle internals) — separate domain
 - Not iOS, iPadOS, watchOS, tvOS, visionOS — separate skills (deferred in IDEAS.md)
 - Not Windows or Android — separate skills (deferred in IDEAS.md)
+- Not a code-level SwiftUI review — that's `swiftui-expert-skill` by Antoine van der Lee (separate plugin, install via `/plugin install swiftui-expert@swiftui-expert-skill` after adding marketplace `AvdLee/SwiftUI-Agent-Skill`). It reviews SwiftUI implementation at the code layer (state management, view composition, performance, deprecated-API migration, Liquid Glass, Instruments tracing). `macos-native-review` reviews the spec/plan *before* code exists. Complementary at different lifecycle stages: run `macos-native-review` on the spec, then `swiftui-expert-skill` on the implementation.
 
 It is the *Apple-native conformance gate* between "spec written" and "implementation begins" for macOS projects. Catch the un-Mac decisions before they ship.
 
