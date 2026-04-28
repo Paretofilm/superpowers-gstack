@@ -37,7 +37,7 @@ Do NOT proceed until both frameworks are present.
 > ```
 > Then run `/superpowers-gstack:adapt` again.
 
-**Version check:** This skill is version **1.8.0**. If the project's CLAUDE.md contains a version marker (`<!-- superpowers-gstack: X.Y.Z -->`) with an older version, inform the user that routing and session rules will be updated to the current version as part of this adaptation.
+**Version check:** This skill is version **1.8.1**. If the project's CLAUDE.md contains a version marker (`<!-- superpowers-gstack: X.Y.Z -->`) with an older version, inform the user that routing and session rules will be updated to the current version as part of this adaptation.
 
 ## Process
 

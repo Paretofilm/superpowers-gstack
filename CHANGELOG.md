@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.8.1] - 2026-04-28
+
+### Changed
+- **Claude Code** version tracking bumped to 2.1.119 (was 2.1.114). Folds in the auto-update workflow's PR #9 — closed in favour of this patch because PR #9's `[1.7.1]` slot collided with the just-shipped `[1.8.0]`. No skill or behaviour changes.
+
 ## [1.8.0] - 2026-04-28
 
 ### Added
