@@ -82,7 +82,7 @@ Sort views by `(reference_count + interactive_control_count)` descending. Tie-br
 
 ### Step 6: Detect TIER mappings
 - TIER-1 #1 (Smoke): always (uses Scene-root window-title)
-- TIER-1 #2 (Happy-path): pick top-ranked view's primary button. Heuristic: `Button` containing `await` OR action calling a method named `generate*`/`create*`/`save*`/`run*`/`start*`
+- TIER-1 #2 (Happy-path): pick top-ranked view's primary button. Heuristic: `Button` containing `await` OR action calling a method named `generate*`/`create*`/`save*`/`run*`/`start*`. **Fallback** if no Button matches: pick the first Button in the top-ranked view (by line number); mark the generated stub with comment `// HEURISTIC: generic fallback — no save/create/await action matched. Verify this is the right primary action.` so user knows to double-check.
 - TIER-1 #3 (Error-recovery): pick first view (alphabetical by source-file name, then by line number — deterministic) containing `.alert(...)`, `errorMessage`, `failure`, or `error: Error`
 - TIER-2 (Modal): only if `.sheet(isPresented:` or `.fullScreenCover(isPresented:` found in walked tree
 - TIER-2 (Menubar): only if `.commands { ... }` or `MenuBarExtra(` found
