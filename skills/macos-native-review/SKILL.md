@@ -182,9 +182,9 @@ Cite: /windows, /the-menu-bar.
 
 ### 11. Dock icon behavior
 
-Does click-on-dock-icon (when app is hidden / in background) reactivate the main window? Is a dock menu defined for relevant commands? Are badge counts used (and HIG-conformant) where appropriate?
+Does click-on-dock-icon (when app is hidden / in background) reactivate the main window? Is a dock menu defined for relevant commands? Are badge counts used (and HIG-conformant) where appropriate? For menu-bar-only utilities (e.g. `MenuBarExtra`-only apps with no primary window), does the spec explicitly declare `LSUIElement` (Info.plist) — or the SwiftUI equivalent — to suppress the dock icon? An "agent app" that still shows a dock icon reads as un-finished.
 
-Risk surfaces: dock-icon UX; background/foreground transitions; dock contextual menu.
+Risk surfaces: dock-icon UX; background/foreground transitions; dock contextual menu; menu-bar-only apps that should be `LSUIElement` agents but don't say so.
 
 Cite — citation strategy for this category:
 - For findings about Dock **right-click contextual menus** specifically: cite https://developer.apple.com/design/human-interface-guidelines/dock-menus.
