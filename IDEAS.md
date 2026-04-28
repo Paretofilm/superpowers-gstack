@@ -89,6 +89,58 @@ When a skill ships, its entry moves to the "Shipped" section below with the comm
 
 ---
 
+## `ios-e2e-scaffold` (proposed 2026-04-29, deferred)
+
+**Gap.** XCUITest scaffolding for iOS SwiftUI apps; same shape as the (now-shipped) `macos-e2e-scaffold` but with iOS-specific heuristics — gestures, tab-bar, modals with sheet detents, device-rotation, safe-area, NavigationStack vs WindowGroup at the Scene root.
+
+**Scope.** iOS-only. SwiftUI views. iOS Simulator destination. iOS-specific patterns:
+
+- **Scene root** — `WindowGroup` (iOS) without `MenuBarExtra`/`Settings`
+- **Navigation** — `NavigationStack` and `TabView` instead of `WindowGroup`-multi
+- **Modals** — `.sheet` with `.presentationDetents`, `.fullScreenCover`, popovers (iPad)
+- **Gestures** — swipe-to-go-back, pull-to-refresh, drag gestures
+- **Lifecycle** — scene phase transitions, background tasks
+- **Device contexts** — orientation, dynamic type, AX5 accessibility tier
+
+Out: macOS, watchOS, AppKit.
+
+**Method.** Mirrors `macos-e2e-scaffold` deterministic Read+Grep heuristic. Detects iOS target via `Package.swift` `.iOS(.v...)` or `.xcodeproj` scheme platform. Different scene-walk patterns (TabView/NavigationStack at root instead of WindowGroup), different runner-script destination (`platform=iOS Simulator,name=iPhone 15`).
+
+**Differentiation.** Different heuristic targets (iOS top-flows differ from macOS), different runner-script destination, different identifier examples. Not a wrapper around macos-e2e-scaffold — distinct heuristic with iOS-specific TIER mappings.
+
+**Status.** Deferred until observed need. v1.10.0 ships `macos-e2e-scaffold` only.
+
+---
+
+## `swiftui-snapshot-scaffold` (proposed 2026-04-29, deferred)
+
+**Gap.** Snapshot-test scaffolding via `swift-snapshot-testing` (Pointfree). Catches visual regressions XCUITest misses — wrong color, wrong margin, cut-off text, dark-mode rendering bugs. Complementary to `macos-e2e-scaffold` and `ios-e2e-scaffold`, not a replacement.
+
+**Scope.** Cross-platform (macOS + iOS). Adds `swift-snapshot-testing` Package.swift dependency. Generates baseline snapshots for top 5 views (heuristic same as e2e-scaffold but ranked by render-complexity rather than interaction-density). First run produces baselines; subsequent runs verify diffs.
+
+**Method.** Detect `View`-conforming structs, render with `assertSnapshot(matching:as:.image)` skeletons. Heuristic ranks views by complexity (modifier count, sub-view count, conditional-rendering branches). Generates per-state snapshot stubs (default state, loading state, error state, empty state — based on view's @State properties).
+
+**Differentiation.** Visual regression rather than interaction. Pairs with any e2e-scaffold skill — together they cover both interaction (XCUITest) and rendering (snapshot).
+
+**Status.** Deferred until snapshot-testing demand surfaces. Currently most projects use unit + XCUITest; snapshot is a third tier rarely adopted from day one.
+
+---
+
+## `appkit-e2e-scaffold` (proposed 2026-04-29, deferred)
+
+**Gap.** XCUITest scaffolding for AppKit-based macOS apps (legacy, mature, or Catalyst-bridged). Different identifier conventions — NSAccessibility uses `accessibilityIdentifier()` method on `NSView` directly, not the SwiftUI `.accessibilityIdentifier(...)` modifier.
+
+**Scope.** AppKit-only views (`NSWindow`, `NSViewController`, `NSButton`, `NSTextField`, `NSTableView`). Different scene-walk heuristic (no SwiftUI Scene tree; AppKit uses controller hierarchy via `NSWindowController` and `NSViewController` segues/storyboards).
+
+**Method.** Grep for `NSWindow`, `NSViewController`, `NSButton(`, `NSTextField(`, `NSTableView`. Walk controller hierarchy from `NSStoryboard` references. Different identifier convention applied via Swift code rather than modifier-chain.
+
+**Differentiation.** AppKit-only. Won't work for SwiftUI projects (use `macos-e2e-scaffold`). Useful for legacy apps that haven't migrated to SwiftUI, or hybrid SwiftUI-on-AppKit projects where critical surfaces are still AppKit.
+
+**Status.** Deferred until observed need (most modern macOS apps are SwiftUI-first).
+
+---
+
 ## Shipped
 
 - `macos-native-review` — shipped in v1.9.0 (2026-04-28). See `skills/macos-native-review/SKILL.md`.
+- `macos-e2e-scaffold` — shipped in v1.10.0 (2026-04-29). See `skills/macos-e2e-scaffold/SKILL.md`.
