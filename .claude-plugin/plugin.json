@@ -1,7 +1,7 @@
 {
   "name": "superpowers-gstack",
   "description": "Routing, context management, and project setup for the Superpowers + GStack workflow",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "author": {
     "name": "Kjetil Geirbo"
   }

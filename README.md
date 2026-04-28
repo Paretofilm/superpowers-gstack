@@ -110,6 +110,13 @@ This generates a CLAUDE.md with routing rules tailored to your project type, tec
 │  /plan-design-review → Design validation         │
 │  /autoplan        → Chains all three reviews     │
 ├─────────────────────────────────────────────────┤
+│  PHASE 1.5: SPEC REVIEW (this plugin)            │
+│                                                  │
+│  /pitfall-verification → "will this work?"       │
+│  /quality-review       → "will this feel good?"  │
+│  /macos-native-review  → "is this Apple-native?" │
+│                          (macOS projects only)   │
+├─────────────────────────────────────────────────┤
 │  PHASE 2: IMPLEMENTATION (Superpowers)           │
 │                                                  │
 │  /superpowers:brainstorming           → Refine   │
@@ -170,8 +177,13 @@ No hooks, no orchestration overhead, no nesting. Just save and restore.
 /plan-eng-review       → Lock architecture
   → Save key decisions to docs/
 /clear
+/pitfall-verification  → Spec-level: "will this work?"
+/quality-review        → Spec-level: "will this feel good?"
+[macOS only]
+/macos-native-review   → Spec-level: "is this Apple-native?"
 /superpowers:brainstorming         → Adopt design, refine technical approach
 /superpowers:writing-plans         → Break into TDD tasks
+/pitfall-verification  → Plan-level: re-check after writing-plans
 /superpowers:subagent-driven-development → Build it
 /clear
 /review                → Code review
@@ -235,6 +247,11 @@ New idea or feature?
     Scope clear?
       YES → /superpowers:brainstorming
       NO  → /office-hours
+
+Spec or plan written? (after writing-specs / writing-plans / plan-eng-review)
+  → /pitfall-verification → /quality-review
+  → [macOS] /macos-native-review
+  → /superpowers:writing-plans (or /superpowers:subagent-driven-development)
 
 Code written?  → /clear → /review
 Review feedback needs changes? → /superpowers:receiving-code-review → fix → /review

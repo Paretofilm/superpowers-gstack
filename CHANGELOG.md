@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.9.1] - 2026-04-29
+
+### Changed
+- **README workflow integration** — the three plugin-internal review skills (`/pitfall-verification`, `/quality-review`, `/macos-native-review`) were announced in v1.5.0, v1.8.0, and v1.9.0 in the "What's Included" section but never integrated into the README's workflow guidance. Result: users knew the skills existed but couldn't see where to invoke them in practice. This patch fixes that:
+  - **"The Workflow" 4-phase diagram** gains a new `PHASE 1.5: SPEC REVIEW (this plugin)` block between Phase 1 (planning) and Phase 2 (implementation).
+  - **"Common Scenarios → New Feature (Full Workflow)"** now shows the spec-review trio explicitly between `/plan-eng-review` and `/superpowers:brainstorming`, plus a `/pitfall-verification` re-check after `/superpowers:writing-plans`.
+  - **"Decision Tree"** gains a "Spec or plan written?" branch routing to the review trio before implementation.
+- `setup-routing` and `adapt` version markers bumped to 1.9.1.
+
+### Notes for users
+- No skill or behavior changes. Documentation-only patch addressing a discoverability gap surfaced after v1.9.0 shipped.
+
 ## [1.9.0] - 2026-04-28
 
 ### Added
