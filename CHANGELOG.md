@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.11.0] - 2026-05-04
+
+### Upstream: GStack v1.16.0.0 → v1.26.2.0
+
+Internal fixes and hardening across a wide range of GStack skills. No skills were added, removed, or renamed. No routing table changes required.
+
+Key changes from upstream:
+
+- **`/plan-eng-review`** — STOP gates now always fire `AskUserQuestion`; report-at-bottom contract enforced. More reliable interactive review flow.
+- **`/office-hours`** — Phase 4 STOP gate fixed; `AskUserQuestion` recommendation judge repaired. Interactive prompts no longer silently skip.
+- **`/setup-gbrain`** — gbrain federation surface now fully wired up. Cross-session memory (PGLite local or Supabase) is production-ready.
+- **`AskUserQuestion`** — Resolves to host MCP variant when native is disallowed, ensuring interactive prompts work in all Claude Code environments.
+- **`/ship`** — PR titles are now always prefixed with `v<VERSION>` for consistent release tagging.
+- **Cross-platform hardening** — Curated Windows lane, `Bun.which` resolver, and path-portability helpers added. GStack skills are more reliable on Windows.
+- **gbrain manifests** — Per-skill gbrain manifests and V1 transcript ingest shipped. Skills can now surface retrieval context from prior sessions.
+- **Browser skills** — Browser-skills runtime and gbrain-support carryover landed (`browser-skills/hackernews-frontpage` and related).
+- **gbrain-sync** — Orchestrator now resolves sibling via `import.meta.dir` (path resolution fix).
+- **Tunnel allowlist** — Expanded from 17 to 26 entries; `canDispatchOverTunnel` extracted as a pure function.
+
+### Upstream: Claude Code 2.1.119 → 2.1.126
+
+No routing or skill behavior changes affecting this plugin.
+
+---
+
 ## [1.10.0] - 2026-04-29
 
 ### Added

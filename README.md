@@ -1,3 +1,31 @@
+# Analysis
+
+**What changed:**
+- GStack updated from v1.15.0.0 (dde5510) to v1.26.2.0 (30fe6bb)
+- Claude Code updated from 2.1.119 to 2.1.126
+- Many skill files changed internally (bug fixes, behavior changes)
+- Key behavior changes from commits:
+  - `plan-eng-review` STOP gates always fire AskUserQuestion + report-at-bottom contract enforcement
+  - `gbrain-sync` orchestrator fix
+  - V1 transcript ingest + per-skill gbrain manifests + retrieval surface
+  - `office-hours` Phase 4 STOP gate + AskUserQuestion recommendation judge fix
+  - `AskUserQuestion` resolves to host MCP variant when native is disallowed
+  - Cross-platform hardening — curated Windows lane + Bun.which resolver + path-portability helper
+  - PR titles always prefixed with v<VERSION>
+  - Browser-skills runtime + gbrain-support carryover
+  - `setup-gbrain` wireup ships the gbrain federation surface
+  - Tunnel allowlist 17→26 + canDispatchOverTunnel pure function
+
+**Skill additions/removals:** No new skills added or removed from the routing tables based on the changed files listed. The changed skills are existing ones with internal fixes. `browser-skills/hackernews-frontpage/SKILL.md` appears but `browser-skills` is a runtime, not a user-facing skill to add to the tables. No skill renames detected.
+
+**What needs updating:**
+- VERSIONS.md: GStack version and Claude Code version + date
+- CHANGELOG.md: new entry at top
+- README: No skill table changes needed; behavior changes are internal to GStack skills, not routing-level changes that affect the README's Quick Reference or workflow sections. The `/ship` behavior change (PR titles prefixed with v<VERSION>) is worth noting but doesn't change routing. Nothing in the README's skill tables needs updating.
+- SKILL.md files: No additions/removals/renames, so evaluation tables remain unchanged.
+
+# README
+
 # Superpowers + GStack: Routing, Context Management & Workflow
 
 > **"Superpowers owns the implementation loop, GStack owns everything before and after it. Context Guard keeps the session clean."**
