@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.11.0] - 2026-05-12
+
+### Added
+- **Per-skill model routing recommendations** — `setup-routing` and `adapt` now emit a `### Model Routing` subsection inside `## Skill routing` in the generated CLAUDE.md. The table maps each relevant skill (and key per-phase steps within multi-phase skills like `/superpowers:test-driven-development`, `/superpowers:subagent-driven-development`, `/superpowers:systematic-debugging`, `/qa`, `/ship`) to its recommended model per harness.
+- **Multi-harness columns** — routing recommendations are column-wise: **Claude Code** (`opus`/`sonnet`/`haiku`), **Pi (local-only)** (concrete Qwen3.6 model IDs from `~/.pi/agent/models.json`), and **Pi (hybrid)** (local default + cloud fallback for heavy reasoning). Orchestrator-Claude identifies its own runtime and picks the matching column. No hook required for the routing itself.
+- **Swift-implementation specialization** — Swift/SwiftUI implementation phases route to `qwen3.6-27b-optiQ-SFT` (Stage 12.4 SFT adapter on Qwen3.6-27B-OptiQ-4bit, served via `mlx-sft` provider) when running in Pi. Other implementation phases route to the daily-driver `qwen3.6-mlx-8bit`.
+- **Canonical routing table** — `skills/setup-routing/model-routing.md` holds the full table referenced by both `setup-routing` and `adapt`. Includes phase-level sub-tables for the five multi-phase skills, model identifier documentation (Anthropic + Pi), and explicit caveats.
+- **`setup-routing` Step 2 question 10** — new always-asked question: which harness(es) will run this project (Claude Code / Pi local-only / Pi hybrid). Determines which columns appear in the generated CLAUDE.md.
+- **`setup-routing` Step 5.5** — new step: present model routing recommendations to the user for confirmation before generating CLAUDE.md. Mirrors the existing skill-selection-confirmation pattern in Step 5.
+- **`adapt` Step 2 follow-up** — mirrors the harness question. Step 4 gap-detection now includes `### Model Routing` presence check. Step 5 inserts/updates the section without touching other CLAUDE.md content.
+
+### Changed
+- `setup-routing` and `adapt` version markers bumped to 1.11.0.
+- Generated CLAUDE.md target size: 60-100 lines → 80-130 lines (Model Routing adds ~15-30 lines depending on how many skills and harnesses are selected). The ~150-line compliance budget still applies.
+
+### Notes for users
+- **⚠️ Marketplace users:** v1.11.0 adds a new `### Model Routing` subsection to generated CLAUDE.md by default. The **Pi columns reference local-model identifiers specific to the plugin author's setup** (Qwen3.6 variants in `~/.pi/agent/models.json`) — most users won't have those models installed. **To opt out**, answer "None — skip model routing entirely" when prompted for harness in `/setup-routing` (Step 2 Q10) or `/adapt` (Step 2 follow-up). Existing CLAUDE.md files are untouched until you re-run one of those skills.
+- **Advisory, not enforced.** Orchestrator-Claude may ignore the recommendations — this v0.1 ships as guidance only. Hook-based enforcement (and online-vs-offline auto-detection for the Pi hybrid column) is deferred to v1.12.0.
+- **Empirical validation pending.** The Pi columns lean on the user's `project_vibe_coding_config.md` memory entry (Tier 1/2/3 benchmark from 2026-05-02/03 Quern test). The Anthropic columns are sensible defaults based on each skill's dominant cognitive demand, not benchmarked across this exact skill set.
+- **Existing projects:** re-run `/superpowers-gstack:adapt` to pick up Model Routing. The skill detects the older version marker and adds the section without touching other content.
+- **Pi model availability:** routing references concrete model IDs (e.g. `qwen3.6-mlx-8bit`, `qwen3.6-27b-optiQ-SFT`). Confirm coverage with `cat ~/.pi/agent/models.json | grep '"id"'` before relying on Pi-column recommendations.
+- **Design rationale:** full design doc with scope decisions, known gaps, and future work is at `docs/superpowers/specs/2026-05-12-model-routing-design.md`.
+
 ## [1.10.0] - 2026-04-29
 
 ### Added

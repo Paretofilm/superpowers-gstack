@@ -39,7 +39,7 @@ Do NOT proceed until both frameworks are present.
 
 **Important:** If the project already has a `CLAUDE.md` file with existing content, STOP and suggest the user runs `/superpowers-gstack:adapt` instead — it preserves existing content while adding routing.
 
-**Version:** This skill writes version **1.10.0** into the CLAUDE.md version marker.
+**Version:** This skill writes version **1.11.0** into the CLAUDE.md version marker.
 
 ## Process
 
@@ -55,7 +55,7 @@ Ask the user ONE question:
 
 ### Step 2: Ask follow-up questions
 
-Based on the project type, ask 3-5 focused follow-up questions. Always include questions 1-3. Add 4-5 based on relevance:
+Based on the project type, ask 3-5 focused follow-up questions. Always include questions 1-3 and 10. Add 4-9 based on relevance:
 
 1. What test framework will you use? (or "no tests yet")
 2. Will this be deployed? Where? (or local-only)
@@ -66,6 +66,7 @@ Based on the project type, ask 3-5 focused follow-up questions. Always include q
 7. Is this a long-running project or a one-off? (helps evaluate `/learn`)
 8. Do you have existing linting, type checking, or test suites? (helps evaluate `/health`)
 9. Is this a monorepo? Which directory will you work in? (helps evaluate `/freeze`)
+10. Which harnesses will you run this project under? Pick all that apply: **Claude Code**, **Pi (local-only — no network calls)**, **Pi (hybrid — local + cloud fallback)**, or **None — skip model routing entirely**. Determines which model-routing columns get emitted in CLAUDE.md. Pick "None" to opt out of the new v1.11.0 Model Routing section completely; setup-routing falls back to its v1.10.0 behavior for this project.
 
 Ask all follow-up questions in a single message. **STOP HERE.** Do not continue to the next step until the user responds. Do not add suggestions or any other content after the questions. End your message with the questions.
 
@@ -176,6 +177,46 @@ Ask: "Does this look right? Any skills to add or remove?"
 
 If the user wants changes, update your selection and re-present. Repeat until confirmed.
 
+### Step 5.5: Present model routing recommendations
+
+Read `skills/setup-routing/model-routing.md` (sibling file in this skill's directory) — it holds the canonical per-skill model recommendations for Claude Code and the two Pi modes.
+
+**If `model-routing.md` does not exist** (older cached plugin version, file deletion, etc.): tell the user "Model routing reference is unavailable — likely an older plugin cache. Run `/plugin update superpowers-gstack` and re-run this skill, or proceed without model routing." Then skip directly to Step 6 with the `### Model Routing` section omitted.
+
+**If the user's harness answer to Step 2 Q10 was "None — skip model routing entirely"**: skip directly to Step 6 with the entire `### Model Routing` section omitted. Tell the user: "Skipping Model Routing per your request. Re-run `/superpowers-gstack:adapt` later if you change your mind." Do not present a preview.
+
+**If the user's harness answer to Step 2 Q10 was "Other" or named an unlisted harness** (Cursor, opencode, Codex CLI, etc.): include only the **Claude Code** column in the preview and note in the generated CLAUDE.md that "this harness was not in the routing table — Claude Code defaults are used as a starting point, override per task with harness-native mechanisms."
+
+**If Q10 was skipped or returned an empty/unparseable answer**: default to the **Claude Code** column only and proceed.
+
+Build a routing preview containing only:
+- The skills selected in Step 5 (skip everything excluded)
+- The harness columns selected in Step 2 question 10 (skip columns the user isn't using)
+
+Present it as:
+
+**Model routing for [list selected harnesses]:**
+
+| Skill | [Selected harness columns] |
+|---|---|
+| [Skills from Step 5 confirmation, one per row] | [Recommendation from model-routing.md] |
+
+For skills marked `see phases` in `model-routing.md`, include a sub-table for that skill showing the per-phase recommendations.
+
+**For Pi columns specifically:** the table in `model-routing.md` references concrete model IDs (e.g. `qwen3.6-mlx-8bit`, `qwen3.6-27b-optiQ-SFT`). If the user is unsure which Pi models they have loaded, ask them to run:
+
+```bash
+cat ~/.pi/agent/models.json 2>/dev/null | grep '"id"'
+```
+
+…and confirm coverage. If a recommended Pi model is not listed, mark that row with `(verify availability)` in the generated CLAUDE.md.
+
+After presenting, ask:
+
+> Does this model routing look right? Any adjustments?
+
+**STOP HERE.** Do not continue to Step 6 until the user responds. If adjustments are requested, update and re-present. If the user wants to keep model routing out of CLAUDE.md entirely, note that and skip the Model Routing section in Step 6.
+
 ### Step 6: Generate CLAUDE.md
 
 Generate the `CLAUDE.md` file in the project root. Adapt the structure below based on what's relevant — omit entire sections that don't apply.
@@ -214,6 +255,29 @@ This project uses Superpowers + GStack. Each owns a distinct phase:
 - Use `/investigate` only for bugs found in QA or production (Phase 3+)
 - Superpowers specs go in `docs/superpowers/`
 - GStack state lives in `~/.gstack/projects/`
+
+### Model Routing (v0.1, advisory)
+
+**Identify your runtime:**
+- **Claude Code** — your system prompt names you "Claude Code". Use the **Claude Code** column.
+- **Pi (local-only)** — `~/.pi/agent/AGENTS.md` confirms Pi runtime; no network calls allowed. Use **Pi (local-only)**.
+- **Pi (hybrid)** — Pi runtime with cloud calls permitted. Use **Pi (hybrid)**.
+
+If your runtime doesn't match a listed column, default to **Claude Code**.
+
+**How to apply the recommendations** (differs by harness):
+- **In Claude Code:** dispatch subagents (via `Agent` tool, parallel agents, or SDD workers) with `model:` set to the column entry for the task. Multi-phase skills become per-phase subagent calls.
+- **In Pi:** no subagent dispatch is available (Pi runs a single process per session). Use the column entry as a guide for *which Pi provider/model to start the session with* for tasks of this type. For multi-phase skills, pick the model matched to the dominant phase. The Pi model aliases (e.g. `qwen3.6-27b-optiQ-SFT`) map to actual `--provider` / `--model` flags — see the alias table in `model-routing.md`.
+
+[Insert routing table here — only the skills confirmed in Step 5, only the harness columns selected in Step 2 Q10. For skills marked "see phases" in `model-routing.md`, include the phase sub-table inline. For Pi rows, use the friendly aliases for readability; orchestrator should map back to actual `id` from the alias table in `model-routing.md` when invoking.]
+
+For multi-phase skills (`/superpowers:test-driven-development`, `/superpowers:subagent-driven-development`, `/superpowers:systematic-debugging`, `/qa`, `/ship`), route per phase — see the sub-tables above.
+
+**Caveats:**
+- Advisory only. Override per task when you have evidence.
+- Pi rows assume the named models/providers are loaded (`cat ~/.pi/agent/models.json` to verify, and `scripts/start-mlx-server.sh` for the SFT model).
+- Swift-implementation rows route to `qwen3.6-27b-optiQ-SFT` (mlx-sft provider, port 8081) only if that provider is running. Otherwise fall back to the row's non-Swift recommendation.
+- Full table with all skills (not just this project's selected subset) lives at `~/.claude/plugins/cache/.../superpowers-gstack/skills/setup-routing/model-routing.md`.
 
 ### Session Continuity
 
@@ -284,7 +348,9 @@ Ready to ship        → /ship
 - DO include the default QA URL if the user provided one
 - DO include test commands if known
 - Omit entire sections that don't apply (no empty "QA: N/A" sections)
-- Target 60-100 lines total. The CLAUDE.md compliance budget is ~150 lines — leave room for the user to add conventions later
+- **Model Routing section:** include only the harness columns selected in Step 2 Q10 and only the rows for skills selected in Step 5. If the user opted out of model routing in Step 5.5, omit the entire `### Model Routing` section.
+- **Phase sub-tables:** include inline only for multi-phase skills selected in Step 5 (e.g. skip the TDD sub-table if `/superpowers:test-driven-development` is not in the selected set).
+- Target 80-130 lines total (was 60-100 in v1.10.0 — Model Routing adds ~15-30 lines). The CLAUDE.md compliance budget is ~150 lines — keep tight, omit any column or phase that doesn't apply.
 
 ### Step 7: Confirm
 

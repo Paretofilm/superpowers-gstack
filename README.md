@@ -37,6 +37,7 @@ They never overlap. GStack focuses on *what roles review the work*. Superpowers 
   - `/quality-review` — Perceived-quality gate run after a PRD, spec, or implementation plan, before implementation begins. Hunts pitfalls that make a product feel cheap or broken even when it technically works (silent failures, missing loading/empty states, error recovery, state drift, animations, AI output, sudo flows). Complementary to `/pitfall-verification`: that one asks "will this work?", this one asks "will this feel good?".
   - `/macos-native-review` — Apple-native conformance gate for macOS PRDs, specs, and plans. 12 HIG-citation-grounded categories: vocabulary, control choices, keyboard shortcuts, semantic colors, sheets/popovers/alerts, animation timing, privileged operations, accessibility, menu bar, app lifecycle, dock behavior, App menu. Every finding cites a `developer.apple.com` HIG page via WebFetch. Phase 0 self-check rejects non-macOS artifacts. Complementary to `/pitfall-verification` ("will this work?") and `/quality-review` ("will this feel good?") — this asks "is this Apple-native?".
   - `/macos-e2e-scaffold` — One-shot XCUITest scaffolding for macOS SwiftUI projects. Walks the Scene tree deterministically, generates ranked TIER-1/2/3 test stubs (Smoke + Happy-path + Error-recovery always; Modal/Menubar/Multi-window/Toolbar conditional on pattern detection). Suggests accessibility identifiers (`<ViewName>_<ControlType>_<Purpose>`) with batch confirmation, emits a Claude-readable xcresult runner script. Three project-type branches (xcodegen / SPM / plain .xcodeproj). Manual invocation only — modifies project files. Phase 0 self-check refuses non-Swift, non-SwiftUI, non-macOS, or already-scaffolded projects. The only skill in the plugin that *creates* test infrastructure rather than reviewing artefacts.
+- **Per-skill model routing** (v1.11.0+) — `/setup-routing` and `/adapt` emit a `### Model Routing` table inside the generated CLAUDE.md. Each row maps a skill (or phase within a multi-phase skill) to its recommended model per harness: **Claude Code** (`opus`/`sonnet`/`haiku`), **Pi (local-only)** (Qwen3.6 model IDs), **Pi (hybrid)** (local default + cloud fallback). Swift/SwiftUI implementation phases route to `qwen3.6-27b-optiQ-SFT` when running in Pi. See `skills/setup-routing/model-routing.md` for the canonical table. Advisory v0.1 — orchestrator-Claude consults it when dispatching subagents.
 - **[Appendix](appendix-reference.md)** — Skill internals, troubleshooting, and anti-patterns
 - **Automated update pipeline** — GitHub Actions keeps the plugin in sync when upstream frameworks change
 
@@ -322,6 +323,23 @@ Review passed? → /qa → /cso → /ship
 | `/superpowers:requesting-code-review` | Dispatch review subagent |
 | `/superpowers:receiving-code-review` | Handle review feedback |
 | `/superpowers:writing-skills` | Plugin/skill projects only |
+
+### Model Routing (v1.11.0+)
+
+When orchestrator-Claude dispatches a subagent, it should pick the model based on the **task being executed**, not the orchestrator's default. The full table lives at [`skills/setup-routing/model-routing.md`](skills/setup-routing/model-routing.md). Highlights:
+
+| Skill / Phase                         | Claude Code | Pi (local-only)         | Pi (hybrid) |
+|---------------------------------------|-------------|--------------------------|-------------|
+| `/plan-ceo-review`                    | opus        | qwen3.6-35b-a3b-4bit-dwq | opus        |
+| `/superpowers:brainstorming`          | sonnet      | qwen3.6-35b-a3b-4bit-dwq | sonnet      |
+| `/review`, `/cso`, `/retro`           | sonnet      | qwen3.6-mlx-8bit         | sonnet      |
+| `/superpowers:verification-before-completion` | haiku | qwen3.6-mlx-8bit       | haiku       |
+| `/ship`, `/health`, `/learn`, `/canary` | haiku     | qwen3.6-mlx-8bit         | haiku       |
+| TDD → implement (Swift/SwiftUI)       | sonnet      | **qwen3.6-27b-optiQ-SFT** | **qwen3.6-27b-optiQ-SFT** |
+
+The recommendations are **advisory v0.1** — orchestrator-Claude reads them as guidance, no hook enforcement yet (v1.12.0 candidate). See `skills/setup-routing/model-routing.md` for the full table with phase-level breakdowns and caveats.
+
+> **⚠️ Marketplace users — heads up.** The Pi columns reference local-model identifiers specific to the plugin author's `~/.pi/agent/models.json`. If you don't run Pi (or run it with different models), the Pi columns won't apply to you — but the Claude Code column will. **To opt out entirely**, answer "None — skip model routing entirely" when `/setup-routing` or `/adapt` asks about harnesses (Step 2 Q10 / Step 2 follow-up). Existing CLAUDE.md files aren't touched until you re-run one of those skills. Full opt-out details and design rationale: [`docs/superpowers/specs/2026-05-12-model-routing-design.md`](docs/superpowers/specs/2026-05-12-model-routing-design.md).
 
 ## How It Stays Up to Date
 

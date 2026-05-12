@@ -37,7 +37,7 @@ Do NOT proceed until both frameworks are present.
 > ```
 > Then run `/superpowers-gstack:adapt` again.
 
-**Version check:** This skill is version **1.10.0**. If the project's CLAUDE.md contains a version marker (`<!-- superpowers-gstack: X.Y.Z -->`) with an older version, inform the user that routing and session rules will be updated to the current version as part of this adaptation.
+**Version check:** This skill is version **1.11.0**. If the project's CLAUDE.md contains a version marker (`<!-- superpowers-gstack: X.Y.Z -->`) with an older version, inform the user that routing and session rules will be updated to the current version as part of this adaptation. Projects on version `1.10.0` or earlier will gain a `### Model Routing` section in their CLAUDE.md unless they opt out — surface this clearly so it's not a silent addition.
 
 ## Process
 
@@ -67,11 +67,13 @@ Based on Step 1, determine:
 - QA URL (if browser-testable)
 - Whether it's a team or solo project
 
-Present this to the user for confirmation:
+Present this to the user for confirmation, and ask one additional question about harnesses (needed for model routing in Step 5):
 
 > Based on my analysis, this is a **[type]** using **[stack]**. Tests run with `[command]`. [Deployed to X / Local-only]. [Has browser UI at X / No browser UI].
 >
 > Is this correct? Anything to add?
+>
+> Also: which harnesses do you run this project under? Pick all that apply: **Claude Code**, **Pi (local-only — no network)**, **Pi (hybrid — local + cloud fallback)**, or **None — skip model routing entirely**. Determines which model-routing columns the CLAUDE.md gets. Pick "None" to opt out of the v1.11.0 Model Routing feature for this project (existing CLAUDE.md content stays untouched; only routing updates happen).
 
 **STOP HERE.** Do not continue to the next step until the user responds. Do not add "Next steps", suggestions, or any other content after the question. End your message with the question.
 
@@ -167,6 +169,7 @@ Compare the current project state against what Superpowers + GStack needs. Check
 - [ ] Does `## Skill routing` section exist?
 - [ ] Does it include the correct skills for this project?
 - [ ] Does it have Routing Logic, Rules, and Session Management?
+- [ ] Does it have a `### Model Routing` section (v1.11.0+)? If not, this adaptation will add one.
 - [ ] Is there existing content that must be preserved?
 
 **Project structure:**
@@ -205,6 +208,13 @@ Apply the changes identified in Step 4. Follow these rules strictly:
 - If a `## Skill routing` section already exists: REPLACE only that section
 - If no `## Skill routing` section exists: ADD it after the first heading (or at the top if no heading)
 - The routing section follows the same template as `setup-routing` Step 6, adapted to this project
+- **Model Routing (v1.11.0+):** read the canonical routing table from `~/.claude/plugins/cache/*/superpowers-gstack/*/skills/setup-routing/model-routing.md` (sibling skill file). Build the tailored sub-table containing:
+  - Only skills relevant to this project (filtered from Step 3 evaluation)
+  - Only harness columns the user confirmed in Step 2 (Claude Code / Pi local-only / Pi hybrid)
+  - For multi-phase skills selected, include the phase sub-tables inline
+  - Insert this as a `### Model Routing` subsection of `## Skill routing`, placed after `### Rules` and before `### Session Continuity`
+  - **Fallbacks:** If `model-routing.md` is missing (older cached plugin), warn the user and skip the section entirely. If the user picked an unlisted harness ("Other": Cursor, opencode, etc.), emit only the Claude Code column with a note that harness-native model selection should be used instead. If the harness answer was empty/skipped, default to Claude Code column only.
+  - If the user opts out, skip this section entirely and note the choice in the final report
 - If no `## Session Continuity` section exists in CLAUDE.md: ADD the following block. If it already exists, REPLACE it with the current version:
   ```
   ## Session Continuity
