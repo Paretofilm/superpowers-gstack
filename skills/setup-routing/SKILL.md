@@ -185,9 +185,15 @@ Read `skills/setup-routing/model-routing.md` (sibling file in this skill's direc
 
 **If the user's harness answer to Step 2 Q10 was "None — skip model routing entirely"**: skip directly to Step 6 with the entire `### Model Routing` section omitted. Tell the user: "Skipping Model Routing per your request. Re-run `/superpowers-gstack:adapt` later if you change your mind." Do not present a preview.
 
-**If the user's harness answer to Step 2 Q10 was "Other" or named an unlisted harness** (Cursor, opencode, Codex CLI, etc.): include only the **Claude Code** column in the preview and note in the generated CLAUDE.md that "this harness was not in the routing table — Claude Code defaults are used as a starting point, override per task with harness-native mechanisms."
+**If the user's harness answer to Step 2 Q10 was "Other" or named an unlisted harness** (Cursor, opencode, Codex CLI, etc.): include only the **Claude Code** column in the preview, and emit a note at the **top of the `### Model Routing` section in the generated CLAUDE.md** (immediately after the section header, before the "Identify your runtime" paragraph). The note must say:
+
+> **Note:** Your harness (`<name>`) is not in this routing table. Claude Code defaults are shown as a starting point — override per task with your harness's native model-selection mechanism (e.g. opencode's agent-types, Cursor's model picker, Codex CLI's `--model` flag).
 
 **If Q10 was skipped or returned an empty/unparseable answer**: default to the **Claude Code** column only and proceed.
+
+**If user selected only Pi columns (no Claude Code)**: emit a note at the top of the `### Model Routing` section saying:
+
+> **Note:** Claude Code column is not present because you didn't select it. If you open this project in Claude Code anyway, use the Pi (hybrid) column as a rough approximation — its Anthropic-leaning recommendations (sonnet for most, haiku for mechanical) are the closest stand-in.
 
 Build a routing preview containing only:
 - The skills selected in Step 5 (skip everything excluded)
@@ -267,7 +273,10 @@ If your runtime doesn't match a listed column, default to **Claude Code**.
 
 **How to apply the recommendations** (differs by harness):
 - **In Claude Code:** dispatch subagents (via `Agent` tool, parallel agents, or SDD workers) with `model:` set to the column entry for the task. Multi-phase skills become per-phase subagent calls.
-- **In Pi:** no subagent dispatch is available (Pi runs a single process per session). Use the column entry as a guide for *which Pi provider/model to start the session with* for tasks of this type. For multi-phase skills, pick the model matched to the dominant phase. The Pi model aliases (e.g. `qwen3.6-27b-optiQ-SFT`) map to actual `--provider` / `--model` flags — see the alias table in `model-routing.md`.
+- **In Pi:** no subagent dispatch is available (Pi runs a single process per session). Use the column entry as a guide for *which Pi provider/model to start the session with* for tasks of this type. For multi-phase skills with phase-varying recommendations:
+  - **Preferred:** end the current Pi session (`/new`) between phases and restart with the model matched to the next phase. Acceptable for long-running implementation work.
+  - **Pragmatic:** if restarting is friction, pick the model matched to the **most cognitively-demanding phase** in your session (bias toward the larger/stronger model so weaker phases still get adequate capability).
+  - Pi aliases (e.g. `qwen3.6-27b-optiQ-SFT`) map to actual `--provider` / `--model` flags — see the alias table in `model-routing.md`.
 
 [Insert routing table here — only the skills confirmed in Step 5, only the harness columns selected in Step 2 Q10. For skills marked "see phases" in `model-routing.md`, include the phase sub-table inline. For Pi rows, use the friendly aliases for readability; orchestrator should map back to actual `id` from the alias table in `model-routing.md` when invoking.]
 
@@ -277,7 +286,8 @@ For multi-phase skills (`/superpowers:test-driven-development`, `/superpowers:su
 - Advisory only. Override per task when you have evidence.
 - Pi rows assume the named models/providers are loaded (`cat ~/.pi/agent/models.json` to verify, and `scripts/start-mlx-server.sh` for the SFT model).
 - Swift-implementation rows route to `qwen3.6-27b-optiQ-SFT` (mlx-sft provider, port 8081) only if that provider is running. Otherwise fall back to the row's non-Swift recommendation.
-- Full table with all skills (not just this project's selected subset) lives at `~/.claude/plugins/cache/.../superpowers-gstack/skills/setup-routing/model-routing.md`.
+- **Drift warning:** this table is inlined from `model-routing.md` at the time `/setup-routing` was last run. If the plugin updates its routing recommendations, this inline copy stays frozen — re-run `/superpowers-gstack:adapt` to pull the latest. The plugin version that produced this section is stamped in the top-of-file `<!-- superpowers-gstack: X.Y.Z -->` marker.
+- Full canonical table with all skills (not just this project's selected subset) lives at `~/.claude/plugins/cache/.../superpowers-gstack/skills/setup-routing/model-routing.md`.
 
 ### Session Continuity
 
@@ -350,7 +360,7 @@ Ready to ship        → /ship
 - Omit entire sections that don't apply (no empty "QA: N/A" sections)
 - **Model Routing section:** include only the harness columns selected in Step 2 Q10 and only the rows for skills selected in Step 5. If the user opted out of model routing in Step 5.5, omit the entire `### Model Routing` section.
 - **Phase sub-tables:** include inline only for multi-phase skills selected in Step 5 (e.g. skip the TDD sub-table if `/superpowers:test-driven-development` is not in the selected set).
-- Target 80-130 lines total (was 60-100 in v1.10.0 — Model Routing adds ~15-30 lines). The CLAUDE.md compliance budget is ~150 lines — keep tight, omit any column or phase that doesn't apply.
+- Target 100-180 lines total (was 60-100 in v1.10.0 — Model Routing adds ~20-50 lines depending on selected skills, harness count, and how many multi-phase skills are included). Projects that select all three harnesses + many multi-phase skills can legitimately reach 200 lines; that is acceptable when the routing is being used. The 150-line "compliance budget" from v1.10.0 is officially relaxed to 200 lines starting v1.11.0 when Model Routing is present. To stay tight: omit any column not selected, omit phase sub-tables for skills not selected.
 
 ### Step 7: Confirm
 
