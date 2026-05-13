@@ -37,7 +37,7 @@ Do NOT proceed until both frameworks are present.
 > ```
 > Then run `/superpowers-gstack:adapt` again.
 
-**Version check:** This skill is version **1.11.0**. If the project's CLAUDE.md contains a version marker (`<!-- superpowers-gstack: X.Y.Z -->`) with an older version, inform the user that routing and session rules will be updated to the current version as part of this adaptation. Projects on version `1.10.0` or earlier will gain a `### Model Routing` section in their CLAUDE.md unless they opt out — surface this clearly so it's not a silent addition.
+**Version check:** This skill is version **1.11.2**. If the project's CLAUDE.md contains a version marker (`<!-- superpowers-gstack: X.Y.Z -->`) with an older version, inform the user that routing and session rules will be updated to the current version as part of this adaptation. Projects on version `1.10.0` or earlier will gain a `### Model Routing` section in their CLAUDE.md unless they opt out — surface this clearly so it's not a silent addition. Projects on `1.11.1` or earlier will gain three new gstack skill rows (`/sync-gbrain`, `/scrape`, `/skillify`) in the evaluation tables.
 
 ## Process
 
@@ -139,6 +139,7 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | `/retro` | Team projects with regular sprint cadence |
 | `/learn` | Long-running projects (> 2 weeks) — saves cross-session learnings |
 | `/setup-gbrain` | Long-running projects wanting cross-session memory (PGLite local or Supabase) |
+| `/sync-gbrain` | Long-running projects with gbrain — keeps the brain current with this repo's code and refreshes CLAUDE.md search guidance |
 | `/health` | Projects with existing linting, type checking, or test suites |
 | `/make-pdf` | Projects needing publication-quality documentation or reports |
 
@@ -151,6 +152,8 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | `/unfreeze` | Clear the `/freeze` boundary mid-session without ending the session |
 | `/guard` | Production / shared-infra work — combines `/careful` warnings with `/freeze` directory lock |
 | `/browse` | Projects needing headless browser interaction beyond QA |
+| `/scrape` | Projects pulling data from web pages — prototypes a flow once, codifies it via `/skillify` |
+| `/skillify` | After a successful `/scrape` — persists the flow as a permanent browser-skill so future calls run in ~200ms |
 | `/open-gstack-browser` | Projects wanting a visible AI-controlled Chromium with live activity feed |
 | `/pair-agent` | When pairing a remote AI agent with your browser session |
 | `/setup-browser-cookies` | One-time: import cookies for authenticated `/qa` and `/browse` testing |

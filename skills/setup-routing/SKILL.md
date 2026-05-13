@@ -134,6 +134,7 @@ Think through each GStack skill, organized by phase:
 | `/retro` | Team projects with regular sprint cadence |
 | `/learn` | Long-running projects (> 2 weeks) — saves cross-session learnings |
 | `/setup-gbrain` | Long-running projects wanting cross-session memory (PGLite local or Supabase) |
+| `/sync-gbrain` | Long-running projects with gbrain — keeps the brain current with this repo's code and refreshes CLAUDE.md search guidance |
 | `/health` | Projects with existing linting, type checking, or test suites |
 | `/make-pdf` | Projects needing publication-quality documentation or reports |
 
@@ -146,6 +147,8 @@ Think through each GStack skill, organized by phase:
 | `/unfreeze` | Clear the `/freeze` boundary mid-session without ending the session |
 | `/guard` | Production / shared-infra work — combines `/careful` warnings with `/freeze` directory lock |
 | `/browse` | Projects needing headless browser interaction beyond QA |
+| `/scrape` | Projects pulling data from web pages — prototypes a flow once, codifies it via `/skillify` |
+| `/skillify` | After a successful `/scrape` — persists the flow as a permanent browser-skill so future calls run in ~200ms |
 | `/open-gstack-browser` | Projects wanting a visible AI-controlled Chromium with live activity feed |
 | `/pair-agent` | When pairing a remote AI agent with your browser session |
 | `/setup-browser-cookies` | One-time: import cookies for authenticated `/qa` and `/browse` testing |
