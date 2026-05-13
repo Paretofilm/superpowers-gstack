@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.11.1] - 2026-05-13
+
+### Changed
+- **VERSIONS.md sync** — bumped GStack v1.15.0.0 (dde5510) → v1.26.2.0 (30fe6bb) and Claude Code 2.1.119 → 2.1.126. Per auto-update PR #14's own analysis: no new skills added, removed, or renamed upstream. Routing tables and Model Routing recommendations remain accurate. Upstream changes are internal fixes (e.g. `/plan-eng-review` STOP gates, `/office-hours` Phase 4, `AskUserQuestion` MCP fallback, `/ship` PR-title prefix, cross-platform hardening, gbrain manifests, browser-skills runtime, tunnel allowlist expansion).
+
+### Notes for users
+- No functional changes in this plugin. v1.11.1 closes auto-update PR #14 / issue #15 which collided with the manually-shipped v1.11.0 model routing release (same pattern as v1.8.1 / PR #9 collision documented in earlier CHANGELOG). The salvageable VERSIONS.md update from PR #14 is incorporated here.
+
 ## [1.11.0] - 2026-05-12
 
 ### Added
