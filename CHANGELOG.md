@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.12.0] - 2026-05-15
+
+### Changed
+- **`context-handoff` schema upgrade — YAML frontmatter + prose hybrid.** `docs/superpowers/handoff.md` now starts with a YAML block carrying machine-parseable fields: `session_end`, `branch`, `commit_at_handoff`, `mode`, `active_task`, `status`, `completed`, `remaining`, `files_in_flight`, `env` (venv/dev_server/test_cmd), and `next_step`. Prose sections below remain for human context (decisions, files modified, plan progress, blockers).
+- **Stable task-ID convention** — `<feature-slug>-<n>` (e.g. `auth-rewrite-3`). IDs never renumber; the slug makes them grep-able across handoff history, plan files, and commit messages.
+- **`next_step` discipline** — must be one sentence with a concrete verb and (where possible) `file:line` anchor. Vague resumption text ("continue work on auth") is no longer acceptable.
+- **`CLAUDE.md` "Session continuity" section** updated to read structured YAML fields. Quotes `next_step` verbatim, names the `active_task`, and surfaces `env` so commands work immediately on resume. Falls back to prose parsing for pre-1.12.0 handoffs.
+- **Auto-mode marker migrated to YAML.** New writes use `mode: auto` in YAML; the legacy `## Mode: auto` Markdown marker is still recognized on read for backwards compatibility.
+
+### Why
+Phase 1 → Phase 2 handoff was the weakest link in the workflow: prose-only handoffs forced re-parsing on every session start, and "next step" was often too vague to act on without re-reading the whole file. Structured fields let the SessionStart hook restore env automatically, and stable task IDs make it possible to grep across sessions for what happened to a given piece of work. Considered full integration with `acai.sh` (ACIDs) but rejected as too heavy and too immature (v0.0.8) for the actual problem — this is the lighter, reversible alternative.
+
+### Notes for users
+- **Existing handoff.md files keep working** — pre-1.12.0 prose-only format is read as-is, then converted to YAML+prose on next write.
+- **No action required** unless you've customized the handoff schema yourself. Re-run `/superpowers-gstack:adapt` is NOT needed — `context-handoff` is a self-contained skill.
+- Test plan: use on the next project for one week. Iterate on the schema (add/remove YAML fields) or revert based on actual friction.
+
 ## [1.11.2] - 2026-05-13
 
 ### Changed
