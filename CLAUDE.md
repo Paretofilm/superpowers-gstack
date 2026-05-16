@@ -3,6 +3,19 @@
 ## About
 This repo contains the combined workflow manual for using Superpowers and GStack with Claude Code.
 
+## Dual-track: web and native
+
+superpowers-gstack is **dual-track**. The plugin supports two project tracks equally.
+Skills in this repo must not assume web as the default.
+
+### Track 1: Web
+Next.js/React/Node/Python/etc. HTML is the native output format for mockups,
+dashboards, and planning artifacts.
+
+### Track 2: Native (Swift/SwiftUI, Liquid Glass)
+Target platform is iOS 26+ / macOS 26 with the **Liquid Glass** design system —
+not generic Swift, not pre-26.
+
 ## Automated update pipeline
 
 A GitHub Action (`.github/workflows/check-updates.yml`) runs weekly and:
