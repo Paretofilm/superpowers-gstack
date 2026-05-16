@@ -12,25 +12,38 @@ Lager visuelt elegante HTML-companions ved siden av MD-artefakter, og en aggrege
 - Bruker spør "kan jeg få en penere visning av denne MD-en"
 - PostToolUse-hook (når installert) auto-trigger ved Write/Edit på artefakt-MD
 
-## First-run check
+## How to invoke
 
-Sjekk at deps er installert. Hvis ikke, instruer brukeren — IKKE auto-installer:
+Skill-katalogen oppdages av Claude Code som "Base directory for this skill" ved invokering. Wrapper-binæren `bin/htmlify` self-lokaliserer og kan kjøres fra hvilken som helst cwd:
 
 ```bash
-SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ ! -d "$SKILL_DIR/node_modules" ]; then
-  echo "ERROR: htmlify deps not installed. Run:"
-  echo "  cd $SKILL_DIR && bun install"
-  exit 5
-fi
+"$SKILL_DIR/bin/htmlify" <args>
 ```
+
+Hvor `$SKILL_DIR` er katalogen denne SKILL.md filen ligger i. Eksempel når installert via Claude Code marketplace:
+
+```bash
+~/.claude/plugins/cache/paretofilm-plugins/superpowers-gstack/<version>/skills/htmlify/bin/htmlify <args>
+```
+
+Wrapper-en sjekker at `bun` og deps er installert; printer feilmelding (exit 5) hvis ikke.
+
+## First-run setup (one-time)
+
+Deps må installeres én gang per installasjons-lokasjon. Wrapperen forteller deg den nøyaktige kommandoen hvis den feiler:
+
+```bash
+cd "$SKILL_DIR" && bun install
+```
+
+Etterpå er skill'en klar til bruk uansett antall invokeringer.
 
 ## Usage
 
 ### Render én MD til HTML companion
 
 ```bash
-bun run skills/htmlify/src/cli.ts <path-to-md>
+"$SKILL_DIR/bin/htmlify" <path-to-md>
 ```
 
 Output: `<dir>/.superpowers-html/<name>.html`. Også en `companion.css` blir kopiert til samme katalog.
@@ -38,13 +51,13 @@ Output: `<dir>/.superpowers-html/<name>.html`. Også en `companion.css` blir kop
 ### Med auto-open (macOS)
 
 ```bash
-bun run skills/htmlify/src/cli.ts <path-to-md> --open
+"$SKILL_DIR/bin/htmlify" <path-to-md> --open
 ```
 
 ### Generer dashboard for en katalog
 
 ```bash
-bun run skills/htmlify/src/cli.ts dashboard <dir>
+"$SKILL_DIR/bin/htmlify" dashboard <dir>
 ```
 
 Output: `<dir>/.superpowers-html/index.html` med liste av alle artefakter i katalogen sortert by mtime desc.
@@ -69,14 +82,20 @@ Output: `<dir>/.superpowers-html/index.html` med liste av alle artefakter i kata
 - 2 — schema validation failure
 - 3 — MD parse error
 - 4 — I/O error (file not found, not writable)
-- 5 — setup error (run `cd skills/htmlify && bun install`)
+- 5 — setup error (deps not installed, bun missing)
 
 ## Auto-trigger (PostToolUse hook)
 
-For automatisk å fyre htmlify når en skill skriver en artefakt-MD, kjør én gang:
+For automatisk å fyre htmlify når en skill skriver en artefakt-MD, kjør installeren én gang. Path avhenger av om du jobber fra repo-rota eller fra plugin-installasjonen:
 
+**Fra repo (utvikling):**
 ```bash
 ./scripts/setup-htmlify-hook.sh
+```
+
+**Fra plugin-installasjonen (marketplace):**
+```bash
+~/.claude/plugins/cache/paretofilm-plugins/superpowers-gstack/<version>/scripts/setup-htmlify-hook.sh
 ```
 
 Hook'en matcher:
@@ -85,7 +104,11 @@ Hook'en matcher:
 - Alle MD-er under `.gstack/projects/`
 - Loop-prevention: skip MD-er i `.superpowers-html/`
 
+Hook-skriptet self-lokaliserer — det vil alltid kalle `htmlify` fra den katalogen den selv ligger i, så det er trygt å installere hooks fra plugin-cache-stien.
+
 ## Development
+
+Kun relevant hvis du jobber fra repo-rota i `~/Developer/superpowers-gstack/`:
 
 ```bash
 cd skills/htmlify

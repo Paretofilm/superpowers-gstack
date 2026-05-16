@@ -1,0 +1,22 @@
+#!/bin/bash
+# htmlify wrapper — self-locating, can be invoked from anywhere.
+# Resolves the skill directory from $0 and forwards args to the Bun CLI.
+
+set -e
+
+# Resolve to absolute path even if invoked via symlink
+SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd -P)/$(basename "$0")"
+SKILL_DIR="$(dirname "$(dirname "$SCRIPT_PATH")")"
+
+if ! command -v bun >/dev/null 2>&1; then
+  echo "ERROR: bun is not installed. Install from https://bun.sh" >&2
+  exit 5
+fi
+
+if [ ! -d "$SKILL_DIR/node_modules" ]; then
+  echo "ERROR: htmlify deps not installed. Run:" >&2
+  echo "  cd '$SKILL_DIR' && bun install" >&2
+  exit 5
+fi
+
+exec bun run "$SKILL_DIR/src/cli.ts" "$@"
