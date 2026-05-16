@@ -133,6 +133,7 @@ The path-form `id` for the SFT model is intentional (mlx-lm.server loads the loc
 | `/superpowers-gstack:macos-native-review`  | sonnet | sonnet (req. web) | sonnet |
 | `/superpowers-gstack:macos-e2e-scaffold`   | haiku  | qwen3.6-mlx-8bit | haiku  |
 | `/superpowers-gstack:context-handoff`      | haiku  | qwen3.6-mlx-8bit | haiku  |
+| `/superpowers-gstack:htmlify`              | haiku  | qwen3.6-mlx-8bit | haiku  |
 
 ## Phase-level routing (for "see phases" entries above)
 

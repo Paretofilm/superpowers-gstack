@@ -158,6 +158,7 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | `/pair-agent` | When pairing a remote AI agent with your browser session |
 | `/setup-browser-cookies` | One-time: import cookies for authenticated `/qa` and `/browse` testing |
 | `/context-handoff` | Long implementation sessions, projects using SDD, or any multi-step workflow |
+| `/htmlify` | Any project — generates beautiful HTML companions for MD artefacts (design docs, plans, handoffs) so verbose output stays readable. Optional PostToolUse hook auto-fires. |
 | `/context-save` | Save progress and working state |
 | `/context-restore` | Resume where you left off |
 | `/benchmark` | Projects with performance monitoring needs |

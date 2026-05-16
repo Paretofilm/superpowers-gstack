@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.13.2] - 2026-05-16
+
+### Added
+- **`/htmlify` lagt til i model-routing-tabellen** med Haiku-anbefaling (Claude Code), `qwen3.6-mlx-8bit` (Pi local-only) og Haiku (Pi hybrid). Begrunnelse: CLI'en selv er deterministic — orchestrator-Claude trenger bare å invoke bash-kommandoen, ingen reasoning om innholdet. Klassisk Haiku-territorium, samsvar med `/verification-before-completion`, `/using-git-worktrees`, `/macos-e2e-scaffold`, `/context-handoff`.
+- **`/htmlify` lagt til i `setup-routing` og `adapt` evaluation tables** så generert CLAUDE.md inkluderer skill'en for nye prosjekter. Anbefales for alle prosjekter — verdien er proporsjonal med hvor mange MD-artefakter prosjektet produserer.
+
+### Notes for users
+- **Re-kjør `/superpowers-gstack:adapt`** på eksisterende prosjekter for å få htmlify-rad lagt til i CLAUDE.md.
+- Ingen breaking changes. Funksjonalitet samme som v1.13.1; dette er kun routing-metadata + skill-katalog-oppdatering.
+
 ## [1.13.1] - 2026-05-16
 
 ### Added
