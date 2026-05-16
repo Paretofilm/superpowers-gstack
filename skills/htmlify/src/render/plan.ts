@@ -1,26 +1,29 @@
-import type { PlanFM } from "../schemas.ts";
+import type { PlanFM, Plan } from "../schemas.ts";
 import { esc, renderHero, renderFooter, renderCard, htmlShell, statusBadge } from "../helpers/render.ts";
 import { tokenize, extractSection, renderTokens } from "../helpers/markdown.ts";
+import { renderPlannedSections, type SectionSpec } from "../helpers/planWiring.ts";
+import { renderFeedbackPanel } from "./components/feedback-panel.ts";
 
 interface RenderInput {
   frontmatter: PlanFM;
   body: string;
   mdPath: string;
   cssHref: string;
+  plan?: Plan | null;  // v2 render plan (not to be confused with PlanFM frontmatter type)
 }
 
-const PROSE_SECTIONS = [
-  "Overview",
-  "Architecture",
-  "Approach",
-  "Dependencies",
-  "NOT in scope",
-  "Open Questions",
-  "Success Criteria",
+const PROSE_SECTIONS: SectionSpec[] = [
+  { heading: "Overview", collapsible: true },
+  { heading: "Architecture", collapsible: true },
+  { heading: "Approach", collapsible: true },
+  { heading: "Dependencies", collapsible: true },
+  { heading: "NOT in scope", collapsible: true },
+  { heading: "Open Questions", collapsible: true },
+  { heading: "Success Criteria", collapsible: true },
 ];
 
 export function renderPlan(input: RenderInput): string {
-  const { frontmatter, body, mdPath, cssHref } = input;
+  const { frontmatter, body, mdPath, cssHref, plan } = input;
   const phases = frontmatter.phases ?? [];
   const doneCount = phases.filter((p) => p.status === "done").length;
   const totalCount = phases.length;
@@ -61,18 +64,16 @@ export function renderPlan(input: RenderInput): string {
     : "";
 
   const tokens = tokenize(body);
-  const proseCards = PROSE_SECTIONS
-    .map((h) => {
-      const section = extractSection(tokens, h);
-      if (!section || section.length === 0) return null;
-      return renderCard({
-        heading: h,
-        body: renderTokens(section),
-        collapsible: true,
-      });
-    })
-    .filter((x) => x !== null)
-    .join("\n");
+  const proseCards = renderPlannedSections({
+    tokens,
+    canonical: PROSE_SECTIONS,
+    plan,
+    defaultCollapsible: true,
+  });
+
+  const feedback = plan?.feedback_panel
+    ? renderFeedbackPanel(plan.feedback_panel)
+    : "";
 
   const footer = renderFooter({ mdPath });
 
@@ -80,6 +81,6 @@ export function renderPlan(input: RenderInput): string {
     title: frontmatter.title,
     cssHref,
     bodyClass: "companion plan",
-    body: `${hero}\n<main>${phasesBlock}${proseCards}</main>\n${footer}`,
+    body: `${hero}\n<main>${phasesBlock}${proseCards}</main>\n${feedback}\n${footer}`,
   });
 }

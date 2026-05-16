@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.0.0] - 2026-05-16
+
+### Added
+- **`/htmlify` v2 — plan-driven rich rendering.** HTML-companions er ikke lenger "penere MD med strukturerte cards" — de er informative plansjer med 9 visuelle komponenter. Nytt `--plan <plan.json>` flagg laster en rendering plan generert av Claude Code i samme sesjon (Max-plan compute — **ingen Anthropic API-kall**). Plan'en definerer per-seksjon treatment (overstyrer default cards) og global feedback-panel.
+- **9 nye komponenter:** `comparison-matrix` (side-ved-side A/B/C med Recommended-highlight), `flowchart-svg` (dagre-layout inline SVG, kobler-fri), `pullquote` (editorial highlight), `callout-box` (info/warn/insight/danger varianter), `stats-bar` (metrics + trend), `two-column` (compare/contrast), `expandable` (pure-CSS `<details>` toggle), `diff-card` (før/etter kode), `feedback-panel` (interaktiv).
+- **Interaktiv feedback-panel.** Pure-CSS reveals + en `<script>`-tag som gjør én ting: gather → JSON → clipboard. Premise-sjekkbokser, approach-radioer, custom-spørsmål, og obligatorisk fritekst-kommentar. "Copy feedback as prompt"-knapp → bruker limer inn i neste sesjon. Fallback til `<pre>` med tekst-seleksjon hvis Clipboard API ikke er tilgjengelig. **Ingen server.**
+- **Plan-skjema med graceful degradation.** `PlanSchema` (zod, `.passthrough()`) validerer struktur. Hvis plan-fil mangler/feil-formatert: stderr-advarsel + fall tilbake til v1-template-rendering. Manglende H2 i MD = plan-seksjon rendres som ny seksjon.
+- **Shared `renderPlannedSections` helper** i `helpers/planWiring.ts`. Tre renderere (designDoc, handoff, plan) bruker samme logikk: kanonisk seksjons-liste først (overstyrt av plan hvis matchende heading), så plan-introduserte seksjoner, så pullquotes interleaved.
+- **64 nye tester** (138 totalt opp fra 74) — per-komponent (HTML-escape, edge cases, missing data), plan-wiring (case-tolerant matching, pullquote placement, default fallback), feedback-panel (clipboard script, fallback, escaped labels).
+
+### Why
+v1 løste "vibe-codere leser ikke MD" ved å gi penere MD-presentasjon. Men brukeren påpekte at v1 fortsatt er prosa: "veldig mye av poenget med å vise vibe coderen html i stedet for md er fordi med html blir det mulig å lage pene informative plansjer/grafiske fremstillinger." v2 leverer det: når plan'en sier "Approaches Considered = comparison-matrix" får brukeren et lesbart 3-koloners visuelt rasterkort i stedet for en bullet-liste; "Architecture = flowchart-svg" gir et statisk SVG-diagram. Den separate **Phase 1 planning-modellen** (LLM-en lager planen i Claude Code-sesjonen, ikke i CLI'en) holder kostnad nede (Max-plan compute = inkludert) og innholdsforståelse oppe (planen er på model-side, ikke deterministic regex-baserte heuristikker).
+
+### Changed
+- **`--open` bruker Safari som dedikert leser.** Tidligere åpnet `--open` HTML-en i brukerens default-nettleser (via `open <url>`). Nå brukes Safari spesifikt — alle eksisterende Safari-vinduer lukkes først, og HTML-en åpnes som eneste vindu. Bakgrunn: brukeren bruker normalt ikke Safari, så Safari blir en distraksjonsfri visning som ikke forstyrres av andre tabs/sesjoner. Default-nettleseren røres ikke. Implementert via `osascript`; fallback til `open` hvis AppleScript feiler.
+
+### Backwards compatibility
+**Ingen breaking changes for eksisterende brukere.** Uten `--plan` er output identisk med v1.13.x. Hookken kjører som før (uten plan-generering). `--open` skifter nettleser (Safari) men semantikk er den samme — HTML vises. Major version-bump skyldes scope og dybde av nye features, ikke trukne kontrakter.
+
+### Notes for users
+- **Bruke v2 manuelt:** I Claude Code, be om "lag en rik HTML av X.md". Claude leser MD-en, identifiserer visuelle muligheter, skriver `plan.json` til en temp-fil, og kjører `htmlify --plan plan.json`.
+- **Auto-trigger via hook** bruker fortsatt v1 (uten --plan). v2-rendering er opt-in inntil videre — vi kan eventuelt utvide hooken når plan-generering blir billigere/raskere.
+- **Plan-skjema og treatment-katalogen** er dokumentert i `skills/htmlify/SKILL.md` under "Enhanced rendering (v2 — plan-driven layout)".
+- **First-run deps oppdatert:** `cd "$SKILL_DIR" && bun install` (dagre lagt til som ny dependency for flowchart-layout).
+- **Eksisterende plugin-installasjoner:** etter upgrade, kjør `bun install` i cache-katalogen for å hente `dagre`. Wrapperen rapporterer exit 5 + nøyaktig kommando hvis ikke gjort.
+
+### Engineering process
+Brainstormet via `/office-hours`. Phase A (PlanSchema + CLI flag + plumbing) → Phase B (9 komponenter med tester) → Phase C (feedback-panel + clipboard) → Phase D (docs). Hver fase bisectable-committet. Critical constraint underveis: bruker er på Max-plan → ingen API-kall — plan-generering må skje in-session, ikke i CLI'en.
+
 ## [1.13.2] - 2026-05-16
 
 ### Added

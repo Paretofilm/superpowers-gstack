@@ -9,16 +9,21 @@ import { renderPlan } from "./render/plan.ts";
 import { renderGeneric } from "./render/generic.ts";
 import { writeCompanion, openInBrowser, companionPathFor, OUTPUT_DIR } from "./output.ts";
 import { writeDashboard } from "./renderDashboard.ts";
+import { readPlan } from "./readPlan.ts";
+import type { Plan } from "./schemas.ts";
 import { EXIT, die } from "./helpers/exit-codes.ts";
 
 const HELP = `htmlify — generate HTML companions for superpowers-gstack MD artifacts
 
 USAGE
-  htmlify <file.md> [--open] [--no-clobber] [--force-rebuild]
+  htmlify <file.md> [--plan <plan.json>] [--open] [--no-clobber] [--force-rebuild]
   htmlify dashboard <dir>
   htmlify --help
 
 OPTIONS
+  --plan <file>     Load v2 rendering plan (JSON) for rich, content-aware layout
+                    (comparison-matrix, flowchart-svg, pullquote, feedback-panel,
+                    etc.). Without --plan: v1 template rendering (default).
   --open            After render, open the HTML in the default browser (macOS).
   --no-clobber      Skip render if HTML is newer than MD.
   --force-rebuild   Render regardless of mtime (overrides --no-clobber).
@@ -67,17 +72,31 @@ interface ParsedArgs {
     open: boolean;
     noClobber: boolean;
     forceRebuild: boolean;
+    planPath: string | null;
   };
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
   const positional: string[] = [];
-  const flags = { open: false, noClobber: false, forceRebuild: false };
-  for (const a of argv) {
+  const flags = {
+    open: false,
+    noClobber: false,
+    forceRebuild: false,
+    planPath: null as string | null,
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
     if (a === "--open") flags.open = true;
     else if (a === "--no-clobber") flags.noClobber = true;
     else if (a === "--force-rebuild") flags.forceRebuild = true;
-    else if (a === "--help" || a === "-h") {
+    else if (a === "--plan") {
+      const next = argv[i + 1];
+      if (!next || next.startsWith("--")) {
+        die(EXIT.USAGE, `--plan requires a path argument\n\n${HELP}`);
+      }
+      flags.planPath = next;
+      i++;
+    } else if (a === "--help" || a === "-h") {
       return { command: "help", positional, flags };
     } else if (a.startsWith("--")) {
       die(EXIT.USAGE, `Unknown flag: ${a}\n\n${HELP}`);
@@ -104,6 +123,13 @@ function renderOne(mdPath: string, flags: ParsedArgs["flags"]): void {
   const artifact = readArtifact(abs);
   const classified = classify(artifact);
 
+  // Load plan if --plan was passed. On any failure, falls back to null,
+  // which triggers v1 template rendering (graceful degradation per design E2).
+  let plan: Plan | null = null;
+  if (flags.planPath) {
+    plan = readPlan(flags.planPath);
+  }
+
   const outPath = companionPathFor(abs);
   const cssHref = ensureCssAt(outPath);
   const mdHref = relPath(outPath, abs);
@@ -116,6 +142,7 @@ function renderOne(mdPath: string, flags: ParsedArgs["flags"]): void {
         body: artifact.body,
         mdPath: mdHref,
         cssHref,
+        plan,
       });
       break;
     case "handoff":
@@ -124,6 +151,7 @@ function renderOne(mdPath: string, flags: ParsedArgs["flags"]): void {
         body: artifact.body,
         mdPath: mdHref,
         cssHref,
+        plan,
       });
       break;
     case "plan":
@@ -132,6 +160,7 @@ function renderOne(mdPath: string, flags: ParsedArgs["flags"]): void {
         body: artifact.body,
         mdPath: mdHref,
         cssHref,
+        plan,
       });
       break;
     case "generic":
@@ -140,6 +169,7 @@ function renderOne(mdPath: string, flags: ParsedArgs["flags"]): void {
         body: artifact.body,
         mdPath: mdHref,
         cssHref,
+        plan,
       });
       break;
   }

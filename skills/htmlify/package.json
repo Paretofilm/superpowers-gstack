@@ -8,9 +8,11 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@types/dagre": "^0.7.54",
+    "dagre": "^0.8.5",
     "gray-matter": "^4.0.3",
-    "marked": "^14.1.0",
     "isomorphic-dompurify": "^2.18.0",
+    "marked": "^14.1.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

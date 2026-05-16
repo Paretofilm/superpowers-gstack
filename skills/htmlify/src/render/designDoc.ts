@@ -1,19 +1,18 @@
-import type { DesignDocFM } from "../schemas.ts";
-import { esc, renderHero, renderFooter, renderCard, htmlShell } from "../helpers/render.ts";
-import { tokenize, extractSection, renderTokens } from "../helpers/markdown.ts";
+import type { DesignDocFM, Plan } from "../schemas.ts";
+import { renderHero, renderFooter, htmlShell } from "../helpers/render.ts";
+import { tokenize } from "../helpers/markdown.ts";
+import { renderPlannedSections, type SectionSpec } from "../helpers/planWiring.ts";
+import { renderFeedbackPanel } from "./components/feedback-panel.ts";
 
 interface RenderInput {
   frontmatter: DesignDocFM;
   body: string;
   mdPath: string;
   cssHref: string;
+  plan?: Plan | null;  // v2: rich layout plan (null/undefined = v1 template)
 }
 
-const SECTION_CARDS: Array<{
-  heading: string;
-  variant?: "default" | "accent" | "muted";
-  collapsible?: boolean;
-}> = [
+const SECTION_CARDS: SectionSpec[] = [
   { heading: "Problem Statement", collapsible: true },
   { heading: "What Makes This Cool", collapsible: true },
   { heading: "Constraints", collapsible: true },
@@ -44,7 +43,7 @@ const SECTION_CARDS: Array<{
 ];
 
 export function renderDesignDoc(input: RenderInput): string {
-  const { frontmatter, body, mdPath, cssHref } = input;
+  const { frontmatter, body, mdPath, cssHref, plan } = input;
   const tokens = tokenize(body);
 
   const meta: Array<{ label: string; value: string }> = [];
@@ -63,21 +62,15 @@ export function renderDesignDoc(input: RenderInput): string {
     supersedesPath: frontmatter.supersedes ?? null,
   });
 
-  const cards = SECTION_CARDS
-    .map((c) => {
-      const section = extractSection(tokens, c.heading);
-      if (section === null) return null;
-      if (section.length === 0) return null;
-      const inner = renderTokens(section);
-      return renderCard({
-        heading: c.heading,
-        body: inner,
-        variant: c.variant,
-        collapsible: c.collapsible,
-      });
-    })
-    .filter((x) => x !== null)
-    .join("\n");
+  const cards = renderPlannedSections({
+    tokens,
+    canonical: SECTION_CARDS,
+    plan,
+  });
+
+  const feedback = plan?.feedback_panel
+    ? renderFeedbackPanel(plan.feedback_panel)
+    : "";
 
   const footer = renderFooter({
     mdPath,
@@ -88,6 +81,6 @@ export function renderDesignDoc(input: RenderInput): string {
     title: frontmatter.title,
     cssHref,
     bodyClass: "companion design-doc",
-    body: `${hero}\n<main>${cards}</main>\n${footer}`,
+    body: `${hero}\n<main>${cards}</main>\n${feedback}\n${footer}`,
   });
 }

@@ -1,24 +1,27 @@
-import type { HandoffFM } from "../schemas.ts";
+import type { HandoffFM, Plan } from "../schemas.ts";
 import { esc, renderHero, renderFooter, renderCard, htmlShell, statusBadge } from "../helpers/render.ts";
 import { tokenize, extractSection, renderTokens, renderFullBody } from "../helpers/markdown.ts";
+import { renderPlannedSections, type SectionSpec } from "../helpers/planWiring.ts";
+import { renderFeedbackPanel } from "./components/feedback-panel.ts";
 
 interface RenderInput {
   frontmatter: HandoffFM;
   body: string;
   mdPath: string;
   cssHref: string;
+  plan?: Plan | null;
 }
 
-const PROSE_SECTIONS = [
-  "What I was doing",
-  "Key decisions made this session",
-  "Files modified this session",
-  "Plan progress",
-  "Open questions / blockers",
+const PROSE_SECTIONS: SectionSpec[] = [
+  { heading: "What I was doing", collapsible: true },
+  { heading: "Key decisions made this session", collapsible: true },
+  { heading: "Files modified this session", collapsible: true },
+  { heading: "Plan progress", collapsible: true },
+  { heading: "Open questions / blockers", collapsible: true },
 ];
 
 export function renderHandoff(input: RenderInput): string {
-  const { frontmatter, body, mdPath, cssHref } = input;
+  const { frontmatter, body, mdPath, cssHref, plan } = input;
 
   const meta: Array<{ label: string; value: string }> = [];
   if (frontmatter.active_task) meta.push({ label: "Active task", value: frontmatter.active_task });
@@ -68,18 +71,12 @@ export function renderHandoff(input: RenderInput): string {
     : "";
 
   const tokens = tokenize(body);
-  const proseCards = PROSE_SECTIONS
-    .map((h) => {
-      const section = extractSection(tokens, h);
-      if (!section || section.length === 0) return null;
-      return renderCard({
-        heading: h,
-        body: renderTokens(section),
-        collapsible: true,
-      });
-    })
-    .filter((x) => x !== null)
-    .join("\n");
+  const proseCards = renderPlannedSections({
+    tokens,
+    canonical: PROSE_SECTIONS,
+    plan,
+    defaultCollapsible: true,
+  });
 
   const tasksCard = tasksBlock
     ? renderCard({
@@ -89,12 +86,16 @@ export function renderHandoff(input: RenderInput): string {
       })
     : "";
 
+  const feedback = plan?.feedback_panel
+    ? renderFeedbackPanel(plan.feedback_panel)
+    : "";
+
   const footer = renderFooter({ mdPath });
 
   return htmlShell({
     title: `Handoff — ${frontmatter.active_task ?? frontmatter.next_step.slice(0, 40)}`,
     cssHref,
     bodyClass: "companion handoff",
-    body: `${hero}\n<main>${tasksCard}${envBlock}${inFlightBlock}${proseCards}</main>\n${footer}`,
+    body: `${hero}\n<main>${tasksCard}${envBlock}${inFlightBlock}${proseCards}</main>\n${feedback}\n${footer}`,
   });
 }

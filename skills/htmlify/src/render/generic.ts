@@ -1,3 +1,4 @@
+import type { Plan } from "../schemas.ts";
 import { esc, renderHero, renderFooter, htmlShell } from "../helpers/render.ts";
 import { renderFullBody } from "../helpers/markdown.ts";
 import * as path from "node:path";
@@ -7,6 +8,7 @@ interface RenderInput {
   body: string;
   mdPath: string;
   cssHref: string;
+  plan?: Plan | null;
 }
 
 // Generic fallback when frontmatter is missing or type unknown.
