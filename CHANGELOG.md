@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.13.0] - 2026-05-16
+
+### Added
+- **`/htmlify` skill — HTML companions for MD artefacter.** Generates visually elegant, pedagogical HTML next to MD-artefakter fra skills som `/office-hours`, `/autoplan`, `/plan-eng-review`, `/context-handoff` osv. Stilles ut for vibe-codere som ikke orker å lese verbose MD-output. Auto-opens i nettleser via `--open` flag (macOS). Per-katalog aggregert dashboard via `htmlify dashboard <dir>` viser alle companions sortert by mtime med drilldown-lenker. Tre frontmatter-typer støttes: `design-doc`, `handoff`, `plan` (med backward-compat for legacy handoff.md filer uten `type:`-felt). Generic fallback for MD-er uten kjent frontmatter — får banner + full marked-rendret body. Implementert som Bun + TypeScript, kjørt via `bun run skills/htmlify/src/cli.ts <args>`. Output legges i `<dir>/.superpowers-html/<name>.html` (sibling-katalog, auto-gitignored).
+- **PostToolUse-hook for auto-trigger.** Et nytt hook-skript (`scripts/htmlify-posttooluse.sh`) fyrer automatisk når Claude Code skriver/redigerer en MD-fil som matcher artefakt-mønstre (`*-design-*.md`, `handoff.md`, `*-plan-*.md`, alt under `.gstack/projects/`). Loop-prevention på `.superpowers-html/*.html` skrives. Installeres én gang via `./scripts/setup-htmlify-hook.sh`.
+
+### Why
+Et tilbakevendende mønster: skills produserer verbose MD-output (design-docs, plans, retro-rapporter) som blir liggende ulest. Stockholm-syndrome med MD-format som vinner mot AI-skifte til HTML for menneske-konsum (Thariq Shihipar / Anthropic, mai 2026). Brukerens egen `~/.claude/CLAUDE.md` mandater allerede HTML+MD parallelt for kreative/strategiske artefakter — denne featuren implementerer det mønsteret INNE I plugin'et selv. Companion-HTML er pedagogisk scaffold som viser PROSESSEN (premisser challenged, alternativer vurdert, beslutninger), POSISJONEN (workflow-state), og STATEN (DRAFT/APPROVED/SHIPPED, tasks-progress). YAML-frontmatter er kontrakten (rir på v1.12.0-mønsteret); zod-skjemaer med `.passthrough()` håndterer schema-evolusjon tolerant.
+
+### Notes for users
+- **Aktiver auto-trigger:** Kjør `./scripts/setup-htmlify-hook.sh` én gang. Hook'en legges til `~/.claude/settings.json` som PostToolUse-hook. Restart Claude Code etter installasjon.
+- **Manuell bruk:** `bun run skills/htmlify/src/cli.ts <path-to-md>` produserer HTML, `--open` åpner i nettleser, `htmlify dashboard <dir>` genererer aggregat-side. Se `skills/htmlify/SKILL.md` for full referanse.
+- **First-run deps:** `cd skills/htmlify && bun install` (committed lockfile garanterer reproduserbare bygg). Hook'en feiler silently hvis deps ikke er installert — ingen auto-bootstrap som muterer brukerens checkout.
+- **Visual design enforcement:** Stilark `skills/htmlify/styles/companion.css` følger brukerens design-system (Charter/Georgia typografi, varm copper-aksent, hairline borders, asymmetrisk grid). Hardkodet palette — ingen lilla gradient.
+- **74 unit-tester følger med** (`cd skills/htmlify && bun test`) — full path coverage på schemas, helpers, renderers, dashboard, output, hook-filter.
+- **Cross-platform `--open` kommer i V1.5** (Linux `xdg-open`, WSL `wslview`). V1 er macOS-only by design.
+- **`/adapt`-retrofit-integrasjon** (scanning av eksisterende MDer i et prosjekt) er deferred til V1.5.
+
+### Engineering process
+Designet via `/office-hours` (builder mode), reviewet via `/plan-eng-review` med 3 reviewer-iterasjoner og uavhengig Codex kald-lesning. Codex utfordret V1-abstraksjonen som førte til scope-expansion: hook og dashboard ble flyttet fra V1.1/V2 inn i V1. Også 7 hardening-fixes anvendt (handoff schema disambiguation, body sanitization via DOMPurify, URL-encoding via `pathToFileURL`, exit-code taxonomy, Levenshtein typo-detection på `type:`-felt). Design-doc + test-plan lever i `~/.gstack/projects/Paretofilm-superpowers-gstack/`.
+
 ## [1.12.0] - 2026-05-15
 
 ### Changed
