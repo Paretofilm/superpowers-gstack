@@ -84,11 +84,14 @@ describe("renderDashboard", () => {
   test("escapes title with HTML entities", () => {
     fs.writeFileSync(
       path.join(TMP, "x.md"),
-      `---\ntype: design-doc\ntitle: "<script>"\n---\n`
+      `---\ntype: design-doc\ntitle: "<script>alert(1)</script>"\n---\n`
     );
     const html = renderDashboard(TMP, "companion.css");
-    expect(html).not.toContain("<script>");
-    expect(html).toContain("&lt;script&gt;");
+    // The shell legitimately includes inline scripts for theme handling;
+    // assert that the user-supplied payload appears escaped, never as an
+    // executable tag.
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(html).not.toContain("<script>alert(1)</script>");
   });
 });
 

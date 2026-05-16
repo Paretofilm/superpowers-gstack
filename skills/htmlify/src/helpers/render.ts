@@ -96,6 +96,13 @@ export function renderCard(opts: {
   return `<section class="${klass}"><h2>${esc(opts.heading)}</h2>${opts.body}</section>`;
 }
 
+// Inline scripts: the theme bootstrap MUST run before paint to avoid flash-of-
+// wrong-theme. Persistence is in localStorage under "htmlify-theme"; values
+// are "light", "dark", or absent (= follow OS).
+const THEME_BOOTSTRAP = `(function(){try{var t=localStorage.getItem('htmlify-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`;
+
+const THEME_TOGGLE_SCRIPT = `(function(){var btn=document.querySelector('[data-theme-toggle]');if(!btn)return;function current(){var t=document.documentElement.getAttribute('data-theme');if(t)return t;return window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}function update(){var t=current();var lbl=btn.querySelector('.theme-label');if(lbl)lbl.textContent=t==='dark'?'Dark':'Light';}btn.addEventListener('click',function(){var next=current()==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);try{localStorage.setItem('htmlify-theme',next);}catch(e){}update();});update();})();`;
+
 export function htmlShell(opts: {
   title: string;
   cssHref: string;
@@ -109,9 +116,15 @@ export function htmlShell(opts: {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${esc(opts.title)}</title>
   <link rel="stylesheet" href="${esc(opts.cssHref)}">
+  <script>${THEME_BOOTSTRAP}</script>
 </head>
 <body${opts.bodyClass ? ` class="${esc(opts.bodyClass)}"` : ""}>
+<button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle theme">
+  <span class="theme-glyph" aria-hidden="true"></span>
+  <span class="theme-label">Light</span>
+</button>
 ${opts.body}
+<script>${THEME_TOGGLE_SCRIPT}</script>
 </body>
 </html>
 `;

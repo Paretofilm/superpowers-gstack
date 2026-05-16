@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.1.0] - 2026-05-16
+
+### Changed
+- **Liquid Glass design system.** Hele `companion.css` skrevet om til en 2026-software-aestethic: gradient-mesh canvas, glass-overflater med edge-highlights (`backdrop-filter: blur(28px) saturate(160%)` + `mask-composite` for kantgradient), "knashe" accent-palette (cyan/magenta/violet/amber/emerald/terracotta), SF Pro + Charter typografi-paring, monospace tabular-numerics. Lys og mørk mode med forskjellige aksent-intensiteter (varme i lys, neon i mørk).
+- **Dual-theme + toggle.** Ny pill-knapp i øvre høyre hjørne bytter mellom light/dark/system. Valget persistert i localStorage; OS-preferanse er default. Bootstrap-script kjører før paint så ingen flash-of-wrong-theme.
+- **Flowchart-layout med kontekst-bevisste regler:**
+  - ≤4-noders lineær chain → LR stacked (full bredde øverst, notes under)
+  - =5-noders lineær chain → TB single column, eksakt 50/50 med notes-kolonne
+  - ≥6-noders lineær chain → TB split i to sub-kolonner med 90°-cornered connector mellom, eksakt 2/3 (diagram) + 1/3 (notes)
+  - Trær / DAG → TB regular side-by-side
+  - Eksplisitt `orientation` i plan respekteres alltid
+- **Connector-kurve for split-chains:** L+C+L+C+L-mønster (rett ned → 90° bend → rett opp midt mellom kolonnene → 90° bend → rett ned), ikke én sammenhengende S-Bezier. Cubic-Bezier-kontrollpunkter plassert utenfor endepunktene så tangentene er strikt vertikale ved exit/entry.
+- **`notes`-felt på `FlowchartData`** — optional markdown rendres som side-kolonne (TB) eller stacked-rad (LR). Lar plan-LLM-en putte budsjett, legend, kontekst som ellers ville gått tapt når en seksjon erstattes av et diagram-treatment.
+- **Større flowchart-nodes** (165×50 TB / 165×72 LR), større font (15.5px i bokser, 13px på edges), generøs ranksep (55 TB / 70 LR) — labels får luft.
+- **Notes-kolonne stretches** til full kortets indre-høyde (`align-items: stretch` på flex), så border-left ikke avsluttes der tekst slutter.
+- **Safari som distraksjonsfri viewer:** `--open` bruker `osascript` til å lukke alle eksisterende Safari-vinduer før den åpner companion-HTML-en. Default-nettleseren røres ikke.
+
+### Fixed
+- Dashboard-test bruker nå mer presis assertion (sjekker escaped form, ikke fravær av `<script>` overhodet) siden shell-en legitimat embedder theme-bootstrap-script.
+
 ## [2.0.0] - 2026-05-16
 
 ### Added
