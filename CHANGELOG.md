@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.13.1] - 2026-05-16
+
+### Added
+- **Self-locating `bin/htmlify` wrapper.** Nytt skript `skills/htmlify/bin/htmlify` resolverer skill-katalogen fra sin egen path og kan kjøres fra hvilken som helst cwd uten å vite den faktiske installasjons-stien. Sjekker at `bun` og `node_modules/` finnes, printer presis feilmelding (exit 5) hvis ikke.
+
+### Fixed
+- **SKILL.md ga feile install-paths.** v1.13.0-instruksjonene refererte til repo-relative stier (`skills/htmlify/...`, `./scripts/setup-htmlify-hook.sh`) som ikke fungerer når plugin'et er installert via marketplace (faktisk path er `~/.claude/plugins/cache/paretofilm-plugins/superpowers-gstack/<version>/...`). Oppdatert til å bruke `$SKILL_DIR/bin/htmlify`-mønsteret som Claude Code resolver automatisk via "Base directory for this skill"-header. CHANGELOG-notater for v1.13.0 hadde samme feil.
+- **First-run-setup steg klargjort.** En `bun install` per install-lokasjon er nødvendig — det gjelder både utviklingsrepo og plugin-cache. Wrapperen forteller deg den eksakte kommandoen.
+
+### Notes for users
+- **Eksisterende v1.13.0-installasjoner:** Etter oppdatering til v1.13.1, kjør én gang:
+  ```bash
+  cd ~/.claude/plugins/cache/paretofilm-plugins/superpowers-gstack/1.13.1/skills/htmlify && bun install
+  ```
+- **Hook-installer-stien er nå tydeligere** i SKILL.md. Hook'en self-lokaliserer fortsatt — installasjon fra cache-stien fungerer.
+
 ## [1.13.0] - 2026-05-16
 
 ### Added
