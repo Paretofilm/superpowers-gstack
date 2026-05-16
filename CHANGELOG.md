@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.1.1] - 2026-05-16
+
+### Changed
+- **`context-handoff` template adds `type: handoff` as first YAML field.** Aligns with htmlify v2.0+ classifier, which treats `type:` as the primary type-discriminator. v1.12.0 handoffs (without `type:`) still work via htmlify's filename-based legacy fallback, but new handoffs written by this skill are now first-class instead of legacy.
+- **CLAUDE.md "Session continuity" updated** to detect three handoff formats: `type: handoff` (current, v2.1.1+), YAML-without-`type:` (v1.12.0 → v2.1.0), and prose-only (pre-1.12.0). All read the same YAML fields when present.
+- **`context-handoff` SKILL documents htmlify hook side effect.** If the `/htmlify` PostToolUse hook is installed, writing handoff.md auto-renders it as HTML and opens it in Safari. Background, non-blocking — but visible. SKILL.md now warns to mention this once if it surprises the user.
+
+### Why
+"Forward-clean" patch. v1.12.0 introduced the YAML handoff schema but predated htmlify's `type:` discriminator. As long as this skill keeps producing handoffs without `type:`, htmlify's legacy-fallback path must stay actively maintained. One-line template change moves new handoffs to the first-class path; the fallback freezes into "pre-existing files only" instead of "needed for current tooling".
+
+### Backwards compatibility
+**No breaking changes.** Pre-2.1.1 handoff.md files (with or without YAML) keep working — htmlify's classifier still recognizes them, and CLAUDE.md "Session continuity" still parses them. The change only affects what *new* writes look like.
+
+### Notes for users
+- **No action required.** Next time `/superpowers-gstack:context-handoff` runs, the written handoff.md will include `type: handoff` automatically.
+- If the Safari auto-open is undesired, disable the htmlify PostToolUse hook by removing the relevant block from `~/.claude/settings.json` (the `scripts/setup-htmlify-hook.sh` installer is opt-in to begin with).
+
 ## [2.1.0] - 2026-05-16
 
 ### Changed

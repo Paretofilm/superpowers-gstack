@@ -15,6 +15,8 @@ Writes a structured session handoff to `docs/superpowers/handoff.md` in the proj
 - CLAUDE.md sensor triggers after /compact (user opts in to auto-modus)
 - User explicitly invokes /context-handoff
 
+**Side effect to know about:** If the `/htmlify` PostToolUse hook is installed (`scripts/setup-htmlify-hook.sh`), writing handoff.md will automatically render it as HTML and open it in Safari. This happens in the background and doesn't block. Tell the user once if it seems to surprise them.
+
 ## Save state
 
 1. **Create `docs/superpowers/` directory** if it doesn't exist.
@@ -23,6 +25,7 @@ Writes a structured session handoff to `docs/superpowers/handoff.md` in the proj
 
    ```markdown
    ---
+   type: handoff
    session_end: {ISO-8601 with timezone, e.g. 2026-05-14T16:30:00+02:00}
    branch: {current git branch, or "n/a" if not a repo}
    commit_at_handoff: {short SHA of HEAD, or "n/a"}
@@ -77,6 +80,7 @@ Use `<feature-slug>-<n>` where `<feature-slug>` is a stable kebab-case identifie
 
 ## YAML field rules
 
+- `type: handoff` MUST be the first field — downstream tools (e.g. `/htmlify`) use it as the primary type-discriminator. Filename-based detection exists as a fallback for pre-2.1.1 handoffs but should not be relied on going forward.
 - `mode: auto` in YAML replaces the older `## Mode: auto` Markdown marker. If both exist (legacy handoff), YAML takes precedence; remove the Markdown marker on next write.
 - `next_step` MUST be one sentence with a concrete verb and (where possible) a file:line anchor. "Continue work on auth" is not acceptable; "Read src/auth/session.ts:45-78, decide middleware vs hook for refresh flow" is.
 - `completed` and `remaining` arrays may be empty (`[]`) but must be present.

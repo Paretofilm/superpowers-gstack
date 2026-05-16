@@ -61,7 +61,7 @@ For the update notification hook (optional, after cloning the repo):
 
 ## Session continuity
 
-On session start or after /compact: if `docs/superpowers/handoff.md` exists and contains content, read it and present a one-line summary of where you left off. Use the structured YAML frontmatter when available — quote `next_step` verbatim, name the `active_task` ID, and surface `env` (venv, dev_server, test_cmd) so commands work immediately. Fall back to prose parsing for pre-1.12.0 handoffs without YAML. Then proceed normally — do not ask "ready to continue?". Clear the file (write empty string) immediately after presenting the summary.
+On session start or after /compact: if `docs/superpowers/handoff.md` exists and contains content, read it and present a one-line summary of where you left off. Detect format by frontmatter `type:` field — `type: handoff` is the current format (v2.1.1+). For YAML handoffs without `type:` (v1.12.0 → v2.1.0), treat as legacy-handoff and parse the same fields. For prose-only files (pre-1.12.0), fall back to text parsing. In all YAML cases, quote `next_step` verbatim, name the `active_task` ID, and surface `env` (venv, dev_server, test_cmd) so commands work immediately. Then proceed normally — do not ask "ready to continue?". Clear the file (write empty string) immediately after presenting the summary.
 
 After /compact: check for auto-mode in this priority order — YAML `mode: auto` field, then legacy `## Mode: auto` Markdown marker. If neither is present, ask the user once: "Context was compressed. Want me to activate auto context handoff for this session? I'll keep handoff.md updated and suggest /clear when context gets heavy." If yes, invoke the context-handoff skill.
 
