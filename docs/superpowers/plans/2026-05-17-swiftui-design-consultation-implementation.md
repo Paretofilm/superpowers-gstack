@@ -596,7 +596,7 @@ import XCTest
 
 final class HIGBudgetTests: XCTestCase {
     private var sourceFiles: [URL] {
-        let packageDir = URL(fileURLWithPath: #file)
+        let packageDir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()       // Tests/DesignSystemTests
             .deletingLastPathComponent()       // Tests
             .deletingLastPathComponent()       // package root
@@ -656,7 +656,7 @@ import XCTest
 
 final class PlatformsTests: XCTestCase {
     func testPackageSwiftDeclaresExpectedPlatforms() throws {
-        let packageURL = URL(fileURLWithPath: #file)
+        let packageURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()       // Tests/DesignSystemTests
             .deletingLastPathComponent()       // Tests
             .deletingLastPathComponent()       // package root
@@ -706,6 +706,165 @@ tokens documented at site of use. No skill logic yet — that lands in
 the next phase.
 
 Part of plugin v2.2.0.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+```
+
+### Task 2.6: Add WCAG contrast-check helper script
+
+The spec's § Detail decisions #1 promises "accept hex AND run a contrast
+check against proposed text/background colors". The math is non-trivial
+(sRGB → linear → relative luminance → contrast ratio). Implement it as
+a bash helper script so the skill can call it deterministically instead
+of asking Claude to do the math.
+
+**Files:**
+- Create: `skills/swiftui-design-consultation/bin/contrast-check.sh`
+
+- [ ] **Step 1: Create bin directory**
+
+```bash
+mkdir -p /Users/kjetilge/Developer/superpowers-gstack/skills/swiftui-design-consultation/bin
+```
+
+- [ ] **Step 2: Write contrast-check.sh**
+
+````bash
+#!/usr/bin/env bash
+# contrast-check.sh — WCAG 2.1 contrast ratio between two hex colors.
+#
+# Usage: contrast-check.sh <fg-hex> <bg-hex>
+# Output: JSON to stdout with ratio + pass flags for AA-normal and AA-large.
+# Exit: 0 always (caller reads JSON to decide).
+#
+# Implements sRGB → linear → relative luminance → contrast ratio
+# per https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio. Uses `bc`
+# for floating-point math. No external libraries required (bash + bc
+# are present on every macOS + Linux install).
+
+set -euo pipefail
+
+if [ "$#" -ne 2 ]; then
+  echo '{"error": "usage: contrast-check.sh <fg-hex> <bg-hex>"}' >&2
+  exit 1
+fi
+
+# Strip leading # if present, accept 3-char or 6-char hex.
+normalize_hex() {
+  local h="${1#\#}"
+  if [ "${#h}" = "3" ]; then
+    h="${h:0:1}${h:0:1}${h:1:1}${h:1:1}${h:2:1}${h:2:1}"
+  fi
+  if ! [[ "$h" =~ ^[0-9a-fA-F]{6}$ ]]; then
+    echo "invalid hex: $1" >&2
+    exit 2
+  fi
+  printf '%s\n' "$h"
+}
+
+FG=$(normalize_hex "$1")
+BG=$(normalize_hex "$2")
+
+# Extract R, G, B as 0-255 ints.
+hex_channel() {
+  printf '%d\n' "0x$1"
+}
+
+FR=$(hex_channel "${FG:0:2}")
+FG_=$(hex_channel "${FG:2:2}")
+FB=$(hex_channel "${FG:4:2}")
+BR=$(hex_channel "${BG:0:2}")
+BG_=$(hex_channel "${BG:2:2}")
+BB=$(hex_channel "${BG:4:2}")
+
+# sRGB channel → linear: if c/255 <= 0.03928 then c/255/12.92 else ((c/255+0.055)/1.055)^2.4
+# Use bc -l for floating point + power.
+to_linear() {
+  local c=$1
+  bc -l <<EOF
+v = $c / 255
+if (v <= 0.03928) v / 12.92 else e(2.4 * l((v + 0.055) / 1.055))
+EOF
+}
+
+# Relative luminance: 0.2126*R + 0.7152*G + 0.0722*B
+luminance() {
+  local r=$1 g=$2 b=$3
+  local lr lg lb
+  lr=$(to_linear "$r")
+  lg=$(to_linear "$g")
+  lb=$(to_linear "$b")
+  bc -l <<EOF
+0.2126 * $lr + 0.7152 * $lg + 0.0722 * $lb
+EOF
+}
+
+LFG=$(luminance "$FR" "$FG_" "$FB")
+LBG=$(luminance "$BR" "$BG_" "$BB")
+
+# Contrast ratio: (lighter + 0.05) / (darker + 0.05)
+RATIO=$(bc -l <<EOF
+if ($LFG > $LBG) (($LFG + 0.05) / ($LBG + 0.05)) else (($LBG + 0.05) / ($LFG + 0.05))
+EOF
+)
+
+# Format ratio to 2 decimals.
+RATIO_FMT=$(printf '%.2f' "$RATIO")
+
+# WCAG AA: 4.5:1 for normal text, 3:1 for large text (≥18pt or ≥14pt bold).
+PASS_NORMAL=$(echo "$RATIO >= 4.5" | bc -l)
+PASS_LARGE=$(echo "$RATIO >= 3.0" | bc -l)
+PASS_AAA=$(echo "$RATIO >= 7.0" | bc -l)
+
+# bc returns 1 for true, 0 for false; convert to JSON booleans.
+bool() { [ "$1" = "1" ] && echo "true" || echo "false"; }
+
+cat <<EOF
+{
+  "fg": "#$FG",
+  "bg": "#$BG",
+  "ratio": $RATIO_FMT,
+  "pass_aa_normal": $(bool "$PASS_NORMAL"),
+  "pass_aa_large": $(bool "$PASS_LARGE"),
+  "pass_aaa_normal": $(bool "$PASS_AAA")
+}
+EOF
+````
+
+- [ ] **Step 3: Make executable and smoke-test**
+
+```bash
+chmod +x skills/swiftui-design-consultation/bin/contrast-check.sh
+
+# Black on white — known ratio 21:1, should pass everything
+./skills/swiftui-design-consultation/bin/contrast-check.sh 000000 ffffff
+# Light gray on white — known to fail AA-normal
+./skills/swiftui-design-consultation/bin/contrast-check.sh aaaaaa ffffff
+# Warm copper #B87333 on near-black #1a1a1a — typical brand-on-dark
+./skills/swiftui-design-consultation/bin/contrast-check.sh B87333 1a1a1a
+```
+
+Expected outputs (verify ratios manually against a WCAG calculator):
+- 1st: `"ratio": 21.00, "pass_aa_normal": true, ...`
+- 2nd: `"ratio": 2.32, "pass_aa_normal": false, "pass_aa_large": false`
+- 3rd: `"ratio": 4.62, "pass_aa_normal": true, "pass_aa_large": true`
+
+If ratios are off by more than ±0.1, the bc math has a bug — debug
+before continuing.
+
+- [ ] **Step 4: Commit**
+
+```bash
+cd /Users/kjetilge/Developer/superpowers-gstack
+git add skills/swiftui-design-consultation/bin/contrast-check.sh
+git commit -m "feat(swiftui-design-consultation): WCAG contrast-check helper
+
+Bash + bc implementation of sRGB→linear→luminance→contrast ratio per
+WCAG 2.1. No external deps; called by Phase 6 Step 6.2 to validate
+brand-color hex against text/background before writing to asset catalog.
+
+Part of plugin v2.2.0. Resolves pitfall P3 (unfulfilled contrast-check
+promise from spec § Detail decisions #1).
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
@@ -777,6 +936,29 @@ Apple-canon design system consultation for SwiftUI projects. Output:
 `DESIGN.md` + `DesignSystem/` Swift Package + `DESIGN.html` (via htmlify).
 
 ## Phase 0 — Setup
+
+### Step 0.0: Initialize gstack helpers (set $SLUG)
+
+This skill writes per-project state under `~/.gstack/projects/$SLUG/`,
+so `$SLUG` (the gstack project identifier derived from the git remote)
+must be set before any other Phase reads or writes it.
+
+```bash
+# Pull gstack-slug into the current shell. Sets $SLUG = repo-slug
+# from `git remote get-url origin` per gstack convention.
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)" || {
+  # Fallback: derive slug from repo basename if gstack isn't installed
+  # or this isn't a git repo with origin set.
+  SLUG="$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")"
+  export SLUG
+}
+mkdir -p ~/.gstack/projects/"$SLUG"
+echo "SLUG: $SLUG"
+```
+
+`$SLUG` is referenced throughout subsequent phases for state-file paths
+(`~/.gstack/projects/$SLUG/design-proposal-{ts}.md`,
+`~/.gstack/projects/$SLUG/swiftui-consultation-state.json`, etc.).
 
 ### Step 0.1: Track self-bootstrap
 
@@ -1001,17 +1183,36 @@ Build a /htmlify v2 plan JSON at `/tmp/design-proposal-plan.json` with:
 - Color swatches as a custom inline HTML block (via `section-card` body)
 - `feedback_panel` with premises drawn from the actual proposal and `Approve / Drill into X / Change Y / Start over` radio
 
-Invoke `/htmlify`:
+Invoke htmlify via the **Skill tool** (NOT a direct bin path — the
+htmlify skill's base directory differs per install location: dev repo
+vs marketplace cache vs vendored). Use the Skill invocation pattern
+that Claude Code resolves automatically:
 
-```bash
-"$SKILL_DIR/bin/htmlify" \
-  ~/.gstack/projects/$SLUG/design-proposal-$TS.md \
-  --plan /tmp/design-proposal-plan.json \
-  --open
+```
+Skill(skill="superpowers-gstack:htmlify",
+      args="~/.gstack/projects/$SLUG/design-proposal-$TS.md --plan /tmp/design-proposal-plan.json --open")
 ```
 
-(Where `$SKILL_DIR` is the htmlify skill directory; the path can be
-read from htmlify's SKILL.md base directory, which Claude Code injects.)
+If the Skill-tool dispatch is unavailable (rare; only in spawned
+sessions without the htmlify plugin), fall back to locating htmlify's
+bin from the plugin cache:
+
+```bash
+HTMLIFY_BIN=""
+for VERSION_DIR in ~/.claude/plugins/cache/paretofilm-plugins/superpowers-gstack/*/; do
+  CANDIDATE="${VERSION_DIR}skills/htmlify/bin/htmlify"
+  [ -x "$CANDIDATE" ] && HTMLIFY_BIN="$CANDIDATE"
+done
+# Or repo dev path:
+[ -z "$HTMLIFY_BIN" ] && [ -x "$(git rev-parse --show-toplevel 2>/dev/null)/skills/htmlify/bin/htmlify" ] \
+  && HTMLIFY_BIN="$(git rev-parse --show-toplevel)/skills/htmlify/bin/htmlify"
+[ -z "$HTMLIFY_BIN" ] && { echo "htmlify not found"; exit 1; }
+
+"$HTMLIFY_BIN" ~/.gstack/projects/$SLUG/design-proposal-$TS.md \
+  --plan /tmp/design-proposal-plan.json --open
+```
+
+Prefer the Skill tool path; fall back to bin only if needed.
 
 ### Step 3.3: Ask user approve/drill/change
 
@@ -1071,9 +1272,23 @@ Paired generation. DESIGN.md and DesignSystem/* are both written from
 the approved proposal. Then run conformance review against the HIG
 budget; iterate up to 2 times if over budget.
 
-### Step 6.1: Generate DESIGN.md from template
+### Step 6.1: Generate DESIGN.md from template (with overwrite-safety)
 
-Read `skills/swiftui-design-consultation/templates/DESIGN.md.template`.
+**Before writing**, check if `<repo>/DESIGN.md` already exists:
+
+```bash
+if [ -f DESIGN.md ]; then
+  BACKUP="DESIGN.md.backup-$(date +%Y%m%d-%H%M%S)"
+  cp DESIGN.md "$BACKUP"
+  echo "Existing DESIGN.md backed up to $BACKUP"
+fi
+```
+
+This is the refresh-mode safety net: any prior DESIGN.md is preserved
+under a timestamp suffix before overwrite. Same pattern for the Swift
+Package in Step 6.2.
+
+Then read `skills/swiftui-design-consultation/templates/DESIGN.md.template`.
 Substitute all 15 tokens (`{{DATE}}`, `{{PRODUCT_CONTEXT}}`, etc.)
 from the approved proposal. Write to `<repo>/DESIGN.md`.
 
@@ -1110,10 +1325,28 @@ under `DesignSystem/Sources/DesignSystem/Resources/Assets.xcassets/`.
 Each brand color entry uses Xcode's color-set format with light, dark,
 and high-contrast variants.
 
-For each hex value provided, run a WCAG AA contrast check against the
-proposed background and text colors. If contrast < 4.5:1 for normal
-text or < 3:1 for large text, surface a warning + propose an adjusted
-hex (algorithm: rotate L* in OKLCH space ±5 until contrast passes).
+**WCAG contrast check (via Phase 2 helper):** for each brand hex
+provided, call `skills/swiftui-design-consultation/bin/contrast-check.sh`
+once against the proposed light-mode background and once against the
+proposed dark-mode background. Parse the returned JSON:
+
+```bash
+# Example call from inside the skill
+RESULT_LIGHT=$(./skills/swiftui-design-consultation/bin/contrast-check.sh "$BRAND_HEX" "$BG_LIGHT_HEX")
+RESULT_DARK=$(./skills/swiftui-design-consultation/bin/contrast-check.sh "$BRAND_HEX" "$BG_DARK_HEX")
+PASS_LIGHT=$(echo "$RESULT_LIGHT" | grep -o '"pass_aa_normal": [a-z]*' | awk '{print $2}')
+PASS_DARK=$(echo "$RESULT_DARK" | grep -o '"pass_aa_normal": [a-z]*' | awk '{print $2}')
+```
+
+If either `PASS_LIGHT` or `PASS_DARK` is `false`, surface to the user:
+- The actual ratio (from `RESULT_LIGHT.ratio` / `RESULT_DARK.ratio`)
+- A flag: "Brand color $BRAND_HEX fails WCAG AA against $WHICH background"
+- AskUserQuestion: keep this hex (override), or pick a different one?
+
+The skill does NOT auto-adjust the hex (the spec said L*-rotation in
+OKLCH but that requires a full color-space library — out of scope for
+v1's bash helper). Manual adjustment by the user is the v1 fallback;
+auto-suggestion can be added in v1.1.
 
 ### Step 6.3: Type-check generated Swift
 
@@ -1127,25 +1360,49 @@ If typecheck fails: fix the offending file (likely a missing `#if os()`
 guard for platform-specific API) and retry. Hard cap: 3 typecheck
 attempts. If still failing, STOP and report the diagnostic.
 
-### Step 6.4: Generate DESIGN.html
+### Step 6.4: Generate DESIGN.html via Skill tool
 
-Invoke `/htmlify` on the just-written DESIGN.md (no plan — v1
-rendering is fine for the human-readable spec; no feedback panel
-needed):
+Invoke htmlify via the **Skill tool** (same pattern as Step 3.2; do
+NOT use a hardcoded bin path):
 
-```bash
-"$SKILL_DIR/bin/htmlify" <repo>/DESIGN.md
+```
+Skill(skill="superpowers-gstack:htmlify", args="<repo>/DESIGN.md")
 ```
 
+No --plan needed — v1 rendering is fine for the human-readable spec;
+no feedback panel needed for the final DESIGN.html.
+
 Output: `<repo>/.superpowers-html/DESIGN.html` (htmlify's default).
-Optionally also write `<repo>/DESIGN.html` as a copy if user wants a
-gitignore-clean visual artifact at repo root.
+Optionally also `cp` it to `<repo>/DESIGN.html` if the user wants a
+visual artifact at repo root (mention in summary; don't auto-copy).
 
 ### Step 6.5: Chain to macos-native-review (on DESIGN.md)
 
-Invoke the macos-native-review skill via the Skill tool with the path
-to the just-written DESIGN.md as input. Capture findings count by
-severity.
+macos-native-review reads the artifact from context, not from a path
+argument. Two steps:
+
+1. **Read DESIGN.md into context** via the Read tool:
+   ```
+   Read(file_path="<absolute path>/DESIGN.md")
+   ```
+
+2. **Invoke macos-native-review** via the Skill tool. The just-loaded
+   DESIGN.md content is now in the model's context, so the skill's
+   Phase 0 (macOS signal detection) and the 12-category review can
+   read it directly:
+   ```
+   Skill(skill="superpowers-gstack:macos-native-review",
+         args="Review the DESIGN.md just loaded into context. It is the design system spec for a SwiftUI project on track=$TRACK; budget is $BUDGET_CRITICAL/$BUDGET_SIGNIFICANT/$BUDGET_POLISH.")
+   ```
+
+Capture the skill's verdict and findings list by severity (CRITICAL,
+SIGNIFICANT, POLISH). These feed into the budget check at Step 6.7.
+
+If the project's `$TRACK` is `ios` only, macos-native-review's Phase 0
+will return `N/A — iOS-only project`. In that case, skip its findings
+in the aggregation (only review_macos_hig findings from Step 6.6 count
+toward the budget). This is expected behavior — macos-native-review is
+macOS-specific by design.
 
 ### Step 6.6: Chain to review_macos_hig (on each .swift file)
 
@@ -1642,6 +1899,30 @@ After CLAUDE.md generation, read the routing rule. Confirm:
 cd /Users/kjetilge/Developer/superpowers-gstack
 rm -rf "$TESTWS"
 ```
+
+### Task 6.4a: Verify non-standard frontmatter loads cleanly
+
+Both new SKILL.md files use non-standard frontmatter fields
+(`upstream_skills`, `chains_to`, `mcp_tools_used`). Verify Claude
+Code's skill parser accepts them without warnings.
+
+- [ ] **Step 1: Use --plugin-dir to load the dev plugin**
+
+```bash
+cd /tmp  # somewhere outside the repo
+claude --plugin-dir /Users/kjetilge/Developer/superpowers-gstack --print "list available skills with 'swiftui' in the name"
+```
+
+Expected: both `/superpowers-gstack:swiftui-track` and
+`/superpowers-gstack:swiftui-design-consultation` appear in the
+output. No parser warnings about unknown frontmatter fields.
+
+- [ ] **Step 2: If parser warns about unknown fields**
+
+Remove the non-standard fields from frontmatter (move them to body
+content as a `## Skill metadata` section). The fields are
+documentation, not load-bearing — they exist so future tooling can
+reason about skill graphs but Claude Code's runtime doesn't use them.
 
 ### Task 6.4: Test path — direct invocation → Phase 0 self-bootstrap
 

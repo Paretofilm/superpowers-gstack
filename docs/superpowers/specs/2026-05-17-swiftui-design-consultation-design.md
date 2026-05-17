@@ -646,10 +646,35 @@ implementation plan that ships
 `swiftui-design-consultation` + `swiftui-track` + routing updates as
 plugin v2.2.0.
 
+## Known limitations (in-scope, accepted by design)
+
+- **Model-as-dispatcher reliability for `/design-consultation`.** The
+  CLAUDE.md track-aware routing rule depends on Claude (the model)
+  reading the rule when the user invokes `/design-consultation`
+  without a namespace. After /compact, long sessions, or in fresh
+  subagents, CLAUDE.md may not be in context — the model could
+  mistakenly dispatch to the wrong variant. swiftui-design-consultation's
+  Phase 0 self-bootstrap catches mis-dispatch *to it*, but the web
+  `/design-consultation` (gstack skill) has no equivalent self-check —
+  if mis-dispatched to web for a native project, it just runs as web.
+  This is acceptable by design (the architecture chose CLAUDE.md
+  routing over a code-level wrapper to avoid touching gstack). Users
+  who see the wrong dispatch can type the namespaced version
+  (`/superpowers-gstack:swiftui-design-consultation`) to bypass.
+
+- **Concurrent skill invocations.** If two Claude Code sessions both
+  run swiftui-design-consultation in the same project, both write to
+  `DESIGN.md`, `DesignSystem/`, and `.gstack/track` (last-writer-wins).
+  Project-state artifacts under `~/.gstack/projects/$SLUG/` are
+  timestamp-distinguished so they don't collide. Acceptable for v1.
+
 ## Known issues to log separately
 
-- **htmlify feedback panel copy-to-clipboard does not work.** Reported
-  during this brainstorm session — text selection / copy from the
-  feedback panel HTML fails. Investigate `skills/htmlify/src/`
-  (likely the feedback panel template's CSS user-select or the JS
-  copy handler). Separate fix, not in this spec's scope.
+- **htmlify feedback panel copy-to-clipboard does not work via file://.**
+  Reported during this brainstorm session — `navigator.clipboard.writeText`
+  is restricted by Safari on `file://` origins. The fallback path
+  ("Clipboard unavailable — text is selected, press Cmd/Ctrl-C") works
+  when the user clicks the "Copy feedback as prompt" button, but not
+  when selecting text manually. Confirmed via inspection of
+  `skills/htmlify/src/render/components/feedback-panel.ts` lines
+  123-139. Separate fix, not in this spec's scope.
