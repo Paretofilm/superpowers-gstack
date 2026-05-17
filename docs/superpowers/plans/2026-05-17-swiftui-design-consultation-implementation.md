@@ -1292,9 +1292,20 @@ Then read `skills/swiftui-design-consultation/templates/DESIGN.md.template`.
 Substitute all 15 tokens (`{{DATE}}`, `{{PRODUCT_CONTEXT}}`, etc.)
 from the approved proposal. Write to `<repo>/DESIGN.md`.
 
-### Step 6.2: Generate Swift Package
+### Step 6.2: Generate Swift Package (with overwrite-safety)
 
-Create the directory layout:
+**Before writing**, back up any existing DesignSystem/ directory
+(refresh-mode safety net, companion to Step 6.1's DESIGN.md backup):
+
+```bash
+if [ -d DesignSystem ]; then
+  BACKUP_DIR="DesignSystem.backup-$(date +%Y%m%d-%H%M%S)"
+  mv DesignSystem "$BACKUP_DIR"
+  echo "Existing DesignSystem/ moved to $BACKUP_DIR"
+fi
+```
+
+Then create the directory layout:
 
 ```bash
 mkdir -p DesignSystem/Sources/DesignSystem/Resources
@@ -1331,12 +1342,29 @@ once against the proposed light-mode background and once against the
 proposed dark-mode background. Parse the returned JSON:
 
 ```bash
-# Example call from inside the skill
-RESULT_LIGHT=$(./skills/swiftui-design-consultation/bin/contrast-check.sh "$BRAND_HEX" "$BG_LIGHT_HEX")
-RESULT_DARK=$(./skills/swiftui-design-consultation/bin/contrast-check.sh "$BRAND_HEX" "$BG_DARK_HEX")
-PASS_LIGHT=$(echo "$RESULT_LIGHT" | grep -o '"pass_aa_normal": [a-z]*' | awk '{print $2}')
-PASS_DARK=$(echo "$RESULT_DARK" | grep -o '"pass_aa_normal": [a-z]*' | awk '{print $2}')
+# Example call from inside the skill — handle exit code explicitly
+# so a missing `bc` or invalid hex doesn't silently pass the check.
+CONTRAST_BIN="./skills/swiftui-design-consultation/bin/contrast-check.sh"
+
+if RESULT_LIGHT=$("$CONTRAST_BIN" "$BRAND_HEX" "$BG_LIGHT_HEX" 2>&1); then
+  PASS_LIGHT=$(echo "$RESULT_LIGHT" | grep -o '"pass_aa_normal": [a-z]*' | awk '{print $2}')
+else
+  PASS_LIGHT="error"
+  echo "WARN: contrast-check failed for $BRAND_HEX vs $BG_LIGHT_HEX (exit $?). Skipping; surfacing to user." >&2
+fi
+
+if RESULT_DARK=$("$CONTRAST_BIN" "$BRAND_HEX" "$BG_DARK_HEX" 2>&1); then
+  PASS_DARK=$(echo "$RESULT_DARK" | grep -o '"pass_aa_normal": [a-z]*' | awk '{print $2}')
+else
+  PASS_DARK="error"
+  echo "WARN: contrast-check failed for $BRAND_HEX vs $BG_DARK_HEX (exit $?). Skipping; surfacing to user." >&2
+fi
 ```
+
+If either result is `error` (helper script failed — likely `bc` missing
+or invalid hex), surface the warning to the user and ask explicitly
+whether to accept the brand color without verified contrast. Do NOT
+treat empty/missing PASS as a pass.
 
 If either `PASS_LIGHT` or `PASS_DARK` is `false`, surface to the user:
 - The actual ratio (from `RESULT_LIGHT.ratio` / `RESULT_DARK.ratio`)
