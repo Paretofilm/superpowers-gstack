@@ -97,20 +97,19 @@ before).
 review output into a typed structure). Tied to S3 (formal data
 model). Best built together.
 
-### S5. Contrast helper: printf locale can break JSON
+### S5. ✅ FIXED in v2.2.0 — Contrast helper: printf locale break JSON
 
 **What codex flagged.** Plan line 812: `printf '%.2f' "$RATIO"` emits
 comma decimals under some `LC_NUMERIC` locales (e.g., German, French,
 Norwegian — `LC_NUMERIC=nb_NO`). `"ratio": 4,62` is invalid JSON.
 
-**v1.1 fix.** Add `LC_ALL=C` to the contrast-check.sh script header,
-or wrap the bc calls with `LC_NUMERIC=C bc -l <<...`. One-line patch.
-Trivial to do; not done in v1 because plan size cap was hit.
-
-**Why deferred.** Locale-dependent bug; impacts non-English users.
-User (Oslo, `nb_NO`) is at risk. Should be fixed early in v1.1, not
-left for later — actually consider this a "v1.0.1 patch release"
-candidate.
+**Status: FIXED in v2.2.0 release.** Caught at implementation time
+when the controller's `nb_NO.UTF-8` locale exposed it as a real bug
+during Task 2.6 dispatch (not theoretical). The fix — `export LC_ALL=C`
+at the top of `contrast-check.sh` after `set -euo pipefail` — was
+folded into the v2.2.0 ship rather than deferred. Smoke-tested:
+ratio 21.00 / 2.32 / 4.59 / 21.00 all emitted with dot decimals on
+`nb_NO.UTF-8`. See commit `887f86b`.
 
 ### S6. `adapt` preservation prevents updating stale routing rules
 
