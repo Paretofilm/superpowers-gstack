@@ -159,6 +159,8 @@ Think through each GStack skill, organized by phase:
 | `/benchmark` | Projects with performance monitoring needs |
 | `/benchmark-models` | Projects comparing AI model performance |
 | `/codex` | Projects needing second opinions or adversarial code review |
+| `/superpowers-gstack:swiftui-track` | Native SwiftUI projects — declares iOS/macOS/both via `.gstack/track`; required upstream of swiftui-design-consultation |
+| `/superpowers-gstack:swiftui-design-consultation` | Native SwiftUI projects — produces DESIGN.md + Swift Package starter; equivalent to /design-consultation for web |
 
 ### Step 5: Present the routing plan
 
@@ -265,6 +267,30 @@ This project uses Superpowers + GStack. Each owns a distinct phase:
 - Use `/investigate` only for bugs found in QA or production (Phase 3+)
 - Superpowers specs go in `docs/superpowers/`
 - GStack state lives in `~/.gstack/projects/`
+
+### Track-aware routing (dual-track)
+
+This project follows superpowers-gstack's dual-track convention.
+Track is declared in `.gstack/track` (`ios` | `macos` | `both`).
+Missing marker = `web` (gstack default).
+
+#### When user starts a new product idea
+
+After product context is clear in /office-hours or brainstorming, check
+`.gstack/track`. If missing:
+- Native signals (SwiftUI, iOS, iPadOS, macOS app, App Store) → invoke
+  `/superpowers-gstack:swiftui-track`, then continue
+- Web signals (Next.js, React, web app, dashboard, landing page) → do
+  nothing; web is the default
+- Ambiguous → ask the user once before continuing
+
+#### When user invokes /design-consultation (no namespace)
+
+Read `.gstack/track`:
+- `ios` / `macos` / `both` → invoke `/superpowers-gstack:swiftui-design-consultation`
+- Absent or `web` → invoke `/design-consultation` (gstack)
+
+User can always bypass by typing the namespaced version directly.
 
 ### Model Routing (v0.1, advisory)
 
