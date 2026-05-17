@@ -11,6 +11,8 @@ Lager visuelt elegante HTML-companions ved siden av MD-artefakter, og en aggrege
 - Bruker sier "html-ify", "lag html av", "generer HTML companion"
 - Bruker spør "kan jeg få en penere visning av denne MD-en"
 - PostToolUse-hook (når installert) auto-trigger ved Write/Edit på artefakt-MD
+- Invoked programmatically by `/superpowers-gstack:swiftui-design-consultation`
+  for Phase 3 proposal preview and Phase 6 DESIGN.html generation
 
 ## How to invoke
 
