@@ -40,6 +40,16 @@ Recommended flow on a fresh artifact for a macOS app:
 
 `macos-native-review` does *not* replace `quality-review`. The latter has 13 platform-independent categories (silent failures, empty states, multi-tenancy, AI output, sort order, etc.) that are still worth running on macOS projects. Modest overlap on two categories (quality-review's keyboard / animations) is acceptable: that skill checks generic conventions, this skill checks Apple-specific values.
 
+### Relationship to swiftui-design-consultation
+
+`/superpowers-gstack:swiftui-design-consultation` is the upstream
+design-system step for SwiftUI projects. It produces a DESIGN.md +
+Swift Package starter, then auto-chains into macos-native-review on
+the DESIGN.md and `mcp__swiftui-rag__review_macos_hig` on each
+generated `.swift` file. The HIG conformance budget set in
+swiftui-design-consultation Phase 1 is the bar this skill measures
+against during that chain.
+
 ## Sequence
 
 1. **Phase 0 — macOS signal detection** (~30 seconds). Scan the artifact for macOS signals. If none found, return `N/A` and exit. If iOS-only, return `N/A` with deferred-skill note. Otherwise proceed.
