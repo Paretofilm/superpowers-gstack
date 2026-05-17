@@ -914,12 +914,6 @@ allowed-tools:
   - AskUserQuestion
   - WebFetch
   - Skill
-upstream_skills:
-  - swiftui-track
-chains_to:
-  - macos-native-review
-  - htmlify
-mcp_tools_used:
   - mcp__swiftui-rag__corpus_info
   - mcp__swiftui-rag__search_swiftui_corpus
   - mcp__swiftui-rag__index_project
@@ -928,6 +922,11 @@ mcp_tools_used:
   - mcp__swiftui-rag__review_macos_hig
   - mcp__swiftui-rag__review_liquid_glass
   - mcp__swiftui-rag__review_accessibility
+upstream_skills:
+  - swiftui-track
+chains_to:
+  - macos-native-review
+  - htmlify
 ---
 
 # /superpowers-gstack:swiftui-design-consultation
@@ -946,12 +945,25 @@ must be set before any other Phase reads or writes it.
 ```bash
 # Pull gstack-slug into the current shell. Sets $SLUG = repo-slug
 # from `git remote get-url origin` per gstack convention.
-eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)" || {
-  # Fallback: derive slug from repo basename if gstack isn't installed
-  # or this isn't a git repo with origin set.
+#
+# CAREFUL: `eval "$(... 2>/dev/null)" || fallback` does NOT work — if
+# gstack-slug is missing, command substitution returns empty, `eval ""`
+# succeeds (exit 0), and the fallback never runs. Capture output first
+# and check non-empty explicitly.
+SLUG_OUTPUT=$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
+if [ -n "$SLUG_OUTPUT" ]; then
+  eval "$SLUG_OUTPUT"
+fi
+if [ -z "${SLUG:-}" ]; then
+  # Fallback: derive slug from git toplevel basename, or pwd basename
+  # if not in a git repo.
   SLUG="$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")"
   export SLUG
-}
+fi
+if [ -z "$SLUG" ] || [ "$SLUG" = "/" ]; then
+  echo "FATAL: could not derive SLUG. Aborting." >&2
+  exit 1
+fi
 mkdir -p ~/.gstack/projects/"$SLUG"
 echo "SLUG: $SLUG"
 ```
@@ -1007,6 +1019,33 @@ returned JSON has:
 
 If any field is missing or the call fails, STOP and report:
 `BLOCKED — swiftui-rag MCP unavailable. Run /sync-gbrain or check pipx install.`
+
+### Step 0.3.1: Verify MCP parameter schemas (defensive)
+
+Tool NAMES are only half the contract. Before any later phase
+invokes these tools, verify the actual parameter NAMES match what
+the plan assumes. The tool schemas are visible in Claude Code's
+tool list (the same list this skill's frontmatter `allowed-tools`
+references). Read them and confirm:
+
+| Tool | Expected primary param | If schema differs, use the actual name |
+|---|---|---|
+| `mcp__swiftui-rag__index_project` | `path` (string) | Look for `repo_path`, `project_path`, `dir`, etc. |
+| `mcp__swiftui-rag__search_project` | `query` (string) | Look for `q`, `text`, `pattern` |
+| `mcp__swiftui-rag__search_swiftui_corpus` | `query` (string) | Look for `q`, `text` |
+| `mcp__swiftui-rag__swift_typecheck` | `swift_code` (string), `target_versions` (array of strings) | Verify both names |
+| `mcp__swiftui-rag__review_macos_hig` | `swift_code` (string) | Verify name |
+| `mcp__swiftui-rag__review_liquid_glass` | `swift_code` (string) | Verify name |
+| `mcp__swiftui-rag__review_accessibility` | `swift_code` (string) | Verify name |
+
+If a tool's actual schema differs from the table above, the agent
+executing this plan should ADJUST its invocations accordingly — do
+not blindly use the names above if the schema disagrees. This is a
+runtime-correctness gate; the plan's prose uses the most likely names
+but the schema is authoritative.
+
+If any tool is missing from the tool list (e.g., MCP server not
+attached), STOP and report `BLOCKED — required MCP tool not available`.
 
 ### Step 0.4: Existing-project indexing
 
@@ -1165,9 +1204,18 @@ data model". Tokens map to the templates from Phase 2.
 
 ### Step 3.2: Serialize and /htmlify the proposal
 
-Write to:
+Pin a single timestamp so the file written here and the path referenced
+when invoking htmlify match exactly (do NOT call `$(date ...)` twice;
+the two calls would produce different timestamps when seconds tick):
+
+```bash
+TS=$(date +%Y%m%d-%H%M%S)
+PROPOSAL_PATH=~/.gstack/projects/"$SLUG"/design-proposal-"$TS".md
 ```
-~/.gstack/projects/$SLUG/design-proposal-$(date +%Y%m%d-%H%M%S).md
+
+Then write the proposal MD to `$PROPOSAL_PATH`:
+```
+~/.gstack/projects/$SLUG/design-proposal-$TS.md
 ```
 
 Structure the file as rich Markdown with:
@@ -1388,7 +1436,7 @@ If typecheck fails: fix the offending file (likely a missing `#if os()`
 guard for platform-specific API) and retry. Hard cap: 3 typecheck
 attempts. If still failing, STOP and report the diagnostic.
 
-### Step 6.4: Generate DESIGN.html via Skill tool
+### Step 6.4: Generate DESIGN.html via Skill tool (auto-copy to repo root)
 
 Invoke htmlify via the **Skill tool** (same pattern as Step 3.2; do
 NOT use a hardcoded bin path):
@@ -1400,9 +1448,26 @@ Skill(skill="superpowers-gstack:htmlify", args="<repo>/DESIGN.md")
 No --plan needed — v1 rendering is fine for the human-readable spec;
 no feedback panel needed for the final DESIGN.html.
 
-Output: `<repo>/.superpowers-html/DESIGN.html` (htmlify's default).
-Optionally also `cp` it to `<repo>/DESIGN.html` if the user wants a
-visual artifact at repo root (mention in summary; don't auto-copy).
+htmlify writes to `<repo>/.superpowers-html/DESIGN.html` by default,
+but `.superpowers-html/` is typically gitignored. The spec promises
+`DESIGN.html` lives next to `DESIGN.md` at repo root and ships
+committed. After htmlify completes, copy the file:
+
+```bash
+mkdir -p .superpowers-html  # ensure htmlify output dir exists
+if [ -f .superpowers-html/DESIGN.html ]; then
+  cp .superpowers-html/DESIGN.html DESIGN.html
+  echo "Copied DESIGN.html to repo root for commit"
+else
+  echo "WARN: htmlify did not produce expected output at .superpowers-html/DESIGN.html" >&2
+  # Don't fail the skill — DESIGN.md is the source of truth; HTML is auxiliary.
+fi
+```
+
+The repo-root `DESIGN.html` is what Step 6.8 commits. The
+`.superpowers-html/DESIGN.html` is the htmlify-managed copy (refreshed
+on every re-htmlify; remains gitignored). Both exist intentionally;
+they have different lifecycles.
 
 ### Step 6.5: Chain to macos-native-review (on DESIGN.md)
 
@@ -1461,9 +1526,27 @@ If over budget:
   Choose: (A) ship anyway, (B) override budget to actual numbers,
   (C) refine manually now."
 
-### Step 6.8: Commit
+### Step 6.8: Commit (including .gstack/track marker)
+
+The spec requires `.gstack/track` committed to the repo (project-level
+decision, not per-developer). If the project's `.gitignore` already
+excludes `.gstack/`, we need to force-add the marker AND record an
+exception in `.gitignore` so future runs don't silently drop it.
 
 ```bash
+# Ensure .gstack/track is committable
+if git check-ignore -q .gstack/track 2>/dev/null; then
+  # Project ignores .gstack/ — add an exception for the marker
+  if ! grep -q '^!\.gstack/track$' .gitignore 2>/dev/null; then
+    echo '!.gstack/track' >> .gitignore
+    echo "Added exception for .gstack/track to .gitignore"
+  fi
+  git add .gitignore
+  git add -f .gstack/track  # force-add since ignore rule still matches dir-walk
+else
+  git add .gstack/track
+fi
+
 git add DESIGN.md DESIGN.html DesignSystem/
 git commit -m "feat: scaffold design system via swiftui-design-consultation
 
