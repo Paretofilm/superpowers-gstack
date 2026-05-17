@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.3.1] - 2026-05-17
+
+### Changed
+- `swiftui-design-consultation` Step 6.6 now explicitly invokes **all
+  three** swiftui-rag review tools in parallel
+  (`review_macos_hig` + `review_accessibility` + `review_liquid_glass`)
+  with a deduplication rule on `(rule_id, line)`. Previously the trio
+  was mentioned but described loosely ("Same for ..."), which led the
+  consumer to under-invoke and miss accessibility-only findings.
+- Step 6.7 budget aggregation now explicitly counts findings from all
+  three tools, deduplicated.
+- Schema table now lists `question` (not `query`) as the
+  `search_swiftui_corpus` primary parameter — verified against live
+  swiftui-rag v1.4.0 / corpus v1.3.3 MCP responses.
+
+### Documented
+- **Known limitation** in Step 6.6: `C1-glass-on-content` does not
+  always fire when `.glassEffect` is separated from its shape primitive
+  by chained modifiers. Pattern that fires: `Circle().glassEffect()`.
+  Pattern that does NOT fire: `Circle().fill(...).frame(...).glassEffect()`.
+  Verified by live stress-test in this session. Track upstream fix at
+  `swiftui-rag-pipeline` issue tracker.
+
+### Why
+- Stress-test on swiftui-rag v1.4.0 revealed the three review tools are
+  complementary, not overlapping — each owns its own ruleset
+  (`review_accessibility` is the only one that fires A1/A3, etc).
+  Running only `review_macos_hig` misses all accessibility findings.
+
 ## [2.3.0] - 2026-05-17
 
 ### Added

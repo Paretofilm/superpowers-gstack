@@ -177,7 +177,7 @@ references). Read them and confirm:
 |---|---|---|
 | `mcp__swiftui-rag__index_project` | `path` (string) | Look for `repo_path`, `project_path`, `dir`, etc. |
 | `mcp__swiftui-rag__search_project` | `query` (string) | Look for `q`, `text`, `pattern` |
-| `mcp__swiftui-rag__search_swiftui_corpus` | `query` (string) | Look for `q`, `text` |
+| `mcp__swiftui-rag__search_swiftui_corpus` | `question` (string) — verified live | Optional: `platform`, `cluster_tag`, `hyde_doc`, `top_k` |
 | `mcp__swiftui-rag__swift_typecheck` | `swift_code` (string), `target_versions` (array of strings) | Verify both names |
 | `mcp__swiftui-rag__review_macos_hig` | `swift_code` (string) | Verify name |
 | `mcp__swiftui-rag__review_liquid_glass` | `swift_code` (string) | Verify name |
@@ -584,21 +584,46 @@ SIGNIFICANT, POLISH). These feed into the budget check at Step 6.7.
 
 If the project's `$TRACK` is `ios` only, macos-native-review's Phase 0
 will return `N/A — iOS-only project`. In that case, skip its findings
-in the aggregation (only review_macos_hig findings from Step 6.6 count
-toward the budget). This is expected behavior — macos-native-review is
-macOS-specific by design.
+in the aggregation (only the three review-* tool findings from Step
+6.6 count toward the budget). This is expected behavior —
+macos-native-review is macOS-specific by design.
 
-### Step 6.6: Chain to review_macos_hig (on each .swift file)
+### Step 6.6: Chain to review-* tools (on each .swift file)
+
+The three review-* tools are **complementary, not overlapping**.
+Each has its own ruleset; running all three is the only way to get
+complete coverage:
+
+| Tool | What it lints | Rules |
+|------|---------------|-------|
+| `mcp__swiftui-rag__review_macos_hig` | Full macOS HIG ruleset | C1, C2, S1–S9 (11 rules) |
+| `mcp__swiftui-rag__review_accessibility` | Accessibility-only subset | A1, A2, A3 (3 rules) |
+| `mcp__swiftui-rag__review_liquid_glass` | Liquid Glass-only subset of HIG | C1, S7, S8 (subset) |
 
 For each `.swift` file under `DesignSystem/Sources/DesignSystem/`,
-call `mcp__swiftui-rag__review_macos_hig` with its content. Aggregate
-findings counts. Same for `mcp__swiftui-rag__review_liquid_glass` and
-`mcp__swiftui-rag__review_accessibility`.
+**invoke all three tools in parallel** (they are independent and
+read-only). Each call passes the same `swift_code` argument.
+
+Aggregate findings across all three tools by severity, **deduplicating
+by `(rule_id, line)`** — `review_liquid_glass` returns a subset of
+HIG findings, so the same `S7-material-on-content` finding can appear
+in both its output and `review_macos_hig`'s. Count it once.
+
+**Known limitation (as of swiftui-rag v1.4.0 / corpus v1.3.3):** the
+`C1-glass-on-content` rule does not always fire when the `.glassEffect`
+modifier is separated from its shape primitive by other method calls.
+Pattern that DOES fire: `Circle().glassEffect()`. Pattern that has been
+observed NOT to fire: `Circle().fill(...).frame(...).glassEffect()`.
+If your generated code uses shape-then-modifier-then-glassEffect chains
+on content layers, manually verify against Materials HIG. Track
+upstream fix at `swiftui-rag-pipeline` issue tracker.
 
 ### Step 6.7: Budget check + iteration
 
-Aggregate findings:
-- CRITICAL count (from all reviews combined)
+Aggregate findings from **all three review-* tools** combined
+(`review_macos_hig` + `review_accessibility` + `review_liquid_glass`),
+deduplicated by `(rule_id, line)`, plus macos-native-review verdict:
+- CRITICAL count
 - SIGNIFICANT count
 - POLISH count
 
