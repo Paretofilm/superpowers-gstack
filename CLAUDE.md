@@ -97,6 +97,8 @@ Key routing rules:
 - Update docs after shipping → invoke document-release
 - Weekly retro → invoke retro
 - Design system, brand → invoke design-consultation
+- Declare SwiftUI project track (iOS/macOS/both) → invoke /superpowers-gstack:swiftui-track
+- Design system for SwiftUI projects (DESIGN.md + Swift Package) → invoke /superpowers-gstack:swiftui-design-consultation
 - Visual audit, design polish → invoke design-review
 - Architecture review → invoke plan-eng-review
 - End of day, switch project, save progress → invoke context-save
