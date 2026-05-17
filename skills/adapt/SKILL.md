@@ -164,6 +164,8 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | `/benchmark` | Projects with performance monitoring needs |
 | `/benchmark-models` | Projects comparing AI model performance |
 | `/codex` | Projects needing second opinions or adversarial code review |
+| `/superpowers-gstack:swiftui-track` | Native SwiftUI projects — declares iOS/macOS/both via `.gstack/track`; required upstream of swiftui-design-consultation |
+| `/superpowers-gstack:swiftui-design-consultation` | Native SwiftUI projects — produces DESIGN.md + Swift Package starter; equivalent to /design-consultation for web |
 
 ### Step 4: Identify gaps and plan changes
 
@@ -219,6 +221,41 @@ Apply the changes identified in Step 4. Follow these rules strictly:
   - Insert this as a `### Model Routing` subsection of `## Skill routing`, placed after `### Rules` and before `### Session Continuity`
   - **Fallbacks:** If `model-routing.md` is missing (older cached plugin), warn the user and skip the section entirely. If the user picked an unlisted harness ("Other": Cursor, opencode, etc.), emit only the Claude Code column with a note that harness-native model selection should be used instead. If the harness answer was empty/skipped, default to Claude Code column only.
   - If the user opts out, skip this section entirely and note the choice in the final report
+**Preserve existing Track-aware routing.** Before appending the
+Track-aware routing section, check if the project's CLAUDE.md
+already contains `## Track-aware routing (dual-track)`. If yes,
+skip the append (do not duplicate). If no, append the full section.
+This makes the skill idempotent — re-running adapt does not pollute
+the file.
+
+The Track-aware routing block to append (verbatim) when not already present:
+
+```markdown
+## Track-aware routing (dual-track)
+
+This project follows superpowers-gstack's dual-track convention.
+Track is declared in `.gstack/track` (`ios` | `macos` | `both`).
+Missing marker = `web` (gstack default).
+
+### When user starts a new product idea
+
+After product context is clear in /office-hours or brainstorming, check
+`.gstack/track`. If missing:
+- Native signals (SwiftUI, iOS, iPadOS, macOS app, App Store) → invoke
+  `/superpowers-gstack:swiftui-track`, then continue
+- Web signals (Next.js, React, web app, dashboard, landing page) → do
+  nothing; web is the default
+- Ambiguous → ask the user once before continuing
+
+### When user invokes /design-consultation (no namespace)
+
+Read `.gstack/track`:
+- `ios` / `macos` / `both` → invoke `/superpowers-gstack:swiftui-design-consultation`
+- Absent or `web` → invoke `/design-consultation` (gstack)
+
+User can always bypass by typing the namespaced version directly.
+```
+
 - If no `## Session Continuity` section exists in CLAUDE.md: ADD the following block. If it already exists, REPLACE it with the current version:
   ```
   ## Session Continuity
