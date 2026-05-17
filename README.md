@@ -38,12 +38,20 @@ They never overlap. GStack focuses on *what roles review the work*. Superpowers 
   - `/quality-review` — Perceived-quality gate run after a PRD, spec, or implementation plan, before implementation begins. Hunts pitfalls that make a product feel cheap or broken even when it technically works (silent failures, missing loading/empty states, error recovery, state drift, animations, AI output, sudo flows). Complementary to `/pitfall-verification`: that one asks "will this work?", this one asks "will this feel good?".
   - `/macos-native-review` — Apple-native conformance gate for macOS PRDs, specs, and plans. 12 HIG-citation-grounded categories: vocabulary, control choices, keyboard shortcuts, semantic colors, sheets/popovers/alerts, animation timing, privileged operations, accessibility, menu bar, app lifecycle, dock behavior, App menu. Every finding cites a `developer.apple.com` HIG page via WebFetch. Phase 0 self-check rejects non-macOS artifacts. Complementary to `/pitfall-verification` ("will this work?") and `/quality-review` ("will this feel good?") — this asks "is this Apple-native?".
   - `/macos-e2e-scaffold` — One-shot XCUITest scaffolding for macOS SwiftUI projects. Walks the Scene tree deterministically, generates ranked TIER-1/2/3 test stubs (Smoke + Happy-path + Error-recovery always; Modal/Menubar/Multi-window/Toolbar conditional on pattern detection). Suggests accessibility identifiers (`<ViewName>_<ControlType>_<Purpose>`) with batch confirmation, emits a Claude-readable xcresult runner script. Three project-type branches (xcodegen / SPM / plain .xcodeproj). Manual invocation only — modifies project files. Phase 0 self-check refuses non-Swift, non-SwiftUI, non-macOS, or already-scaffolded projects. The only skill in the plugin that *creates* test infrastructure rather than reviewing artefacts.
-  - `/superpowers-gstack:swiftui-track` — declare a SwiftUI project's
-    platform target (iOS / macOS / both); writes `.gstack/track`
+  - `/superpowers-gstack:office-hours-track-aware` (v2.3.0+) — wraps
+    upstream `/office-hours` for dual-track projects. Runs the gstack
+    brainstorm, then infers track from the idea (native vs web signals),
+    asks the platform question (iOS/macOS/both) inline only if needed,
+    relocates the design doc into the project's `docs/` directory, runs
+    `/htmlify --open` so the rich HTML opens BEFORE the approval gate,
+    and only then asks Approve / Revise / Restart. Suggests
+    `/superpowers-gstack:swiftui-design-consultation` next for native
+    tracks. **Intercepts `/office-hours`** via CLAUDE.md routing rules.
   - `/superpowers-gstack:swiftui-design-consultation` — Apple-canon design
     system consultation for SwiftUI projects; produces `DESIGN.md` + a
     Swift Package starter; chains into macos-native-review with HIG
-    conformance budget
+    conformance budget. Inlines the platform question (iOS/macOS/both) on
+    first run if `.gstack/track` is missing (v2.3.0+).
 - **Per-skill model routing** (v1.11.0+) — `/setup-routing` and `/adapt` emit a `### Model Routing` table inside the generated CLAUDE.md. Each row maps a skill (or phase within a multi-phase skill) to its recommended model per harness: **Claude Code** (`opus`/`sonnet`/`haiku`), **Pi (local-only)** (Qwen3.6 model IDs), **Pi (hybrid)** (local default + cloud fallback). Swift/SwiftUI implementation phases route to `qwen3.6-27b-optiQ-SFT` when running in Pi. See `skills/setup-routing/model-routing.md` for the canonical table. Advisory v0.1 — orchestrator-Claude consults it when dispatching subagents.
 - **[Appendix](appendix-reference.md)** — Skill internals, troubleshooting, and anti-patterns
 - **Automated update pipeline** — GitHub Actions keeps the plugin in sync when upstream frameworks change

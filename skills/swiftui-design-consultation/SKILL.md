@@ -11,6 +11,9 @@ description: |
   macos-native-review for HIG conformance gating.
   Use when starting a new SwiftUI project, when an existing SwiftUI
   project lacks a coherent design system, or when refreshing one.
+  Phase 0 inlines the platform-question if .gstack/track is missing
+  (since v2.3.0 — previously delegated to standalone swiftui-track
+  skill, which was removed).
 allowed-tools:
   - Bash
   - Read
@@ -30,7 +33,7 @@ allowed-tools:
   - mcp__swiftui-rag__review_liquid_glass
   - mcp__swiftui-rag__review_accessibility
 upstream_skills:
-  - swiftui-track
+  - office-hours-track-aware (typical entry — sets marker before this skill runs)
 chains_to:
   - macos-native-review
   - htmlify
@@ -79,7 +82,7 @@ echo "SLUG: $SLUG"
 (`~/.gstack/projects/$SLUG/design-proposal-{ts}.md`,
 `~/.gstack/projects/$SLUG/swiftui-consultation-state.json`, etc.).
 
-### Step 0.1: Track self-bootstrap
+### Step 0.1: Track self-bootstrap (inline platform-question)
 
 ```bash
 mkdir -p .gstack
@@ -90,11 +93,46 @@ else
 fi
 ```
 
-If output is `TRACK_MISSING`, invoke `/superpowers-gstack:swiftui-track`
-via the Skill tool. That skill asks the iOS/macOS/both question and
-writes `.gstack/track`. Wait for it to complete before continuing.
+If output is `TRACK_MISSING`, ask the platform question inline. Since
+v2.3.0 there is no separate `swiftui-track` skill — the platform
+question lives here (when invoked directly) and in
+`/superpowers-gstack:office-hours-track-aware` Phase 3 (when reached
+via the standard office-hours flow).
 
-After self-bootstrap, re-read the marker:
+AskUserQuestion brief:
+
+```
+D0 — Which platform target does this project ship to?
+Project/branch/task: declaring SwiftUI track for direct invocation
+ELI10: I need to know iPhone/iPad, Mac, or both — so generated
+  Package.swift and design defaults match. The marker is set once
+  per project and read by all future swiftui-* skills.
+Stakes if we pick wrong: Package.swift declares wrong platforms;
+  easy to re-run later. No permanent damage.
+Recommendation: iOS only (most common for new projects)
+Note: options differ in kind, not coverage — no completeness score.
+Pros / cons:
+A) iOS only (recommended)
+  ✅ Most common case; iPadOS works via iOS target automatically
+  ✅ Smallest Package.swift surface
+  ❌ No macOS companion — add later by re-running
+B) macOS only
+  ✅ Menu-bar tools, productivity apps, system utilities
+  ✅ Liquid Glass strategy tuned for macOS chrome
+  ❌ Narrows reach — no phone/tablet
+C) Both iOS + macOS
+  ✅ Cross-platform Swift Package; max reach
+  ❌ More #if os() surfaces; longer compile times
+Net: pick where you'll first ship.
+```
+
+Write the chosen value to `.gstack/track`:
+
+```bash
+echo "$CHOICE" > .gstack/track
+```
+
+After write, re-read:
 
 ```bash
 TRACK=$(cat .gstack/track | tr -d '[:space:]')
@@ -102,8 +140,8 @@ echo "TRACK: $TRACK"
 ```
 
 `$TRACK` must be one of `ios | macos | both` to continue. If it is
-anything else, STOP and ask the user to run `/superpowers-gstack:swiftui-track`
-manually.
+anything else (corrupted marker, user typed invalid value), STOP and
+report `BLOCKED — invalid .gstack/track value`.
 
 ### Step 0.2: Detect project mode
 

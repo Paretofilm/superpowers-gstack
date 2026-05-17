@@ -133,7 +133,19 @@ versions of the rule.
 versioning scheme is small but needs to land before any rule change
 v1.1+, not in v2.2.0.
 
-### S7. office-hours "next step" claim not implemented
+### S7. office-hours "next step" claim not implemented — **FIXED in v2.3.0**
+
+**Status: addressed.** v2.3.0 ships
+`/superpowers-gstack:office-hours-track-aware` (option A from below)
+which wraps upstream office-hours, runs the brainstorm, then handles
+track inference + next-step suggestion deterministically. The
+swiftui-track skill (v2.2.0 only) is removed; its job is now folded
+into the wrapper.
+
+Original codex finding preserved below for history.
+
+---
+
 
 **What codex flagged.** Spec lines 514-515 and 628 say office-hours
 completion now points the user toward swiftui-design-consultation

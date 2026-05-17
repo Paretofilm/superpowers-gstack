@@ -1,5 +1,60 @@
 # Changelog
 
+## [2.3.0] - 2026-05-17
+
+### Added
+- **`/superpowers-gstack:office-hours-track-aware`** — wrapper around
+  upstream `/office-hours` that fixes three UX bugs observed in live
+  v2.2.0 usage:
+  1. Approval gate ran BEFORE htmlify rendered — user had to approve
+     a design they hadn't seen rendered. Now htmlify runs first
+     (auto-opens in Safari) and the approval gate comes after.
+  2. Plain v1 HTML was rendered instead of the rich v2 plan-driven
+     layout. Wrapper now inspects design-doc content for visual
+     opportunities (Approaches Considered, architecture diagrams,
+     pullquotes, metrics, callouts) and generates a v2 plan JSON
+     before invoking `/htmlify --plan ... --open`.
+  3. Track inference happened too late (or not at all). Wrapper now
+     classifies the brainstormed idea as native vs web and asks the
+     iOS/macOS/both platform question inline only when needed.
+- Wrapper also relocates design docs from gstack's default location
+  (`~/super-me/brain/ideas/seeds/...` etc.) into the project's
+  `docs/superpowers/specs/` directory so they live alongside other
+  project artifacts.
+
+### Changed
+- `swiftui-design-consultation` Step 0.1 now asks the platform question
+  inline (AskUserQuestion D0 with iOS / macOS / both options) when
+  `.gstack/track` is missing — previously delegated to the standalone
+  `swiftui-track` skill. One fewer hop, same result.
+- `setup-routing` and `adapt` skill tables: replaced
+  `/superpowers-gstack:swiftui-track` row with
+  `/superpowers-gstack:office-hours-track-aware`. Updated track-aware
+  routing block in generated CLAUDE.md to intercept `/office-hours`
+  (not `swiftui-track`) for dual-track projects.
+- Repo `CLAUDE.md` skill routing: `office-hours` routes through the
+  wrapper; dropped the swiftui-track row.
+- `README.md` Skills section: replaced swiftui-track entry with
+  office-hours-track-aware entry.
+
+### Removed
+- **`/superpowers-gstack:swiftui-track`** (v2.2.0 only) — the
+  standalone marker-writing skill is gone. Its job is now folded into
+  the wrapper (early-stage inference at brainstorm time) and into
+  `swiftui-design-consultation` Step 0.1 (late-stage inline question
+  if user jumps straight into design without brainstorming).
+
+### Compatibility
+- Backwards compatible. Projects with existing `.gstack/track` markers
+  continue working unchanged. Projects without the wrapper installed
+  fall back to plain `/office-hours` (gstack), as before.
+- No upstream gstack or superpowers code touched.
+
+### Review pipeline
+- Inline pitfall-verification on v2.3.0 changes (single round)
+- Real-world live-fire test: caught all three UX bugs from sing-replay
+  session observation; wrapper design verified against that flow
+
 ## [2.2.0] - 2026-05-17
 
 ### Added

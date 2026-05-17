@@ -164,8 +164,8 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | `/benchmark` | Projects with performance monitoring needs |
 | `/benchmark-models` | Projects comparing AI model performance |
 | `/codex` | Projects needing second opinions or adversarial code review |
-| `/superpowers-gstack:swiftui-track` | Native SwiftUI projects — declares iOS/macOS/both via `.gstack/track`; required upstream of swiftui-design-consultation |
-| `/superpowers-gstack:swiftui-design-consultation` | Native SwiftUI projects — produces DESIGN.md + Swift Package starter; equivalent to /design-consultation for web |
+| `/superpowers-gstack:office-hours-track-aware` | All new-project brainstorming — wraps `/office-hours` with track inference, inline platform question, design-doc relocation, htmlify --open, and approve-before-render gate. **Intercepts `/office-hours`** — see routing-intercept rules below. |
+| `/superpowers-gstack:swiftui-design-consultation` | Native SwiftUI projects — produces DESIGN.md + Swift Package starter; equivalent to /design-consultation for web. Inlines the platform question (iOS/macOS/both) on first run if `.gstack/track` is missing. |
 
 ### Step 4: Identify gaps and plan changes
 
@@ -237,15 +237,23 @@ This project follows superpowers-gstack's dual-track convention.
 Track is declared in `.gstack/track` (`ios` | `macos` | `both`).
 Missing marker = `web` (gstack default).
 
-### When user starts a new product idea
+### When user invokes /office-hours (no namespace)
 
-After product context is clear in /office-hours or brainstorming, check
-`.gstack/track`. If missing:
-- Native signals (SwiftUI, iOS, iPadOS, macOS app, App Store) → invoke
-  `/superpowers-gstack:swiftui-track`, then continue
-- Web signals (Next.js, React, web app, dashboard, landing page) → do
-  nothing; web is the default
-- Ambiguous → ask the user once before continuing
+Intercept and invoke `/superpowers-gstack:office-hours-track-aware`
+instead. The wrapper runs upstream `/office-hours` for the brainstorm,
+then handles:
+- Track inference from the brainstormed idea (native vs web signals)
+- Inline platform question (iOS/macOS/both) if native or ambiguous, only
+  when `.gstack/track` is absent
+- Design-doc relocation from gstack defaults into repo `docs/`
+- `/htmlify --open` rendering BEFORE the approval gate (so the user can
+  read the rich HTML before deciding)
+- Approve / Revise / Restart gate after they've seen the rendered HTML
+- Suggests `/superpowers-gstack:swiftui-design-consultation` next for
+  native tracks
+
+User can bypass by typing `/office-hours` (gstack) directly — but for
+all dual-track projects, prefer the wrapper.
 
 ### When user invokes /design-consultation (no namespace)
 
