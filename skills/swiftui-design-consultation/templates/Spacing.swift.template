@@ -1,0 +1,11 @@
+// Sources/DesignSystem/Spacing.swift
+
+import CoreGraphics
+
+public enum AppSpacing {
+{{SPACING_CONSTANTS}}
+}
+
+public enum AppRadius {
+{{RADIUS_CONSTANTS}}
+}

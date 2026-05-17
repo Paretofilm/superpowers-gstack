@@ -1,0 +1,7 @@
+// Sources/DesignSystem/Typography.swift
+
+import SwiftUI
+
+public extension Font {
+{{TYPE_ROLES}}
+}

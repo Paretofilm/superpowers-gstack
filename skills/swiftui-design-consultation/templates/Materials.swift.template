@@ -1,0 +1,15 @@
+// Sources/DesignSystem/Materials.swift
+//
+// Liquid Glass discipline encoded as API: only chrome variants are
+// public. Content-layer material has NO public binding — views cannot
+// accidentally apply it because the type isn't exported. Enforced
+// further by HIGBudgetTests grepping for .ultraThinMaterial on
+// non-chrome views in user code.
+
+import SwiftUI
+
+public enum AppMaterial {
+    public static let chrome      = Material.thinMaterial      // toolbars, sidebars
+    public static let chromeDense = Material.regularMaterial   // sheets, popovers
+    // Intentionally no `content` — content layer must not carry material.
+}

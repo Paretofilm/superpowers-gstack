@@ -1,0 +1,20 @@
+// Tests/DesignSystemTests/PlatformsTests.swift
+//
+// Asserts Package.swift platforms match {{DECLARED_TRACK}}. Fails
+// at CI time if Package.swift is hand-edited away from the
+// generated value.
+
+import XCTest
+
+final class PlatformsTests: XCTestCase {
+    func testPackageSwiftDeclaresExpectedPlatforms() throws {
+        let packageURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()       // Tests/DesignSystemTests
+            .deletingLastPathComponent()       // Tests
+            .deletingLastPathComponent()       // package root
+            .appendingPathComponent("Package.swift")
+        let source = try String(contentsOf: packageURL, encoding: .utf8)
+
+{{PLATFORM_ASSERTIONS}}
+    }
+}

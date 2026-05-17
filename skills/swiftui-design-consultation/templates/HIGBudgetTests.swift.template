@@ -1,0 +1,56 @@
+// Tests/DesignSystemTests/HIGBudgetTests.swift
+//
+// Budget-enforcer tests. They scan the DesignSystem package's own
+// source files for forbidden patterns and fail at CI time if any
+// commit reintroduces them. Pattern-matching at file level — no
+// snapshot library, no external deps.
+
+import XCTest
+
+final class HIGBudgetTests: XCTestCase {
+    private var sourceFiles: [URL] {
+        let packageDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()       // Tests/DesignSystemTests
+            .deletingLastPathComponent()       // Tests
+            .deletingLastPathComponent()       // package root
+            .appendingPathComponent("Sources/DesignSystem")
+        return (try? FileManager.default.contentsOfDirectory(
+            at: packageDir,
+            includingPropertiesForKeys: nil
+        )) ?? []
+    }
+
+    private func read(_ url: URL) -> String {
+        (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+    }
+
+    func testNoHardcodedRGB() throws {
+        for url in sourceFiles where url.pathExtension == "swift" {
+            let source = read(url)
+            XCTAssertFalse(
+                source.contains("Color(red:"),
+                "Hardcoded RGB color found in \(url.lastPathComponent). Use semantic colors or asset-catalog brand entries."
+            )
+        }
+    }
+
+    func testNoEaseInOut() throws {
+        for url in sourceFiles where url.pathExtension == "swift" {
+            let source = read(url)
+            XCTAssertFalse(
+                source.contains(".easeInOut"),
+                "Generic .easeInOut found in \(url.lastPathComponent). Use AppPrimary, AppSnappy, or AppSmooth from Motion.swift."
+            )
+        }
+    }
+
+    func testNoUltraThinMaterialOutsideMaterialsFile() throws {
+        for url in sourceFiles where url.pathExtension == "swift" && url.lastPathComponent != "Materials.swift" {
+            let source = read(url)
+            XCTAssertFalse(
+                source.contains(".ultraThinMaterial"),
+                ".ultraThinMaterial found in \(url.lastPathComponent) (only allowed inside Materials.swift via AppMaterial)."
+            )
+        }
+    }
+}

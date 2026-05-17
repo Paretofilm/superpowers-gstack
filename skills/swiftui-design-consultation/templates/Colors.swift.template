@@ -1,0 +1,17 @@
+// Sources/DesignSystem/Colors.swift
+//
+// Semantic-first color system. Direct hardcoded RGB is forbidden
+// (enforced by DesignSystemTests/HIGBudgetTests.swift). Brand colors
+// live in the asset catalog with light/dark/highContrast variants.
+
+import SwiftUI
+
+public extension Color {
+    // MARK: - Semantic (always prefer these in views)
+
+{{SEMANTIC_COLORS}}
+
+    // MARK: - Brand (asset-catalog entries with light/dark/highContrast)
+
+{{BRAND_COLORS}}
+}

@@ -1,0 +1,9 @@
+// Sources/DesignSystem/Motion.swift
+//
+// Named easings only. `.easeInOut` is forbidden by HIGBudgetTests.
+
+import SwiftUI
+
+public extension Animation {
+{{MOTION_PRESETS}}
+}
