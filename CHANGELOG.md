@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.9.0] - 2026-05-18
+
+### Added
+- **Companion skills (discovery) section** in generated CLAUDE.md for SwiftUI projects (track ∈ {ios, macos, both}). Surfaces four third-party expert skills by Antoine van der Lee: `swiftui-expert-skill`, `swift-concurrency-expert-skill`, `core-data-expert-skill`, `swift-testing-expert-skill`. Lists what each does + the install commands.
+- **Workflow fit table** clarifies the complementary stages: this plugin's review skills (`macos-native-review`, `ios-native-review`) operate at spec/plan time (pre-code); Antoine's skills operate at code review time (post-code). Same Apple-platform project, different lifecycle stages, zero overlap.
+- **Curation policy stated:** widely-installed, actively-maintained skills from recognized ecosystem experts. PRs welcome to add entries.
+
+### Changed
+- **`setup-routing` Step 6** emits the new section under `## Skill routing` as `### Companion skills (discovery — not routing)`, conditional on native track.
+- **`adapt` Step 5** inserts or upgrades the section using the same four-case marker logic (`<!-- gstack-companion-skills-v1 -->`) as Track-aware routing and Xcode tools.
+
+### Why
+Closes issue #11 ("Companion skills discovery in setup-routing/adapt"). The plugin's evaluation tables list only Superpowers + GStack skills — third-party expert skills are invisible to a user setting up or adapting a project. By the time they reach code-review stage on a SwiftUI app, they may have forgotten that Antoine's skills exist. v2.9.0 makes the discovery durable: every SwiftUI project's CLAUDE.md includes the table; every agent that reads CLAUDE.md on session start sees it.
+
+**Architectural boundary preserved.** This is discovery, NOT routing. The plugin does not auto-invoke the companion skills, does not depend on them being installed, does not write routing rules that assume their presence. Users can run the workflow without them; they just miss the optional code-review pass. The plugin doesn't ship, version, or guarantee the companion skills — that's their authors' job.
+
+### Backwards compatibility
+**Fully additive.** No skill behavior changes. The section emits into newly-generated CLAUDE.md for native projects and is inserted into existing native projects via `/superpowers-gstack:adapt`. Web projects unaffected (no companion entries yet for non-Apple ecosystems — separate follow-up).
+
+### Notes for users
+- **Re-run `/superpowers-gstack:adapt`** on existing native projects to add the Companion skills section.
+- **Adding more companion skills** (other ecosystems, other authors): edit the table in `skills/setup-routing/SKILL.md` (template) and `skills/adapt/SKILL.md` (insert block) together. Bump marker only if the table semantics change (e.g. new columns); adding rows is cosmetic.
+- **Non-Apple ecosystems** (React/Next.js, Python data, Rails, etc.) intentionally deferred to a follow-up issue. Start with what we know — the Apple skills are battle-tested in this workflow.
+
 ## [2.8.1] - 2026-05-18
 
 ### Fixed
