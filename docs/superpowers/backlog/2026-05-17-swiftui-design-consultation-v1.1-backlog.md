@@ -206,7 +206,15 @@ for v1.1, kept lightweight.
 
 ## MINOR findings (acceptable, fix when convenient)
 
-### M1. contrast-check.sh "Exit: 0 always" comment is inconsistent
+### M1. ✅ FIXED in v2.8.1 — contrast-check.sh "Exit: 0 always" comment is inconsistent
+
+**Status: FIXED in v2.8.1.** Comment in plan file line 738 updated to match reality: `Exit: 0 on success; nonzero on usage error or invalid hex`. Actual `contrast-check.sh` script already had the correct docstring; only the plan file was stale.
+
+Original codex finding preserved below for history.
+
+---
+
+
 
 Comment at plan line 738 says exit is always 0; actual code at lines
 747-760 exits nonzero on usage error or invalid hex. Just update the
@@ -222,7 +230,15 @@ this by reading current git state before committing. Real fix would
 require dynamic commit-message generation based on staged diff — out
 of scope.
 
-### M3. "Phase 2/3 parallelize" handoff overstated
+### M3. ✅ FIXED in v2.8.1 — "Phase 2/3 parallelize" handoff overstated
+
+**Status: FIXED in v2.8.1.** Plan intro clarified: "Phase 2 templates and Phase 3 SKILL.md *writing* can parallelize once Phase 1 lands — but Phase 3 *execution* still requires Phase 2 templates to exist, since the skill references template paths."
+
+Original codex finding preserved below for history.
+
+---
+
+
 
 Plan's intro says Phase 2 (templates) and Phase 3 (SKILL.md) can
 parallelize after Phase 1 lands. True for DOCUMENTATION authoring;

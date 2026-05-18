@@ -735,7 +735,8 @@ mkdir -p /Users/kjetilge/Developer/superpowers-gstack/skills/swiftui-design-cons
 #
 # Usage: contrast-check.sh <fg-hex> <bg-hex>
 # Output: JSON to stdout with ratio + pass flags for AA-normal and AA-large.
-# Exit: 0 always (caller reads JSON to decide).
+# Exit: 0 on success; nonzero on usage error or invalid hex (caller should
+# check exit code and treat nonzero as "skip contrast check, warn user").
 #
 # Implements sRGB → linear → relative luminance → contrast ratio
 # per https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio. Uses `bc`
@@ -2281,7 +2282,7 @@ Plan complete and saved to `docs/superpowers/plans/2026-05-17-swiftui-design-con
 
 Two execution options:
 
-**1. Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration. Each subagent loads only its task context, not the full session. Good for this plan because the 7 phases are mostly independent (Phase 2 templates and Phase 3 SKILL.md writing can even parallelize once Phase 1 lands).
+**1. Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration. Each subagent loads only its task context, not the full session. Good for this plan because the 7 phases are mostly independent (Phase 2 templates and Phase 3 SKILL.md *writing* can parallelize once Phase 1 lands — but Phase 3 *execution* still requires Phase 2 templates to exist, since the skill references template paths).
 
 **2. Inline Execution** — Execute tasks in this session using `executing-plans`. Batch execution with checkpoints for your review. Better if you want to watch each step and steer in real time, but uses more of the current session's context.
 

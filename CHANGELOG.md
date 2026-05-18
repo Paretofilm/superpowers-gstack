@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.8.1] - 2026-05-18
+
+### Fixed
+- **M1** — `docs/superpowers/plans/2026-05-17-swiftui-design-consultation-implementation.md:738` had a stale docstring comment claiming `contrast-check.sh` exits 0 always. The actual script (and its in-repo docstring) correctly exits nonzero on usage/hex errors. Plan-file comment updated to match reality.
+- **M3** — Same plan file's intro overstated Phase 2/3 parallelism. Clarified: writing the two phases can parallelize after Phase 1, but Phase 3 *execution* still requires Phase 2 templates to exist on disk (the skill references template paths).
+
+### Notes
+- **M2** stays deferred** per backlog ("Commit steps not idempotent — Real fix would require dynamic commit-message generation based on staged diff — out of scope"). Documented in backlog as accepted-and-deferred.
+- Both M1 and M3 are documentation-only fixes in a historical plan artifact. No skill behavior changes.
+
 ## [2.8.0] - 2026-05-18
 
 ### Added
