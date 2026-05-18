@@ -291,15 +291,15 @@ User can always bypass by typing the namespaced version directly.
 
 **Insert or upgrade the Native Apple development tools section.** Only emit this section when `.gstack/track` exists and equals `ios`, `macos`, or `both` (skip entirely for web-only projects). Scan CLAUDE.md for the heading `^#{2,3} Native Apple development tools` and its version marker `<!-- gstack-xcode-tools-vN -->`. Apply the same four-case logic as Track-aware routing above:
 
-1. **Heading present + marker matches `v2`** → skip (idempotent).
-2. **Heading present + marker `v1`** (pre-v2.7.1 emitter assumed XcodeBuildMCP universally available, which is wrong — per-session MCP install) → REPLACE through next heading. Preserve original heading level. Auto-upgrade is what the marker pattern is for.
-3. **Heading present + marker absent** (pre-v2.7.0) → REPLACE the same way; one-time silent upgrade adds the v2 marker.
+1. **Heading present + marker matches `v3`** → skip (idempotent).
+2. **Heading present + marker `v1` or `v2`** (v1 assumed XcodeBuildMCP universally; v2 added CLI fallback but missed capabilities/signing/portal split) → REPLACE through next heading. Preserve original heading level. Auto-upgrade is what the marker pattern is for.
+3. **Heading present + marker absent** (pre-v2.7.0) → REPLACE the same way; one-time silent upgrade adds the v3 marker.
 4. **Heading absent** → APPEND the block below as H2 (or insert under `## Skill routing` as H3 to match the structure used by setup-routing).
 
 The Native Apple development tools block to insert (verbatim, when track ∈ {ios, macos, both}):
 
 ```markdown
-## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v2 -->
+## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v3 -->
 
 Xcode-related operations MUST be performed by the agent — NEVER delegated to the user. The user should never need to open Xcode to verify your work. Prefer MCP tools when available; fall back to CLI when not.
 
@@ -329,6 +329,46 @@ Avoid hand-editing the auto-generated XML in `.xcodeproj/project.pbxproj`. Two d
 - **Tuist** — more powerful declarative project manager; heavier dependency. Use if XcodeGen isn't sufficient (multi-target, complex schemes, generated frameworks).
 
 For new SwiftUI projects under this plugin, default to XcodeGen unless the project explicitly requires Tuist.
+
+### Capabilities, signing, and provisioning
+
+Three surfaces, three different handlers:
+
+| Surface | What | Who handles it |
+|---|---|---|
+| `*.entitlements` file | Declares which capabilities (CloudKit, push, app groups, keychain sharing, etc.) the app uses | **Agent** — edit declaratively as XML |
+| `project.yml` (XcodeGen) or `*.xcodeproj` build settings | `DEVELOPMENT_TEAM`, code signing identity, target capabilities | **Agent** — edit declaratively |
+| Apple Developer Portal (developer.apple.com) | Registers container IDs (CloudKit), App IDs, provisioning profiles, push certificates | **User** — Apple ID login + 2FA required; agent cannot access |
+
+**CloudKit example workflow:**
+
+1. **Agent edits entitlements** to declare CloudKit + container:
+   ```xml
+   <key>com.apple.developer.icloud-services</key>
+   <array><string>CloudKit</string></array>
+   <key>com.apple.developer.icloud-container-identifiers</key>
+   <array><string>iCloud.com.example.appname</string></array>
+   ```
+2. **Agent ensures `DEVELOPMENT_TEAM` is set** (e.g. via `project.yml`):
+   ```yaml
+   settings:
+     base:
+       DEVELOPMENT_TEAM: WXNUGGYB2B
+   ```
+3. **Agent regenerates and builds:**
+   ```bash
+   xcodegen generate
+   xcodebuild build -scheme <name> -destination 'platform=iOS Simulator,name=iPhone 16'
+   ```
+4. **If signing fails** with "container not registered" / "no matching provisioning profile":
+   - STOP. Surface to user with exact portal steps, e.g.:
+     > "Container `iCloud.com.example.appname` is not registered in Apple Developer Portal. Go to https://developer.apple.com/account → Identifiers → click your App ID (com.example.appname) → enable the iCloud capability → link the container `iCloud.com.example.appname`. ~30 seconds. Ping me when done and I'll retry the build."
+5. **User does the portal-click** (~30 sec).
+6. **Agent retries `xcodebuild build`** — succeeds.
+
+**Why this split:** Apple Developer Portal requires Apple ID + 2FA, which no MCP/CLI tool automates stably. Xcode's Capabilities pane is just a frontend to the same portal — clicking there doesn't help an agent that has no portal session either. The declarative path (entitlements + project.yml) is the only path that works for BOTH the agent AND for git history (YAML is committable; portal state is implicit).
+
+For CI/CD with many apps or frequent provisioning operations, **Fastlane match** + spaceship is the standard automation surface. Out of scope for solo vibe-coder workflows; mention it only if the user scales beyond one or two apps.
 
 ### Anti-patterns (NEVER do these)
 

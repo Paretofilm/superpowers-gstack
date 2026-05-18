@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.7.2] - 2026-05-18
+
+### Added
+- **New subsection "Capabilities, signing, and provisioning"** in the Native Apple development tools block. Documents the three-surface split: `.entitlements` file (agent-handled, declarative XML), `project.yml` / build settings (agent-handled, declarative YAML), and Apple Developer Portal (user-handled, agent has no API access). Concrete CloudKit example walks through 6 steps from entitlements edit to portal-handoff to retry-build.
+- **Error-recovery handoff template** for signing failures: agent stops, surfaces the exact portal URL + steps the user needs (e.g. "Go to developer.apple.com → Identifiers → enable iCloud capability → link container `iCloud.com.example.appname`. ~30 seconds."), then retries build after user confirms portal-side setup is done.
+- **Fastlane match mention** as the standard CI/CD provisioning automation surface; explicitly out of scope for solo vibe-coder workflows but acknowledged for users who scale beyond a few apps.
+
+### Changed
+- **Marker bumped from `v2` to `v3`** — section semantics expand to cover the capabilities/signing/portal split (v1 = MCP-only tools, v2 = MCP + CLI fallback, v3 = + provisioning workflow).
+- **Adapt's case-2 logic updated** to handle both `v1` and `v2` legacy markers (both REPLACE through next heading), not just `v1`.
+
+### Why
+Real-world question from downstream session: "Will the agent now successfully check the CloudKit capability + select team WXNUGGYB2B?" Answer in v2.7.1 was implicit — the anti-patterns mention "click through the Signing & Capabilities pane → declare in entitlements + project.yml" but never explain the WHY (portal needs human 2FA) or the WORKFLOW (entitlements → project.yml → xcodegen → xcodebuild → handoff if portal-side missing → retry). v2.7.2 makes that workflow explicit so agents don't either (a) silently fail without a clear handoff or (b) attempt to click through UI that doesn't exist for them.
+
+### Backwards compatibility
+**Fully backwards compatible — auto-upgrade via marker pattern.** Projects with v1 or v2 markers get REPLACED through next heading on next `/superpowers-gstack:adapt` run. Surrounding CLAUDE.md untouched. Pre-v2.7.0 projects (no marker) treated as case 3 — same REPLACE behavior, adds v3 marker.
+
+### Notes for users
+- **Re-run `/superpowers-gstack:adapt`** on existing native projects to upgrade v1/v2 → v3. The capabilities/signing/portal split is now part of the agent's playbook for any SwiftUI project.
+- **The CloudKit example is generalizable.** Same pattern applies to push notifications, app groups, keychain sharing, sign-in-with-Apple — any capability that requires both an entitlements declaration AND portal-side registration.
+- **Bump the marker (`v3` → `v4`)** in future versions only when the routing or workflow semantics change again — not for cosmetic edits, adding a single tool, or rewording an existing example.
+
 ## [2.7.1] - 2026-05-18
 
 ### Changed
