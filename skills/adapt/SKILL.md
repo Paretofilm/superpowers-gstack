@@ -353,6 +353,57 @@ If >5 distinct commits in a row without testing the cumulative state, STOP and v
 If multiple commits land in a single session without ANY commit being tested, the session is committing "progress without verification" — break that cycle by running the project's test suite, or document explicitly why testing is deferred.
 ```
 
+**Insert or upgrade the Multi-lens review section.** This section applies to ALL projects (review hygiene is universal). Scan CLAUDE.md for heading `^#{2,3} Multi-lens review` and its version marker `<!-- gstack-multi-lens-review-vN -->`. Apply the same four-case logic:
+
+1. **Heading present + marker matches `v1`** → skip (idempotent).
+2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. (The Multi-lens review block has H4 subsections; "next heading" alone would stop at the first one and leave old prose behind.)
+3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the v1 marker.
+4. **Heading absent** → APPEND the block below as H2 (or insert under `## Skill routing` as H3 to match setup-routing's structure).
+
+The Multi-lens review block to insert (verbatim):
+
+```markdown
+## Multi-lens review (ship-worthy changes) <!-- gstack-multi-lens-review-v1 -->
+
+Substantive changes need three different review lenses — each catches what the others miss:
+
+1. **Self-check** (always, ~30 sec): placeholders, consistency, scope drift, ambiguity
+2. **Pitfall verification** (always, max 2 rounds): invoke `/superpowers-gstack:pitfall-verification` — catches domain-specific traps (security, idempotency, contracts, edge cases, LLM-output quirks)
+3. **Codex review** (ship-worthy changes only): invoke `/codex review` — catches drift across files and cross-section inconsistency that self-review systematically misses
+
+### What counts as "ship-worthy"
+
+**YES (run codex):**
+- Commits that bump version files (`plugin.json`, `package.json`, `pyproject.toml`, etc.)
+- Commits that produce CHANGELOG entries
+- `feat:` / `fix:` / `refactor:` commits that affect runtime behavior
+- Changes to public contracts (APIs, schemas, generated artifacts, file formats)
+
+**NO (skip codex — it's overkill):**
+- Pure docs/typo fixes
+- Comment-only changes
+- WIP commits (per Continuous Checkpoint mode)
+- Test-only additions where coverage is the only change
+
+### Why three lenses, not two
+
+Self-review catches "is this artifact good?" Pitfall catches "what typically breaks in this domain?" Codex catches "what's inconsistent across the codebase that author was too close to see?". Different lenses see different things; running fewer leaves a known gap.
+
+Dogfood evidence (2026-05-19 in superpowers-gstack repo): self-pitfall verification on v2.10.0 ran two rounds and caught 3 issues. After fixing those, `/codex review` caught a 4th — REPLACE-wording drift across 2 unrelated section blocks. Self-review missed it because the author was focused on the *new* section, not on cross-section consistency.
+
+### Cost
+
+- Self-check: free (~30 sec attention budget)
+- Pitfall verification: free (LLM thought)
+- Codex review: ~$0.05-0.20 per review + 30s-2min wall clock
+
+Acceptable for ship-worthy work. Skip codex explicitly for trivial changes; don't run it on every commit or you'll burn budget on diminishing returns.
+
+### Order matters
+
+Run lenses in order: self → pitfall → codex. Each pass fixes issues the previous one couldn't catch. Running codex *before* pitfall wastes its tokens on issues a simpler pass would have surfaced first.
+```
+
 **Preserve or upgrade existing Track-aware routing.** Before
 inserting the Track-aware routing section, scan the project's
 CLAUDE.md. Check two things independently: (a) does any heading

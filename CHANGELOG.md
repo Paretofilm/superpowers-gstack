@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.11.0] - 2026-05-19
+
+### Added
+- **`### Multi-lens review (ship-worthy changes)` section** (marker `<!-- gstack-multi-lens-review-v1 -->`) emitted into every generated CLAUDE.md — NOT conditional on track. Codifies the three-lens review pipeline (self-check → pitfall verification → codex review) as an explicit project-level workflow rule for ship-worthy commits.
+- **Explicit ship-worthy criteria** — YES list (version bumps, CHANGELOG entries, feat/fix/refactor commits, public-contract changes) and NO list (docs/typos, comments, WIP, test-only). Lets agents decide deterministically when codex review is justified vs overkill.
+- **Cost guidance** — codex ~$0.05-0.20 + 30s-2min per review. Frames the trigger as a cost/value tradeoff, not a hard mandate.
+- **Order rule** — self → pitfall → codex. Running codex first wastes tokens on issues simpler passes catch.
+
+### Changed
+- **`setup-routing` Step 6** emits the new section under `## Skill routing` as `### Multi-lens review`, placed between `### Git hygiene & commit cadence` and `### Track-aware routing` — natural order since it builds on the commit-trigger concept established by Git hygiene.
+- **`adapt` Step 5** inserts or upgrades the section using the same four-case marker logic as Autonomy, Git hygiene, Track-aware, Native Apple tools, and Companion skills. Universal (not track-gated).
+
+### Why
+Real-world dogfood (2026-05-19, this repo): self-pitfall verification on v2.10.0 ran two rounds and caught 3 issues. After fixing those, codex review caught a 4th — REPLACE-wording drift across 2 unrelated section blocks that self-review systematically missed. Different lens, different blind spot. The user's question "burde det nedfelles i workflowen?" surfaced the gap: pitfall verification was already in the user-level CLAUDE.md verification process (always-after-completion), but codex review was nowhere — agents had to be asked manually. v2.11.0 makes codex the explicit third lens in the project-level workflow for ship-worthy work.
+
+**User-level twin:** `~/.claude/CLAUDE.md` updated in the same session to add codex as step 3 in the personal verification process. The plugin-level rule applies to *any* agent reading a project's CLAUDE.md; the user-level rule applies to the plugin maintainer's own work. Both fire on the same trigger.
+
+### Backwards compatibility
+**Fully additive.** No skill behavior changes. The section emits into newly-generated CLAUDE.md and is inserted into existing CLAUDE.md via `/superpowers-gstack:adapt`. Marker pattern means future updates auto-upgrade.
+
+### Notes for users
+- **Re-run `/superpowers-gstack:adapt`** on existing projects to add the Multi-lens review section.
+- **Codex review is opt-in to your spending budget.** The section frames the cost transparently. If you don't have codex CLI installed, the gstack `/codex` skill will tell you how to install it; if you don't want to spend on it for a particular ship-worthy commit, skip explicitly and note the rationale.
+- **The dogfood story (v2.10.0 → v2.10.1 → v2.10.2) is the canonical evidence** for the three-lens approach. 3 self-pitfall issues + 1 codex issue = 4 total catches that the standard "just commit" workflow would have shipped silently.
+
 ## [2.10.2] - 2026-05-19
 
 ### Fixed

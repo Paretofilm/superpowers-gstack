@@ -378,6 +378,46 @@ If >5 distinct commits in a row without testing the cumulative state, STOP and v
 
 If multiple commits land in a single session without ANY commit being tested, the session is committing "progress without verification" — break that cycle by running the project's test suite, or document explicitly why testing is deferred.
 
+### Multi-lens review (ship-worthy changes) <!-- gstack-multi-lens-review-v1 -->
+
+Substantive changes need three different review lenses — each catches what the others miss:
+
+1. **Self-check** (always, ~30 sec): placeholders, consistency, scope drift, ambiguity
+2. **Pitfall verification** (always, max 2 rounds): invoke `/superpowers-gstack:pitfall-verification` — catches domain-specific traps (security, idempotency, contracts, edge cases, LLM-output quirks)
+3. **Codex review** (ship-worthy changes only): invoke `/codex review` — catches drift across files and cross-section inconsistency that self-review systematically misses
+
+#### What counts as "ship-worthy"
+
+**YES (run codex):**
+- Commits that bump version files (`plugin.json`, `package.json`, `pyproject.toml`, etc.)
+- Commits that produce CHANGELOG entries
+- `feat:` / `fix:` / `refactor:` commits that affect runtime behavior
+- Changes to public contracts (APIs, schemas, generated artifacts, file formats)
+
+**NO (skip codex — it's overkill):**
+- Pure docs/typo fixes
+- Comment-only changes
+- WIP commits (per Continuous Checkpoint mode)
+- Test-only additions where coverage is the only change
+
+#### Why three lenses, not two
+
+Self-review catches "is this artifact good?" Pitfall catches "what typically breaks in this domain?" Codex catches "what's inconsistent across the codebase that author was too close to see?". Different lenses see different things; running fewer leaves a known gap.
+
+Dogfood evidence (2026-05-19 in this repo): self-pitfall verification on v2.10.0 ran two rounds and caught 3 issues. After fixing those, `/codex review` caught a 4th — REPLACE-wording drift across 2 unrelated section blocks in `skills/adapt/SKILL.md`. Self-review missed it because the author was focused on the *new* section, not on cross-section consistency. Codex saw the codebase as a flat surface and spotted the outlier immediately.
+
+#### Cost
+
+- Self-check: free (~30 sec attention budget)
+- Pitfall verification: free (LLM thought)
+- Codex review: ~$0.05-0.20 per review + 30s-2min wall clock
+
+Acceptable cost for ship-worthy work. Skip codex explicitly for trivial changes; don't run it on every commit or you'll burn budget on diminishing returns.
+
+#### Order matters
+
+Run lenses in order: self → pitfall → codex. Each pass fixes issues the previous one couldn't catch. Running codex *before* pitfall wastes its tokens on issues a simpler pass would have surfaced first.
+
 ### Track-aware routing (dual-track) <!-- gstack-routing-v1 -->
 
 This project follows superpowers-gstack's dual-track convention.
