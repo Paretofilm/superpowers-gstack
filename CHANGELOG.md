@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.7.1] - 2026-05-18
+
+### Changed
+- **Native Apple development tools section bumped from `v1` to `v2`.** v1 (shipped in v2.7.0) assumed XcodeBuildMCP was universally available — but XcodeBuildMCP is a per-session MCP install, not a default. Agents in sessions without XcodeBuildMCP would search via `ToolSearch`, find nothing, and fall back to asking the user to "open Xcode" — the exact failure mode v2.7.0 was meant to prevent.
+- **v2 routing table is now MCP-preferred + CLI-fallback**, with two columns: "Preferred (MCP)" and "Fallback (CLI, always available with Xcode)". CLI fallbacks listed for every operation that supports them: `xcrun swift -typecheck`, `xcodebuild build/test`, `xcrun simctl list/boot/launch/spawn/io`. UI automation (`ui_tap`, `snapshot_ui`) noted as MCP-only since `xcrun simctl io` only supports screenshots.
+- **New "Project file management" subsection** recommends XcodeGen (`brew install xcodegen`, declarative `project.yml`) over hand-editing `.xcodeproj` XML or clicking through Xcode UI. Tuist mentioned as the heavier alternative when XcodeGen isn't sufficient.
+- **Anti-patterns expanded** to pair each failure mode with BOTH the MCP and CLI fix (e.g. "use `test_sim` (MCP) or `xcodebuild test` (CLI)"). New anti-pattern added: "Click through the Signing & Capabilities pane" → declare in `.entitlements` + `project.yml`.
+
+### Why
+Real-world correction from a downstream agent: a SwiftUI agent in a sing-replay project flagged that XcodeBuildMCP wasn't in its MCP-server list (only swiftui-rag, playwright, pencil, gemini, AWS-specific). The agent correctly identified `xcodebuild` CLI + XcodeGen as the universally-available alternative. v2.7.0's tool routing — which named only MCP tools — would have routed agents in such sessions back to "ask user to open Xcode" because the MCP tools simply aren't there. v2.7.1 corrects the universalist assumption.
+
+### Backwards compatibility
+**Fully backwards compatible — auto-upgrade via marker pattern.** Projects adapted with v2.7.0 have the section marked `<!-- gstack-xcode-tools-v1 -->`. Re-running `/superpowers-gstack:adapt` on those projects hits case 2 (marker present + different version) and REPLACES the section through to the next heading. Surrounding CLAUDE.md content untouched. This is precisely why the marker pattern (introduced in v2.3.2) exists — fix-forward for routing-rule mistakes without manual editing across N adapted projects.
+
+### Notes for users
+- **Re-run `/superpowers-gstack:adapt`** on existing native projects to upgrade v1 → v2. If you adapted between v2.7.0 ship time and this fix, you'll get the corrected (MCP-preferred + CLI-fallback + XcodeGen) section automatically.
+- **CLI fallbacks tested in concept, not in tests/ suite.** Adding a `tests/integration/test_xcode_routing.sh` is now a natural backlog item — assert that the v2 section emits both MCP and CLI tool names. Deferred.
+- **Bump the marker (`v2` → `v3`)** in future versions only when routing semantics change again — not for cosmetic edits or adding a single tool to the existing table.
+
 ## [2.7.0] - 2026-05-18
 
 ### Added

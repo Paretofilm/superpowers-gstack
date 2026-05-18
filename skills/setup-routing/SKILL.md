@@ -302,38 +302,48 @@ Read `.gstack/track`:
 
 User can always bypass by typing the namespaced version directly.
 
-### Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v1 -->
+### Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v2 -->
 
 *This section emits only when `.gstack/track` is `ios`, `macos`, or `both`. Skip entirely for web projects.*
 
-Xcode-related operations MUST use the XcodeBuildMCP and swiftui-rag MCP tool surfaces — NEVER delegate build, test, or simulator operations to the user. The user should never need to open Xcode to verify your work.
+Xcode-related operations MUST be performed by the agent — NEVER delegated to the user. The user should never need to open Xcode to verify your work. Prefer MCP tools when available; fall back to CLI when not.
 
 #### Tool routing for Apple-platform operations
 
-| Operation | Tool |
-|---|---|
-| Type-check Swift code | `mcp__swiftui-rag__swift_typecheck` |
-| Search SwiftUI corpus / HIG | `mcp__swiftui-rag__search_swiftui_corpus` |
-| HIG conformance review | `mcp__swiftui-rag__review_macos_hig`, `review_accessibility`, `review_liquid_glass` |
-| Build Xcode project for simulator | `mcp__XcodeBuildMCP__build_sim` |
-| Build + launch in simulator | `mcp__XcodeBuildMCP__build_run_sim` |
-| Run XCTest / Swift Testing | `mcp__XcodeBuildMCP__test_sim` |
-| Boot / list simulators | `mcp__XcodeBuildMCP__boot_sim`, `list_sims` |
-| Launch app + capture logs | `mcp__XcodeBuildMCP__launch_app_logs_sim` |
-| UI automation in simulator | `mcp__XcodeBuildMCP__ui_tap`, `screenshot`, `snapshot_ui`, `ui_describe_all` |
-| Apple platform docs (HIG, APIs) | `mcp__apple-docs__search_apple_docs`, `get_apple_doc_content` |
-| WWDC video search / examples | `mcp__apple-docs__search_wwdc_content`, `get_wwdc_code_examples` |
+For each operation, **prefer the MCP tool when available**, falling back to CLI otherwise. Check MCP availability via `ToolSearch` first (these are deferred tools loaded on demand); only drop to CLI if the search returns nothing.
 
-If `XcodeBuildMCP__test_sim` etc. tools are not listed in your active tool set, search for them via `ToolSearch` — they are deferred tools loaded on demand.
+| Operation | Preferred (MCP) | Fallback (CLI, always available with Xcode) |
+|---|---|---|
+| Type-check Swift code | `mcp__swiftui-rag__swift_typecheck` | `xcrun swift -typecheck <file>.swift` |
+| Search SwiftUI corpus / HIG | `mcp__swiftui-rag__search_swiftui_corpus` | (no CLI fallback — use `mcp__apple-docs__search_apple_docs`) |
+| HIG conformance review | `mcp__swiftui-rag__review_macos_hig`, `review_accessibility`, `review_liquid_glass` | (no CLI fallback — read HIG via `mcp__apple-docs__get_apple_doc_content` and apply rules manually) |
+| Build Xcode project for simulator | `mcp__XcodeBuildMCP__build_sim` | `xcodebuild -scheme <name> -destination 'platform=iOS Simulator,name=iPhone 16' build` |
+| Build + launch in simulator | `mcp__XcodeBuildMCP__build_run_sim` | `xcodebuild ... build && xcrun simctl launch booted <bundle-id>` |
+| Run XCTest / Swift Testing | `mcp__XcodeBuildMCP__test_sim` | `xcodebuild test -scheme <name> -destination 'platform=iOS Simulator,name=iPhone 16'` |
+| List / boot simulators | `mcp__XcodeBuildMCP__list_sims`, `boot_sim` | `xcrun simctl list devices`, `xcrun simctl boot <udid>` |
+| Capture simulator logs | `mcp__XcodeBuildMCP__launch_app_logs_sim` | `xcrun simctl spawn booted log stream --predicate '...'` |
+| UI automation in simulator | `mcp__XcodeBuildMCP__ui_tap`, `screenshot`, `snapshot_ui`, `ui_describe_all` | `xcrun simctl io booted screenshot <path>.png` (screenshots only; tap/snapshot are MCP-only) |
+| Apple platform docs (HIG, APIs) | `mcp__apple-docs__search_apple_docs`, `get_apple_doc_content` | `man` pages for CLI tools; online docs at developer.apple.com |
+| WWDC video search / examples | `mcp__apple-docs__search_wwdc_content`, `get_wwdc_code_examples` | (no CLI fallback — fetch via `WebFetch` against developer.apple.com/wwdc) |
+
+#### Project file management (prefer declarative)
+
+Avoid hand-editing the auto-generated XML in `.xcodeproj/project.pbxproj`. Two declarative alternatives:
+
+- **XcodeGen** (`brew install xcodegen`) — generate `.xcodeproj` from a committable `project.yml`. Re-runnable via `xcodegen generate`. Strongly recommended for solo / small-team SwiftUI projects.
+- **Tuist** — more powerful declarative project manager; heavier dependency. Use if XcodeGen isn't sufficient (multi-target, complex schemes, generated frameworks).
+
+For new SwiftUI projects under this plugin, default to XcodeGen unless the project explicitly requires Tuist.
 
 #### Anti-patterns (NEVER do these)
 
-- ❌ "Open Xcode and run the tests" — use `mcp__XcodeBuildMCP__test_sim` instead
-- ❌ "Build the app in Xcode to verify" — use `mcp__XcodeBuildMCP__build_sim` instead
-- ❌ "Take a screenshot of the simulator" — use `mcp__XcodeBuildMCP__screenshot` instead
+- ❌ "Open Xcode and run the tests" — use `mcp__XcodeBuildMCP__test_sim` (MCP) or `xcodebuild test` (CLI) instead
+- ❌ "Build the app in Xcode to verify" — use `mcp__XcodeBuildMCP__build_sim` (MCP) or `xcodebuild build` (CLI) instead
+- ❌ "Take a screenshot of the simulator" — use `mcp__XcodeBuildMCP__screenshot` (MCP) or `xcrun simctl io booted screenshot` (CLI) instead
+- ❌ "Click through the Signing & Capabilities pane in Xcode" — declare entitlements in `*.entitlements` + `project.yml` (XcodeGen) instead
 - ❌ "Check what the system color looks like in HIG" — use `mcp__apple-docs__search_apple_docs` or `mcp__swiftui-rag__search_swiftui_corpus` instead
 
-If a verification step requires Xcode, you have not finished the task — use the MCP tools to verify, then report results.
+If a verification step requires Xcode the UI, you have not finished the task — use MCP or CLI tools to verify, then report results.
 
 ### Model Routing (v0.1, advisory)
 
