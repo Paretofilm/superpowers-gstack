@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.10.2] - 2026-05-19
+
+### Fixed
+- **Codex review finding [P2]:** adapt's case-2 REPLACE wording for the Git hygiene block (added in v2.10.0) and the Native Apple tools block (added in v2.7.x) said "REPLACE through next heading" without specifying "of equal-or-shallower level". Both blocks contain H3+H4 nested structure; an agent following the instruction literally would stop at the first H4 subsection (e.g. `#### When to commit`) and leave the rest of the old version's prose behind, producing duplicated/conflicting content.
+- Same fix applied to both blocks. Wording now matches Autonomy (v2.8.0), Track-aware (v2.3.2), and Companion (v2.9.0) blocks — all use "of equal-or-shallower level". Added a parenthetical note in each fixed block explaining WHY the qualifier matters, so future contributors don't strip it as "redundant".
+
+### Why
+Codex code review on v2.10.0 + v2.10.1 diff caught this as a P2 finding ("can corrupt generated CLAUDE.md files during v1-to-v2 replacement"). Manual review confirmed: only 3 of 5 marker-managed sections had the correct wording; Git hygiene and Native Apple tools were drift outliers. Independent cross-model review caught what self-pitfall-verification missed.
+
+### Backwards compatibility
+**Fully backwards compatible.** Adapt's case-logic descriptions are instructions for the agent invoking the skill — they affect future adapt runs, not stored state. Projects adapted before v2.10.2 are unaffected; their next adapt run will use the corrected logic.
+
 ## [2.10.1] - 2026-05-19
 
 ### Changed

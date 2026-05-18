@@ -294,7 +294,7 @@ When you do legitimately reach a stopping point (the agreed scope is done, or a 
 **Insert or upgrade the Git hygiene & commit cadence section.** This section applies to ALL projects (git is universal). Scan CLAUDE.md for heading `^#{2,3} Git hygiene` and its version marker `<!-- gstack-git-hygiene-vN -->`. Apply the same four-case logic:
 
 1. **Heading present + marker matches `v2`** → skip (idempotent).
-2. **Heading present + marker `v1` (pre-v2.10.1 emitter — universalist convention rule, autonomy cross-ref missing, stash advice without WIP-branch caveat) OR different version** → REPLACE through next heading. Preserve original heading level.
+2. **Heading present + marker `v1` (pre-v2.10.1 emitter — universalist convention rule, autonomy cross-ref missing, stash advice without WIP-branch caveat) OR different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. (The Git hygiene block has H4 subsections; "next heading" alone would stop at the first one and leave old v1 prose behind.)
 3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the v2 marker.
 4. **Heading absent** → APPEND the block below as H2 (or insert under `## Skill routing` as H3 to match setup-routing's structure).
 
@@ -422,7 +422,7 @@ User can always bypass by typing the namespaced version directly.
 **Insert or upgrade the Native Apple development tools section.** Only emit this section when `.gstack/track` exists and equals `ios`, `macos`, or `both` (skip entirely for web-only projects). Scan CLAUDE.md for the heading `^#{2,3} Native Apple development tools` and its version marker `<!-- gstack-xcode-tools-vN -->`. Apply the same four-case logic as Track-aware routing above:
 
 1. **Heading present + marker matches `v3`** → skip (idempotent).
-2. **Heading present + marker `v1` or `v2`** (v1 assumed XcodeBuildMCP universally; v2 added CLI fallback but missed capabilities/signing/portal split) → REPLACE through next heading. Preserve original heading level. Auto-upgrade is what the marker pattern is for.
+2. **Heading present + marker `v1` or `v2`** (v1 assumed XcodeBuildMCP universally; v2 added CLI fallback but missed capabilities/signing/portal split) → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. (The Native Apple tools block has H4 subsections; "next heading" alone would stop at the first one and leave old prose behind.) Auto-upgrade is what the marker pattern is for.
 3. **Heading present + marker absent** (pre-v2.7.0) → REPLACE the same way; one-time silent upgrade adds the v3 marker.
 4. **Heading absent** → APPEND the block below as H2 (or insert under `## Skill routing` as H3 to match the structure used by setup-routing).
 
