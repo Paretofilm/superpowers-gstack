@@ -36,7 +36,15 @@ don't test actual dispatch behavior in a real session.
 this plugin. Real-session test cost ~1 minute per case. Worth
 building for v1.1.
 
-### S2. macos-native-review chain gives iOS-only projects zero DESIGN.md native review
+### S2. ✅ FIXED in v2.4.0 — macos-native-review chain gives iOS-only projects zero DESIGN.md native review
+
+**Status: FIXED in v2.4.0.** Shipped `/superpowers-gstack:ios-native-review` as sibling skill — 13 iOS-specific categories mirroring macos-native-review structure. Phase 0 detects iOS vs macOS signals; multi-target projects run both. `macos-native-review` Phase 0 updated to point at the new sibling skill for iOS-only artifacts (instead of IDEAS.md). `setup-routing` + `adapt` evaluation tables also gained the missing macos-native-review row alongside the new ios-native-review row.
+
+Original codex finding preserved below for history.
+
+---
+
+
 
 **What codex flagged.** For `track = ios`, the plan explicitly skips
 macos-native-review (lines 1429-1433) because the skill's Phase 0

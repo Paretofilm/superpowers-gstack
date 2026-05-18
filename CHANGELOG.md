@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.4.0] - 2026-05-18
+
+### Added
+- **`/superpowers-gstack:ios-native-review`** — pre-implementation HIG-citation-grounded review skill for iOS/iPadOS app specs, mirroring the established `macos-native-review` pattern. 13 iOS-specific categories: vocabulary, controls & touch targets (44×44 pt), navigation paradigm (TabView / NavigationStack / NavigationSplitView), modal presentation (sheets + detents, full-screen, popovers), gestures, system surfaces (safe area, Dynamic Island, status bar), keyboard handling (keyboardType / textContentType / submitLabel), haptics, semantic colors & dark mode, animation timing, privileged operations & permission prompts (ATT, location, notifications), accessibility (VoiceOver, Dynamic Type up to AX5, Reduce Motion), app lifecycle & state restoration.
+- **Phase 0 iOS signal detection** mirrors macos-native-review's structure: scans for `.swift` files, `UIKit`/`SwiftUI` imports, iOS-flavored types (`UIViewController`, `TabView`, `NavigationStack`, etc.), `iOS app` text mentions, iOS deployment targets. Multi-target projects (iOS + macOS) proceed; macOS-only signals return N/A with sibling-skill note pointing at `/superpowers-gstack:macos-native-review`.
+- **Robust-citation strategy reused.** Same JSON fallback as macos-native-review (`developer.apple.com/tutorials/data/design/human-interface-guidelines/<slug>.json`) for cases where the JS-rendered HTML returns only a page title. Verified at skill creation against `/buttons` (canonical 44×44 pt touch-target quote returned).
+
+### Changed
+- **`setup-routing` evaluation table** now includes both `macos-native-review` and `ios-native-review` rows. Closes a pre-existing oversight (macos-native-review was missing from the table though it shipped in v1.9.0). Generated CLAUDE.md routing now offers both review skills with platform-aware descriptions.
+- **`adapt` evaluation table** mirrors the addition for projects being adapted into the workflow.
+- **`setup-routing/model-routing.md`** adds `ios-native-review` row with same model recommendation as macos-native-review (`sonnet` everywhere, `sonnet (req. web)` for Pi local-only since WebFetch against developer.apple.com is required).
+- **`macos-native-review` Phase 0** updated: iOS-only signals now point at the newly-shipped `/superpowers-gstack:ios-native-review` instead of "the skill is in the backlog (IDEAS.md)".
+- **`IDEAS.md`** marks ios-native-review entry as ✅ SHIPPED in v2.4.0.
+
+### Why
+Closes backlog item S2 from `docs/superpowers/backlog/2026-05-17-swiftui-design-consultation-v1.1-backlog.md`. v2.3.0/v2.3.1 shipped dual-track support but iOS-only projects had no DESIGN.md HIG-review path — only the platform-agnostic rules from `macos-native-review`'s SwiftUI-rag chain fired. v2.4.0 closes that gap symmetrically; iOS + macOS multi-target projects now have parallel review surfaces. The deferral note from IDEAS.md was accurate ("Pick up when a real iOS spec review surfaces the gap") — the gap surfaced as part of dual-track stress-testing.
+
+### Backwards compatibility
+**Fully additive.** No existing skill behavior changes. The only edit to `macos-native-review` is the Phase 0 fallback text for iOS-only projects (cosmetic, points at the new skill instead of IDEAS.md). Multi-target projects (iOS + macOS) should run both review skills in parallel — neither replaces the other.
+
+### Notes for users
+- **Run on iOS specs the same way as macOS:** `/superpowers-gstack:ios-native-review` after `pitfall-verification` + `quality-review`, before implementation.
+- **Re-run `/superpowers-gstack:adapt`** on existing iOS projects to surface the new skill in routing recommendations (uses the v2.3.2 routing-version-marker, so it's a single-call upgrade).
+- **macos-native-review unchanged in scope.** Phase 0 just points at the sibling skill now instead of the backlog note.
+
 ## [2.3.2] - 2026-05-18
 
 ### Changed

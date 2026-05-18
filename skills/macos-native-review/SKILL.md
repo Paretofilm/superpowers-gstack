@@ -70,7 +70,7 @@ Decision:
 
 - **No signals found:** return `N/A — no macOS surfaces detected, skill not applicable` and exit. Do not proceed.
 - **Multi-target (iOS + macOS):** proceed. macOS surfaces are relevant.
-- **iOS-only signals:** return `N/A — iOS-only project. The ios-native-review skill is in the backlog (IDEAS.md). Run /quality-review for cross-platform polish in the meantime.`
+- **iOS-only signals:** return `N/A — iOS-only project. Use /superpowers-gstack:ios-native-review instead.`
 - **macOS signals present:** proceed.
 
 Phase 0 is the safety net for false positives. Without it, the skill would flag "missing ⌘ shortcuts" for a Linux CLI tool.

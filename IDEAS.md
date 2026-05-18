@@ -12,7 +12,7 @@ When a skill ships, its entry moves to the "Shipped" section below with the comm
 
 ---
 
-## `ios-native-review` (proposed 2026-04-28, deferred)
+## `ios-native-review` ✅ SHIPPED in v2.4.0 (2026-05-18) — originally proposed 2026-04-28
 
 **Gap.** Same gap as the (now-shipped) `macos-native-review` had on the macOS side: existing review skills (`pitfall-verification`, `quality-review`) don't validate iOS UI claims against Apple Human Interface Guidelines for iOS specifically. iOS HIG paths and surfaces differ from macOS — touch-first interaction, navigation paradigm (tab bar / navigation stack vs window-based), modal patterns (sheet detents, full-screen presentation), Dynamic Island, gesture conventions.
 
@@ -37,7 +37,7 @@ When a skill ships, its entry moves to the "Shipped" section below with the comm
 - `macos-native-review` = "is this Apple-native on Mac?"
 - `ios-native-review` = "is this iOS-native?" (touch-first, navigation paradigm, modal detents)
 
-**Status.** Deferred — no observed need yet. Pick up when a real iOS spec review surfaces the gap.
+**Status.** ✅ Shipped in v2.4.0. Mirror of macos-native-review structure with 13 iOS-specific categories (vocabulary, controls/touch targets, navigation, modal presentation, gestures, system surfaces, keyboard, haptics, semantic colors, animation, privileged ops, accessibility, lifecycle). Closes backlog S2 from v1.1-backlog. See `skills/ios-native-review/SKILL.md`.
 
 ---
 
