@@ -221,17 +221,40 @@ Apply the changes identified in Step 4. Follow these rules strictly:
   - Insert this as a `### Model Routing` subsection of `## Skill routing`, placed after `### Rules` and before `### Session Continuity`
   - **Fallbacks:** If `model-routing.md` is missing (older cached plugin), warn the user and skip the section entirely. If the user picked an unlisted harness ("Other": Cursor, opencode, etc.), emit only the Claude Code column with a note that harness-native model selection should be used instead. If the harness answer was empty/skipped, default to Claude Code column only.
   - If the user opts out, skip this section entirely and note the choice in the final report
-**Preserve existing Track-aware routing.** Before appending the
-Track-aware routing section, check if the project's CLAUDE.md
-already contains `## Track-aware routing (dual-track)`. If yes,
-skip the append (do not duplicate). If no, append the full section.
-This makes the skill idempotent — re-running adapt does not pollute
-the file.
+**Preserve or upgrade existing Track-aware routing.** Before
+inserting the Track-aware routing section, scan the project's
+CLAUDE.md. Check two things independently: (a) does any heading
+matching `^#{2,3} Track-aware routing \(dual-track\)` exist (H2 or
+H3 — `setup-routing` emits H3 as subsection, `adapt` historically
+emitted H2 as top-level), and (b) is there a version marker
+`<!-- gstack-routing-vN -->` on that heading line (currently `v1`).
+Four cases:
 
-The Track-aware routing block to append (verbatim) when not already present:
+1. **Heading present + marker matches current version (`v1`)** →
+   skip (idempotent — re-running adapt does not pollute the file).
+2. **Heading present + marker present + different version** →
+   REPLACE the section from the heading down to (but not including)
+   the next heading of the same OR shallower level. Preserves
+   surrounding CLAUDE.md content. This is how routing rules evolve
+   without manual editing across N projects. Preserve the original
+   heading level (H2 or H3) — do not change it during upgrade.
+3. **Heading present + marker absent** (legacy v2.3.0/v2.3.1
+   projects) → REPLACE the section the same way as case 2. Treats
+   the missing marker as "older than v1". This is a one-time silent
+   upgrade; the content replaced is byte-identical to what's already
+   there in v2.3.2, plus the marker. Preserve the original heading
+   level.
+4. **Heading absent** → APPEND the full section as H2 (truly new
+   adaptations, or projects that never had dual-track routing).
+
+The version marker is an HTML comment so it does not render in
+Markdown previews. Bump the version (`v1` → `v2`) only when the
+section's semantics change, not for cosmetic edits.
+
+The Track-aware routing block to insert (verbatim):
 
 ```markdown
-## Track-aware routing (dual-track)
+## Track-aware routing (dual-track) <!-- gstack-routing-v1 -->
 
 This project follows superpowers-gstack's dual-track convention.
 Track is declared in `.gstack/track` (`ios` | `macos` | `both`).

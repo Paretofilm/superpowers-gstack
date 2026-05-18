@@ -268,7 +268,7 @@ This project uses Superpowers + GStack. Each owns a distinct phase:
 - Superpowers specs go in `docs/superpowers/`
 - GStack state lives in `~/.gstack/projects/`
 
-### Track-aware routing (dual-track)
+### Track-aware routing (dual-track) <!-- gstack-routing-v1 -->
 
 This project follows superpowers-gstack's dual-track convention.
 Track is declared in `.gstack/track` (`ios` | `macos` | `both`).

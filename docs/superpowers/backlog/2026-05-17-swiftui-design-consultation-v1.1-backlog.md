@@ -111,7 +111,13 @@ folded into the v2.2.0 ship rather than deferred. Smoke-tested:
 ratio 21.00 / 2.32 / 4.59 / 21.00 all emitted with dot decimals on
 `nb_NO.UTF-8`. See commit `887f86b`.
 
-### S6. `adapt` preservation prevents updating stale routing rules
+### S6. ✅ FIXED in v2.3.2 — `adapt` preservation prevents updating stale routing rules
+
+**Status: FIXED in v2.3.2.** Version marker (`<!-- gstack-routing-v1 -->`) added to the routing-section heading in both `setup-routing` template and `adapt` insertion block. `adapt` now scans for the marker and handles four cases (skip if matches, replace if older version, replace if no marker on legacy projects, append if heading absent) — preserves H2/H3 level symmetry across both skills.
+
+Original codex finding preserved below for history.
+
+---
 
 **What codex flagged.** Plan lines 1651-1654: `adapt` skill skips
 appending if `## Track-aware routing (dual-track)` section exists.

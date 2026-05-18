@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.3.2] - 2026-05-18
+
+### Changed
+- **`adapt` Track-aware routing section now uses a version marker (`<!-- gstack-routing-v1 -->`).** Previously, `adapt` skipped the routing section entirely if a section with the matching H2 already existed — which made the skill idempotent but ALSO prevented updating stale or malformed versions across projects already adapted.
+- **New four-case logic in `adapt`:** heading + matching marker → skip (idempotent); heading + different-version marker → REPLACE through next H2 (upgrade path); heading + no marker (legacy v2.3.0/v2.3.1 projects) → REPLACE (one-time silent upgrade adds the marker); heading absent → APPEND.
+- **`setup-routing` template** emits the version marker on the H3 heading from this version forward, so all newly-generated CLAUDE.md files are already on `v1` and pick up future updates automatically.
+
+### Why
+Closes backlog item S6 from `docs/superpowers/backlog/2026-05-17-swiftui-design-consultation-v1.1-backlog.md`. v2.3.0 introduced track-aware routing; v2.3.1 will not be the last time the rules evolve. Without a version marker, every rule change would require either (a) manual editing across N adapted projects, or (b) breaking idempotency. The marker pattern is forward-clean: the next semantic change (`v2`) auto-upgrades existing projects without disturbing surrounding CLAUDE.md content.
+
+### Backwards compatibility
+**Fully backwards compatible — no duplicate sections.** Projects adapted on v2.3.0/v2.3.1 have a heading without a marker. The four-case logic treats those as case 3 (REPLACE, byte-identical content + new marker), not as APPEND. The APPEND path only fires when no heading exists at all. Re-running `adapt` on existing projects performs a one-time silent upgrade; surrounding CLAUDE.md content outside the routing section is never touched.
+
+**H2 vs H3 handled symmetrically.** Pre-existing inconsistency: `setup-routing` emits the section as **H3** (subsection of `## Skill routing`); `adapt` historically appended it as top-level **H2**. The new marker-detection scans for either level (`^#{2,3} Track-aware routing \(dual-track\)`) and preserves the original level during upgrade. This avoids accidentally promoting H3 → H2 (which would break the nested structure in setup-routing-generated CLAUDE.md files).
+
+### Notes for users
+- **Re-run `/superpowers-gstack:adapt`** on existing dual-track projects to add the version marker. The routing rules themselves are unchanged in this version — only the marker is added. After this, future rule changes (v2+) will upgrade silently.
+- The marker is an HTML comment, so it does not render in Markdown previews. Bump the version (`v1` → `v2`) only when the section's semantics change, not for cosmetic edits.
+
 ## [2.3.1] - 2026-05-17
 
 ### Changed
