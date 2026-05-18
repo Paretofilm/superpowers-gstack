@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.6.0] - 2026-05-18
+
+### Added
+- **`tests/` directory with integration-test infrastructure.** First test: `tests/integration/test_track_aware_dispatch.sh` verifies track-aware routing dispatches `/design-consultation` correctly. Two cases (track=ios → swiftui variant; no marker → gstack default), each shells out to `claude --print` in a temp-dir fixture with a minimal CLAUDE.md containing the routing block. Cost ~1 min and a few cents per case; safety net via `--max-budget-usd 1.00`.
+- **`tests/run.sh`** — entry point with `--integration` / `--unit` flags. Discovers and runs `tests/integration/test_*.sh` files.
+- **`tests/README.md`** — documents prerequisites (Claude Code CLI, `ANTHROPIC_API_KEY`), cost model, what's tested vs deferred, and why integration over unit for this skill set (dispatch logic lives in LLM-interpreted CLAUDE.md text; can't unit-test that without mocking the dispatcher under test).
+
+### Changed
+- **`README.md`** gains a **Testing** section linking to `tests/README.md`.
+
+### Why
+Closes backlog item **S1** from `docs/superpowers/backlog/2026-05-17-swiftui-design-consultation-v1.1-backlog.md`. v1.0 of swiftui-design-consultation's smoke tests "verified by inspection" that routing rules existed in the generated CLAUDE.md — but never tested actual dispatch behavior. Codex flagged this as the highest-impact gap because mis-dispatch on a native project means the user gets the wrong skill (gstack web design-consultation instead of `swiftui-design-consultation`) and may not notice until DESIGN.md is wrong.
+
+The new test runs against the real Claude Code dispatcher with the real plugin loaded — there is no mocking. Live verification against `Paretofilm/superpowers-gstack@7eadf4f` shows both cases pass: the LLM correctly identifies `superpowers-gstack:swiftui-design-consultation` for track=ios, and explicitly notes "not the SwiftUI namespaced variant" when defaulting to gstack for missing-marker.
+
+### Backwards compatibility
+**Fully additive.** No skill behavior changes. The new `tests/` directory and `tests/README.md` exist for contributors; runtime behavior unaffected. No new dependencies (bash only; uses `claude` CLI which is a prerequisite for using the plugin anyway).
+
+### Notes for users
+- **Run before submitting PRs that touch routing rules:** `bash tests/run.sh --integration` catches dispatch regressions that "verify by inspection" misses.
+- **CI integration deferred.** Running integration tests in GitHub Actions requires `ANTHROPIC_API_KEY` as a repo secret and willingness to spend on every PR. Open question — left as a separate backlog item.
+- **Adding tests:** drop another `tests/integration/test_*.sh` script following the same pattern (mktemp fixture → claude --print → grep output). The runner picks them up automatically.
+
 ## [2.5.0] - 2026-05-18
 
 ### Added

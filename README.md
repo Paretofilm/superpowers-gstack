@@ -362,6 +362,14 @@ A GitHub Actions workflow runs weekly and checks for new versions of GStack, Sup
 
 See [VERSIONS.md](VERSIONS.md) for currently tracked versions.
 
+## Testing
+
+Plugin behaviors that depend on LLM dispatch (track-aware routing, slash-command interception) are tested end-to-end against `claude --print`. See [`tests/README.md`](tests/README.md) for prerequisites, cost (~1 min per case, a few cents each), and what's covered.
+
+```bash
+bash tests/run.sh --integration
+```
+
 ## Contributing
 
 This is a work in progress and **any help is welcome**:

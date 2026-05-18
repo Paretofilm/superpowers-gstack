@@ -17,7 +17,15 @@ lost.
 
 ## SIGNIFICANT findings (v1.1 priority)
 
-### S1. Model-as-dispatcher routing under-tested
+### S1. ✅ FIXED in v2.6.0 — Model-as-dispatcher routing under-tested
+
+**Status: FIXED in v2.6.0.** Shipped `tests/integration/test_track_aware_dispatch.sh` — two cases (track=ios and no-marker) each shell out to `claude --print` in a temp-dir fixture and assert the LLM dispatches the right skill. Live verification at v2.6.0 ship time showed both cases pass cleanly; LLM output explicitly cites the routing rule when explaining its choice. Test infrastructure (`tests/run.sh` runner + `tests/README.md` docs) generalizes to future integration tests for `/office-hours-track-aware`, `/context-handoff` write+restore, etc.
+
+Original codex finding preserved below for history.
+
+---
+
+
 
 **What codex flagged.** Spec lines 651-663 acknowledge native projects
 can mis-dispatch to web. Plan smoke tests at lines 1854-1856 and
