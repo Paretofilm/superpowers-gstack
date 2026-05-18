@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.7.0] - 2026-05-18
+
+### Added
+- **Native Apple development tools routing** in generated CLAUDE.md for SwiftUI projects (track ∈ {ios, macos, both}). New section `## Native Apple development tools (Xcode workflow)` with version marker `<!-- gstack-xcode-tools-v1 -->`. Tells the agent which MCP tools own which Apple-platform operations, and what NEVER to delegate to the user.
+- **Tool routing table** lists 11 operation categories — typecheck (swiftui-rag), HIG review (swiftui-rag), build/test/simulator (XcodeBuildMCP), UI automation (XcodeBuildMCP), Apple docs (apple-docs), WWDC content (apple-docs). Every entry names the MCP tool by full identifier (`mcp__XcodeBuildMCP__test_sim`, etc.).
+- **Anti-patterns** section explicitly enumerates the failure modes: "Open Xcode and run the tests", "Build in Xcode to verify", "Take a screenshot of the simulator", "Check what a system color looks like" — each paired with the MCP-tool replacement.
+
+### Changed
+- **`setup-routing` Step 6** emits the new section into newly-generated CLAUDE.md when the track question (Step 2 Q10 successor) reveals a native project. Web-only projects skip the section entirely.
+- **`adapt` Step 5** inserts or upgrades the section using the same four-case logic as Track-aware routing (heading + marker matches → skip; different version → REPLACE; no marker → REPLACE one-time silent upgrade; heading absent → APPEND). Native-track gate: skip entirely for web-only projects.
+
+### Why
+Real-world failure-mode observed in a downstream project: a SwiftUI agent type-checked Swift code correctly (via `mcp__swiftui-rag__swift_typecheck`) but then asked the user to "open Xcode and run the 12 tests to verify." The agent had `mcp__XcodeBuildMCP__test_sim` available as a deferred tool but never invoked it — because nothing in CLAUDE.md or any skill ever named XcodeBuildMCP as the canonical test runner. The result: vibe-coder gets handed verification work that the agent should do itself.
+
+v2.7.0 makes the tool surface explicit in generated CLAUDE.md for native projects. Future SwiftUI agents starting in such projects will read the table on session start and route Xcode operations to MCP tools instead of delegating to the user. Web projects are unaffected (no section emitted).
+
+### Backwards compatibility
+**Fully additive for new projects. Forward-clean for existing.** Pre-v2.7.0 native projects don't have the section — `adapt` falls into case 4 (heading absent → APPEND), no duplication risk. Web projects: section never emitted at all. Existing CLAUDE.md content outside the new section is never touched. Same version-marker pattern as v2.3.2's track-aware routing means future Xcode-tool-table updates auto-upgrade via REPLACE instead of forcing manual edits across N adapted projects.
+
+### Notes for users
+- **Re-run `/superpowers-gstack:adapt`** on existing native projects (track ∈ {ios, macos, both}) to add the Xcode-tools section. Single call; routing-version-marker mechanism (v2.3.2) handles the upgrade.
+- **Web projects: nothing changes.** The skill detects `.gstack/track` is absent or `web` and skips the section.
+- **Bump the marker (`v1` → `v2`)** in future versions only when the tool routing semantics change — not for cosmetic edits or adding tools to the existing table.
+
 ## [2.6.0] - 2026-05-18
 
 ### Added

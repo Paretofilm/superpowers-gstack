@@ -289,6 +289,48 @@ Read `.gstack/track`:
 User can always bypass by typing the namespaced version directly.
 ```
 
+**Insert or upgrade the Native Apple development tools section.** Only emit this section when `.gstack/track` exists and equals `ios`, `macos`, or `both` (skip entirely for web-only projects). Scan CLAUDE.md for the heading `^#{2,3} Native Apple development tools` and its version marker `<!-- gstack-xcode-tools-vN -->`. Apply the same four-case logic as Track-aware routing above:
+
+1. **Heading present + marker matches `v1`** → skip (idempotent).
+2. **Heading present + marker present + different version** → REPLACE through next heading. Preserve original heading level.
+3. **Heading present + marker absent** (pre-v2.7.0) → REPLACE the same way; one-time silent upgrade adds the marker.
+4. **Heading absent** → APPEND the block below as H2 (or insert under `## Skill routing` as H3 to match the structure used by setup-routing).
+
+The Native Apple development tools block to insert (verbatim, when track ∈ {ios, macos, both}):
+
+```markdown
+## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v1 -->
+
+Xcode-related operations MUST use the XcodeBuildMCP and swiftui-rag MCP tool surfaces — NEVER delegate build, test, or simulator operations to the user. The user should never need to open Xcode to verify your work.
+
+### Tool routing for Apple-platform operations
+
+| Operation | Tool |
+|---|---|
+| Type-check Swift code | `mcp__swiftui-rag__swift_typecheck` |
+| Search SwiftUI corpus / HIG | `mcp__swiftui-rag__search_swiftui_corpus` |
+| HIG conformance review | `mcp__swiftui-rag__review_macos_hig`, `review_accessibility`, `review_liquid_glass` |
+| Build Xcode project for simulator | `mcp__XcodeBuildMCP__build_sim` |
+| Build + launch in simulator | `mcp__XcodeBuildMCP__build_run_sim` |
+| Run XCTest / Swift Testing | `mcp__XcodeBuildMCP__test_sim` |
+| Boot / list simulators | `mcp__XcodeBuildMCP__boot_sim`, `list_sims` |
+| Launch app + capture logs | `mcp__XcodeBuildMCP__launch_app_logs_sim` |
+| UI automation in simulator | `mcp__XcodeBuildMCP__ui_tap`, `screenshot`, `snapshot_ui`, `ui_describe_all` |
+| Apple platform docs (HIG, APIs) | `mcp__apple-docs__search_apple_docs`, `get_apple_doc_content` |
+| WWDC video search / examples | `mcp__apple-docs__search_wwdc_content`, `get_wwdc_code_examples` |
+
+If XcodeBuildMCP tools are not in your active tool set, search via `ToolSearch` — they are deferred tools loaded on demand.
+
+### Anti-patterns (NEVER do these)
+
+- ❌ "Open Xcode and run the tests" — use `mcp__XcodeBuildMCP__test_sim` instead
+- ❌ "Build the app in Xcode to verify" — use `mcp__XcodeBuildMCP__build_sim` instead
+- ❌ "Take a screenshot of the simulator" — use `mcp__XcodeBuildMCP__screenshot` instead
+- ❌ "Check what the system color looks like in HIG" — use `mcp__apple-docs__search_apple_docs` or `mcp__swiftui-rag__search_swiftui_corpus` instead
+
+If a verification step requires Xcode, you have not finished the task — use the MCP tools to verify, then report results.
+```
+
 - If no `## Session Continuity` section exists in CLAUDE.md: ADD the following block. If it already exists, REPLACE it with the current version:
   ```
   ## Session Continuity

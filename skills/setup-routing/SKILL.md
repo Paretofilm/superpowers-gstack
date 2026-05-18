@@ -302,6 +302,39 @@ Read `.gstack/track`:
 
 User can always bypass by typing the namespaced version directly.
 
+### Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v1 -->
+
+*This section emits only when `.gstack/track` is `ios`, `macos`, or `both`. Skip entirely for web projects.*
+
+Xcode-related operations MUST use the XcodeBuildMCP and swiftui-rag MCP tool surfaces — NEVER delegate build, test, or simulator operations to the user. The user should never need to open Xcode to verify your work.
+
+#### Tool routing for Apple-platform operations
+
+| Operation | Tool |
+|---|---|
+| Type-check Swift code | `mcp__swiftui-rag__swift_typecheck` |
+| Search SwiftUI corpus / HIG | `mcp__swiftui-rag__search_swiftui_corpus` |
+| HIG conformance review | `mcp__swiftui-rag__review_macos_hig`, `review_accessibility`, `review_liquid_glass` |
+| Build Xcode project for simulator | `mcp__XcodeBuildMCP__build_sim` |
+| Build + launch in simulator | `mcp__XcodeBuildMCP__build_run_sim` |
+| Run XCTest / Swift Testing | `mcp__XcodeBuildMCP__test_sim` |
+| Boot / list simulators | `mcp__XcodeBuildMCP__boot_sim`, `list_sims` |
+| Launch app + capture logs | `mcp__XcodeBuildMCP__launch_app_logs_sim` |
+| UI automation in simulator | `mcp__XcodeBuildMCP__ui_tap`, `screenshot`, `snapshot_ui`, `ui_describe_all` |
+| Apple platform docs (HIG, APIs) | `mcp__apple-docs__search_apple_docs`, `get_apple_doc_content` |
+| WWDC video search / examples | `mcp__apple-docs__search_wwdc_content`, `get_wwdc_code_examples` |
+
+If `XcodeBuildMCP__test_sim` etc. tools are not listed in your active tool set, search for them via `ToolSearch` — they are deferred tools loaded on demand.
+
+#### Anti-patterns (NEVER do these)
+
+- ❌ "Open Xcode and run the tests" — use `mcp__XcodeBuildMCP__test_sim` instead
+- ❌ "Build the app in Xcode to verify" — use `mcp__XcodeBuildMCP__build_sim` instead
+- ❌ "Take a screenshot of the simulator" — use `mcp__XcodeBuildMCP__screenshot` instead
+- ❌ "Check what the system color looks like in HIG" — use `mcp__apple-docs__search_apple_docs` or `mcp__swiftui-rag__search_swiftui_corpus` instead
+
+If a verification step requires Xcode, you have not finished the task — use the MCP tools to verify, then report results.
+
 ### Model Routing (v0.1, advisory)
 
 **Identify your runtime:**
