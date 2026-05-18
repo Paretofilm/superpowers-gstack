@@ -223,6 +223,74 @@ Apply the changes identified in Step 4. Follow these rules strictly:
   - Insert this as a `### Model Routing` subsection of `## Skill routing`, placed after `### Rules` and before `### Session Continuity`
   - **Fallbacks:** If `model-routing.md` is missing (older cached plugin), warn the user and skip the section entirely. If the user picked an unlisted harness ("Other": Cursor, opencode, etc.), emit only the Claude Code column with a note that harness-native model selection should be used instead. If the harness answer was empty/skipped, default to Claude Code column only.
   - If the user opts out, skip this section entirely and note the choice in the final report
+**Insert or upgrade the Autonomy and user interruption section.** This section applies to ALL projects (web and native equally — agents over-asking is platform-agnostic). Scan CLAUDE.md for the heading `^#{2,3} Autonomy and user interruption` and its version marker `<!-- gstack-autonomy-vN -->`. Apply the same four-case logic:
+
+1. **Heading present + marker matches `v1`** → skip (idempotent).
+2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level.
+3. **Heading present + marker absent** (legacy pre-v2.8.0) → REPLACE the same way; one-time silent upgrade adds the v1 marker.
+4. **Heading absent** → APPEND the block below as H2 (or insert under `## Skill routing` as H3 to match the structure used by setup-routing).
+
+The Autonomy block to insert (verbatim):
+
+```markdown
+## Autonomy and user interruption <!-- gstack-autonomy-v1 -->
+
+Default to autonomous continuation. Stopping to ask the user is the LAST resort, not the default. When you complete a planned phase or pass a milestone, the next action is the next phase — NOT a status report followed by "ping me to continue".
+
+### When you MUST stop and ask the user
+
+Only these five categories warrant stopping:
+
+1. **User-territory operation required** — Apple Developer Portal capability registration, OAuth/SSO login, signing into an external service, payment authorization, anything requiring 2FA / Apple ID / human credentials the agent cannot supply
+2. **Destructive operation needing explicit approval** — `rm -rf`, `git push --force`, dropping a database table, deleting cloud resources, any operation listed under the user's `/careful` rules
+3. **Genuinely ambiguous design choice** — two paths with materially different long-term consequences AND no signal in the spec / plan / prior conversation pointing to one over the other. ("I assume green but maybe blue?" is NOT this — that is over-asking.)
+4. **Explicit checkpoint in the skill or plan** — e.g. `swiftui-design-consultation` Phase 3's Approve/Drill/Change/Start-over gate, `executing-plans`' phase review, `office-hours` final approval
+5. **You are truly blocked** — missing information you cannot derive, infinite loop you cannot break, error message you cannot interpret after reasonable investigation (read docs, search corpus, try the obvious fix first)
+
+### When NOT to stop
+
+Do NOT stop to:
+
+- ❌ Report completed work and ask "shall I continue with the next phase?"
+- ❌ Check in at convenient milestones because it feels considerate
+- ❌ Ask "should I do X?" when X is obviously the next step in scope
+- ❌ Wait for permission to do work clearly within the user's original request or agreed plan
+- ❌ Wrap up a session early because the plan turned out to be larger than expected — finish it
+
+If the next step is clearly within scope, DO IT. Report what happened after it's done.
+
+### Forbidden phrases
+
+These continuation-tokens signal "I have stopped autonomy and now require user input" — if any creep into your output without a category-1-to-5 reason above, you have failed the autonomy default:
+
+- ❌ "Ping me when you want me to continue"
+- ❌ "Let me know when you're ready for the next round"
+- ❌ "Ready when you are"
+- ❌ "Awaiting your go-ahead"
+- ❌ "Si fra når jeg skal fortsette"
+- ❌ "Bash-prompten din er fortsatt aktiv — si bare 'fortsett'"
+
+If you catch yourself about to write one of these, ask: "Is there a real category-1-to-5 reason here, or am I just being polite?" If polite, delete the sentence and do the next thing instead.
+
+### Status updates DURING work, not AS wait-states
+
+Give brief progress signals while you continue, not as the final word before stopping:
+
+- ✅ "BookmarkStore + 7 tests green. Moving to RecordingScanner now."
+- ✅ "Phase 1 build verified on macOS. Starting Phase 2 UI layer."
+- ❌ "Phase 1 done. Here's a 12-row status table. Ready for UI when you say so."
+
+The user reads status WHILE you work, not as a wait-state for permission.
+
+### When to STOP, but only after finishing in-scope work
+
+When you do legitimately reach a stopping point (the agreed scope is done, or a category-1-to-5 reason fires), stop cleanly:
+
+- State what's done in one or two sentences
+- Name what's blocked (if anything) with the specific reason from the five categories
+- Do NOT propose new work or invite continuation — the next session/turn will decide that
+```
+
 **Preserve or upgrade existing Track-aware routing.** Before
 inserting the Track-aware routing section, scan the project's
 CLAUDE.md. Check two things independently: (a) does any heading

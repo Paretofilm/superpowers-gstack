@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.8.0] - 2026-05-18
+
+### Added
+- **`### Autonomy and user interruption` section** (with version marker `<!-- gstack-autonomy-v1 -->`) emitted into every generated CLAUDE.md — NOT conditional on track. Establishes autonomous continuation as the default behavior for agents; stopping to ask the user is the LAST resort, not the default.
+- **Five categories that warrant stopping** (and only these): user-territory operations (Apple Developer Portal, 2FA-gated services), destructive operations needing approval, genuinely ambiguous design choices, explicit skill/plan checkpoints, true blocks. Each category is defined precisely so agents can self-check.
+- **"When NOT to stop" anti-list** — five common politeness patterns ("shall I continue?", "ready when you are", convenient-milestone check-ins) flagged as autonomy failures.
+- **Forbidden-phrases list** (6 entries, EN + NO) of continuation-token language that signals failed autonomy. If an agent catches itself writing one of these, it must self-correct.
+- **Status-update template** showing the difference between progress-signals-during-work (✅) versus wait-state-for-permission (❌). Three concrete before/after examples.
+
+### Changed
+- **`setup-routing` Step 6** emits the new section into the `## Skill routing` block as `### Autonomy and user interruption`, placed immediately after `### Rules` and before `### Track-aware routing`.
+- **`adapt` Step 5** inserts or upgrades the section using the same four-case marker logic as Track-aware routing and Xcode tools. Universal (not track-gated) since over-asking is platform-agnostic.
+
+### Why
+Real-world frustration from downstream session: a SwiftUI agent completed Phase 1 work, produced a 12-row status table, and ended with "Pinge meg når du vil at jeg setter i gang neste rundene" / "Bash-prompten din er fortsatt aktiv — om du vil at jeg fortsetter direkte, si bare 'fortsett UI-runde 1'". The user's reaction: frustration. Solo vibe-coder workflows depend on agents staying in motion through scoped work — every "ready when you are" forces a context-switch back to the user for permission to do work the user already authorized.
+
+v2.8.0 makes the autonomous-by-default behavior an explicit rule emitted into every generated CLAUDE.md. Agents that read CLAUDE.md on session start now see the five-categories-only rule for stopping, the forbidden-phrases list, and the progress-signals-during-work pattern. Same systemic-fix-via-CLAUDE.md-rule pattern as the v2.7.x Xcode-tools work.
+
+### Backwards compatibility
+**Fully additive.** No skill behavior changes. The section emits into newly-generated CLAUDE.md and is inserted into existing CLAUDE.md via `/superpowers-gstack:adapt`. Marker pattern (`<!-- gstack-autonomy-v1 -->`) means future updates auto-upgrade existing projects.
+
+### Notes for users
+- **Re-run `/superpowers-gstack:adapt`** on existing projects to add the Autonomy section. Universal — runs on web and native projects alike.
+- **The five categories are the contract.** If you want agents to stop for other reasons in a specific project, add a project-local instruction in your CLAUDE.md alongside the inserted section (the section is gstack-managed; adjacent content is yours).
+- **Bump the marker (`v1` → `v2`)** in future versions only when the autonomy rules themselves change — not for cosmetic edits or adding a forbidden phrase to the existing list.
+
 ## [2.7.2] - 2026-05-18
 
 ### Added
