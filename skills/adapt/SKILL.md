@@ -291,6 +291,62 @@ When you do legitimately reach a stopping point (the agreed scope is done, or a 
 - Do NOT propose new work or invite continuation — the next session/turn will decide that
 ```
 
+**Insert or upgrade the Git hygiene & commit cadence section.** This section applies to ALL projects (git is universal). Scan CLAUDE.md for heading `^#{2,3} Git hygiene` and its version marker `<!-- gstack-git-hygiene-vN -->`. Apply the same four-case logic:
+
+1. **Heading present + marker matches `v1`** → skip (idempotent).
+2. **Heading present + marker present + different version** → REPLACE through next heading. Preserve original heading level.
+3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the v1 marker.
+4. **Heading absent** → APPEND the block below as H2 (or insert under `## Skill routing` as H3 to match setup-routing's structure).
+
+The Git hygiene block to insert (verbatim):
+
+```markdown
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v1 -->
+
+Commit at meaningful milestones, not at every file save and not only at session end. The goal is a readable git history that lets future-you (or another agent) understand what shipped and why.
+
+### When to commit
+
+Commit when:
+- A logical unit of work is done and tested (one feature, one bug fix, one refactor pass)
+- About to switch to unrelated work (don't mix concerns in one commit)
+- A reversible decision was made (so you can `git revert` cleanly later)
+- Before invoking long-running or risky operations (so you have a rollback point)
+
+Do NOT commit:
+- Mid-task — wait until the change is coherent
+- Just to "save progress" — that's what `git stash` is for
+- Unrelated changes batched together — split them into separate commits
+
+### Commit message format
+
+Use the convention established in the repo (check `git log --oneline -10` first). If no convention yet, default to:
+
+```
+<type>(<scope>): <one-line summary>
+
+<body — what changed and why, not how>
+
+<co-authored-by trailer if relevant>
+```
+
+Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`. Scope = subsystem/module name.
+
+### Hygiene rules (NEVER violate)
+
+- ❌ `git commit --no-verify` — pre-commit hooks exist for a reason; if a hook fails, fix the root cause
+- ❌ `git commit --amend` on commits already pushed — rewrites shared history
+- ❌ `git push --force` to `main` or shared branches — destroys others' work
+- ❌ `git reset --hard` without first stashing or committing — silent work loss
+- ❌ `git add -A` or `git add .` when secrets / large binaries / build artifacts may be present — stage specific paths instead
+
+### Cadence rule
+
+If >5 distinct commits in a row without testing the cumulative state, STOP and verify (build, run tests) before continuing. Commits accumulate quickly; cumulative breakage is harder to diagnose than per-commit breakage.
+
+If multiple commits land in a single session without ANY commit being tested, the session is committing "progress without verification" — break that cycle by running the project's test suite, or document explicitly why testing is deferred.
+```
+
 **Preserve or upgrade existing Track-aware routing.** Before
 inserting the Track-aware routing section, scan the project's
 CLAUDE.md. Check two things independently: (a) does any heading

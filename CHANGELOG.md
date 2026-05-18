@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.10.0] - 2026-05-19
+
+### Added
+- **`### Git hygiene & commit cadence` section** (marker `<!-- gstack-git-hygiene-v1 -->`) emitted into every generated CLAUDE.md — NOT conditional on track. Universal git workflow guidance for any project type.
+- **"When to commit" guidance** (4 trigger conditions) + **"Do NOT commit"** anti-list (3 anti-patterns). Distinguishes meaningful milestones from progress-saves and mid-task chunks.
+- **Commit message format template** with type/scope convention and reference to the repo's existing `git log --oneline -10` as the canonical source for project style.
+- **Hygiene rules list** (5 NEVER-violations): no `--no-verify`, no `--amend` on pushed commits, no force-push to main/shared, no `--hard` reset without stash, no `git add -A` with secrets/binaries risk. Mirrors the standard git-safety protocol but as an explicit emit-into-project-CLAUDE.md rule.
+- **Cadence rule** — if >5 commits land in a row without testing cumulative state, STOP and verify. Catches the "progress-without-verification" failure mode where committed-but-untested work accumulates.
+
+### Changed
+- **`setup-routing` Step 6** emits the new section into the `## Skill routing` block as `### Git hygiene & commit cadence`, placed immediately after `### Autonomy and user interruption` and before `### Track-aware routing`.
+- **`adapt` Step 5** inserts or upgrades the section using the same four-case marker logic as Autonomy (v2.8.0), Track-aware routing (v2.3.2), and Xcode tools (v2.7.x). Universal (not track-gated).
+
+### Why
+Real-world observation from sing-replay session (2026-05-19): the SwiftUI agent shipped 40 tests + 2404 lines of Swift code without a CLAUDE.md ever being created — meaning no per-project commit-cadence guidance was ever loaded into the agent's context. The agent committed at arbitrary cadences and used phrases like "Bekreft + neste steg" as wait-states, which we patched in v2.8.0. v2.10.0 patches the parallel git-hygiene gap: agents working in projects WITH a CLAUDE.md will now see explicit commit-cadence + commit-message + hygiene rules on every session start.
+
+**Architectural note:** the *trigger* for creating CLAUDE.md in the first place is user-level concern (lives in `~/.claude/CLAUDE.md`), not plugin-level — chicken-and-egg, since the trigger has to fire BEFORE CLAUDE.md exists. The plugin owns the *rules* (what to do once CLAUDE.md exists), the user-level CLAUDE.md owns the *bootstrap-on-detect* trigger.
+
+### Backwards compatibility
+**Fully additive.** No skill behavior changes. The section emits into newly-generated CLAUDE.md and is inserted into existing CLAUDE.md via `/superpowers-gstack:adapt`. Marker pattern means future updates auto-upgrade.
+
+### Notes for users
+- **Re-run `/superpowers-gstack:adapt`** on existing projects to add the Git hygiene section. Universal — runs on web and native projects alike.
+- **The cadence rule is the most actionable** — "5 commits without verifying cumulative state" maps directly to the kind of vibe-coder failure mode where commits accumulate and breakage compounds. Worth dogfooding in your own workflow.
+- **The trigger for bootstrap-from-empty-project** is in the user's `~/.claude/CLAUDE.md` (added 2026-05-19), NOT this plugin. The plugin handles "what to do once bootstrap completes"; the user-level rule handles "fire bootstrap before 40 tests get shipped without CLAUDE.md".
+
 ## [2.9.0] - 2026-05-18
 
 ### Added
