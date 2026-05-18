@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.5.0] - 2026-05-18
+
+### Added
+- **`skills/swiftui-design-consultation/schema/proposal.schema.yaml`** — formal data model for design proposals (JSON Schema vocabulary in YAML form). 11 top-level fields (`schema_version`, `metadata`, `track`, `typography`, `color`, `materials`, `motion`, `spacing`, `accessibility`, `platforms`, `budget`, `decisions_log`) capture every token Phase 6 generators consume. `version: 1` documented as the current schema version; mismatch between proposal `schema_version` and schema `version` is a hard STOP error with explicit upgrade guidance.
+- **`skills/swiftui-design-consultation/schema/proposal.example.yaml`** — fully populated canonical example (Lighthouse macOS menu-bar utility). Shows every required and recommended field; new proposals SHOULD start from this template and only modify fields where the actual design differs.
+- **New Phase 6 Step 6.0 (schema validation)** — read cached proposal YAML, validate against schema (LLM-side: walk every `required` field, confirm type matches), then confirm `schema_version` + `track` align with project state. STOPs surface schema gaps explicitly; never silently substitute empty strings.
+- **Severity monotonicity guard between HIG iterations (Step 6.7)** — after each iteration N, compare findings against N-1. No NEW CRITICAL allowed; SIGNIFICANT count must not increase; POLISH may drift. Rollback proposal YAML to N-1 state if monotonicity violated, then AskUserQuestion (accept N anyway / accept N-1 / refine manually). Prevents the failure mode where a fix trades one CRITICAL for another, or fixes a SIGNIFICANT by introducing two new ones.
+
+### Changed
+- **Phase 3 Step 3.1 (build data model)** — now references the schema explicitly and produces a structured YAML proposal alongside the in-memory object. "Build the in-memory DesignProposal" → "Build the DesignProposal as a structured YAML document matching proposal.schema.yaml".
+- **Phase 3 Step 3.2 (serialize + htmlify)** — writes BOTH `design-proposal-$TS.md` (human-readable, for htmlify preview) AND `design-proposal-$TS.yaml` (structured, for Phase 6). Same pinned timestamp; same data, different presentation.
+- **Phase 3 Step 3.4 (cache approved proposal)** — caches both files under canonical names (`swiftui-consultation-state.proposal.yaml` + `.md`). The YAML is authoritative; the MD is its presentation; they must stay consistent.
+- **Phase 6 Step 6.1 (generate DESIGN.md)** — token substitution sources from the parsed proposal YAML object loaded in Step 6.0, NOT from prose. New explicit token-to-YAML-field mapping table (15 tokens × YAML paths).
+- **Phase 6 Step 6.2 (generate Swift Package)** — same change: tokens map to parsed YAML paths. New mapping table covers all 9 Swift-template tokens. Both 6.1 and 6.2 read the same parsed object, so prose-vs-code drift is structurally impossible.
+- **Phase 6 Step 6.7 iteration loop** — proposal YAML is the only thing that gets edited during iteration; DESIGN.md and DesignSystem/* are always regenerated from it. In-memory backup of the YAML before each iteration enables mechanical rollback for the monotonicity guard.
+
+### Why
+Closes backlog items **S3** (formal data model) and **S4** (HIG iteration convergence guard) from `docs/superpowers/backlog/2026-05-17-swiftui-design-consultation-v1.1-backlog.md`. v1.0 of swiftui-design-consultation produced DESIGN.md and DesignSystem/* by substituting tokens into templates from a *prose* proposal MD — the "pure functions of the same data model" guarantee was aspirational, not enforced. Drift was possible whenever the LLM mis-substituted tokens, and the iteration loop could leave the user with a strictly worse artifact than they originally approved (no comparison against iteration N-1, no severity monotonicity).
+
+v2.5.0 makes the data model real (structured YAML + schema) and adds the rollback guard. Both changes are LLM-side (no new dependencies, no validator binary, no build step). The schema is human-readable YAML; the validation is the skill reading the schema and confirming the proposal matches; the monotonicity check is finding-comparison the skill performs between iterations.
+
+### Backwards compatibility
+**Breaking for in-flight Phase 3 work**, additive for new consultations. Projects mid-consultation when v2.5.0 lands need to re-run Phase 3 to produce a structured proposal YAML — the cached prose-only `swiftui-consultation-state.proposal.md` is not sufficient for Phase 6 anymore. For new projects: zero migration. For freshly-shipped DESIGN.md/DesignSystem from v1.x consultations: no change (the artifacts are already on disk; the schema only matters when re-running the skill).
+
+### Notes for users
+- **Re-running consultation after v2.5.0:** start fresh from Phase 0 to produce the YAML proposal. The skill detects missing YAML in Step 6.0 and surfaces it explicitly.
+- **Schema evolution:** when adding/removing/renaming proposal fields in the future, bump `version` in `proposal.schema.yaml` and document the upgrade path in the CHANGELOG. The schema-version mismatch check in Step 6.0 will catch proposals on the old format.
+- **Monotonicity guard tuning:** if you find legitimate cases where iteration 2 *should* introduce a new SIGNIFICANT (e.g. a deliberate trade-off the user accepts), the AskUserQuestion offers option (A) to override. The guard never silently blocks — only surfaces the discrepancy.
+
 ## [2.4.0] - 2026-05-18
 
 ### Added

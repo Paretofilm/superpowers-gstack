@@ -307,24 +307,45 @@ each choice in canonical patterns + HIG citations:
 Each returns 3-5 corpus samples + HIG-page citations. Use these as
 grounding for proposing the design.
 
-Build the in-memory DesignProposal object per the spec § "The internal
-data model". Tokens map to the templates from Phase 2.
+Build the DesignProposal object as a **structured YAML document
+matching `skills/swiftui-design-consultation/schema/proposal.schema.yaml`**.
+The schema defines every required field across all eight pillars
+(metadata, track, typography, color, materials, motion, spacing,
+accessibility, platforms, budget, decisions_log) with the exact
+types Phase 6 generators expect.
+
+See `skills/swiftui-design-consultation/schema/proposal.example.yaml`
+for a fully populated canonical example. New proposals SHOULD start
+from that template and only modify fields where the actual design
+differs.
+
+The structured proposal becomes the single source of truth — both
+DESIGN.md and the DesignSystem/* Swift Package are generated as
+pure functions of this YAML object in Phase 6. Drift between the
+two outputs is structurally impossible because they read the same
+parsed data.
 
 ### Step 3.2: Serialize and /htmlify the proposal
 
-Pin a single timestamp so the file written here and the path referenced
-when invoking htmlify match exactly (do NOT call `$(date ...)` twice;
-the two calls would produce different timestamps when seconds tick):
+Pin a single timestamp so the files written here and the paths
+referenced when invoking htmlify match exactly (do NOT call
+`$(date ...)` twice; the two calls would produce different
+timestamps when seconds tick):
 
 ```bash
 TS=$(date +%Y%m%d-%H%M%S)
 PROPOSAL_PATH=~/.gstack/projects/"$SLUG"/design-proposal-"$TS".md
+PROPOSAL_YAML=~/.gstack/projects/"$SLUG"/design-proposal-"$TS".yaml
 ```
 
-Then write the proposal MD to `$PROPOSAL_PATH`:
-```
-~/.gstack/projects/$SLUG/design-proposal-$TS.md
-```
+Write **both** files with the same timestamp suffix:
+
+- `$PROPOSAL_YAML` — the structured proposal matching `proposal.schema.yaml`. This is what Phase 6 reads.
+- `$PROPOSAL_PATH` — the human-readable proposal Markdown for /htmlify preview. Derived from the same data, but formatted for human review.
+
+Both files MUST be consistent — same values in both. The YAML is
+authoritative; the MD is its presentation. If you regenerate one,
+regenerate the other from the same source.
 
 Structure the file as rich Markdown with:
 - H1: "Design Proposal: $PRODUCT_NAME"
@@ -398,18 +419,60 @@ If `D`: go back to Phase 1 to refine constraints.
 
 ### Step 3.4: Cache approved proposal
 
-When user picks `A`, copy the proposal MD to:
-```
-~/.gstack/projects/$SLUG/swiftui-consultation-state.proposal.md
+When user picks `A`, copy **both** the structured YAML and the
+human-readable MD to canonical names (without the timestamp suffix):
+
+```bash
+cp "$PROPOSAL_YAML" ~/.gstack/projects/"$SLUG"/swiftui-consultation-state.proposal.yaml
+cp "$PROPOSAL_PATH" ~/.gstack/projects/"$SLUG"/swiftui-consultation-state.proposal.md
 ```
 
-This is the source the Phase 6 generators read.
+The YAML is what Phase 6 generators read — it is the structured
+source of truth. The MD is kept alongside for human inspection,
+debugging, and audit trails (e.g. "what did we approve last
+Tuesday?"). They must stay consistent.
 
 ## Phase 6 — Write Artifacts (with macos-native-review chain)
 
 Paired generation. DESIGN.md and DesignSystem/* are both written from
-the approved proposal. Then run conformance review against the HIG
-budget; iterate up to 2 times if over budget.
+the approved proposal YAML. Then run conformance review against the
+HIG budget; iterate up to 2 times if over budget, with severity
+monotonicity guard between iterations.
+
+### Step 6.0: Load and validate the structured proposal
+
+Before generating any artifact, read the cached structured proposal
+and validate it against the schema:
+
+```bash
+PROPOSAL_YAML=~/.gstack/projects/"$SLUG"/swiftui-consultation-state.proposal.yaml
+SCHEMA=~/.claude/plugins/cache/paretofilm-plugins/superpowers-gstack/*/skills/swiftui-design-consultation/schema/proposal.schema.yaml
+# (Or the dev-repo path if running from source.)
+
+[ -f "$PROPOSAL_YAML" ] || { echo "ERROR: no cached proposal — Phase 3 must complete first."; exit 1; }
+```
+
+Then **LLM-side validation**:
+
+1. Read both `$PROPOSAL_YAML` and the schema file into context.
+2. Walk every `required` field in the schema. Confirm it is present
+   in the proposal with the right type. (For arrays with `minItems`,
+   confirm the item count. For strings with `pattern`, confirm the
+   regex matches.)
+3. Confirm `schema_version` in the proposal equals the schema's
+   `version` field (currently `1`). Mismatch is a hard STOP — surface
+   to user with explicit upgrade guidance, do not attempt to
+   regenerate against a schema the proposal doesn't claim.
+4. Confirm `track` in the proposal matches `$TRACK` (the value from
+   `.gstack/track`). Mismatch is a hard STOP — the proposal claims
+   one platform target, the project marker claims another. Surface
+   the discrepancy and AskUserQuestion which is authoritative.
+
+If validation passes, the parsed proposal object is the single source
+of truth for every token substitution in Steps 6.1 and 6.2 below. If
+any required field is missing or any type mismatches, STOP and
+surface the schema gap to the user — do NOT silently substitute
+empty strings.
 
 ### Step 6.1: Generate DESIGN.md from template (with overwrite-safety)
 
@@ -429,7 +492,29 @@ Package in Step 6.2.
 
 Then read `skills/swiftui-design-consultation/templates/DESIGN.md.template`.
 Substitute all 15 tokens (`{{DATE}}`, `{{PRODUCT_CONTEXT}}`, etc.)
-from the approved proposal. Write to `<repo>/DESIGN.md`.
+**from the parsed proposal YAML object** loaded in Step 6.0 — NOT
+from the human-readable proposal MD. The MD is for human review; the
+YAML is the data source. Write to `<repo>/DESIGN.md`.
+
+Token-to-YAML-field mapping:
+
+| Template token | Proposal YAML path |
+|---|---|
+| `{{DATE}}` | `metadata.date` |
+| `{{PRODUCT_CONTEXT}}` | `metadata.product_context` |
+| `{{MEMORABLE_THING}}` | `metadata.memorable_thing` |
+| `{{AESTHETIC_DIRECTION}}` | `metadata.aesthetic_direction` |
+| `{{TYPOGRAPHY_PROSE}}` | `typography.prose` |
+| `{{COLOR_PROSE}}` | `color.prose` |
+| `{{MATERIALS_PROSE}}` | `materials.prose` |
+| `{{MOTION_PROSE}}` | `motion.prose` |
+| `{{SPACING_PROSE}}` | `spacing.prose` |
+| `{{ACCESSIBILITY_PROSE}}` | `accessibility.prose` |
+| `{{PLATFORMS_PROSE}}` | `platforms.prose` |
+| `{{BUDGET_CRITICAL}}` | `budget.critical` |
+| `{{BUDGET_SIGNIFICANT}}` | `budget.significant` |
+| `{{BUDGET_POLISH}}` | `budget.polish` |
+| `{{DECISIONS_LOG}}` | `decisions_log` (rendered as bulleted list) |
 
 ### Step 6.2: Generate Swift Package (with overwrite-safety)
 
@@ -453,8 +538,29 @@ mkdir -p DesignSystem/Tests/DesignSystemTests
 
 For each template in `skills/swiftui-design-consultation/templates/`:
 - Read it
-- Substitute tokens per `$TRACK` and the proposal data model
+- Substitute tokens **from the parsed proposal YAML object loaded
+  in Step 6.0** (NOT from the human-readable proposal MD)
 - Write to the corresponding path under `DesignSystem/`
+
+Token-to-YAML-field mapping for the Swift Package templates:
+
+| Template token | Proposal YAML path |
+|---|---|
+| `{{PLATFORMS}}` | derived from `track` (`ios` → `.iOS(.v26)`, `macos` → `.macOS(.v26)`, `both` → `.iOS(.v26), .macOS(.v26)`) |
+| `{{DECLARED_TRACK}}` | `track` |
+| `{{TYPE_ROLES}}` | `typography.roles` (rendered as Swift type-role enum + Font.TextStyle map) |
+| `{{BRAND_COLORS}}` | `color.brand` (rendered as Swift Color extensions + asset-catalog entries) |
+| `{{SEMANTIC_COLORS}}` | `color.semantic` (rendered as Swift Color extensions mapping to system colors) |
+| `{{MOTION_PRESETS}}` | `motion.presets` (rendered as `static let X: Animation = ...` declarations) |
+| `{{SPACING_CONSTANTS}}` | `spacing.constants` (rendered as `static let X: CGFloat = ...`) |
+| `{{RADIUS_CONSTANTS}}` | `spacing.radius` (rendered as `static let X: CGFloat = ...`) |
+| `{{PLATFORM_ASSERTIONS}}` | `platforms.assertions` (rendered as `#if os(...) ... #endif` test guards) |
+
+Because both DESIGN.md (Step 6.1) and the Swift Package (Step 6.2)
+read the same parsed YAML object, the prose in DESIGN.md and the
+declarations in Swift code are guaranteed to refer to the same
+typography roles, colors, motion presets, etc. Drift is structurally
+impossible.
 
 Mapping:
 - `Package.swift.template` → `DesignSystem/Package.swift`
@@ -634,13 +740,66 @@ Compare against the Phase 1 budget. If within budget:
 
 If over budget:
 - List findings ranked by severity with file:line + proposed fix
-- Update the data model to absorb the proposed fixes
-- Regenerate all artifacts (Step 6.1 onwards)
+- Update the **proposal YAML** to absorb the proposed fixes (single
+  source of truth — never edit DESIGN.md or DesignSystem/* files
+  directly during iteration; they are regenerated from the YAML)
+- Regenerate all artifacts (Step 6.1 onwards) from the updated YAML
 - Re-run reviews
+- **Severity monotonicity guard** (see below) must pass before
+  accepting the iteration; otherwise rollback
 - Hard cap: 2 iterations. If still over budget after iteration 2, STOP
   and AskUserQuestion: "Findings exceed budget after 2 iterations.
   Choose: (A) ship anyway, (B) override budget to actual numbers,
   (C) refine manually now."
+
+#### Severity monotonicity guard (between iterations)
+
+After each iteration N (N ≥ 1), compare findings against iteration
+N-1 (the baseline is the post-Phase-3-approval state, before any
+HIG-driven edits). The fix for one finding must not introduce new
+findings of equal or higher severity. Specifically:
+
+- **No NEW CRITICAL** — iteration N must have zero CRITICAL findings
+  that were not present in iteration N-1. A fix that turns
+  SIGNIFICANT into CRITICAL is worse than the original.
+- **SIGNIFICANT count must not increase** — N's SIGNIFICANT count ≤
+  N-1's SIGNIFICANT count. Same logic.
+- **POLISH count may drift up or down** — POLISH is the most
+  tolerant category; tighter conformance often surfaces additional
+  POLISH gaps that were masked by SIGNIFICANT issues. This is fine.
+
+Comparison procedure:
+
+1. Parse findings from iteration N (output of the three review-*
+   tools + macos-native-review, aggregated and deduplicated per
+   Step 6.7 as written).
+2. For each iteration-N finding, look it up by `(rule_id, file:line)`
+   in iteration N-1. NEW findings are those not present in N-1.
+3. Count NEW CRITICAL and NEW SIGNIFICANT.
+4. **If NEW CRITICAL > 0 OR NEW SIGNIFICANT > 0 (rolled-up count
+   increased)**:
+   - **ROLLBACK** the proposal YAML to its iteration N-1 state
+     (keep an in-memory backup of the YAML before each iteration's
+     edit so rollback is mechanical, not LLM-judgment).
+   - **AskUserQuestion**:
+     > "Iteration $N introduced $NEW_CRITICAL new CRITICAL and
+     > $NEW_SIGNIFICANT new SIGNIFICANT findings while fixing the
+     > original. Choose: (A) accept iteration $N anyway (override
+     > monotonicity), (B) accept iteration $N-1 state (forgo the
+     > attempted fix), (C) refine manually now (drop into AskUserQuestion-
+     > driven editing)."
+
+This prevents the failure mode where the LLM trades one CRITICAL for
+another, or fixes a SIGNIFICANT by introducing two new SIGNIFICANTs.
+Without the guard, "iteration 2" can leave the user with a strictly
+worse artifact than the one they approved in Phase 3.
+
+Why this matters: budget conformance is a *necessary* condition,
+not a *sufficient* one. An artifact with zero CRITICAL findings that
+was originally zero CRITICAL is fine. An artifact with zero CRITICAL
+findings that *had* one CRITICAL in iteration N-1 and one *different*
+CRITICAL in iteration N has churned, not improved — the monotonicity
+check catches that.
 
 ### Step 6.8: Commit (including .gstack/track marker)
 

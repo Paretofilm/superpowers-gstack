@@ -64,7 +64,15 @@ contains many platform-agnostic rules), so the HIG budget is still
 partially enforced for iOS-only projects, just not via the DESIGN.md
 review path.
 
-### S3. "Pure functions of same data model" is not actually enforced
+### S3. ✅ FIXED in v2.5.0 — "Pure functions of same data model" is not actually enforced
+
+**Status: FIXED in v2.5.0.** Shipped `skills/swiftui-design-consultation/schema/proposal.schema.yaml` (JSON Schema vocabulary in YAML form, 11 top-level fields, version 1) and `proposal.example.yaml` (canonical populated example). Phase 6 Step 6.0 validates the cached proposal YAML against the schema (LLM-side validation, no dependency). Steps 6.1 and 6.2 source token substitutions from the parsed YAML object — explicit token-to-YAML-field mapping tables document all 15 DESIGN.md tokens and 9 Swift-template tokens. Drift between DESIGN.md and DesignSystem/* is now structurally impossible because both read the same parsed object.
+
+Original codex finding preserved below for history.
+
+---
+
+
 
 **What codex flagged.** The data model in spec lines 170-222 is prose.
 Phase 6 generators read an approved proposal Markdown file (plan lines
@@ -87,7 +95,15 @@ v1.0, the workflow is "Claude reads proposal, substitutes consistently"
 in-context input. Works for single-session generations; the drift risk
 appears mostly on Phase 6 iteration loops or refresh consultations.
 
-### S4. HIG iteration loop has no convergence guard
+### S4. ✅ FIXED in v2.5.0 — HIG iteration loop has no convergence guard
+
+**Status: FIXED in v2.5.0.** Phase 6 Step 6.7 now includes a severity monotonicity guard between iterations: no NEW CRITICAL allowed; SIGNIFICANT count must not increase; POLISH may drift. Comparison is mechanical (`(rule_id, file:line)` lookup between iteration N and N-1). Rollback the proposal YAML to N-1 state if monotonicity violated, then AskUserQuestion offers three explicit choices (accept N anyway / accept N-1 / refine manually). Mechanical rollback is enabled by the in-memory YAML backup taken before each iteration's edit. Tied to S3 (formal data model) — both shipped together since the guard requires structured findings comparison.
+
+Original codex finding preserved below for history.
+
+---
+
+
 
 **What codex flagged.** Plan lines 1454-1462: 2-iteration cap, no
 comparison against Phase 3 accepted proposal, no severity monotonicity.

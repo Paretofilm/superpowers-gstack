@@ -1,0 +1,272 @@
+# Design Proposal Schema (v1)
+#
+# This is the structured data model that drives Phase 6 artifact
+# generation in /superpowers-gstack:swiftui-design-consultation.
+#
+# Both DESIGN.md and the DesignSystem/* Swift Package are pure
+# functions of a proposal that matches this schema. Drift between
+# the two outputs is structurally impossible — they read from the
+# same parsed object.
+#
+# The schema uses JSON Schema vocabulary in YAML form. Validation is
+# LLM-side: the skill reads this file, reads the proposal under
+# review, and confirms the proposal contains every required field
+# with the right type. No build dependency, no validator binary.
+#
+# Schema version policy: bump `version` when fields are added,
+# removed, or have their semantics changed. The proposal file MUST
+# carry a top-level `schema_version` field matching this value;
+# mismatches surface as Phase 6 STOP errors with explicit upgrade
+# guidance.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://paretofilm.github.io/superpowers-gstack/swiftui-design-consultation/proposal.schema.yaml"
+title: "SwiftUI Design Proposal"
+description: "Structured data model for a design system proposal produced by Phase 3 and consumed by Phase 6."
+type: object
+version: 1
+
+required:
+  - schema_version
+  - metadata
+  - track
+  - typography
+  - color
+  - materials
+  - motion
+  - spacing
+  - accessibility
+  - platforms
+  - budget
+  - decisions_log
+
+properties:
+
+  schema_version:
+    description: "Must equal the `version` field of this schema (currently 1). Mismatch is a hard error."
+    type: integer
+    const: 1
+
+  metadata:
+    type: object
+    required: [date, product_name, product_context, memorable_thing, aesthetic_direction]
+    properties:
+      date:
+        description: "ISO-8601 date (YYYY-MM-DD) the proposal was approved."
+        type: string
+        pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      product_name:
+        type: string
+        minLength: 1
+      product_context:
+        description: "1-3 sentences. What the product is, who uses it, what matters most about the experience."
+        type: string
+        minLength: 20
+      memorable_thing:
+        description: "One sentence. The one signature moment the user remembers."
+        type: string
+        minLength: 10
+      aesthetic_direction:
+        description: "1-2 sentences. The aesthetic mood (e.g. 'editorial calm', 'precision instrument', 'tactile warmth')."
+        type: string
+        minLength: 10
+
+  track:
+    description: "Project platform target. Drives Package.swift platforms + DesignSystem #if os() guards."
+    type: string
+    enum: [ios, macos, both]
+
+  typography:
+    type: object
+    required: [prose, roles]
+    properties:
+      prose:
+        description: "Human-readable rationale for the type system, written for DESIGN.md."
+        type: string
+        minLength: 20
+      roles:
+        description: "Concrete type roles (display / title / body / caption / code / etc.) with font + size + weight + tracking."
+        type: array
+        minItems: 4
+        items:
+          type: object
+          required: [name, font_family, size_pt, weight, line_height]
+          properties:
+            name: { type: string }
+            font_family: { type: string }
+            size_pt: { type: number, minimum: 8 }
+            weight:
+              type: string
+              enum: [ultraLight, thin, light, regular, medium, semibold, bold, heavy, black]
+            line_height: { type: number, minimum: 1.0, maximum: 2.0 }
+            tracking: { type: number }
+            dynamic_type_role:
+              description: "Maps to SwiftUI Font.TextStyle for Dynamic Type scaling."
+              type: string
+              enum: [largeTitle, title, title2, title3, headline, subheadline, body, callout, footnote, caption, caption2]
+
+  color:
+    type: object
+    required: [prose, brand, semantic]
+    properties:
+      prose:
+        type: string
+        minLength: 20
+      brand:
+        description: "Brand-specific colors with light + dark hex values. Asset-catalog entries are generated from these."
+        type: array
+        items:
+          type: object
+          required: [name, hex_light, hex_dark]
+          properties:
+            name: { type: string }
+            hex_light: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+            hex_dark: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+            hex_high_contrast_light: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+            hex_high_contrast_dark: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+      semantic:
+        description: "Semantic color tokens that map to Apple system colors. Defines the API of Color.swift."
+        type: array
+        items:
+          type: object
+          required: [name, system_color]
+          properties:
+            name: { type: string }
+            system_color:
+              description: "Apple semantic color name (e.g. label, secondaryLabel, systemBackground, systemBlue)."
+              type: string
+
+  materials:
+    type: object
+    required: [prose]
+    properties:
+      prose:
+        description: "Liquid Glass discipline rules — where glass belongs (chrome), where it does not (content layer)."
+        type: string
+        minLength: 20
+      chrome_layers:
+        description: "UI surfaces that USE glass (navigation, tab bar, sheet, popover, sidebar)."
+        type: array
+        items: { type: string }
+      content_layers:
+        description: "UI surfaces that MUST NOT use glass (lists, grids, primary content)."
+        type: array
+        items: { type: string }
+
+  motion:
+    type: object
+    required: [prose, presets]
+    properties:
+      prose:
+        type: string
+        minLength: 20
+      presets:
+        description: "Named motion presets with SwiftUI Animation declarations."
+        type: array
+        minItems: 3
+        items:
+          type: object
+          required: [name, declaration, use_case]
+          properties:
+            name: { type: string }
+            declaration:
+              description: "SwiftUI Animation literal (e.g. '.spring(response: 0.35, dampingFraction: 0.85)')."
+              type: string
+            use_case: { type: string }
+
+  spacing:
+    type: object
+    required: [prose, constants, radius]
+    properties:
+      prose:
+        type: string
+        minLength: 20
+      constants:
+        description: "Named spacing tokens. Generally on an 8-pt grid."
+        type: array
+        minItems: 4
+        items:
+          type: object
+          required: [name, value_pt]
+          properties:
+            name: { type: string }
+            value_pt: { type: number, minimum: 0 }
+      radius:
+        description: "Corner radius tokens. Generally power-of-two or Apple-canonical."
+        type: array
+        minItems: 2
+        items:
+          type: object
+          required: [name, value_pt]
+          properties:
+            name: { type: string }
+            value_pt: { type: number, minimum: 0 }
+
+  accessibility:
+    type: object
+    required: [prose]
+    properties:
+      prose:
+        description: "Accessibility commitments — Dynamic Type cap, VoiceOver labels policy, contrast targets, Reduce Motion behavior."
+        type: string
+        minLength: 20
+      dynamic_type_max:
+        description: "Maximum Dynamic Type size the layout supports."
+        type: string
+        enum: [xLarge, xxLarge, xxxLarge, AX1, AX2, AX3, AX4, AX5]
+      contrast_target_aa:
+        description: "Are all brand-on-background combinations targeting WCAG AA?"
+        type: boolean
+      reduce_motion_behavior:
+        description: "How motion presets degrade when Reduce Motion is enabled."
+        type: string
+
+  platforms:
+    type: object
+    required: [prose, assertions]
+    properties:
+      prose:
+        description: "Per-platform notes about how the design system adapts (e.g. macOS uses MenuBarExtra vs iOS uses TabView)."
+        type: string
+        minLength: 10
+      assertions:
+        description: "Compile-time platform assertions that PlatformsTests.swift will verify."
+        type: array
+        items:
+          type: object
+          required: [platform, assertion]
+          properties:
+            platform:
+              type: string
+              enum: [iOS, macOS, both]
+            assertion:
+              description: "What must be true for this platform (e.g. 'iOS-26.0 minimum', 'macOS-26.0 minimum', 'TabView available')."
+              type: string
+
+  budget:
+    type: object
+    required: [critical, significant, polish]
+    properties:
+      critical:
+        description: "Maximum CRITICAL HIG findings allowed before Phase 6 STOPs and asks user."
+        type: integer
+        minimum: 0
+      significant:
+        type: integer
+        minimum: 0
+      polish:
+        type: integer
+        minimum: 0
+
+  decisions_log:
+    description: "Ordered list of design decisions made during the consultation, in human-readable form."
+    type: array
+    items:
+      type: object
+      required: [decision, rationale]
+      properties:
+        decision: { type: string }
+        rationale: { type: string }
+        hig_citation:
+          description: "Optional HIG URL backing the decision."
+          type: string
