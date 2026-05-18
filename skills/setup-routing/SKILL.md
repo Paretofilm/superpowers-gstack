@@ -327,7 +327,7 @@ When you do legitimately reach a stopping point (the agreed scope is done, or a 
 - Name what's blocked (if anything) with the specific reason from the five categories
 - Do NOT propose new work or invite continuation — the next session/turn will decide that
 
-### Git hygiene & commit cadence <!-- gstack-git-hygiene-v1 -->
+### Git hygiene & commit cadence <!-- gstack-git-hygiene-v2 -->
 
 Commit at meaningful milestones, not at every file save and not only at session end. The goal is a readable git history that lets future-you (or another agent) understand what shipped and why.
 
@@ -341,12 +341,18 @@ Commit when:
 
 Do NOT commit:
 - Mid-task — wait until the change is coherent
-- Just to "save progress" — that's what `git stash` is for
+- Just to "save progress" — that's what `git stash` is for (short-lived holds only, minutes to hours; for longer holds create a WIP branch instead so the work survives `git stash clear` and is visible in `git branch`)
 - Unrelated changes batched together — split them into separate commits
 
 #### Commit message format
 
-Use the convention established in the repo (check `git log --oneline -10` first). If no convention yet, default to:
+Use the convention established in the repo (check `git log --oneline -10` first). Three cases:
+
+- **Repo has a consistent convention** (every recent commit follows the same prefix style — `feat:` / `fix:` / `[TICKET-123]` / plain prose / etc.) → follow it. Do not introduce a different style.
+- **Repo log is empty** (first commit, or freshly init'd) → use the default below.
+- **Repo log is inconsistent** (mixed styles, no clear winner) → use the default below AND note in your final summary that the project has no clear commit convention so the user can decide whether to standardize.
+
+Default format (use only when no consistent convention is established):
 
 ```
 <type>(<scope>): <one-line summary>
@@ -368,7 +374,7 @@ Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`. Scope = subsystem/mod
 
 #### Cadence rule
 
-If >5 distinct commits in a row without testing the cumulative state, STOP and verify (build, run tests) before continuing. Commits accumulate quickly; cumulative breakage is harder to diagnose than per-commit breakage.
+If >5 distinct commits in a row without testing the cumulative state, STOP and verify (build, run tests) before continuing. This STOP is a category-5 ("truly blocked — verification gap") per the Autonomy section above; it overrides the autonomous-continuation default exactly the same way an unresolvable error would. Commits accumulate quickly; cumulative breakage is harder to diagnose than per-commit breakage.
 
 If multiple commits land in a single session without ANY commit being tested, the session is committing "progress without verification" — break that cycle by running the project's test suite, or document explicitly why testing is deferred.
 

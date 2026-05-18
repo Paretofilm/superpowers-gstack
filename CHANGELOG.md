@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.10.1] - 2026-05-19
+
+### Changed
+- **Git hygiene marker bumped `v1` → `v2`.** Round 1 pitfall verification on v2.10.0 surfaced three real risks that v2.10.1 fixes inline.
+
+### Fixed
+- **Convention-discovery ambiguity** — v1 said "use repo convention if exists, else default" but didn't handle the realistic case of MIXED commit styles in the log. v2 splits into three explicit cases: consistent convention → follow it; empty log → use default; inconsistent log → use default AND note in summary so the user can decide whether to standardize.
+- **Cross-section conflict with Autonomy rule (v2.8.0)** — v1 cadence rule said "STOP after >5 commits" but Autonomy section says "only stop in 5 specific categories". An agent reading both could ignore cadence as "not in the 5 categories". v2 explicitly maps the cadence STOP to Autonomy category 5 ("truly blocked — verification gap") so the precedence is unambiguous.
+- **git stash advice without scope caveat** — v1 said "use git stash to save progress" without noting that stash is risky for longer holds (silent loss via `git stash clear`, invisible in `git branch`). v2 qualifies: "short-lived holds (minutes to hours); for longer holds create a WIP branch instead".
+
+### Why
+Pitfall verification (round 1 on v2.10.0): three issues found, all in the same Git hygiene section. Per the skill's two-rounds policy, fix inline and re-run. Round 2 (on the patched artifact): CLEAN. v2.10.1 ships those fixes plus the marker bump that triggers auto-upgrade via adapt's REPLACE path on existing v2.10.0-adapted projects.
+
+### Backwards compatibility
+**Fully backwards compatible — auto-upgrade via marker pattern.** Adapt's case-2 logic now explicitly recognizes both `v1` legacy markers and absent markers, REPLACEs through next heading, preserves heading level. Pre-v2.10.0 projects (no marker) get the v2 section appended cleanly.
+
 ## [2.10.0] - 2026-05-19
 
 ### Added
