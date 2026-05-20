@@ -318,7 +318,7 @@ jobs:
              - The marker `===ADAPT_SKILL.md===`
              - The complete updated adapt SKILL.md
 
-          Output ONLY the file contents and markers, no markdown fences or commentary."""
+          Output ONLY the file contents and markers, no markdown fences, no commentary, no analytical preamble. Start your response IMMEDIATELY with the first character of the README — the `# Superpowers + GStack:` heading. Do NOT include any text before that line, even to acknowledge the task, explain your reasoning, or summarize what you plan to change. The script parses your response by markers; any prose before the first heading gets written into README.md verbatim and corrupts the file."""
 
           request = {
               "model": "claude-sonnet-4-6",
@@ -373,9 +373,85 @@ jobs:
                     file=sys.stderr)
               sys.exit(1)
 
-          def prepend_changelog_entry(new_entry: str) -> None:
-              """Prepend new entry to CHANGELOG.md, preserving the `# Changelog` header."""
-              new_entry = new_entry.strip()
+          def strip_preamble(text: str, expected_line_prefix: str, file_label: str,
+                              next_line_required: str = "") -> str:
+              """Strip analytical preamble before the expected file-start line.
+
+              Claude occasionally includes planning prose ("I'll analyze the
+              upstream changes…") despite the prompt's explicit no-commentary
+              rule. Script-side defense: find the FIRST LINE that starts with
+              the expected prefix and discard everything before it.
+
+              Line-anchored (not substring) matching means we don't get
+              fooled by Claude mentioning the prefix in its preamble prose
+              (e.g. "I'll update the # Superpowers section…").
+
+              `next_line_required`: for prefixes that appear in other
+              contexts (e.g. `---` is also used in the upstream context
+              sent INTO the prompt as `--- skill_name/SKILL.md ---`), require
+              the following line to start with this string. Used for SKILL.md
+              YAML front-matter: `---` followed by `name:`. The next-line
+              check uses lstrip() to tolerate accidental leading whitespace.
+
+              Returns empty string if the prefix (or prefix + next-line pair)
+              never appears, signaling the caller to fail loudly.
+              """
+              text = text.strip()
+              if not text:
+                  return text
+              lines = text.splitlines()
+              for i, line in enumerate(lines):
+                  if not line.startswith(expected_line_prefix):
+                      continue
+                  if next_line_required:
+                      if i + 1 >= len(lines):
+                          continue
+                      if not lines[i + 1].lstrip().startswith(next_line_required):
+                          continue
+                  if i > 0:
+                      dropped = "\n".join(lines[:i])
+                      dropped_preview = dropped[:200].replace("\n", " ")
+                      print(f"Note: stripped {i} preamble lines from {file_label} "
+                            f"before '{expected_line_prefix}…'. Dropped: "
+                            f"{dropped_preview}{'…' if len(dropped) > 200 else ''}",
+                            file=sys.stderr)
+                  return "\n".join(lines[i:]).strip()
+              # Prefix never found — signal corruption to caller.
+              hint = (f" + next-line '{next_line_required}'" if next_line_required else "")
+              print(f"ERROR: expected line prefix '{expected_line_prefix}'{hint} not found "
+                    f"in {file_label} content. Claude likely emitted a malformed response.",
+                    file=sys.stderr)
+              return ""
+
+          def write_or_fail(path: Path, content: str, file_label: str) -> None:
+              """Write content to path, or abort the workflow if content is empty.
+
+              strip_preamble returns "" when the expected prefix is missing.
+              Writing an empty file would corrupt the auto-update PR. Better
+              to fail the workflow loudly; self-repair handles retry.
+              """
+              if not content.strip():
+                  print(f"ERROR: empty content for {file_label} after preamble strip. "
+                        f"Refusing to write a corrupt file. Failing workflow.",
+                        file=sys.stderr)
+                  sys.exit(1)
+              path.write_text(content.strip() + "\n")
+
+          def prepend_changelog_entry(raw_entry: str) -> None:
+              """Prepend new entry to CHANGELOG.md, preserving the `# Changelog` header.
+
+              Fails the workflow loudly if Claude's response doesn't contain a
+              valid `## [...]` entry header — better than silently skipping the
+              changelog update, which would leave the auto-PR claiming a fix
+              shipped without recording it.
+              """
+              had_content = bool(raw_entry.strip())
+              # First strip any preamble before the version-line header.
+              new_entry = strip_preamble(raw_entry, "## [", "CHANGELOG entry")
+              if had_content and not new_entry:
+                  print("ERROR: CHANGELOG entry block contained content but no '## ['"
+                        " header line was found. Failing workflow.", file=sys.stderr)
+                  sys.exit(1)
               if not new_entry:
                   return
               # Defensive: strip a `# Changelog` line if Claude includes it despite
@@ -401,15 +477,26 @@ jobs:
               else:
                   changelog_path.write_text(f"# Changelog\n\n{new_entry}\n")
 
+          # File-start prefixes used by strip_preamble. README uses the unique
+          # title; VERSIONS.md uses its unique header; SKILL.md files use the
+          # YAML front-matter opener `---` (which also legitimately appears
+          # mid-file, but find() returns the FIRST occurrence which is the
+          # opener).
+          README_PREFIX = "# Superpowers + GStack"
+          VERSIONS_PREFIX = "# Verified Versions"
+          SKILL_PREFIX = "---"
+
           if "===VERSIONS.md===" in content:
               manual_part, rest = content.split("===VERSIONS.md===", 1)
-              Path("README.md").write_text(manual_part.strip() + "\n")
+              manual_part = strip_preamble(manual_part, README_PREFIX, "README.md")
+              write_or_fail(Path("README.md"), manual_part, "README.md")
               updated = ["README.md"]
 
               # Split NEW_CHANGELOG_ENTRY if present
               if "===NEW_CHANGELOG_ENTRY===" in rest:
                   versions_part, changelog_rest = rest.split("===NEW_CHANGELOG_ENTRY===", 1)
-                  Path("VERSIONS.md").write_text(versions_part.strip() + "\n")
+                  versions_part = strip_preamble(versions_part, VERSIONS_PREFIX, "VERSIONS.md")
+                  write_or_fail(Path("VERSIONS.md"), versions_part, "VERSIONS.md")
                   updated.append("VERSIONS.md")
                   rest = changelog_rest
 
@@ -421,11 +508,14 @@ jobs:
 
                       if "===ADAPT_SKILL.md===" in skill_rest:
                           setup_part, adapt_part = skill_rest.split("===ADAPT_SKILL.md===", 1)
-                          Path("skills/setup-routing/SKILL.md").write_text(setup_part.strip() + "\n")
-                          Path("skills/adapt/SKILL.md").write_text(adapt_part.strip() + "\n")
+                          setup_part = strip_preamble(setup_part, SKILL_PREFIX, "setup-routing/SKILL.md", next_line_required="name:")
+                          adapt_part = strip_preamble(adapt_part, SKILL_PREFIX, "adapt/SKILL.md", next_line_required="name:")
+                          write_or_fail(Path("skills/setup-routing/SKILL.md"), setup_part, "setup-routing/SKILL.md")
+                          write_or_fail(Path("skills/adapt/SKILL.md"), adapt_part, "adapt/SKILL.md")
                           updated.extend(["setup-routing/SKILL.md", "adapt/SKILL.md"])
                       else:
-                          Path("skills/setup-routing/SKILL.md").write_text(skill_rest.strip() + "\n")
+                          skill_rest = strip_preamble(skill_rest, SKILL_PREFIX, "setup-routing/SKILL.md", next_line_required="name:")
+                          write_or_fail(Path("skills/setup-routing/SKILL.md"), skill_rest, "setup-routing/SKILL.md")
                           updated.append("setup-routing/SKILL.md")
                   else:
                       prepend_changelog_entry(rest)
@@ -434,24 +524,30 @@ jobs:
                   # Fallback: no NEW_CHANGELOG_ENTRY marker
                   if "===SKILL.md===" in rest:
                       versions_part, skill_rest = rest.split("===SKILL.md===", 1)
-                      Path("VERSIONS.md").write_text(versions_part.strip() + "\n")
+                      versions_part = strip_preamble(versions_part, VERSIONS_PREFIX, "VERSIONS.md")
+                      write_or_fail(Path("VERSIONS.md"), versions_part, "VERSIONS.md")
                       updated.append("VERSIONS.md")
 
                       if "===ADAPT_SKILL.md===" in skill_rest:
                           setup_part, adapt_part = skill_rest.split("===ADAPT_SKILL.md===", 1)
-                          Path("skills/setup-routing/SKILL.md").write_text(setup_part.strip() + "\n")
-                          Path("skills/adapt/SKILL.md").write_text(adapt_part.strip() + "\n")
+                          setup_part = strip_preamble(setup_part, SKILL_PREFIX, "setup-routing/SKILL.md", next_line_required="name:")
+                          adapt_part = strip_preamble(adapt_part, SKILL_PREFIX, "adapt/SKILL.md", next_line_required="name:")
+                          write_or_fail(Path("skills/setup-routing/SKILL.md"), setup_part, "setup-routing/SKILL.md")
+                          write_or_fail(Path("skills/adapt/SKILL.md"), adapt_part, "adapt/SKILL.md")
                           updated.extend(["setup-routing/SKILL.md", "adapt/SKILL.md"])
                       else:
-                          Path("skills/setup-routing/SKILL.md").write_text(skill_rest.strip() + "\n")
+                          skill_rest = strip_preamble(skill_rest, SKILL_PREFIX, "setup-routing/SKILL.md", next_line_required="name:")
+                          write_or_fail(Path("skills/setup-routing/SKILL.md"), skill_rest, "setup-routing/SKILL.md")
                           updated.append("setup-routing/SKILL.md")
                   else:
-                      Path("VERSIONS.md").write_text(rest.strip() + "\n")
+                      rest = strip_preamble(rest, VERSIONS_PREFIX, "VERSIONS.md")
+                      write_or_fail(Path("VERSIONS.md"), rest, "VERSIONS.md")
                       updated.append("VERSIONS.md")
 
               print(f"Files updated: {', '.join(updated)}")
           else:
-              Path("README.md").write_text(content.strip() + "\n")
+              content = strip_preamble(content, README_PREFIX, "README.md")
+              write_or_fail(Path("README.md"), content, "README.md")
               print("Warning: markers not found, only README updated")
           PYTHON_EOF
 

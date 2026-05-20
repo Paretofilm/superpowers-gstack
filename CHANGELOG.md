@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.11.3] - 2026-05-20
+
+### Fixed
+- **Auto-update PR corruption: Claude's analytical preamble was being written into README.md.** v2.11.2 made the update pipeline run end-to-end for the first time in 3 weeks, exposing a latent prompt-following bug: despite the prompt's explicit "no commentary" rule, Claude prefixed the README content with 30+ lines of planning prose ("I'll analyze the upstream changes carefully…"). The script wrote this preamble verbatim to README.md, producing PR #16 which had to be closed before it corrupted main.
+- **Defensive parser layer:** new `strip_preamble(text, expected_line_prefix, file_label)` helper finds the FIRST LINE that starts with the expected prefix and discards everything before it. Line-anchored matching avoids being fooled by Claude mentioning the prefix in preamble prose. Logs how many lines were stripped + a preview of what was dropped, so misbehavior is visible in the workflow log.
+- **Per-file expected prefixes:** README → `# Superpowers + GStack`; VERSIONS.md → `# Verified Versions`; CHANGELOG entry → `## [`; SKILL.md files → `---` (YAML front-matter opener).
+- **`write_or_fail` guard:** if `strip_preamble` returns empty (prefix never found), the workflow exits 1 instead of writing an empty file. Self-repair workflow picks up the failure; next cron retries.
+- **Tightened prompt** to instruct Claude explicitly: "Start your response IMMEDIATELY with the first character of the README — the `# Superpowers + GStack:` heading. Do NOT include any text before that line, even to acknowledge the task, explain your reasoning, or summarize what you plan to change. The script parses your response by markers; any prose before the first heading gets written into README.md verbatim and corrupts the file." Belt-and-suspenders with the defensive strip.
+
+### Why
+v2.11.2 fixed the API timeout, which made the workflow finally complete. The first successful run (PR #16) revealed Claude's preamble injection — a pre-existing prompt-following gap that had been masked by the timeout for ~3 weeks. Tre-lens verification on the v2.11.2 fix (self/pitfall/codex) examined the code and prompt-structure but couldn't catch this because the failure mode only manifests in Claude's actual production output. The lesson: synthetic review catches code bugs; real cron runs catch behavioral bugs. The fourth lens is dogfood at production scale.
+
+### Backwards compatibility
+**Fully backwards compatible.** If Claude already produces clean output (no preamble), `strip_preamble` is a no-op — the first line already starts with the expected prefix, no chars are stripped. If Claude has been misbehaving silently (likely the case on earlier successful runs that were merged without review), the new defense catches it.
+
+### Notes for users
+- **Re-trigger the workflow** via `gh workflow run check-updates.yml` to validate the fix against real upstream drift. PR #16 was closed without merging; the next successful run will create a clean replacement.
+- **Watch the workflow log** for `Note: stripped N preamble lines from <file>` entries — if these appear, Claude is still misbehaving on the prompt level and the prompt needs further tightening. Currently we expect zero strips after the tightened prompt; non-zero means the prompt isn't holding.
+
 ## [2.11.2] - 2026-05-20
 
 ### Fixed
