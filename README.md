@@ -29,7 +29,7 @@ They never overlap. GStack focuses on *what roles review the work*. Superpowers 
 
 ## What's Included
 
-- **Claude Code Plugin** with ten skills:
+- **Claude Code Plugin** with eleven skills:
   - `/setup-routing` — Generates a tailored CLAUDE.md for new projects
   - `/adapt` — Adds routing to existing projects without losing your CLAUDE.md content
   - `/context-handoff` — Writes a human-readable handoff to `docs/superpowers/handoff.md` before `/clear` or `/compact`. Auto-resumes on next session start. Different from gstack's `/context-save` — this lives in the repo and works cross-machine.
@@ -37,6 +37,7 @@ They never overlap. GStack focuses on *what roles review the work*. Superpowers 
   - `/pitfall-verification` — Final-check skill run after any PRD, spec, plan, or code artifact. Targeted check that typical pitfalls for that artifact type and domain (security, idempotency, contracts, edge cases, LLM output) actually do not apply. Two rounds max.
   - `/quality-review` — Perceived-quality gate run after a PRD, spec, or implementation plan, before implementation begins. Hunts pitfalls that make a product feel cheap or broken even when it technically works (silent failures, missing loading/empty states, error recovery, state drift, animations, AI output, sudo flows). Complementary to `/pitfall-verification`: that one asks "will this work?", this one asks "will this feel good?".
   - `/macos-native-review` — Apple-native conformance gate for macOS PRDs, specs, and plans. 12 HIG-citation-grounded categories: vocabulary, control choices, keyboard shortcuts, semantic colors, sheets/popovers/alerts, animation timing, privileged operations, accessibility, menu bar, app lifecycle, dock behavior, App menu. Every finding cites a `developer.apple.com` HIG page via WebFetch. Phase 0 self-check rejects non-macOS artifacts. Complementary to `/pitfall-verification` ("will this work?") and `/quality-review` ("will this feel good?") — this asks "is this Apple-native?".
+  - `/ios-native-review` — Apple-native conformance gate for iOS/iPadOS PRDs, specs, and plans. 13 HIG-citation-grounded categories: vocabulary, controls/touch targets (44×44pt), navigation paradigm (tab bar / navigation stack / split view), modal presentation (`.presentationDetents`, `.fullScreenCover`, popover), gestures, system surfaces (safe area, Dynamic Island), keyboard handling, haptics, semantic colors, animation timing, privileged operations, accessibility (VoiceOver, Dynamic Type to AX5), app lifecycle. Every finding cites a `developer.apple.com` HIG (iOS) page via WebFetch. Phase 0 self-check rejects non-iOS artifacts. Same shape as `/macos-native-review` but iOS-specific surfaces and conventions.
   - `/macos-e2e-scaffold` — One-shot XCUITest scaffolding for macOS SwiftUI projects. Walks the Scene tree deterministically, generates ranked TIER-1/2/3 test stubs (Smoke + Happy-path + Error-recovery always; Modal/Menubar/Multi-window/Toolbar conditional on pattern detection). Suggests accessibility identifiers (`<ViewName>_<ControlType>_<Purpose>`) with batch confirmation, emits a Claude-readable xcresult runner script. Three project-type branches (xcodegen / SPM / plain .xcodeproj). Manual invocation only — modifies project files. Phase 0 self-check refuses non-Swift, non-SwiftUI, non-macOS, or already-scaffolded projects. The only skill in the plugin that *creates* test infrastructure rather than reviewing artefacts.
   - `/superpowers-gstack:office-hours-track-aware` (v2.3.0+) — wraps
     upstream `/office-hours` for dual-track projects. Runs the gstack
@@ -133,6 +134,8 @@ This generates a CLAUDE.md with routing rules tailored to your project type, tec
 │  /quality-review       → "will this feel good?"  │
 │  /macos-native-review  → "is this Apple-native?" │
 │                          (macOS projects only)   │
+│  /ios-native-review    → "is this iOS-native?"   │
+│                          (iOS/iPadOS only)       │
 ├─────────────────────────────────────────────────┤
 │  PHASE 2: IMPLEMENTATION (Superpowers)           │
 │                                                  │
@@ -198,6 +201,8 @@ No hooks, no orchestration overhead, no nesting. Just save and restore.
 /quality-review        → Spec-level: "will this feel good?"
 [macOS only]
 /macos-native-review   → Spec-level: "is this Apple-native?"
+[iOS only]
+/ios-native-review     → Spec-level: "is this iOS-native?"
 /superpowers:brainstorming         → Adopt design, refine technical approach
 /superpowers:writing-plans         → Break into TDD tasks
 /pitfall-verification  → Plan-level: re-check after writing-plans
@@ -268,6 +273,7 @@ New idea or feature?
 Spec or plan written? (after writing-specs / writing-plans / plan-eng-review)
   → /pitfall-verification → /quality-review
   → [macOS] /macos-native-review
+  → [iOS] /ios-native-review
   → /superpowers:writing-plans (or /superpowers:subagent-driven-development)
 
 Code written?  → /clear → /review

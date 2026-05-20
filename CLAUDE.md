@@ -98,6 +98,7 @@ Key routing rules:
 - Weekly retro → invoke retro
 - Design system, brand → invoke design-consultation
 - Design system for SwiftUI projects (DESIGN.md + Swift Package) → invoke /superpowers-gstack:swiftui-design-consultation (inlines platform question on first run)
+- After a PRD/spec/plan for a native Apple app, before implementation → invoke /superpowers-gstack:macos-native-review (macOS) or /superpowers-gstack:ios-native-review (iOS/iPadOS). HIG-citation-grounded conformance gate; complementary to pitfall-verification and quality-review.
 - Visual audit, design polish → invoke design-review
 - Architecture review → invoke plan-eng-review
 - End of day, switch project, save progress → invoke context-save

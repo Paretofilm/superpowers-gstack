@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.11.1] - 2026-05-20
+
+### Fixed
+- **Documentation drift after `ios-native-review` ship (v2.4.0).** README skill count, skill bullet list, workflow diagram (Phase 1.5), "New Feature" common scenario, and decision tree all referenced `macos-native-review` without the iOS counterpart. CLAUDE.md routing section likewise omitted both native-review skills. IDEAS.md "Shipped" record only listed the v1.9.0 and v1.10.0 ships.
+
+### Changed
+- **README.md** — "ten skills" → "eleven skills"; added `/ios-native-review` bullet mirroring the macOS form; added iOS lines to the workflow diagram, common scenario, and decision tree (parallel to existing macOS lines, not nested under "also iOS").
+- **CLAUDE.md (project routing)** — added explicit routing bullet for `/macos-native-review` and `/ios-native-review` post-spec/plan, complementary to pitfall-verification and quality-review.
+- **IDEAS.md** — Shipped section now records `ios-native-review` (v2.4.0). The body entry above is retained for proposal-vs-shipped record per the section's own convention.
+- **VERSIONS.md** — added "Drift detected — pending review" section recording the 2026-05-20 local check (`./scripts/check-updates.sh`). GStack drifted 12 minor versions (v1.34.1.0 → v1.42.1.0), Claude Code 19 patches (2.1.126 → 2.1.145). The "Verified Versions" table is intentionally NOT advanced; the file's "last verified" semantics require an actual review of upstream changes against the manual, which is the weekly GitHub Action's job (or a manual review pass). The script's state file `.update-state.json` is gitignored, so the local check doesn't affect the commit; the drift record lives in `VERSIONS.md` itself.
+
+### Why
+Docs-only review on 2026-05-20 surfaced that `ios-native-review` shipped 2 days ago and was already enumerated in skill front-matter and IDEAS body, but the README + CLAUDE.md skill catalogue had never been updated. The drift class is "auto-managed (CLAUDE.md generation via markers) keeps synced; manual prose surfaces don't". Future-proofing this (e.g. a script that generates README skill bullets from `skills/*/SKILL.md` front-matter) is a v2.12 candidate, not in scope here.
+
+### Backwards compatibility
+**Fully additive — documentation only.** No skill behavior changes, no marker bumps, no generated-CLAUDE.md changes. Existing adapted projects unaffected.
+
 ## [2.11.0] - 2026-05-19
 
 ### Added

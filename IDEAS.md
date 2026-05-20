@@ -144,3 +144,4 @@ Out: macOS, watchOS, AppKit.
 
 - `macos-native-review` — shipped in v1.9.0 (2026-04-28). See `skills/macos-native-review/SKILL.md`.
 - `macos-e2e-scaffold` — shipped in v1.10.0 (2026-04-29). See `skills/macos-e2e-scaffold/SKILL.md`.
+- `ios-native-review` — shipped in v2.4.0 (2026-05-18). Mirror of macos-native-review with 13 iOS-specific categories. See `skills/ios-native-review/SKILL.md`. (Body entry above retained for proposal-vs-shipped record.)
