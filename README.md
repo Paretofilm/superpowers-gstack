@@ -337,11 +337,11 @@ Review passed? → /qa → /cso → /ship
 | `/superpowers:executing-plans` | Inline execution (small projects) |
 | `/superpowers:dispatching-parallel-agents` | Independent parallel tasks |
 | `/superpowers:systematic-debugging` | Finding root cause of bugs |
-| `/superpowers:using-git-worktrees` | Feature branch isolation |
-| `/superpowers:finishing-a-development-branch` | Merge/PR/discard |
+| `/superpowers:using-git-worktrees` | Feature branch isolation — asks for consent before creating; detects if already in a worktree |
+| `/superpowers:finishing-a-development-branch` | Merge/PR/discard — only cleans up worktrees it created (inside `.worktrees/`) |
 | `/superpowers:test-driven-development` | Manual TDD enforcement |
 | `/superpowers:verification-before-completion` | Verify before claiming done |
-| `/superpowers:requesting-code-review` | Dispatch review subagent |
+| `/superpowers:requesting-code-review` | Dispatch review subagent (uses `general-purpose` agent with self-contained template) |
 | `/superpowers:receiving-code-review` | Handle review feedback |
 | `/superpowers:writing-skills` | Plugin/skill projects only |
 
