@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.11.4] - 2026-05-20
+
+### Changed (Superpowers 5.1.0)
+
+- **`/superpowers:using-git-worktrees` behavior updated** — now asks for user consent before creating a worktree (fixes silent auto-creation). Detects when already running inside a linked worktree and skips creation. Defers to harness-native worktree controls when available (e.g. Codex). README Superpowers Commands table updated to reflect consent-before-create and in-worktree detection.
+- **`/superpowers:finishing-a-development-branch` behavior updated** — provenance-based cleanup: only removes worktrees inside `.worktrees/` (those created by superpowers); external worktrees are left untouched. Collapses to two options when in detached HEAD state. README updated accordingly.
+- **`/superpowers:requesting-code-review` dispatch changed** — the `superpowers:code-reviewer` named agent has been removed upstream. The skill now dispatches `Task (general-purpose)` with a self-contained prompt template in `skills/requesting-code-review/code-reviewer.md`. README description updated; anyone dispatching `Task (superpowers:code-reviewer)` should switch to `Task (general-purpose)`.
+- **`/superpowers:subagent-driven-development` review cadence changed** — no longer pauses every 3 tasks; now reviews at each task or natural checkpoint with an explicit continuous-execution directive.
+- **Legacy slash commands removed upstream** — `/brainstorm`, `/execute-plan`, and `/write-plan` were deprecated stubs; they are gone. Use `/superpowers:brainstorming`, `/superpowers:executing-plans`, and `/superpowers:writing-plans` directly.
+
+### Changed (Claude Code 2.1.145)
+
+- Version bumped from 2.1.126 to 2.1.145 (19 patch versions). Release notes not reviewed for plugin-specific impact; VERSIONS.md updated.
+
 ## [2.11.3] - 2026-05-20
 
 ### Fixed
