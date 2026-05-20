@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.11.3] - 2026-05-20
+
+### Changed
+- **Superpowers updated to 5.1.0** — reviewed and incorporated upstream changes:
+  - `superpowers:code-reviewer` named agent removed; `requesting-code-review` skill is now self-contained with persona, checklist, and dispatch template in a single file. Skill dispatches `Task (general-purpose)` directly. No user-facing command changes — `/superpowers:requesting-code-review` continues to work as before.
+  - Legacy slash commands `/brainstorm`, `/execute-plan`, and `/write-plan` removed upstream (they were deprecated stubs; the corresponding skills `superpowers:brainstorming`, `superpowers:executing-plans`, and `superpowers:writing-plans` are unchanged).
+  - `using-git-worktrees` now asks for consent before creating worktrees (fixes auto-creation without consent), detects when already running inside a worktree and skips creation, and prefers harness-native worktree tools when available.
+  - `finishing-a-development-branch` only cleans up worktrees inside `.worktrees/` (those created by superpowers); external worktrees are left untouched. Detached HEAD handling collapses menu to two options.
+  - README Superpowers Commands table updated to reflect new worktree skill behavior notes.
+- **Claude Code updated to 2.1.145** — 19 patch versions since 2.1.126; no plugin-impacting changes identified.
+- **VERSIONS.md** — Superpowers advanced to 5.1.0 (2026-05-20), Claude Code advanced to 2.1.145 (2026-05-20). Claude Code row removed from the drift table (now reviewed). GStack drift (v1.34.1.0 → v1.42.1.0) remains pending full review.
+
+### Why
+Routine weekly upstream sync. Superpowers 5.1.0 shipped 2026-04-30; this review confirms no skill renames or additions that require SKILL.md evaluation table changes. The worktree behavior changes are behavioral improvements, not interface changes — updated the README command table descriptions to reflect the new consent-before-create and provenance-based-cleanup behavior so users know what to expect.
+
+### Backwards compatibility
+**Fully backwards compatible.** No generated-CLAUDE.md changes, no skill evaluation table changes, no routing rule changes. Users invoking `/superpowers:using-git-worktrees` will now be asked before a worktree is created (previously auto-created); this is a UX improvement, not a breaking change.
+
 ## [2.11.2] - 2026-05-20
 
 ### Fixed

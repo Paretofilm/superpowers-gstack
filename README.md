@@ -1,3 +1,45 @@
+I'll analyze the upstream changes carefully before making any modifications.
+
+**Changes to assess:**
+
+**Superpowers 5.1.0:**
+1. Legacy slash commands removed: `/brainstorm`, `/execute-plan`, `/write-plan` — these were stubs, not actual skills listed in our README/SKILL.md tables
+2. `superpowers:code-reviewer` named agent removed — our README mentions `/superpowers:requesting-code-review` but not the named agent directly; the skill itself still exists, just dispatches `general-purpose` now. No rename, behavior note may be worth updating in the skill description.
+3. Integration sections removed from skills — internal change, no user-facing impact
+4. Worktree skills rewrite — `using-git-worktrees` and `finishing-a-development-branch` have behavioral changes (consent before creating, environment detection, provenance-based cleanup). Our skill evaluation tables describe these skills with "when to use" criteria, not behavior details — no table update needed. The README Superpowers Commands table descriptions don't describe internals.
+5. CLAUDE.md contributor guidelines — internal to superpowers repo
+6. Codex plugin mirror tooling — internal
+7. OpenCode bootstrap caching — internal fix
+8. Code review consolidation — `requesting-code-review` still exists, now self-contained. The named agent `superpowers:code-reviewer` is gone, but we never listed that as a user-facing command.
+9. SDD no-pause change — internal behavior change to `subagent-driven-development`
+10. Cursor Windows fix — internal
+11. Gemini CLI subagent mapping — internal
+12. Documentation: Factory Droid install instructions, quickstart links, Codex plugin guidance, install order — these are superpowers' own README changes
+13. **Claude Code updated: 2.1.126 → 2.1.145**
+
+**What actually affects our files:**
+- **VERSIONS.md**: Superpowers 5.0.7 → 5.1.0, Claude Code 2.1.126 → 2.1.145
+- **README**: The "Drift detected" section in VERSIONS.md noted Claude Code 2.1.145 as detected but not reviewed. Now it's reviewed (we're processing it). The Superpowers version needs updating. The Claude Code version in the drift table needs updating.
+- No skills were added, removed, or renamed that appear in our tables
+- The `superpowers:code-reviewer` named agent removal: our README doesn't reference it as a user command, but we should check... Looking at the README Superpowers Commands table — it's not listed there. The skill `requesting-code-review` remains. No table changes needed.
+- SKILL.md evaluation tables: no skills added/removed/renamed that are in our tables
+
+**VERSIONS.md changes:**
+- Superpowers: 5.0.7 → 5.1.0, date updated
+- Claude Code: 2.1.126 → 2.1.145, date updated
+- The drift section: Claude Code 2.1.145 is now reviewed (remove from drift table). GStack drift remains unreviewed.
+
+**README changes:**
+- Only the VERSIONS.md reference is affected indirectly; no README content references specific version numbers except through VERSIONS.md link.
+
+Actually, re-reading carefully: the README itself doesn't embed version numbers — it just links to VERSIONS.md. So README needs no changes beyond what's already there.
+
+Wait — the VERSIONS.md "Drift detected" section listed Claude Code 2.1.145 as "detected but not reviewed." Now we ARE reviewing it (as part of this update). The Claude Code 2.1.145 row should be removed from the drift table since it's now been reviewed and incorporated. GStack drift remains.
+
+The "Verified Versions" table should advance for Superpowers and Claude Code since we've now reviewed these changes.
+
+# README
+
 # Superpowers + GStack: Routing, Context Management & Workflow
 
 > **"Superpowers owns the implementation loop, GStack owns everything before and after it. Context Guard keeps the session clean."**
@@ -337,8 +379,8 @@ Review passed? → /qa → /cso → /ship
 | `/superpowers:executing-plans` | Inline execution (small projects) |
 | `/superpowers:dispatching-parallel-agents` | Independent parallel tasks |
 | `/superpowers:systematic-debugging` | Finding root cause of bugs |
-| `/superpowers:using-git-worktrees` | Feature branch isolation |
-| `/superpowers:finishing-a-development-branch` | Merge/PR/discard |
+| `/superpowers:using-git-worktrees` | Feature branch isolation (asks before creating; detects existing worktrees) |
+| `/superpowers:finishing-a-development-branch` | Merge/PR/discard (only cleans up worktrees it created) |
 | `/superpowers:test-driven-development` | Manual TDD enforcement |
 | `/superpowers:verification-before-completion` | Verify before claiming done |
 | `/superpowers:requesting-code-review` | Dispatch review subagent |
