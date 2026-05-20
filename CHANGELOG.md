@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.11.2] - 2026-05-20
+
+### Fixed
+- **Weekly update pipeline (`check-updates.yml`) broken since 2026-04-27.** The Anthropic API call timed out at 300s because the full 86KB `CHANGELOG.md` was included in the prompt, pushing total input past sonnet-4-6's effective fast-response window. Fix: trim `CHANGELOG.md` input to first 60 lines (style reference only) and ask Claude for ONLY a new entry via marker `===NEW_CHANGELOG_ENTRY===`; the script prepends to the existing file. Bumps curl timeout 300s → 600s. Defensively strips a leading `# Changelog` header from the response in case Claude ignores the no-top-header instruction.
+- **Self-repair workflow (`self-repair.yml`) broken since 2026-04-27.** `ValueError: substring not found` because the parser called `part.index("===")` on the leading text part before the first `===FILE: ` marker. Fix: skip parts missing the closing marker. Separately, `gh api .../jobs/{id}/logs` returns 404 for `workflow_run` events due to token-scope narrowing; the script now treats 404 as a known case and feeds job metadata + workflow annotations to Claude as a usable fallback.
+- **Output truncation risk in `check-updates.yml` (caught by codex review).** Combined output (README + VERSIONS.md + new entry + setup-routing/SKILL.md + adapt/SKILL.md) is ≈29.3k tokens when both SKILL.md files update. The initial fix dropped `max_tokens` to 24000 which would have silently truncated responses, writing partial SKILL.md content to auto-update PRs. Fix: raise `max_tokens` to 32000 (calibrated against measured file sizes) AND add a `stop_reason == "max_tokens"` check that fails the workflow loudly instead of writing partial files.
+
+### Why
+The weekly cron fired three times against the accumulated 12-version GStack drift surfaced in v2.11.1's VERSIONS.md report. Each attempt timed out at the same 300s curl limit, and the self-repair workflow couldn't recover because of its own parse bug — silent drift compounded for ~3 weeks until the user noticed the failure emails. Three-lens verification on this fix (self-check → pitfall verification → codex review) caught the output-budget issue that the first two lenses missed: pitfall verification's max_tokens estimate undercounted SKILL.md size by ~40%, and codex spotted the gap by reasoning about the prompt's "return complete file" contract against the file sizes.
+
+### Backwards compatibility
+**Fully backwards compatible.** The `===CHANGELOG.md===` marker was only consumed by `check-updates.yml` itself; the new `===NEW_CHANGELOG_ENTRY===` marker replaces it cleanly. No generated-CLAUDE.md changes, no skill behavior changes. The next scheduled cron run (next Monday 07:23 UTC) will exercise the fix against real upstream drift. Manual trigger via `gh workflow run check-updates.yml` available for impatient operators.
+
 ## [2.11.1] - 2026-05-20
 
 ### Fixed

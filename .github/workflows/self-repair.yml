@@ -24,24 +24,34 @@ jobs:
         run: |
           run_id=${{ github.event.workflow_run.id }}
 
-          # Get failed job IDs
-          failed_jobs=$(gh api "repos/${{ github.repository }}/actions/runs/${run_id}/jobs" \
-            --jq '.jobs[] | select(.conclusion == "failure") | .id')
+          # Get failed job IDs + names (name lets Claude infer which step failed
+          # even when the logs endpoint 404s, which happens via workflow_run
+          # event due to token-scope quirks)
+          failed_jobs_json=$(gh api "repos/${{ github.repository }}/actions/runs/${run_id}/jobs" \
+            --jq '[.jobs[] | select(.conclusion == "failure") | {id, name, conclusion, html_url, steps: [.steps[] | select(.conclusion == "failure") | {name, conclusion, number}]}]' 2>/dev/null || echo "[]")
 
-          # Collect error logs (last 100 lines per job)
+          # Collect error logs per job. The /logs endpoint returns a redirect
+          # to a temporary URL — gh api follows it, but the response can be a
+          # 404 if the token is workflow-scoped (workflow_run events run with
+          # narrower scope). Always emit a usable placeholder if we can't fetch.
+          failed_jobs=$(echo "$failed_jobs_json" | python3 -c "import json,sys; data=json.load(sys.stdin); [print(j['id']) for j in data]" 2>/dev/null || echo "")
+
           log_output=""
           for job_id in $failed_jobs; do
-            job_log=$(gh api "repos/${{ github.repository }}/actions/jobs/${job_id}/logs" 2>/dev/null | tail -100 || echo "Could not fetch logs for job $job_id")
+            job_log=$(gh api "repos/${{ github.repository }}/actions/jobs/${job_id}/logs" 2>/dev/null | tail -100 || echo "")
+            if [ -z "$job_log" ] || echo "$job_log" | grep -q '"status": "404"'; then
+              job_log="[Logs endpoint unavailable for job ${job_id} — likely a workflow_run token-scope 404. The job metadata below identifies which step failed; Claude should reason from the workflow file structure to diagnose.]"
+            fi
             log_output="${log_output}
           --- Job ${job_id} ---
           ${job_log}"
           done
 
-          # Also check for annotation errors (YAML syntax errors show here)
+          # Get annotations from the workflow run itself (often contains the
+          # actual error message when logs are unavailable)
           annotations=$(gh api "repos/${{ github.repository }}/actions/runs/${run_id}" \
-            --jq '.conclusion' 2>/dev/null || echo "unknown")
+            --jq '{conclusion, display_title, head_commit: .head_commit.message}' 2>/dev/null || echo "{}")
 
-          # Get annotations from check runs
           check_annotations=$(gh api "repos/${{ github.repository }}/check-runs" \
             --method GET \
             -f filter=latest \
@@ -49,7 +59,16 @@ jobs:
 
           {
             echo "error_logs<<LOGS_EOF"
+            echo "## Failed jobs metadata"
+            echo "$failed_jobs_json"
+            echo ""
+            echo "## Workflow run annotations"
+            echo "$annotations"
+            echo ""
+            echo "## Job log tails"
             echo "$log_output"
+            echo ""
+            echo "## Check-run annotations"
             echo "$check_annotations"
             echo "LOGS_EOF"
           } >> "$GITHUB_OUTPUT"
@@ -148,11 +167,15 @@ jobs:
               print(content[:500])
               sys.exit(0)
 
-          # Parse and write fixed files
+          # Parse and write fixed files. content.split("===FILE: ") produces
+          # parts where the first is any text BEFORE the first marker (often
+          # empty or a stray newline, but sometimes preamble Claude added
+          # despite "no commentary" rule). Skip parts that don't contain the
+          # closing "===" marker — they're not real file blocks.
           parts = content.split("===FILE: ")
           files_written = []
           for part in parts:
-              if not part.strip():
+              if not part.strip() or "===" not in part:
                   continue
               marker_end = part.index("===")
               file_path = part[:marker_end].strip()

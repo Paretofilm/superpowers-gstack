@@ -208,7 +208,16 @@ jobs:
           report = os.environ.get("REPORT", "")
           manual = Path("README.md").read_text()
           versions = Path("VERSIONS.md").read_text()
-          changelog = Path("CHANGELOG.md").read_text() if Path("CHANGELOG.md").exists() else ""
+          # CHANGELOG.md grew past 86KB after 30 versions and dominates the API
+          # prompt — the 300s curl timeout fires before Claude can respond. We
+          # only send the first ~60 lines as a style reference and ask Claude
+          # for a NEW entry only; the script prepends it to the full file below.
+          changelog_path = Path("CHANGELOG.md")
+          changelog_full_exists = changelog_path.exists()
+          if changelog_full_exists:
+              changelog_style_sample = "\n".join(changelog_path.read_text().splitlines()[:60])
+          else:
+              changelog_style_sample = ""
 
           # Collect upstream skill files — only changed ones to reduce payload
           upstream = ""
@@ -286,9 +295,9 @@ jobs:
 
           {versions}
 
-          ## Current CHANGELOG.md
+          ## CHANGELOG.md (first 60 lines — for STYLE reference only; do NOT echo back)
 
-          {changelog}{skill_section}
+          {changelog_style_sample}{skill_section}
 
           ## Upstream skill definitions (for reference)
 
@@ -300,8 +309,8 @@ jobs:
           1. The complete updated README
           2. The marker `===VERSIONS.md===`
           3. The complete updated VERSIONS.md
-          4. The marker `===CHANGELOG.md===`
-          5. The complete updated CHANGELOG.md
+          4. The marker `===NEW_CHANGELOG_ENTRY===`
+          5. ONLY the NEW changelog entry to be prepended (do NOT include earlier entries; the script preserves them). Format: start with `## [<new-version>] - <today>` and follow the style shown in the sample. Do NOT include the top-level `# Changelog` header — only the new section.
           6. If the setup-routing SKILL.md needs updates (skills added/removed/renamed), also include:
              - The marker `===SKILL.md===`
              - The complete updated setup-routing SKILL.md
@@ -313,6 +322,13 @@ jobs:
 
           request = {
               "model": "claude-sonnet-4-6",
+              # Output budget calibrated against measured file sizes on
+              # 2026-05-20: README ≈ 6.3k tokens, VERSIONS.md ≈ 0.4k, new
+              # changelog entry ≈ 0.5k, setup-routing/SKILL.md ≈ 10.9k,
+              # adapt/SKILL.md ≈ 11.2k. Combined ≈ 29.3k when both SKILL.md
+              # files update. 32k = ~3k headroom for growth; below that the
+              # response silently truncates and writes a corrupt SKILL.md.
+              # We ALSO check stop_reason below as a defense in depth.
               "max_tokens": 32000,
               "messages": [{"role": "user", "content": user_content}]
           }
@@ -320,6 +336,9 @@ jobs:
           # Write request to file to avoid shell argument limits
           Path("/tmp/api-request.json").write_text(json.dumps(request))
 
+          # Timeout 600s (was 300s). Even with the trimmed prompt, large prompts
+          # against sonnet-4-6 can take 4-6 minutes; 5-minute headroom prevents
+          # spurious timeouts on slow API days.
           result = subprocess.run(
               ["curl", "-s", "-w", "\n%{http_code}",
                "https://api.anthropic.com/v1/messages",
@@ -327,7 +346,7 @@ jobs:
                "-H", "anthropic-version: 2023-06-01",
                "-H", "content-type: application/json",
                "-d", "@/tmp/api-request.json"],
-              capture_output=True, text=True, timeout=300
+              capture_output=True, text=True, timeout=600
           )
 
           lines = result.stdout.strip().rsplit("\n", 1)
@@ -341,23 +360,64 @@ jobs:
           response = json.loads(body)
           content = response["content"][0]["text"]
 
+          # Defense in depth: if the response was truncated by max_tokens, we
+          # cannot trust that the final SKILL.md / CHANGELOG blocks are
+          # complete. Better to fail loudly than write a half-truncated SKILL.md
+          # that opens a corrupt PR. The workflow run will fail; self-repair
+          # picks up from there (or the next weekly cron retries).
+          stop_reason = response.get("stop_reason", "")
+          if stop_reason == "max_tokens":
+              print(f"API truncated response (stop_reason=max_tokens). "
+                    f"max_tokens too low for current README + SKILL.md sizes; "
+                    f"raise the budget and re-run. Refusing to write partial files.",
+                    file=sys.stderr)
+              sys.exit(1)
+
+          def prepend_changelog_entry(new_entry: str) -> None:
+              """Prepend new entry to CHANGELOG.md, preserving the `# Changelog` header."""
+              new_entry = new_entry.strip()
+              if not new_entry:
+                  return
+              # Defensive: strip a `# Changelog` line if Claude includes it despite
+              # the prompt's explicit "do NOT include the top-level header" rule.
+              # Otherwise the prepend produces a duplicate header.
+              lines = new_entry.splitlines()
+              while lines and (not lines[0].strip() or lines[0].strip() == "# Changelog"):
+                  lines.pop(0)
+              new_entry = "\n".join(lines).strip()
+              if not new_entry:
+                  return
+              if changelog_full_exists:
+                  existing = changelog_path.read_text()
+                  # Existing starts with `# Changelog\n\n` then entries. Preserve header.
+                  header_match = existing.split("\n\n", 1)
+                  if header_match[0].startswith("# Changelog"):
+                      header = header_match[0]
+                      body = header_match[1] if len(header_match) > 1 else ""
+                      changelog_path.write_text(f"{header}\n\n{new_entry}\n\n{body}")
+                  else:
+                      # No standard header — prepend the entry plus a blank line.
+                      changelog_path.write_text(f"{new_entry}\n\n{existing}")
+              else:
+                  changelog_path.write_text(f"# Changelog\n\n{new_entry}\n")
+
           if "===VERSIONS.md===" in content:
               manual_part, rest = content.split("===VERSIONS.md===", 1)
               Path("README.md").write_text(manual_part.strip() + "\n")
               updated = ["README.md"]
 
-              # Split CHANGELOG if present
-              if "===CHANGELOG.md===" in rest:
-                  versions_part, changelog_rest = rest.split("===CHANGELOG.md===", 1)
+              # Split NEW_CHANGELOG_ENTRY if present
+              if "===NEW_CHANGELOG_ENTRY===" in rest:
+                  versions_part, changelog_rest = rest.split("===NEW_CHANGELOG_ENTRY===", 1)
                   Path("VERSIONS.md").write_text(versions_part.strip() + "\n")
                   updated.append("VERSIONS.md")
                   rest = changelog_rest
 
-                  # Split skills from changelog
+                  # Split skills from new changelog entry
                   if "===SKILL.md===" in rest:
-                      changelog_part, skill_rest = rest.split("===SKILL.md===", 1)
-                      Path("CHANGELOG.md").write_text(changelog_part.strip() + "\n")
-                      updated.append("CHANGELOG.md")
+                      new_entry, skill_rest = rest.split("===SKILL.md===", 1)
+                      prepend_changelog_entry(new_entry)
+                      updated.append("CHANGELOG.md (prepended)")
 
                       if "===ADAPT_SKILL.md===" in skill_rest:
                           setup_part, adapt_part = skill_rest.split("===ADAPT_SKILL.md===", 1)
@@ -368,10 +428,10 @@ jobs:
                           Path("skills/setup-routing/SKILL.md").write_text(skill_rest.strip() + "\n")
                           updated.append("setup-routing/SKILL.md")
                   else:
-                      Path("CHANGELOG.md").write_text(rest.strip() + "\n")
-                      updated.append("CHANGELOG.md")
+                      prepend_changelog_entry(rest)
+                      updated.append("CHANGELOG.md (prepended)")
               else:
-                  # Fallback: no CHANGELOG marker
+                  # Fallback: no NEW_CHANGELOG_ENTRY marker
                   if "===SKILL.md===" in rest:
                       versions_part, skill_rest = rest.split("===SKILL.md===", 1)
                       Path("VERSIONS.md").write_text(versions_part.strip() + "\n")
