@@ -140,6 +140,29 @@ Out: macOS, watchOS, AppKit.
 
 ---
 
+## Partial-artifact verification — når er `pitfall-verification` for tidlig? (proposed 2026-05-21, open question)
+
+**Gap.** `pitfall-verification` er kalibrert for *komplette artefakter* — ferdige specs, planer eller kode. Skill-en har et "maks to runder"-budsjett. Men under lange brainstorming/design-sesjoner produseres sub-artefakter inkrementelt (f.eks. én arkitektur-seksjon av fem). Å kjøre den fulle skill-en på partial output gir enten (a) false positives om "manglende seksjoner" som bare ikke er skrevet ennå, eller (b) bruker opp runde-budsjettet tidlig så den endelige komplette-artefakt-runden har mindre headroom.
+
+**Observed need.** Surfaced 2026-05-21 midt i brainstorm av "Live SwiftUI v0"-design. Etter at seksjon 1 av 5 (arkitektur + moduler) var presentert spurte brukeren om en pitfall-review passet. Fem ekte flagg fantes i den seksjonen (NSXPCConnection-mekanikk, concurrency-koherens mellom stateless API og "last render wins", SwiftSyntax-versjonsbinding, NSHostingView/dlclose-livssyklus, ToolService XPC-bridge-overhead) — alle verdt å fange før vi bygget fire seksjoner til oppe på dem. Men formell skill-invokasjon føltes feilkalibrert. Løsningen i sesjonen ble en uformell inline-sanity-check og senere bruk av den formelle skill-en på ferdig spec.
+
+**Scope.** En av tre løsninger:
+- (a) En lettere søsken-skill `partial-design-sanity-check` med eksplisitt "jeg ser kun arkitektur-seksjonen, ikke flagg manglende detalj"-framing.
+- (b) En utvidelse av `pitfall-verification` med en `partial: true`-flag og tilpassede prompts som beskjeder hva som er bevisst utelatt.
+- (c) Eksplisitt veiledning i `pitfall-verification` SKILL.md om *når man ikke skal bruke den* — push partial-artefakt-reviews til inline self-review i stedet.
+
+**Åpne underspørsmål.**
+- Er det verdt en separat skill, eller bare en flag/modus på den eksisterende?
+- Skal partial reviews konsumere budsjett fra hovedskill-ens "to runder", eller ha sitt eget?
+- Hvordan interagerer dette med brainstorming → writing-specs-handoffs — skal pitfall alltid kjøre mellom handoffs, selv når hver artefakt er intermediær?
+- Hvis vi legger til en `partial`-modus: hvordan deklarerer vi hvilke seksjoner som er bevisst fraværende (så modellen vet å ikke flagge dem)?
+
+**Differentiation.** Ikke et nytt domene — samme risiko-taksonomi som `pitfall-verification` (sikkerhet, idempotens, kontrakter, edge cases). Forskjellen er *artefakt-komplettheit-signalering*: si til reviewer-en "dette er strukturelt ufullstendig by design, evaluer det som er der".
+
+**Status.** Open question. Ikke blokkerende for shipped skills. Trenger beslutning før neste gang det surfacer — sannsynligvis allerede ved seksjon 2-5 av `live-swiftui`-designet.
+
+---
+
 ## Shipped
 
 - `macos-native-review` — shipped in v1.9.0 (2026-04-28). See `skills/macos-native-review/SKILL.md`.

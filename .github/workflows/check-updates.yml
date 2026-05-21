@@ -323,13 +323,18 @@ jobs:
           request = {
               "model": "claude-sonnet-4-6",
               # Output budget calibrated against measured file sizes on
-              # 2026-05-20: README ≈ 6.3k tokens, VERSIONS.md ≈ 0.4k, new
-              # changelog entry ≈ 0.5k, setup-routing/SKILL.md ≈ 10.9k,
-              # adapt/SKILL.md ≈ 11.2k. Combined ≈ 29.3k when both SKILL.md
-              # files update. 32k = ~3k headroom for growth; below that the
-              # response silently truncates and writes a corrupt SKILL.md.
-              # We ALSO check stop_reason below as a defense in depth.
-              "max_tokens": 32000,
+              # 2026-05-21 (after v2.12.0 added Code reuse discipline section
+              # to both SKILL.md files):
+              # README ≈ 6.4k tokens, VERSIONS.md ≈ 0.3k, new changelog entry
+              # ≈ 0.5k, setup-routing/SKILL.md ≈ 12.3k, adapt/SKILL.md ≈ 13.5k.
+              # Combined ≈ 33k when both SKILL.md files update.
+              # 40k = ~7k headroom for future section additions; below the
+              # combined estimate the response silently truncates and writes
+              # a corrupt SKILL.md (caught by stop_reason check below as
+              # defense in depth — see v2.11.3 codex review for that fix).
+              # Recalibrate this comment every time a new marker-section is
+              # added; the workflow would otherwise drift back to budget-too-low.
+              "max_tokens": 40000,
               "messages": [{"role": "user", "content": user_content}]
           }
 

@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.12.0] - 2026-05-21
+
+### Added
+- **`### Code reuse discipline (before writing)` section** (marker `<!-- gstack-code-reuse-v1 -->`) emitted into every generated CLAUDE.md — universal, NOT track-gated. Tells the agent to grep/glob for existing implementations of a concept (struct, helper, component, view-modifier, extension, hook, utility) before introducing new ones, and to verbalize the scan in chat so the user can intervene before a duplicate is scaffolded.
+- **Scope list** distinguishes "scan before writing" (new domain-shared structs/components/utilities) from "do NOT scan" (lines inside existing functions, inline closures, test helpers, one-off scripts) — keeps the cadence-cost bounded.
+- **Dispatch-boundary instruction** for subagents under SDD or Task-tool dispatch: the orchestrator must include "search existing implementations before scaffolding" in the dispatch prompt, since the subagent has narrower context than the orchestrator.
+- **Coverage-at-adjacent-stages block** documents that `/plan-eng-review` covers pre-implementation reuse-scan and `/review` (gstack/maintainability) covers post-implementation DRY violations — this section explicitly fills the implementation-time gap between them, not duplicating either.
+- **Local override clause** — if the user says "skip the reuse-check for this session", honor it without re-litigation. User has full-codebase context the agent may lack.
+
+### Changed
+- **`setup-routing` Step 6** emits the new section under `## Skill routing` as `### Code reuse discipline`, placed between `### Multi-lens review` and `### Track-aware routing` — keeping the "operating discipline" rules (Autonomy → Git hygiene → Multi-lens review → Code reuse) grouped before track-gated content.
+- **`adapt` Step 5** inserts or upgrades the section using the same four-case marker logic as Autonomy, Git hygiene, Multi-lens review, Track-aware routing, Native Apple tools, and Companion skills. Universal (not track-gated).
+
+### Why
+Real-world session (2026-05-21): user expressed concern about agentic-coding-induced duplication — "agent skriver feature ute av kontekst" — particularly in Swift/SwiftUI where many small reusable patterns (ViewModifier, ButtonStyle, Extension) silently duplicate. Memory `feedback_swift_office_hours_dry.md` captured the concern as a soft mechanism. Investigation of where DRY is already covered (grep across gstack + superpowers + this plugin) showed:
+
+- `/office-hours` and `/plan-ceo-review`: correctly NOT addressing DRY (product/strategy framing, too early)
+- `/plan-eng-review`: explicit pre-implementation reuse-scan ("list existing code/flows that already partially solve sub-problems") at l.1371
+- `/review` (gstack/maintainability): post-implementation DRY violations check
+- **Gap:** the implementation step itself (SDD subagent code-writing) has no explicit "search before writing" trigger anywhere in gstack or superpowers
+
+v2.12.0 closes that gap with a project-level CLAUDE.md rule, emitted universally so every project benefits — not just native track. Pragmatist by default; verbose-by-default; bounded by an explicit scope list to prevent cadence-cost runaway.
+
+### Fixed (retroactive — surfaced by codex review of v2.12.0)
+- **Heading-hierarchy class bug in all marker-section case-4 wordings.** Codex review on v2.12.0's new Code reuse section flagged that "APPEND as H2 (or insert under `## Skill routing` as H3)" without explicit demote instruction creates a latent corruption path: when the H3 alternative is chosen, the H3 subsections sit at the SAME level as the H3 root. Next marker upgrade's "REPLACE through next heading of equal-or-shallower level" stops at the first subsection and leaves stale content behind. The same wording exists in 5 other case-4 blocks (Autonomy, Git hygiene, Multi-lens review, Native Apple tools, Companion skills). All 6 now include explicit demote-to-H4 requirement for the H3 alternative path. Same class as v2.10.2's REPLACE-wording bug — different dimension (now heading-level shift instead of equal-or-shallower).
+- **Subagent dispatch instruction was "propose reuse" instead of "use reuse".** Codex review flagged that dispatched subagents under SDD would stop after proposing reuse if existing code was found, instead of completing the delegated coding task using the existing implementation. Fixed to "use it or extend it and continue with your delegated task — report what you reused" with explicit instruction to escalate ONLY on genuine ambiguity. Applies to both setup-routing and adapt's emit blocks.
+- **`.github/workflows/check-updates.yml` max_tokens cascade.** Codex review flagged that adding the Code reuse section to both SKILL.md files grew the combined output from ~29.3k tokens (v2.11.3 calibration) to ~33k tokens — over the workflow's 32000 budget. Bumped max_tokens to 40000 with explicit recalibration documentation; without this fix the next upstream-sync workflow run that touches SKILL.md files would have hit stop_reason=max_tokens and aborted.
+- **Data-loss regression in adapt's case-3 logic for new sections.** Codex review flagged that the standard four-case marker logic ("Heading present + marker absent → REPLACE as legacy pre-marker plugin content") doesn't apply to genuinely new sections. Code reuse discipline is new in v2.12.0 — markerless `Code reuse discipline` sections in user CLAUDE.md files cannot be pre-marker plugin content (the plugin never had this section before). They are *user-authored* sections that adapt would have silently replaced. Fixed: Code reuse case 3 now PRESERVES the user's section and surfaces a notice in the adapt summary instructing how to migrate to the plugin version (delete + re-run adapt). This is a UNIQUE case-3 behavior for newly-introduced sections; other marker-sections (Autonomy, Git hygiene, etc.) correctly treat case 3 as legitimate pre-marker plugin content because they existed in earlier plugin versions.
+- **Case-2 heading-hierarchy class bug (parallel to case-4).** Codex review (round 5) flagged that the same H3-root-with-H3-subs corruption from case 4 also applies to case 2 when the existing root is H3 (setup-routing-nested under Skill routing) and the replacement block is given as H2 with H3 subs. All 6 case-2 wordings (Autonomy, Git hygiene, Multi-lens review, Code reuse, Native Apple tools, Companion skills) now include the same demote-when-root-is-H3 instruction as case 4, cross-referenced rather than duplicated.
+- **Ambiguous "REPLACE only that section" language in adapt's Step 5 (l.216).** Codex review (round 6) flagged that the existing wording could be read as "wholesale-replace the entire `## Skill routing` block," which would silently destroy user-authored subsections nested inside (e.g. a hand-written `### Code reuse discipline` markerless heading — the exact scenario v2.12.0's case-3 PRESERVE guarantee was meant to cover, defeated by an upstream wholesale-replace). Clarified to make the actual behavior explicit: per-section case-logic operates on individual marker-sections; everything else inside Skill routing must be PRESERVED verbatim. The actual behavior was already this in practice (otherwise case-1 idempotent skip would never trigger), but the loose wording invited misinterpretation by both human readers and AI agents executing the skill.
+
+### Backwards compatibility
+**Fully additive.** No skill behavior changes. The section emits into newly-generated CLAUDE.md and is inserted into existing CLAUDE.md via `/superpowers-gstack:adapt`. Marker pattern means future updates auto-upgrade. Users who want to opt out can delete the section from their CLAUDE.md after adapt; the next adapt run will re-emit it (the marker pattern intentionally treats "section deleted" as "needs re-insert"). The retroactive case-4 fix is purely documentation-of-existing-behavior — projects adapted before v2.12.0 are unaffected unless they re-run adapt AND choose the H3-under-Skill-routing alternative path on a section that wasn't previously present (very narrow case).
+
+### Notes for users
+- **Re-run `/superpowers-gstack:adapt`** on existing projects to add the Code reuse discipline section.
+- **Verbose-by-default** is intentional. The "Sjekker om vi har en eksisterende X" line gives you a chance to redirect the agent BEFORE the duplicate is scaffolded. If you find it too noisy, say "skip the reuse-check for this session" — the rule honors that.
+- **Minor version bump (2.12.0)** rather than patch — this is a new generated-CLAUDE.md section, an additive feature with new behavior. Patch was for the CI fixes in 2.11.x.
+
 ## [2.11.4] - 2026-05-20
 
 ### Changed (Superpowers 5.1.0)
