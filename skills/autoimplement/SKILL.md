@@ -152,6 +152,10 @@ git status --porcelain
 
 If non-empty, STOP. The previous phase left work uncommitted — surface and exit.
 
+Also capture the current HEAD before dispatch:
+`pre_phase_head=$(git rev-parse HEAD)`
+This will be compared after the subagent returns DONE (see Step C).
+
 ### B. Dispatch the generator subagent
 
 Invoke the `Agent` tool with:
@@ -192,7 +196,13 @@ Wait for the subagent to return. **Do not prompt the user during this wait** —
 
 Match by **prefix** (`startswith`), not substring — this avoids false matches when those tokens appear mid-content:
 
-- Line starts with `DONE` → proceed to Step D.
+- Line starts with `DONE` → **first, verify the subagent actually committed its work**:
+  ```bash
+  git status --porcelain
+  ```
+  If output is non-empty, the subagent claimed DONE but left uncommitted changes. Treat as `FAILED` with reason "subagent reported DONE but working tree is dirty". This catches the failure mode where the subagent says "done" but forgot the commit step. Also capture HEAD before dispatch (Step A) and compare after — if HEAD did not advance, treat as `FAILED` with reason "subagent reported DONE but made no commits".
+
+  If tree is clean and HEAD advanced → proceed to Step D.
 - Line starts with `BLOCKED ` (with reason after) → STOP. Surface the reason. Exit cleanly.
 - Line starts with `FAILED ` (with reason after) → STOP. Surface the reason and the subagent's last 30 lines of output. Exit. (Do NOT retry — the user said they always fix manually when something fails.)
 - Anything else → treat as `FAILED` with reason "subagent terminator line did not start with DONE/BLOCKED/FAILED".
