@@ -16,7 +16,7 @@
 - No lock files or session locking.
 - No JSON-state progress files (each session is self-contained; cross-session resumability is out of scope for v1 of this skill — if the user wants it, that's a v2.14 feature).
 - No deterministic exit-code contracts with `/review`, `/pitfall-verification`, or `/codex review` — the agent reads their output and decides.
-- No prompt-injection envelope (defer until a real prompt-injection bug bites; YAGNI).
+- No complex prompt-injection runtime (no token-level filtering, no LLM-based input sanitizer). The shipped skill DOES include a simple `<PHASE_CONTENT>` data/instruction boundary envelope in Step B — that's a low-cost defense, not the "complex envelope" we explicitly defer.
 - No auto-rollback, no WIP hard-stop commits — when something goes wrong, leave the working tree as-is and let the user inspect.
 
 ---
