@@ -119,3 +119,23 @@ the final summary).
 
 Build the phase queue: `phases = [{num, title, body}, ...]` and echo:
 > Found N phases. Startup checks: clean. Codex: <available|unavailable>. Asking one policy question, then starting Phase 1.
+
+## Policy question (one, after startup checks pass)
+
+This is **one policy question** — the only friction autoimplement deliberately adds.
+It runs only AFTER plan path resolution and startup checks have all passed; refusal
+paths upstream may have produced their own prompts, but those are gates, not the
+policy question.
+
+Invoke `AskUserQuestion` with:
+
+**Question:** "Stop on any review issue, or treat pitfall/codex as advisory?"
+**Header:** "Stop policy"
+**Options (2):**
+- "Stop on any review issue (recommended)" — pause if `/review`, `/pitfall-verification`, OR `/codex review` flags anything actionable. Matches the manual workflow this skill is replacing.
+- "Treat pitfall/codex as advisory (risky)" — `/pitfall-verification` and `/codex review` findings are surfaced but do not pause execution. Use only when you trust them to over-flag and accept the risk that a real correctness/security/data-loss finding will slip through. `/review` failures still always stop. Severe findings (security, data loss, correctness bugs in test assertions) ALWAYS block regardless of this setting — see § Per-phase procedure Step D.
+
+Store the answer as `STOP_POLICY` (string: `any-issue` or `advisory`).
+
+After the answer, echo:
+> Stop policy: <STOP_POLICY>. Proceeding through N phases.
