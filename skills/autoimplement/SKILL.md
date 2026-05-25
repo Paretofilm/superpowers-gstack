@@ -320,3 +320,20 @@ Suggested next:
   - git log main..HEAD to see the cumulative diff
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
+
+## Audit trail
+
+autoimplement is a high-trust skill — when invoked, it executes plan phases without human-in-loop checkpoints. To make that trust auditable, this skill itself went through documented review chains before shipping:
+
+| Round | Reviewer | Findings | Status |
+|---|---|---|---|
+| Plan v1 → pitfall | self | 11 issues | Fixed in v1 |
+| Plan v1 → codex review | codex (gpt-5.5) | 20 findings, 7 blockers — flagged "SKILL.md ≠ runtime" | Triggered v2 rewrite |
+| Plan v2 → pitfall | self | 4 issues | Fixed inline |
+| Plan v2 → codex review | codex (gpt-5.5) | 11 findings, 4 blockers | All addressed before implementation |
+| Code → pitfall | self | clean | — |
+| Code → codex review | codex (gpt-5.5) | 6 findings (2 P1, 3 P2, 1 P3) | All addressed before merge |
+
+**Meta-review note:** As of v2.13.0, the pitfall-verification and codex-review skills themselves have not been independently audited for blind spots. This is a known limitation. If/when a `/audit-review-skills` skill exists, autoimplement should be re-reviewed under it. Until then, the chain `code → pitfall + codex` is considered adequate based on accumulated evidence that both surface real issues.
+
+**For future maintainers:** Add a row here whenever a non-trivial change to autoimplement ships, documenting which reviews ran and what they found. This keeps the trust justification auditable as the skill evolves.
