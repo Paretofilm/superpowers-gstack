@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.12.1] - 2026-05-25
+
+### Changed (Claude Code 2.1.150)
+
+- Version bumped from 2.1.145 to 2.1.150 (5 patch versions). Release notes not reviewed for plugin-specific impact; VERSIONS.md updated.
+
 ## [2.12.0] - 2026-05-21
 
 ### Added
