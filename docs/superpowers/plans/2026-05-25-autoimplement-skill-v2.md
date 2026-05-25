@@ -150,9 +150,11 @@ import sys, yaml
 data = yaml.safe_load(sys.stdin.read())
 assert isinstance(data, dict), "FAIL: frontmatter not a mapping"
 assert "name" in data, "FAIL: missing name"
-assert data["name"] == "autoimplement", f"FAIL: name is {data[\"name\"]!r}"
+name = data["name"]
+assert name == "autoimplement", f"FAIL: name is {name!r}"
 assert "description" in data, "FAIL: missing description"
-assert len(data["description"]) >= 80, f"FAIL: description too short"
+desc_len = len(data["description"])
+assert desc_len >= 80, f"FAIL: description too short ({desc_len} chars)"
 print("OK: frontmatter valid")
 '
 ```
