@@ -202,7 +202,7 @@ jobs:
           REPORT: ${{ needs.check.outputs.report }}
         run: |
           python3 << 'PYTHON_EOF'
-          import json, os, subprocess, sys
+          import json, os, re, subprocess, sys
           from pathlib import Path
 
           report = os.environ.get("REPORT", "")
@@ -442,8 +442,33 @@ jobs:
                   sys.exit(1)
               path.write_text(content.strip() + "\n")
 
+          def bump_plugin_json(new_version: str) -> None:
+              """Sync .claude-plugin/plugin.json version with the new CHANGELOG entry.
+
+              Claude Code's plugin cache keys on plugin.json's version field.
+              If CHANGELOG bumps to X but plugin.json stays at X-1, users running
+              `/plugin update` keep getting the old code. PRs #18 and #20 both
+              shipped with this mismatch and required reactive bump commits
+              (c236c46, bd0dd86). Closing the loop here.
+              """
+              plugin_path = Path(".claude-plugin/plugin.json")
+              if not plugin_path.exists():
+                  print("Warning: .claude-plugin/plugin.json not found, skipping bump",
+                        file=sys.stderr)
+                  return
+              data = json.loads(plugin_path.read_text())
+              if data.get("version") == new_version:
+                  return
+              data["version"] = new_version
+              plugin_path.write_text(json.dumps(data, indent=2) + "\n")
+              print(f"Bumped plugin.json to {new_version}")
+
           def prepend_changelog_entry(raw_entry: str) -> None:
               """Prepend new entry to CHANGELOG.md, preserving the `# Changelog` header.
+
+              Also bumps .claude-plugin/plugin.json to match the new version —
+              the two must stay in sync or Claude Code's plugin cache won't pick
+              up the new code.
 
               Fails the workflow loudly if Claude's response doesn't contain a
               valid `## [...]` entry header — better than silently skipping the
@@ -468,6 +493,15 @@ jobs:
               new_entry = "\n".join(lines).strip()
               if not new_entry:
                   return
+              # Extract version from the entry header (`## [X.Y.Z] - YYYY-MM-DD`)
+              # so we can keep plugin.json synchronized.
+              version_match = re.match(r"^##\s*\[([^\]]+)\]", new_entry)
+              if version_match:
+                  bump_plugin_json(version_match.group(1))
+              else:
+                  print("Warning: could not parse version from new CHANGELOG entry; "
+                        "plugin.json not bumped. Header was: "
+                        f"{new_entry.splitlines()[0][:80]}", file=sys.stderr)
               if changelog_full_exists:
                   existing = changelog_path.read_text()
                   # Existing starts with `# Changelog\n\n` then entries. Preserve header.
@@ -578,7 +612,7 @@ jobs:
           git checkout -b "$branch"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md VERSIONS.md CHANGELOG.md skills/setup-routing/SKILL.md skills/adapt/SKILL.md
+          git add README.md VERSIONS.md CHANGELOG.md skills/setup-routing/SKILL.md skills/adapt/SKILL.md .claude-plugin/plugin.json
 
           git commit -m "Auto-update README for upstream changes
 
