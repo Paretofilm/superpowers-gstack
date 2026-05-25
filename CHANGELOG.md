@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.13.0] - 2026-05-25
+
+### Added
+
+- New `/superpowers-gstack:autoimplement` skill. Composes existing review
+  skills (`/review`, `/pitfall-verification`, `/codex review`) to auto-advance
+  through a multi-phase plan, skipping the y/n prompts the user always answers
+  "yes" to when reviews pass. Stops and surfaces when any review flags issues
+  — no auto-retry, no automatic rollback. One policy question after startup
+  checks pass. Severe findings (security, data loss, correctness in tests)
+  always stop regardless of policy. Refuses on fewer than 2 phases, missing
+  per-phase commit steps, dirty trees, main/master branch, or plans touching
+  migrations / secrets / credentials / `.env` / `.ssh`.
+
+### Notes
+
+- This skill is *honestly scoped* as an agent procedure, not a deterministic
+  runtime. Pass/fail is Claude's judgment on review output, not exit-code
+  parsing. See `docs/superpowers/plans/2026-05-25-autoimplement-skill-v2.md`
+  for the design rationale (v1 attempted a deterministic runtime in markdown
+  — codex review correctly flagged it as unimplementable).
+
 ## [2.12.1] - 2026-05-25
 
 ### Changed (Claude Code 2.1.150)
