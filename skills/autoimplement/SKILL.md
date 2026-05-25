@@ -72,6 +72,8 @@ across all code fences inside the phase). Refuse if any phase lacks a commit ste
 
 This catches the common failure mode where a plan describes work but never tells the subagent to commit it — autoimplement would then trigger the dirty-tree refusal at Step A of Phase 2 and stop pointlessly.
 
+**Assumption:** This check looks for literal `git commit` (case-insensitive). Plans that delegate commits to a wrapper script (e.g., `./scripts/commit-phase.sh`) or to another skill (e.g., `/ship`) will false-negative. This is acceptable given that `superpowers:writing-plans` produces literal `git commit` steps by convention. If your plan uses wrappers, either inline the commits or expect this refusal.
+
 ### Check 4: No forbidden file paths or write targets
 
 Two scans, both case-insensitive:
@@ -83,8 +85,8 @@ regexes (anchored, not substring):
 
 - `(^|/)migrations(/|$)` — migration directories
 - `(^|/)\.env(\..*)?$` — `.env` and `.env.*` files
-- `.*secret.*` — any path containing "secret"
-- `.*credential.*` — any path containing "credential"
+- `(^|[/._-])secrets?([/._-]|$)` — paths containing "secret" or "secrets" as a word (e.g. `app/secrets/`, `prod.secret.yaml`); avoids matching `secretary/`
+- `(^|[/._-])credentials?([/._-]|$)` — paths containing "credential" or "credentials" as a word; avoids matching `credentialed-users.md`
 - `(^|/)\.ssh/` — SSH directories
 
 **Scan B — shell command writes.** For each phase body, scan code fences for
