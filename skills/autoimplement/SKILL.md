@@ -126,6 +126,24 @@ If absent → set internal flag `CODEX_AVAILABLE=false`. Continue, but the `/cod
 review` step in the per-phase procedure will be skipped (with a logged note in
 the final summary).
 
+### Check 6: Plan has been reviewed (pitfall or codex)
+
+Autoimplement trusts the plan implicitly — it runs phases without human approval at boundaries. So the plan must have been reviewed at least once before it can be autoimplemented. Detection via git history:
+
+```bash
+git log --all --grep='pitfall\|codex\|review' --oneline -- "$plan_path" 2>/dev/null
+```
+
+If output is empty (no commits to the plan file mentioning "pitfall", "codex", or "review"), refuse:
+
+> "Plan '$plan_path' has no commits mentioning pitfall / codex / review in its history. autoimplement requires plan-level review before automated execution. Run `superpowers-gstack:pitfall-verification` on the plan, address findings, commit the fixes with 'pitfall' or 'codex' in the message, then re-invoke."
+
+**Why this check:** Without it, a user could draft a plan and immediately autoimplement it — bypassing the review-before-implementation discipline that surfaced the critical issues in this skill's own v1 plan (which codex called "unimplementable"). The check uses git-log-scan rather than content-scan because content can be faked; commit history is harder to game (would require explicit "pitfall" in a fake commit message).
+
+**Edge case — plan exists but isn't committed yet:** Refuse with the same message. Plans must be committed before being autoimplemented (the git-log check requires a tracked file).
+
+**Edge case — plan reviewed inline without separate commits:** False negative. Acceptable cost; the workflow `superpowers-gstack:pitfall-verification` + commit fixes IS the documented convention. If a user has a genuine reason to bypass, they can manually invoke `superpowers:subagent-driven-development` instead.
+
 ### After all checks pass
 
 Build the phase queue: `phases = [{num, title, body}, ...]` and echo:
