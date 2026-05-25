@@ -563,14 +563,18 @@ git commit -m "docs(autoimplement): routing entry in repo CLAUDE.md"
 **Files:**
 - Modify: `skills/setup-routing/SKILL.md`
 
-- [ ] **Step 1: Find the skill evaluation table in `skills/setup-routing/SKILL.md`**
+- [ ] **Step 1: Find the "Utility (any phase)" table in `skills/setup-routing/SKILL.md`**
 
-If the file structure has changed since this plan was written, STOP and ask the user where the table now lives — do not improvise.
+setup-routing has multiple 2-column tables organized by phase (Planning, Review&QA, Ship&Monitor, Utility). `autoimplement` is a workflow accelerator usable in any phase that has a plan, so it goes in the **"Utility (any phase)"** table alongside other `/superpowers-gstack:*` skills.
 
-- [ ] **Step 2: Add this row (match existing column count exactly)**
+If the file structure has changed since this plan was written or the Utility table doesn't exist, STOP and ask the user — do not improvise.
+
+- [ ] **Step 2: Add this row to the Utility table (2-column format, matching existing rows)**
+
+Insert as the FIRST `/superpowers-gstack:*` row in the Utility table (alphabetical: `autoimplement` < `ios-native-review` < `macos-native-review` < `office-hours-track-aware` < `swiftui-design-consultation`):
 
 ```markdown
-| autoimplement | superpowers-gstack | Plan has 2+ phases with per-phase commit steps, no migrations/secrets/credentials/.env/.ssh in Files: blocks, user wants automated phase advancement | "I have a multi-phase plan and want it run end-to-end" |
+| `/superpowers-gstack:autoimplement` | Multi-phase plans where the user always confirms phase boundaries — chains `/review` + `/pitfall-verification` + `/codex review` automatically. Refuses on <2 phases, missing per-phase commit steps, dirty tree, main/master branch, or plans touching migrations/secrets/credentials/.env/.ssh. |
 ```
 
 - [ ] **Step 3: Commit**
