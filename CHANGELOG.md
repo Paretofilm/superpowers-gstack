@@ -7,7 +7,7 @@
 - New `/superpowers-gstack:autoimplement` skill. Composes existing review
   skills (`/review`, `/pitfall-verification`, `/codex review`) to auto-advance
   through a multi-phase plan, skipping the y/n prompts the user always answers
-  "yes" to when reviews pass. Stops and surfaces when any review flags issues
+  "yes" to when reviews pass. Stops by default when /review or any review flags actionable issues; severe findings (security/data-loss/correctness) always stop regardless of policy; pitfall/codex findings can be treated as advisory via the policy question.
   — no auto-retry, no automatic rollback. One policy question after startup
   checks pass. Severe findings (security, data loss, correctness in tests)
   always stop regardless of policy. Refuses on fewer than 2 phases, missing

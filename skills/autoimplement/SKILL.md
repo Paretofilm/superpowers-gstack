@@ -4,8 +4,10 @@ description: |
   Auto-advance through a multi-phase implementation plan by dispatching a
   subagent per phase, then chaining /review, /pitfall-verification, and
   /codex review at the phase boundary. Skips the y/n prompts a user would
-  always answer "yes" to when reviews pass; stops and surfaces when any
-  review flags issues. Composes existing skills — does not reimplement
+  always answer "yes" to when reviews pass; stops by default when /review or
+  any review flags actionable issues; severe findings (security/data-loss/correctness)
+  always stop regardless of policy; pitfall/codex findings can be treated as
+  advisory via the policy question. Composes existing skills — does not reimplement
   review logic. Use when asked to "autoimplement", "run this plan
   end-to-end", or "auto-advance through the phases".
 ---
