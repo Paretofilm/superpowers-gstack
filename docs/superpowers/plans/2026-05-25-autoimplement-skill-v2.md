@@ -422,7 +422,7 @@ Invoke the `Agent` tool with:
   </PHASE_CONTENT>
   ```
 
-Wait for the subagent to return. Identify its terminator: the **last non-blank line** of the reply, after trimming trailing whitespace and any closing markdown fences.
+Wait for the subagent to return. **Do not prompt the user during this wait** — the subagent runs to completion or its terminator; orchestrator silence is part of the friction removal. Identify the terminator: the **last non-blank line** of the reply, after trimming trailing whitespace and any closing markdown fences.
 
 ### C. Branch on the subagent's terminator line
 
@@ -442,7 +442,7 @@ For each review output, classify as one of:
 - **clean** — no actionable findings.
 - **advisory** — findings exist but are non-blocking by their own content (style nits, "consider X", optional improvements, low-severity warnings).
 - **blocking** — findings indicate bugs, correctness failures, security issues, data-loss risks, broken contracts, failing tests, or anything the review itself frames as "must fix" / "P1" / "blocker" / equivalent.
-- **severe** — subset of blocking: security vulnerability, data loss, secret leak, or correctness bug in test assertions. **Always stops regardless of `STOP_POLICY`** (this is the "severe findings always block" rule from Phase 3).
+- **severe** — subset of blocking: security vulnerability, data loss, secret leak, or correctness bug in test assertions (e.g., a test that asserts the wrong value, hiding regressions — not a normal test failure). **Always stops regardless of `STOP_POLICY`** (this is the "severe findings always block" rule from Phase 3).
 
 Reviews:
 
@@ -482,7 +482,7 @@ This makes the decision auditable.
 
 If we reached this step (no review STOPped — either all clean, or advisory findings surfaced but not blocking under `advisory` policy):
 
-> Phase <N> complete. Reviews: review=<clean|advisory>, pitfall=<clean|advisory|skipped>, codex=<clean|advisory|skipped>. Starting Phase <N+1>.
+> Phase <N> complete. Reviews: review=<clean|advisory>, pitfall=<clean|advisory>, codex=<clean|advisory|skipped>. Starting Phase <N+1>.
 
 Move to the next phase. **No `AskUserQuestion` between phases — that's the friction we are removing.** The user already answered the policy question upfront.
 
