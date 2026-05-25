@@ -89,16 +89,25 @@ regexes (anchored, not substring):
 - `(^|[/._-])credentials?([/._-]|$)` — paths containing "credential" or "credentials" as a word; avoids matching `credentialed-users.md`
 - `(^|/)\.ssh/` — SSH directories
 
-**Scan B — shell command writes.** For each phase body, scan code fences for
-shell redirection or git operations that write to forbidden paths:
+**Scan B — shell command writes against forbidden paths.** For each phase body,
+scan code fences for write-like commands targeting any forbidden path. The
+forbidden path regexes from Scan A apply here too — match them against the
+ARGUMENTS of these commands:
 
-- `>\s*\.env`, `>>\s*\.env` — redirect to .env files
-- `git add.*\.env`, `git add.*secret`, `git add.*credential` — staging forbidden files
-- `(^|\s)secrets?\s*=`, `(^|\s)password\s*=` in `export`/`echo` lines
+Write-like command patterns:
+- Shell redirection: `>\s*<path>`, `>>\s*<path>`, `2>\s*<path>`, `&>\s*<path>`
+- File commands: `tee\s+(-[a-z]+\s+)*<path>`, `cat\s+>\s*<path>`, `cp\s+\S+\s+<path>`, `mv\s+\S+\s+<path>`, `install\s+\S+\s+<path>`
+- Touch/mkdir: `touch\s+<path>`, `mkdir\s+(-p\s+)?<path>`
+- Editors: `vim?\s+<path>`, `nano\s+<path>`, `code\s+<path>`
+- Git: `git\s+add\s+<path>`
+- Heredoc: `cat\s+(>|>>|<<)\s*<path>` and `<<-?\s*['"]?EOF['"]?` followed by writes
+- Secret-shape assignments: `(^|\s)(secrets?|passwords?|tokens?|api_?keys?)\s*=` in `export`/`echo`/`printf` lines
 
-If any match in either scan, refuse with the offending path/command quoted:
+If any write-like command targets any forbidden path (migrations / .env / secret / credential / .ssh — using the regexes from Scan A), refuse with the offending command quoted:
 
 > "Plan touches forbidden path or writes secret-shaped content: `<offending match>` in Phase <N>. autoimplement refuses on migrations / secrets / credentials / .env / .ssh — these need human-in-the-loop friction. Run the plan manually."
+
+**Implementation note:** This scan is intentionally over-eager. False positives are acceptable; a missed forbidden write is not. If a legitimate plan trips the scan, the user can rename the file or run the plan manually.
 
 **Fallback when `Files:` blocks are absent in some phases:** Still run Scan B
 on all phases. Surface a note when Scan A finds nothing because no `Files:`
