@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.13.1] - 2026-05-26
+
+### Fixed
+
+- **autoimplement Check 1 zsh portability** — the bash snippet used bare
+  `status=...` assignment, but `status` is a read-only variable in zsh
+  (the default shell on macOS). When the agent ran the snippet, zsh
+  errored with `read-only variable: status` and Check 1 failed before
+  it could refuse cleanly. Fixed by prefixing local variables with
+  `git_` (`git_branch`, `git_status`) — self-documenting and
+  collision-free across bash and zsh. Caught during live dogfood
+  testing — the first real invocation of v2.13.0 surfaced this.
+
 ## [2.13.0] - 2026-05-25
 
 ### Added
