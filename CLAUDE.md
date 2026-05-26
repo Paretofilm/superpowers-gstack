@@ -98,6 +98,7 @@ Key routing rules:
 - Weekly retro → invoke retro
 - Design system, brand → invoke design-consultation
 - Design system for SwiftUI projects (DESIGN.md + Swift Package) → invoke /superpowers-gstack:swiftui-design-consultation (inlines platform question on first run)
+- Autoimplement a plan, "run plan end-to-end", "auto-advance phases" → invoke /superpowers-gstack:autoimplement. Removes y/n friction at phase boundaries by chaining /review + /pitfall-verification + /codex review automatically. Refuses on: <2 phases, missing per-phase commit steps, dirty tree, main/master branch, or plans touching migrations / secrets / credentials / .env / .ssh.
 - After a PRD/spec/plan for a native Apple app, before implementation → invoke /superpowers-gstack:macos-native-review (macOS) or /superpowers-gstack:ios-native-review (iOS/iPadOS). HIG-citation-grounded conformance gate; complementary to pitfall-verification and quality-review.
 - Visual audit, design polish → invoke design-review
 - Architecture review → invoke plan-eng-review
