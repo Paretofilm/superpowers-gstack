@@ -739,13 +739,13 @@ Create `skills/autoimplement/tests/fixtures/tiny-plan.md`:
 echo "phase1" >> skills/autoimplement/tests/fixtures/sample.txt
 ```
 
-- [ ] **Step 2: Verify**
+- [ ] **Step 2: Verify (idempotent — presence-check, not count)**
 
 ```bash
-grep -c '^phase1$' skills/autoimplement/tests/fixtures/sample.txt
+grep -q '^phase1$' skills/autoimplement/tests/fixtures/sample.txt && echo "phase1 present"
 ```
 
-Expected: `1`
+Expected: `phase1 present`
 
 - [ ] **Step 3: Commit**
 
@@ -769,13 +769,13 @@ git commit -m "test(autoimplement): tiny-plan phase 1 (e2e fixture)"
 echo "phase2" >> skills/autoimplement/tests/fixtures/sample.txt
 ```
 
-- [ ] **Step 2: Verify**
+- [ ] **Step 2: Verify (idempotent — presence-check, not count)**
 
 ```bash
-grep -c '^phase2$' skills/autoimplement/tests/fixtures/sample.txt
+grep -q '^phase2$' skills/autoimplement/tests/fixtures/sample.txt && echo "phase2 present"
 ```
 
-Expected: `1`
+Expected: `phase2 present`
 
 - [ ] **Step 3: Commit**
 
