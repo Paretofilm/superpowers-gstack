@@ -336,6 +336,7 @@ autoimplement is a high-trust skill — when invoked, it executes plan phases wi
 | Code → pitfall | self | clean | — |
 | Code → codex review | codex (gpt-5.5) | 6 findings (2 P1, 3 P2, 1 P3) | All addressed before merge |
 | v2.13.1 → live dogfood | user (kjetilge) | 1 portability bug: bare `status=` assignment fails in zsh (read-only var) | Fixed: prefix `git_` on local vars |
+| v2.13.2 → full dogfood Phase 1 (review + pitfall + codex chain) | codex (gpt-5.5) caught 1 [P1] in fixture | Fixture's `grep -c == 1` verify breaks on re-runs (cross-run idempotency bug) | Fixed: `grep -q` presence-check makes fixture idempotent. Validates Step D's cross-model adversarial value — finding missed by /review and /pitfall, caught by codex. |
 
 **Meta-review note:** As of v2.13.0, the pitfall-verification and codex-review skills themselves have not been independently audited for blind spots. This is a known limitation. If/when a `/audit-review-skills` skill exists, autoimplement should be re-reviewed under it. Until then, the chain `code → pitfall + codex` is considered adequate based on accumulated evidence that both surface real issues.
 

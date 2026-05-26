@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.13.2] - 2026-05-26
+
+### Fixed
+
+- **autoimplement fixture cross-run idempotency** — `tiny-plan.md` used
+  `grep -c '^phaseN$' == 1` for verify, which breaks on re-runs (appending
+  produces duplicate lines → count becomes 2 → verify fails). Caught by
+  codex review during v2.13.1 dogfood Phase 1 chain — a real cross-run bug
+  that neither `/review` nor `/pitfall-verification` flagged (they correctly
+  focus on single-diff correctness, not temporal/cross-run semantics).
+  Fix: switched to `grep -q` presence-check + explicit echo, making the
+  fixture idempotent across multiple runs on the same branch. Audit trail
+  in SKILL.md updated.
+
+### Notes
+
+- This is the second meta-finding validating cross-model adversarial value:
+  codex caught a bug single-shot reviewers structurally cannot see.
+  Documented in the autoimplement audit trail as evidence of the
+  pattern's practical value.
+
 ## [2.13.1] - 2026-05-26
 
 ### Fixed

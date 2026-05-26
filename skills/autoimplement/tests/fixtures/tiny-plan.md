@@ -6,6 +6,8 @@
 
 **Architecture:** Trivial. Each phase has one task that runs `echo ... >> sample.txt && git add && git commit`. Exercises the real commit + review chain — not a /tmp fake.
 
+**Idempotency:** Verify steps use `grep -q` (presence check) instead of `grep -c == 1` (exact-count check). This makes the fixture safe to re-run on a branch that already ran it once — re-appending duplicates "phase1" but presence-check still succeeds. Caught by codex review during v2.13.0 dogfood (would have caused cross-run verification failures otherwise).
+
 **Tech Stack:** Bash + a tracked text file.
 
 ---
@@ -23,13 +25,13 @@
 echo "phase1" >> skills/autoimplement/tests/fixtures/sample.txt
 ```
 
-- [ ] **Step 2: Verify**
+- [ ] **Step 2: Verify (idempotent — presence-check, not count)**
 
 ```bash
-grep -c '^phase1$' skills/autoimplement/tests/fixtures/sample.txt
+grep -q '^phase1$' skills/autoimplement/tests/fixtures/sample.txt && echo "phase1 present"
 ```
 
-Expected: `1`
+Expected: `phase1 present`
 
 - [ ] **Step 3: Commit**
 
@@ -53,13 +55,13 @@ git commit -m "test(autoimplement): tiny-plan phase 1 (e2e fixture)"
 echo "phase2" >> skills/autoimplement/tests/fixtures/sample.txt
 ```
 
-- [ ] **Step 2: Verify**
+- [ ] **Step 2: Verify (idempotent — presence-check, not count)**
 
 ```bash
-grep -c '^phase2$' skills/autoimplement/tests/fixtures/sample.txt
+grep -q '^phase2$' skills/autoimplement/tests/fixtures/sample.txt && echo "phase2 present"
 ```
 
-Expected: `1`
+Expected: `phase2 present`
 
 - [ ] **Step 3: Commit**
 
