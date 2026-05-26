@@ -45,13 +45,15 @@ not proceed.
 ### Check 1: Workspace is on a feature branch with a clean tree
 
 ```bash
-branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-status=$(git status --porcelain 2>/dev/null || echo "GIT_FAIL")
+git_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+git_status=$(git status --porcelain 2>/dev/null || echo "GIT_FAIL")
 ```
 
+(Variable names are deliberately prefixed `git_` — bare `status` is read-only in zsh, the default shell on macOS, which would break this snippet when the agent runs it via Bash. The `git_` prefix avoids the collision and is self-documenting.)
+
 Refuse if:
-- `branch` is empty, `main`, `master`, or `GIT_FAIL` → "autoimplement runs only on a feature branch in a git repo. You are on '<branch>'. Create a feature branch first; suggested name: `feat/<plan-slug>`."
-- `status` is non-empty → "working tree has uncommitted changes — autoimplement requires a clean tree (so phase commits are unambiguous). Commit or stash, then re-invoke."
+- `git_branch` is empty, `main`, `master`, or `GIT_FAIL` → "autoimplement runs only on a feature branch in a git repo. You are on '<branch>'. Create a feature branch first; suggested name: `feat/<plan-slug>`."
+- `git_status` is non-empty → "working tree has uncommitted changes — autoimplement requires a clean tree (so phase commits are unambiguous). Commit or stash, then re-invoke."
 
 ### Check 2: Phase count is at least 2
 
@@ -333,6 +335,7 @@ autoimplement is a high-trust skill — when invoked, it executes plan phases wi
 | Plan v2 → codex review | codex (gpt-5.5) | 11 findings, 4 blockers | All addressed before implementation |
 | Code → pitfall | self | clean | — |
 | Code → codex review | codex (gpt-5.5) | 6 findings (2 P1, 3 P2, 1 P3) | All addressed before merge |
+| v2.13.1 → live dogfood | user (kjetilge) | 1 portability bug: bare `status=` assignment fails in zsh (read-only var) | Fixed: prefix `git_` on local vars |
 
 **Meta-review note:** As of v2.13.0, the pitfall-verification and codex-review skills themselves have not been independently audited for blind spots. This is a known limitation. If/when a `/audit-review-skills` skill exists, autoimplement should be re-reviewed under it. Until then, the chain `code → pitfall + codex` is considered adequate based on accumulated evidence that both surface real issues.
 
