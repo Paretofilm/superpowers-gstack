@@ -1,5 +1,56 @@
 # Changelog
 
+## [2.14.2] - 2026-05-27
+
+### Fixed
+
+- **autoimplement Check 6a marker pattern tightened to anchored regex.**
+  v2.14.0 → v2.14.1 used loose substring matching that allowed bypass via
+  unrelated commits. Took **4 rounds of pre-ship codex review** to converge
+  on a safe pattern:
+  - v2.14.0: matched `pitfall|codex|review` → bypassed by `docs: review plan wording`
+  - v2.14.2 attempt 1: matched substring `pre-flight` → bypassed by `docs: add pre-flight checklist`
+  - v2.14.2 attempt 2: matched `^(chore|fix)\(plan\):\s*pre-flight` → bypassed by `chore(plan): pre-flighting checklist`; also `\s` is GNU-extension, not BSD-portable
+  - **v2.14.2 final**: `^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)` — anchored conventional-commit prefix + POSIX whitespace + trailing word-boundary
+
+  Empirically verified 13/13 edge cases under `grep -E` on macOS BSD grep:
+  valid `chore(plan)`/`fix(plan)` markers match; `pre-flighting`,
+  `pre-flightchecklist`, non-marker subjects, wrong scopes/types all miss.
+
+  Closes the "no edited-but-unreviewed plan reaches Phase 1" guarantee
+  Step 6a was supposed to provide. Manual-review bypass is documented
+  as opt-in: commit with the explicit marker shape (e.g.
+  `chore(plan): pre-flight manual review completed`) — the skill cannot
+  verify a manual review actually happened; the marker is a convention,
+  not proof.
+
+### Added
+
+- **`fresh-plan.md` + `fresh-sample.txt` test fixtures** —
+  shipped as proper artifacts under
+  `skills/autoimplement/tests/fixtures/`. These complement
+  `tiny-plan.md` by providing a fixture pair where the plan
+  starts without any review-marker history, so manual or
+  automated dogfood tests of the pre-flight chain can repeat
+  without interfering with tiny-plan's marker state. (The
+  fixtures existed temporarily on a v2.14.0 dogfood branch but
+  were deleted with that branch; v2.14.1 system-wide codex
+  review caught the absence.)
+
+### Notes
+
+- Caught by codex review v2.14.1 system-wide audit (3 findings,
+  2 ship-worthy + 1 backlog), then 3 more rounds of v2.14.2
+  pre-ship codex review tightening the regex iteratively. Full
+  provenance in audit trail (SKILL.md).
+- Test coverage gap (smoke tests check anchors, not semantic
+  behaviors) noted but deferred — proper integration test
+  harness is a future effort.
+- **Meta-lesson:** regex-based trust gates require multiple
+  adversarial-review iterations to converge. Each round closed
+  one bypass class; round 4 confirmed convergence on the
+  current pattern.
+
 ## [2.14.1] - 2026-05-27
 
 ### Docs
@@ -9,9 +60,12 @@
   reflect v2.14.0's active pre-flight review chain. Previous docs
   described only the per-phase review behavior; new text explains
   the pre-flight chain that runs on the plan body itself before
-  Phase 1 when no review history exists. Also cleaned up a
-  duplicated "Severe findings" sentence in README's autoimplement
-  entry.
+  Phase 1 when no review history exists. (Note: v2.14.2 later
+  tightened the "no review history" trigger to a strict
+  `^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)`
+  regex on the latest plan-touching commit — see v2.14.2 entry.)
+  Also cleaned up a duplicated "Severe findings" sentence in
+  README's autoimplement entry.
 
 ### Bumped
 

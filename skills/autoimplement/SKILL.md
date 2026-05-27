@@ -132,7 +132,7 @@ the final summary).
 
 Autoimplement trusts the plan implicitly — it runs phases without human approval at boundaries. So the plan MUST be reviewed before automated execution starts. v2.14.0 makes this an **active** pre-flight chain instead of a passive history check (the previous v2.13.x behavior).
 
-**Step 6a: Skip condition — LATEST commit touching plan path is a review marker**
+**Step 6a: Skip condition — LATEST commit touching plan path is a pre-flight marker**
 
 Check the *latest* commit that touched the plan path (not historical anywhere — that's too lenient and would skip pre-flight even after the plan was edited post-review):
 
@@ -140,12 +140,34 @@ Check the *latest* commit that touched the plan path (not historical anywhere �
 last_plan_commit_subject=$(git log -1 --format=%s -- "$plan_path" 2>/dev/null || echo "")
 ```
 
-If the subject contains `pitfall`, `codex`, or `review` (case-insensitive) → the plan's most recent touch was a review pass; trust it and skip:
-> Plan's latest commit is a review marker ("$last_plan_commit_subject"). Skipping pre-flight chain — proceeding to policy question.
+If the subject matches the marker regex `^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)` (case-insensitive, anchored at line start, requires the conventional-commit prefix, requires a word boundary after `pre-flight`) → the plan's most recent touch was a pre-flight marker commit produced by this skill (Step 6b.4); trust it and skip:
 
-Otherwise → run the pre-flight chain below. This semantics is strict by design: if a user reviews a plan, then edits the plan, the edit becomes the latest touch (subject probably doesn't match review pattern) and pre-flight re-runs. **No edited-but-unreviewed plan reaches Phase 1.**
+```bash
+if echo "$last_plan_commit_subject" | grep -qiE '^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)'; then
+    skip_preflight=true
+fi
+```
 
-**Step 6b: Pre-flight chain (when no history exists)**
+(POSIX character class `[[:space:]]` chosen over GNU-extension `\s` for portability across BSD/macOS grep. The trailing `([[:space:]]|$)` is a word boundary preventing matches like `pre-flighting` or `pre-flightchecklist` — caught by codex review v2.14.2 round 3.)
+
+> Plan's latest commit is a pre-flight marker ("$last_plan_commit_subject"). Skipping pre-flight chain — proceeding to policy question.
+
+Otherwise → run the pre-flight chain below.
+
+**Why anchored prefix, not a looser substring match:**
+
+- v2.14.0 used `pitfall|codex|review` — any casual commit like `docs: review plan wording` would falsely bypass.
+- v2.14.2 first attempt: substring `pre-flight` — still false-matched `docs: add pre-flight checklist to plan` and similar non-marker mentions. (Caught by codex round 2 on the v2.14.2 branch, before ship.)
+- v2.14.2 second attempt: `^(chore|fix)\(plan\):\s*pre-flight` — anchored but missing trailing word-boundary, so `pre-flighting checklist` falsely matched. Also used GNU-extension `\s`. (Caught by codex round 3.)
+- v2.14.2 final (shipped): `^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)` — anchored conventional-commit prefix + POSIX whitespace + trailing word boundary. The probability of an unrelated commit accidentally matching this exact pattern is vanishingly low — a user would need to deliberately use both the conventional-commit prefix `(chore|fix)(plan):` AND the literal token `pre-flight` followed by whitespace or end-of-line. Empirically verified 13/13 edge cases in codex round 4.
+
+**Manual review bypass — explicit opt-in:**
+
+If you want to bypass pre-flight after reviewing a plan manually, commit with the explicit marker shape: `chore(plan): pre-flight manual review completed`. The skill cannot verify a manual review actually happened — the marker is a convention you opt into, not a proof. Don't lie to yourself; if you didn't actually run reviews, don't use the marker.
+
+This semantics is strict by design: any post-review edit invalidates the marker (the edit becomes the latest touch with a non-marker subject), forcing pre-flight to re-run. **No edited-but-unmarked plan reaches Phase 1.**
+
+**Step 6b: Pre-flight chain (when no pre-flight marker exists)**
 
 Run these two reviews in sequence ON THE PLAN FILE ITSELF (not on any code diff yet — there is no code diff at this point):
 
@@ -218,16 +240,16 @@ Run these two reviews in sequence ON THE PLAN FILE ITSELF (not on any code diff 
 
 **Why the re-read in Step 5:** Pre-flight CAN edit the plan in-place (fix-edits or sentinel append). Without re-reading, the phase queue would be built from stale pre-review content. If pitfall feedback added a phase, autoimplement would silently skip it; if a fix removed a phase, autoimplement would dispatch a subagent against deleted content. The re-read closes this gap. (Caught by codex review round 2 on v2.14.0 — see audit trail.)
 
-**Why active pre-flight, not just history-trust:**
+**Why active pre-flight, not just trust-on-keyword-scan:**
 
-v2.13.x used a passive git-log scan — looking for prior commits that mentioned "pitfall"/"codex"/"review". That made autoimplement *aware* of review history but didn't *enforce* freshly-written plans got reviewed before execution. A user could write a plan, immediately invoke autoimplement, and get refused — but with no guidance on how to *do* the review. v2.14.0 closes that gap: no history → autoimplement runs the reviews itself; have history → trust it. Either way, **no plan reaches Phase 1 without review**.
+v2.13.x used a passive git-log scan — looking for any prior commit that mentioned "pitfall"/"codex"/"review". That made autoimplement *aware* of supposed review history but didn't *enforce* freshly-written plans got reviewed before execution. A user could write a plan, immediately invoke autoimplement, and get refused — but with no guidance on how to *do* the review. v2.14.0+ closes that gap: no pre-flight marker on the latest plan commit → autoimplement runs the reviews itself and creates the marker; marker present → trust it. Either way, **no unmarked plan reaches Phase 1**.
 
-**Cost:** Pre-flight adds ~3-5 minutes the FIRST time a plan is autoimplemented (codex on a multi-thousand-line plan). Subsequent runs skip it because the fix-commits have populated the history. This is the right tradeoff: spend 5 minutes once to gain durable trust.
+**Cost:** Pre-flight adds ~3-5 minutes the FIRST time a plan is autoimplemented (codex on a multi-thousand-line plan). Subsequent runs skip it because Step 6b.4 leaves a marker commit (`chore(plan): pre-flight reviewed clean (...)` or `fix(plan): pre-flight {reviews_ran} feedback`) as the latest touch on the plan path. This is the right tradeoff: spend 5 minutes once to gain durable trust.
 
 **Edge cases:**
 
 - Plan exists but isn't committed yet → STOP: "Plan must be committed before autoimplementation. Commit it, then re-invoke." (The pre-flight is committed-only — uncommitted edits would race the orchestrator's own commits.)
-- Pre-flight finds blocking issue → STOP with citation; user fixes, commits with `pitfall`/`codex` in message, re-invokes. The fix-commit then satisfies Step 6a on the next run.
+- Pre-flight finds blocking issue → STOP with citation; user fixes, commits with the explicit pre-flight marker shape — e.g. `fix(plan): pre-flight pitfall + codex feedback` — then re-invokes. The marker commit satisfies Step 6a on the next run.
 - User wants to bypass pre-flight entirely → not supported by design. The "bypass" IS doing the manual review and committing it (which then satisfies Step 6a).
 - Pre-flight is NEVER advisory (unlike per-phase reviews) — `STOP_POLICY` doesn't gate pre-flight because the policy question hasn't been asked yet at this point.
 
@@ -422,9 +444,13 @@ autoimplement is a high-trust skill — when invoked, it executes plan phases wi
 | Code → codex review | codex (gpt-5.5) | 6 findings (2 P1, 3 P2, 1 P3) | All addressed before merge |
 | v2.13.1 → live dogfood | user (kjetilge) | 1 portability bug: bare `status=` assignment fails in zsh (read-only var) | Fixed: prefix `git_` on local vars |
 | v2.13.2 → full dogfood Phase 1 (review + pitfall + codex chain) | codex (gpt-5.5) caught 1 [P1] in fixture | Fixture's `grep -c == 1` verify breaks on re-runs (cross-run idempotency bug) | Fixed: `grep -q` presence-check makes fixture idempotent. Validates Step D's cross-model adversarial value — finding missed by /review and /pitfall, caught by codex. |
-| v2.14.0 design | user (kjetilge) feedback | Check 6 (v2.13.x) was passive: refused unreviewed plans but didn't help user *do* the review. Gap between writing-plans and autoimplement required manual review-then-commit dance. | Replaced with active pre-flight chain: if no review history, autoimplement runs `/pitfall-verification` + `/codex review` on the plan itself, commits fixes, then proceeds. Skip-condition preserves the trust-history path for plans already reviewed manually. |
+| v2.14.0 design | user (kjetilge) feedback | Check 6 (v2.13.x) was passive: refused unreviewed plans but didn't help user *do* the review. Gap between writing-plans and autoimplement required manual review-then-commit dance. | Replaced with active pre-flight chain in v2.14.0: when no pre-flight marker exists on the latest plan commit, autoimplement runs `/pitfall-verification` + `/codex review` on the plan itself, commits a marker, then proceeds. The initial skip-condition (loose `pitfall\|codex\|review` substring match) was later tightened to the explicit pre-flight marker regex in v2.14.2 — see rows below. **Current semantics: skip only when latest plan commit matches `^(chore\|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]\|$)`.** |
 | v2.14.0 pre-ship → codex review round 1 | codex (gpt-5.5) | 4 findings (2 P1, 2 P2): (1) empty marker commit invisible to path-scoped log scan — cost fix was false; (2) historical-anywhere skip-condition would skip pre-flight on edited-after-review plans; (3) codex-unavailable created audit lie in marker message; (4) advisory findings fell through marker logic. | All 4 addressed before ship: marker now appends HTML-comment sentinel (real touch to plan path); Step 6a uses LATEST commit (not historical); marker reflects actual reviewers (`reviews_ran` list); advisory handled identically to clean. Pitfall round 2 had already caught a related issue (clean-plan re-cost) but proposed a broken fix (empty commit) that codex correctly rejected. |
 | v2.14.0 pre-ship → codex review round 2 | codex (gpt-5.5) | 1 P1 introduced by round-1 fixes: stale plan content. Pre-flight CAN edit the plan in-place; the original "build phase queue" step uses the in-memory plan from initial read, not the post-edit content. If pre-flight feedback adds/removes/modifies phases, autoimplement would execute the stale pre-review version. | Fixed by adding Step 5 to Check 6: after any pre-flight plan commits, re-read the plan from disk and re-run Checks 2-4 before building the queue. New invariant: phase queue is built from POST-pre-flight content, not pre-flight content. |
+| v2.14.1 → system-wide codex review | codex (gpt-5.5) | 3 findings (1 precision, 1 coverage, 1 backlog): (1) Step 6a marker pattern `pitfall\|codex\|review` is too lenient — commits like "docs: review plan wording" falsely bypass pre-flight, undermining the "no edited-but-unreviewed plan reaches Phase 1" guarantee; (2) fresh-plan.md fixture didn't ship to main (was on a dogfood branch that got cleaned up); (3) smoke tests only check string anchors — semantic behaviors (skip semantics, sentinel visibility, terminator parsing, etc.) untested. | (1) Tightened marker pattern to `pre-flight` (exact substring); manual-review bypass documented as convention. (2) fresh-plan.md + fresh-sample.txt shipped as proper test fixtures. (3) Logged as backlog — integration test harness is a future effort. v2.14.2 ships (1) + (2). |
+| v2.14.2 pre-ship → codex review round 2-3 | codex (gpt-5.5) | Round 2 caught: (a) `pre-flight` substring still loophole-prone (`docs: add pre-flight checklist to plan` would match); (b) fresh-plan files staged but not committed at review time. Round 3 caught: (c) anchored regex `^(chore\|fix)\(plan\):\s*pre-flight` missing word boundary — `pre-flighting checklist` would falsely match; (d) `\s` is GNU-extension, not POSIX-portable in BSD grep. | (a) Tightened to anchored conventional-commit prefix `^(chore\|fix)\(plan\):`. (b) Committed fixtures in same commit. (c) Added trailing `([[:space:]]\|$)` word boundary. (d) Switched `\s` → POSIX `[[:space:]]`. Final regex: `^(chore\|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]\|$)`. |
+| v2.14.2 pre-ship → codex review round 4 | codex (gpt-5.5) | Verified regex correct (13/13 edge cases pass). Caught 1 remaining issue: CHANGELOG entry described attempt-1 substring semantics, not the final anchored regex — stale by 2 iterations. | CHANGELOG rewritten to show the full 4-round convergence story with the final regex stated explicitly. |
+| v2.14.2 pre-ship → codex review round 5 | codex (gpt-5.5) | Caught 2 provenance inconsistencies in docs: (a) SKILL.md said "v2.14.1's first attempt used substring" but substring attempt was actually v2.14.2's first attempt (v2.14.1 was doc-only); (b) CHANGELOG references "round 4 / final convergence" but audit trail in SKILL.md only had round 2-3 row, missing round 4 + 5. | (a) Corrected version-history in SKILL.md narrative. (b) Added rows for rounds 4 and 5 to audit trail. v2.14.2 is now self-consistent across all docs. |
 
 **Meta-review note:** As of v2.13.0, the pitfall-verification and codex-review skills themselves have not been independently audited for blind spots. This is a known limitation. If/when a `/audit-review-skills` skill exists, autoimplement should be re-reviewed under it. Until then, the chain `code → pitfall + codex` is considered adequate based on accumulated evidence that both surface real issues.
 
