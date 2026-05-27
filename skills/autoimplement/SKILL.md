@@ -167,7 +167,7 @@ If you want to bypass pre-flight after reviewing a plan manually, commit with th
 
 This semantics is strict by design: any post-review edit invalidates the marker (the edit becomes the latest touch with a non-marker subject), forcing pre-flight to re-run. **No edited-but-unmarked plan reaches Phase 1.**
 
-**Step 6b: Pre-flight chain (when no history exists)**
+**Step 6b: Pre-flight chain (when no pre-flight marker exists)**
 
 Run these two reviews in sequence ON THE PLAN FILE ITSELF (not on any code diff yet — there is no code diff at this point):
 
@@ -240,16 +240,16 @@ Run these two reviews in sequence ON THE PLAN FILE ITSELF (not on any code diff 
 
 **Why the re-read in Step 5:** Pre-flight CAN edit the plan in-place (fix-edits or sentinel append). Without re-reading, the phase queue would be built from stale pre-review content. If pitfall feedback added a phase, autoimplement would silently skip it; if a fix removed a phase, autoimplement would dispatch a subagent against deleted content. The re-read closes this gap. (Caught by codex review round 2 on v2.14.0 — see audit trail.)
 
-**Why active pre-flight, not just history-trust:**
+**Why active pre-flight, not just trust-on-keyword-scan:**
 
-v2.13.x used a passive git-log scan — looking for prior commits that mentioned "pitfall"/"codex"/"review". That made autoimplement *aware* of review history but didn't *enforce* freshly-written plans got reviewed before execution. A user could write a plan, immediately invoke autoimplement, and get refused — but with no guidance on how to *do* the review. v2.14.0 closes that gap: no history → autoimplement runs the reviews itself; have history → trust it. Either way, **no plan reaches Phase 1 without review**.
+v2.13.x used a passive git-log scan — looking for any prior commit that mentioned "pitfall"/"codex"/"review". That made autoimplement *aware* of supposed review history but didn't *enforce* freshly-written plans got reviewed before execution. A user could write a plan, immediately invoke autoimplement, and get refused — but with no guidance on how to *do* the review. v2.14.0+ closes that gap: no pre-flight marker on the latest plan commit → autoimplement runs the reviews itself and creates the marker; marker present → trust it. Either way, **no unmarked plan reaches Phase 1**.
 
-**Cost:** Pre-flight adds ~3-5 minutes the FIRST time a plan is autoimplemented (codex on a multi-thousand-line plan). Subsequent runs skip it because the fix-commits have populated the history. This is the right tradeoff: spend 5 minutes once to gain durable trust.
+**Cost:** Pre-flight adds ~3-5 minutes the FIRST time a plan is autoimplemented (codex on a multi-thousand-line plan). Subsequent runs skip it because Step 6b.4 leaves a marker commit (`chore(plan): pre-flight reviewed clean (...)` or `fix(plan): pre-flight {reviews_ran} feedback`) as the latest touch on the plan path. This is the right tradeoff: spend 5 minutes once to gain durable trust.
 
 **Edge cases:**
 
 - Plan exists but isn't committed yet → STOP: "Plan must be committed before autoimplementation. Commit it, then re-invoke." (The pre-flight is committed-only — uncommitted edits would race the orchestrator's own commits.)
-- Pre-flight finds blocking issue → STOP with citation; user fixes, commits with `pitfall`/`codex` in message, re-invokes. The fix-commit then satisfies Step 6a on the next run.
+- Pre-flight finds blocking issue → STOP with citation; user fixes, commits with the explicit pre-flight marker shape — e.g. `fix(plan): pre-flight pitfall + codex feedback` — then re-invokes. The marker commit satisfies Step 6a on the next run.
 - User wants to bypass pre-flight entirely → not supported by design. The "bypass" IS doing the manual review and committing it (which then satisfies Step 6a).
 - Pre-flight is NEVER advisory (unlike per-phase reviews) — `STOP_POLICY` doesn't gate pre-flight because the policy question hasn't been asked yet at this point.
 
