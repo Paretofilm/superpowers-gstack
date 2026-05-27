@@ -1,5 +1,45 @@
 # Changelog
 
+## [2.14.2] - 2026-05-27
+
+### Fixed
+
+- **autoimplement Check 6a marker pattern tightened** — was matching
+  any commit subject containing `pitfall`, `codex`, or `review`, which
+  let casual commits like `docs: review plan wording` or
+  `fix: address review comments` falsely bypass pre-flight. This
+  undermined the "no edited-but-unreviewed plan reaches Phase 1"
+  guarantee that Step 6a was supposed to provide. Tightened to the
+  literal substring `pre-flight` (case-insensitive), which matches
+  the actual marker commits Step 6b.4 produces:
+  `chore(plan): pre-flight reviewed clean (...)` and
+  `fix(plan): pre-flight {reviews_ran} feedback`. Manual-review
+  bypass is now explicitly documented as a convention (use
+  `pre-flight` in your commit subject) rather than implied by
+  loose pattern matching.
+
+### Added
+
+- **`fresh-plan.md` + `fresh-sample.txt` test fixtures** —
+  shipped as proper artifacts under
+  `skills/autoimplement/tests/fixtures/`. These complement
+  `tiny-plan.md` by providing a fixture pair where the plan
+  starts without any review-marker history, so manual or
+  automated dogfood tests of the pre-flight chain can repeat
+  without interfering with tiny-plan's marker state. (The
+  fixtures existed temporarily on a v2.14.0 dogfood branch but
+  were deleted with that branch; v2.14.1 system-wide codex
+  review caught the absence.)
+
+### Notes
+
+- Caught by codex review v2.14.1 system-wide audit (3 findings,
+  2 ship-worthy + 1 backlog). Audit trail in SKILL.md updated
+  with full provenance.
+- Test coverage gap (smoke tests check anchors, not semantic
+  behaviors) noted but deferred — proper integration test
+  harness is a future effort.
+
 ## [2.14.1] - 2026-05-27
 
 ### Docs
