@@ -128,23 +128,108 @@ If absent → set internal flag `CODEX_AVAILABLE=false`. Continue, but the `/cod
 review` step in the per-phase procedure will be skipped (with a logged note in
 the final summary).
 
-### Check 6: Plan has been reviewed (pitfall or codex)
+### Check 6: Plan review chain (pre-flight, active)
 
-Autoimplement trusts the plan implicitly — it runs phases without human approval at boundaries. So the plan must have been reviewed at least once before it can be autoimplemented. Detection via git history:
+Autoimplement trusts the plan implicitly — it runs phases without human approval at boundaries. So the plan MUST be reviewed before automated execution starts. v2.14.0 makes this an **active** pre-flight chain instead of a passive history check (the previous v2.13.x behavior).
+
+**Step 6a: Skip condition — LATEST commit touching plan path is a review marker**
+
+Check the *latest* commit that touched the plan path (not historical anywhere — that's too lenient and would skip pre-flight even after the plan was edited post-review):
 
 ```bash
-git log --all --grep='pitfall\|codex\|review' --oneline -- "$plan_path" 2>/dev/null
+last_plan_commit_subject=$(git log -1 --format=%s -- "$plan_path" 2>/dev/null || echo "")
 ```
 
-If output is empty (no commits to the plan file mentioning "pitfall", "codex", or "review"), refuse:
+If the subject contains `pitfall`, `codex`, or `review` (case-insensitive) → the plan's most recent touch was a review pass; trust it and skip:
+> Plan's latest commit is a review marker ("$last_plan_commit_subject"). Skipping pre-flight chain — proceeding to policy question.
 
-> "Plan '$plan_path' has no commits mentioning pitfall / codex / review in its history. autoimplement requires plan-level review before automated execution. Run `superpowers-gstack:pitfall-verification` on the plan, address findings, commit the fixes with 'pitfall' or 'codex' in the message, then re-invoke."
+Otherwise → run the pre-flight chain below. This semantics is strict by design: if a user reviews a plan, then edits the plan, the edit becomes the latest touch (subject probably doesn't match review pattern) and pre-flight re-runs. **No edited-but-unreviewed plan reaches Phase 1.**
 
-**Why this check:** Without it, a user could draft a plan and immediately autoimplement it — bypassing the review-before-implementation discipline that surfaced the critical issues in this skill's own v1 plan (which codex called "unimplementable"). The check uses git-log-scan rather than content-scan because content can be faked; commit history is harder to game (would require explicit "pitfall" in a fake commit message).
+**Step 6b: Pre-flight chain (when no history exists)**
 
-**Edge case — plan exists but isn't committed yet:** Refuse with the same message. Plans must be committed before being autoimplemented (the git-log check requires a tracked file).
+Run these two reviews in sequence ON THE PLAN FILE ITSELF (not on any code diff yet — there is no code diff at this point):
 
-**Edge case — plan reviewed inline without separate commits:** False negative. Acceptable cost; the workflow `superpowers-gstack:pitfall-verification` + commit fixes IS the documented convention. If a user has a genuine reason to bypass, they can manually invoke `superpowers:subagent-driven-development` instead.
+1. **`/superpowers-gstack:pitfall-verification`** on the plan
+   - Invoke via the `Skill` tool with the plan file path as argument
+   - Wait for verdict, classify per the 4-tier semantics in § Per-phase procedure Step D
+   - `severe`/`blocking` → STOP with citation. Pre-flight is **NEVER advisory** — the plan is the foundation; a flawed plan means everything that follows is wrong by construction.
+   - `clean`/`advisory` → echo verdict, continue.
+
+2. **`/codex review` on the plan** (only if `CODEX_AVAILABLE=true` from Check 5)
+   - Invoke the gstack `codex` skill in consult mode with a plan-review prompt:
+     *"Review this implementation plan for: ambiguous contracts, hidden coupling between phases, failure modes the plan does not handle, anything that would block successful autonomous execution. Be specific. Cite section headings or task numbers. Plan path: `<plan_path>`."*
+   - Wait for verdict, classify per the 4-tier semantics
+   - `severe`/`blocking` → STOP with citation
+   - `clean`/`advisory` → echo, continue
+   - If `CODEX_AVAILABLE=false` → skip with logged note "pre-flight codex skipped (CLI unavailable)"
+
+3. **Track what actually ran.** Maintain an internal flag `reviews_ran` listing the reviewers that produced verdicts:
+   - Always: `pitfall`
+   - Conditionally (only if `CODEX_AVAILABLE=true`): `codex`
+
+   This list goes into the marker commit so the audit trail is honest. If codex was skipped because the CLI was unavailable, the marker says `pitfall only` — never claims codex ran when it didn't.
+
+4. **Record the pre-flight pass with a real commit that touches the plan path.**
+
+   `git log -- "$plan_path"` only shows commits that actually modified the path. An empty `--allow-empty` commit would be **invisible** to Step 6a (this was the bug codex caught in v2.14.0's first review pass — fixed before ship). So the marker must touch the path.
+
+   **a. If the reviews surfaced findings the orchestrator edited into the plan:** commit those edits with a descriptive message:
+
+   ```bash
+   git add "$plan_path"
+   git commit -m "fix(plan): pre-flight $reviews_ran feedback"
+   ```
+
+   (Replace `$reviews_ran` with the comma-separated list, e.g. `fix(plan): pre-flight pitfall + codex feedback`.)
+
+   **b. If both reviews returned clean (or advisory-but-accepted) with no edits needed,** append an HTML-comment sentinel to the plan so the commit has real content:
+
+   ```bash
+   {
+     echo ""
+     echo "<!-- autoimplement: pre-flight reviewed $(date -u +%Y-%m-%dT%H:%M:%SZ) [$reviews_ran] -->"
+   } >> "$plan_path"
+   git add "$plan_path"
+   git commit -m "chore(plan): pre-flight reviewed clean ($reviews_ran)"
+   ```
+
+   The HTML-comment sentinel is non-invasive (invisible in rendered markdown), but the commit DOES touch the plan path — so Step 6a's skip-condition will find it next time. The sentinel also doubles as a human-readable marker for anyone browsing the plan file.
+
+5. **Re-read the plan and re-validate (if pre-flight made any plan commits).**
+
+   If Step 6b produced one or more commits that touched the plan path (either fix-edits from findings, or the sentinel marker), the in-memory plan content from Plan path resolution is now stale. Before building the phase queue:
+
+   a. Re-read the plan file from disk.
+   b. Re-run Check 2 (phase count ≥ 2) — pre-flight fixes might have restructured phases.
+   c. Re-run Check 3 (per-phase commit steps) — fixes might have changed commit discipline.
+   d. Re-run Check 4 (forbidden paths) — fixes might have added file references.
+
+   If any re-validation refuses, STOP and surface the reason. The pre-flight edits broke a previous-passing check, and we should not execute against an inconsistent plan.
+
+   (Checks 1 and 5 don't need re-running — branch/tree state and codex availability don't change from plan edits.)
+
+   If Step 6b made zero commits (skip condition fired in Step 6a, or pre-flight was reached but produced no edits — which shouldn't happen given Step 6b.4.b always commits a sentinel), re-read is unnecessary.
+
+6. **Proceed to the policy question.**
+
+**Why a real commit, not `--allow-empty`:** Step 6a uses `git log -- "$plan_path"` (path-scoped). An empty commit touches no paths, so it would be invisible to the scan and clean plans would re-run pre-flight every invocation, defeating the whole skip mechanism. The sentinel-append approach makes the marker durable.
+
+**Why the LATEST-commit check (Step 6a), not historical anywhere:** A historical scan would skip pre-flight even if the plan was reviewed long ago and edited yesterday. The latest-commit check makes any post-review edit invalidate the marker, forcing re-review.
+
+**Why the re-read in Step 5:** Pre-flight CAN edit the plan in-place (fix-edits or sentinel append). Without re-reading, the phase queue would be built from stale pre-review content. If pitfall feedback added a phase, autoimplement would silently skip it; if a fix removed a phase, autoimplement would dispatch a subagent against deleted content. The re-read closes this gap. (Caught by codex review round 2 on v2.14.0 — see audit trail.)
+
+**Why active pre-flight, not just history-trust:**
+
+v2.13.x used a passive git-log scan — looking for prior commits that mentioned "pitfall"/"codex"/"review". That made autoimplement *aware* of review history but didn't *enforce* freshly-written plans got reviewed before execution. A user could write a plan, immediately invoke autoimplement, and get refused — but with no guidance on how to *do* the review. v2.14.0 closes that gap: no history → autoimplement runs the reviews itself; have history → trust it. Either way, **no plan reaches Phase 1 without review**.
+
+**Cost:** Pre-flight adds ~3-5 minutes the FIRST time a plan is autoimplemented (codex on a multi-thousand-line plan). Subsequent runs skip it because the fix-commits have populated the history. This is the right tradeoff: spend 5 minutes once to gain durable trust.
+
+**Edge cases:**
+
+- Plan exists but isn't committed yet → STOP: "Plan must be committed before autoimplementation. Commit it, then re-invoke." (The pre-flight is committed-only — uncommitted edits would race the orchestrator's own commits.)
+- Pre-flight finds blocking issue → STOP with citation; user fixes, commits with `pitfall`/`codex` in message, re-invokes. The fix-commit then satisfies Step 6a on the next run.
+- User wants to bypass pre-flight entirely → not supported by design. The "bypass" IS doing the manual review and committing it (which then satisfies Step 6a).
+- Pre-flight is NEVER advisory (unlike per-phase reviews) — `STOP_POLICY` doesn't gate pre-flight because the policy question hasn't been asked yet at this point.
 
 ### After all checks pass
 
@@ -337,6 +422,9 @@ autoimplement is a high-trust skill — when invoked, it executes plan phases wi
 | Code → codex review | codex (gpt-5.5) | 6 findings (2 P1, 3 P2, 1 P3) | All addressed before merge |
 | v2.13.1 → live dogfood | user (kjetilge) | 1 portability bug: bare `status=` assignment fails in zsh (read-only var) | Fixed: prefix `git_` on local vars |
 | v2.13.2 → full dogfood Phase 1 (review + pitfall + codex chain) | codex (gpt-5.5) caught 1 [P1] in fixture | Fixture's `grep -c == 1` verify breaks on re-runs (cross-run idempotency bug) | Fixed: `grep -q` presence-check makes fixture idempotent. Validates Step D's cross-model adversarial value — finding missed by /review and /pitfall, caught by codex. |
+| v2.14.0 design | user (kjetilge) feedback | Check 6 (v2.13.x) was passive: refused unreviewed plans but didn't help user *do* the review. Gap between writing-plans and autoimplement required manual review-then-commit dance. | Replaced with active pre-flight chain: if no review history, autoimplement runs `/pitfall-verification` + `/codex review` on the plan itself, commits fixes, then proceeds. Skip-condition preserves the trust-history path for plans already reviewed manually. |
+| v2.14.0 pre-ship → codex review round 1 | codex (gpt-5.5) | 4 findings (2 P1, 2 P2): (1) empty marker commit invisible to path-scoped log scan — cost fix was false; (2) historical-anywhere skip-condition would skip pre-flight on edited-after-review plans; (3) codex-unavailable created audit lie in marker message; (4) advisory findings fell through marker logic. | All 4 addressed before ship: marker now appends HTML-comment sentinel (real touch to plan path); Step 6a uses LATEST commit (not historical); marker reflects actual reviewers (`reviews_ran` list); advisory handled identically to clean. Pitfall round 2 had already caught a related issue (clean-plan re-cost) but proposed a broken fix (empty commit) that codex correctly rejected. |
+| v2.14.0 pre-ship → codex review round 2 | codex (gpt-5.5) | 1 P1 introduced by round-1 fixes: stale plan content. Pre-flight CAN edit the plan in-place; the original "build phase queue" step uses the in-memory plan from initial read, not the post-edit content. If pre-flight feedback adds/removes/modifies phases, autoimplement would execute the stale pre-review version. | Fixed by adding Step 5 to Check 6: after any pre-flight plan commits, re-read the plan from disk and re-run Checks 2-4 before building the queue. New invariant: phase queue is built from POST-pre-flight content, not pre-flight content. |
 
 **Meta-review note:** As of v2.13.0, the pitfall-verification and codex-review skills themselves have not been independently audited for blind spots. This is a known limitation. If/when a `/audit-review-skills` skill exists, autoimplement should be re-reviewed under it. Until then, the chain `code → pitfall + codex` is considered adequate based on accumulated evidence that both surface real issues.
 

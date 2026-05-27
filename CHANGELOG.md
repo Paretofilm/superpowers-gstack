@@ -1,5 +1,63 @@
 # Changelog
 
+## [2.14.0] - 2026-05-27
+
+### Changed
+
+- **autoimplement Check 6 is now an active pre-flight chain.** v2.13.x's
+  Check 6 was passive — it scanned git history for prior reviews of the
+  plan file, and refused if none were found. That created a friction
+  gap: a freshly-written plan would be refused with no help on *doing*
+  the review. The user had to manually invoke `/pitfall-verification`
+  and `/codex review` on the plan, commit findings, then re-run
+  autoimplement.
+
+  v2.14.0 replaces the passive check with active pre-flight:
+  1. **Skip condition**: if the LATEST commit touching the plan path has
+     `pitfall`/`codex`/`review` in its subject → trust it, skip pre-flight.
+     (Latest-commit check, not historical — so post-review edits force re-review.)
+  2. **Pre-flight chain** (when no skip): autoimplement itself invokes
+     `/pitfall-verification` on the plan, then `/codex review` (if available),
+     classifies findings by the same 4-tier semantics used per-phase, and
+     STOPs on blocking/severe (pre-flight is NEVER advisory — bad plan
+     equals bad implementation by construction).
+  3. **Record the pass**: commit a marker that ACTUALLY touches the plan
+     path (either real fix-edits or an appended HTML-comment sentinel)
+     with a message reflecting what reviewers ran (e.g.
+     `chore(plan): pre-flight reviewed clean (pitfall + codex)`).
+     The marker commit becomes the latest touch, satisfying step 1's
+     skip-condition on the next run.
+
+  Closes the discoverability gap: users can write a plan and invoke
+  `/autoimplement` directly. The skill takes care of the plan-level
+  review chain on the first run; subsequent runs skip because the
+  latest plan commit is a review marker.
+
+### Design provenance
+
+The first draft of v2.14.0 used `git commit --allow-empty` as the
+marker. Pre-ship codex review caught that as P1: empty commits don't
+touch paths and are invisible to `git log -- "$path"`. Three other
+findings (latest vs historical scan, codex-unavailable audit lie,
+advisory-marker gap) were addressed in the same pass. See audit trail
+in SKILL.md for full provenance.
+
+### Cost
+
+- First-time autoimplement on a fresh plan: ~3-5 extra minutes for
+  pre-flight codex call on the plan. One-time cost; re-runs skip it.
+
+### Notes
+
+- Pre-flight runs BEFORE the policy question because policy is about
+  per-phase review handling during execution, while pre-flight is
+  about whether the plan itself is fit for execution. Different
+  concerns; different gates.
+- This is the second behavior generation of Check 6: v2.13.0 added
+  passive history check; v2.14.0 makes it active. The "Check 6"
+  section name is preserved so the required-sections smoke test
+  keeps passing.
+
 ## [2.13.2] - 2026-05-26
 
 ### Fixed
