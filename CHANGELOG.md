@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.14.1] - 2026-05-27
+
+### Docs
+
+- Updated autoimplement references across `CLAUDE.md`, `README.md`,
+  `skills/setup-routing/SKILL.md`, and `skills/adapt/SKILL.md` to
+  reflect v2.14.0's active pre-flight review chain. Previous docs
+  described only the per-phase review behavior; new text explains
+  the pre-flight chain that runs on the plan body itself before
+  Phase 1 when no review history exists. Also cleaned up a
+  duplicated "Severe findings" sentence in README's autoimplement
+  entry.
+
+### Bumped
+
+- `plugin.json` to 2.14.1 so the marketplace cache refreshes and
+  users running `/plugin update` get the corrected doc text.
+
 ## [2.14.0] - 2026-05-27
 
 ### Changed
