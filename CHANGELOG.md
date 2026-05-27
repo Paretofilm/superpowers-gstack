@@ -4,19 +4,25 @@
 
 ### Fixed
 
-- **autoimplement Check 6a marker pattern tightened** — was matching
-  any commit subject containing `pitfall`, `codex`, or `review`, which
-  let casual commits like `docs: review plan wording` or
-  `fix: address review comments` falsely bypass pre-flight. This
-  undermined the "no edited-but-unreviewed plan reaches Phase 1"
-  guarantee that Step 6a was supposed to provide. Tightened to the
-  literal substring `pre-flight` (case-insensitive), which matches
-  the actual marker commits Step 6b.4 produces:
-  `chore(plan): pre-flight reviewed clean (...)` and
-  `fix(plan): pre-flight {reviews_ran} feedback`. Manual-review
-  bypass is now explicitly documented as a convention (use
-  `pre-flight` in your commit subject) rather than implied by
-  loose pattern matching.
+- **autoimplement Check 6a marker pattern tightened to anchored regex.**
+  v2.14.0 → v2.14.1 used loose substring matching that allowed bypass via
+  unrelated commits. Took **4 rounds of pre-ship codex review** to converge
+  on a safe pattern:
+  - v2.14.0: matched `pitfall|codex|review` → bypassed by `docs: review plan wording`
+  - v2.14.2 attempt 1: matched substring `pre-flight` → bypassed by `docs: add pre-flight checklist`
+  - v2.14.2 attempt 2: matched `^(chore|fix)\(plan\):\s*pre-flight` → bypassed by `chore(plan): pre-flighting checklist`; also `\s` is GNU-extension, not BSD-portable
+  - **v2.14.2 final**: `^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)` — anchored conventional-commit prefix + POSIX whitespace + trailing word-boundary
+
+  Empirically verified 13/13 edge cases under `grep -E` on macOS BSD grep:
+  valid `chore(plan)`/`fix(plan)` markers match; `pre-flighting`,
+  `pre-flightchecklist`, non-marker subjects, wrong scopes/types all miss.
+
+  Closes the "no edited-but-unreviewed plan reaches Phase 1" guarantee
+  Step 6a was supposed to provide. Manual-review bypass is documented
+  as opt-in: commit with the explicit marker shape (e.g.
+  `chore(plan): pre-flight manual review completed`) — the skill cannot
+  verify a manual review actually happened; the marker is a convention,
+  not proof.
 
 ### Added
 
@@ -34,11 +40,16 @@
 ### Notes
 
 - Caught by codex review v2.14.1 system-wide audit (3 findings,
-  2 ship-worthy + 1 backlog). Audit trail in SKILL.md updated
-  with full provenance.
+  2 ship-worthy + 1 backlog), then 3 more rounds of v2.14.2
+  pre-ship codex review tightening the regex iteratively. Full
+  provenance in audit trail (SKILL.md).
 - Test coverage gap (smoke tests check anchors, not semantic
   behaviors) noted but deferred — proper integration test
   harness is a future effort.
+- **Meta-lesson:** regex-based trust gates require multiple
+  adversarial-review iterations to converge. Each round closed
+  one bypass class; round 4 confirmed convergence on the
+  current pattern.
 
 ## [2.14.1] - 2026-05-27
 
