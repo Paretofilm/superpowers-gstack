@@ -60,9 +60,12 @@
   reflect v2.14.0's active pre-flight review chain. Previous docs
   described only the per-phase review behavior; new text explains
   the pre-flight chain that runs on the plan body itself before
-  Phase 1 when no review history exists. Also cleaned up a
-  duplicated "Severe findings" sentence in README's autoimplement
-  entry.
+  Phase 1 when no review history exists. (Note: v2.14.2 later
+  tightened the "no review history" trigger to a strict
+  `^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)`
+  regex on the latest plan-touching commit — see v2.14.2 entry.)
+  Also cleaned up a duplicated "Severe findings" sentence in
+  README's autoimplement entry.
 
 ### Bumped
 
