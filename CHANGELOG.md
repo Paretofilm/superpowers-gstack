@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.14.3] - 2026-06-01
+
+### Chore
+
+- **Claude Code version bump to 2.1.159** (was 2.1.150). No skill changes detected; routine upstream version tracking update.
+
 ## [2.14.2] - 2026-05-27
 
 ### Fixed
