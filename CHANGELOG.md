@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.14.3] - 2026-06-08
+
+### Updated
+
+- **Claude Code version bump to 2.1.168** (was 2.1.150). No skill changes or behavioral updates detected in this release cycle. VERSIONS.md updated accordingly.
+
 ## [2.14.2] - 2026-05-27
 
 ### Fixed
