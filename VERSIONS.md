@@ -6,7 +6,7 @@ This manual was last verified against these versions:
 |-----------|---------|------|
 | GStack | v1.34.1.0 | 2026-05-13 |
 | Superpowers | 5.1.0 | 2026-05-20 |
-| Claude Code | 2.1.150 | 2026-05-25 |
+| Claude Code | 2.1.177 | 2026-06-15 |
 
 When any of these change, review the manual for accuracy.
 
