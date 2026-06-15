@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.14.3] - 2026-06-15
+
+### Chore
+
+- **Claude Code version bump to 2.1.177.** Upstream Claude Code updated from 2.1.150 to 2.1.177. No skill changes detected; VERSIONS.md updated to reflect the new version. GStack and Superpowers versions unchanged.
+
 ## [2.14.2] - 2026-05-27
 
 ### Fixed
