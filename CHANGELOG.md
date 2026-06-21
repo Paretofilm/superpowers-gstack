@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.16.0] - 2026-06-21
+
+### Changed
+
+- **`pitfall-verification` is now a multi-model orchestrator.** Previously it
+  was a single-model (Claude) check that *documented* an optional escalation to
+  Codex and the third house — which meant the user had to remember to run them.
+  It now **auto-chains** the external lenses after the self-pitfall rounds, as
+  one flow with nothing extra to invoke:
+
+  | Tier | Lenses (all automatic) |
+  |------|------------------------|
+  | Trivial (docs/typo/comment/test-only/WIP) | self-pitfall only — free |
+  | Ship-worthy (version bump / CHANGELOG / `feat`/`fix`/`refactor` / public contract) | self-pitfall → **Codex** → synthesis |
+  | + High-stakes (architecture / real-time / security / contracts / migration-logic) | …→ **third model house** → synthesis |
+
+  Stages fire **without a confirmation prompt** (cost is reported after each
+  call, not gated before it — mirrors `autoimplement`'s "remove y/n friction you
+  always answer yes to" doctrine). Stage 4 is a mandatory **adversarial
+  synthesis** across all lenses: a finding is real until explicitly refuted,
+  disagreement is the signal, agreement is high-confidence green.
+
+  Rationale (user feedback): "I already run `/codex` after every pitfall because
+  there's always a lot to find, and I won't remember to run third-lens-review
+  separately." Folding both lenses into pitfall removes the memory burden — one
+  entry point *is* the multi-model review.
+
+- **Idempotency guard:** pitfall Stage 2 does not re-run `/codex review` if an
+  orchestrator (e.g. `autoimplement`, which chains `/review` + `/codex`) already
+  ran it on the same patched artifact — one Codex pass per patched state.
+- **`third-lens-review`** reframed: normally **auto-invoked by pitfall Stage 3**,
+  not by hand. Tier table aligned with pitfall's (gate owned by pitfall).
+- **Generated-CLAUDE.md templates** (`setup-routing` + `adapt`): multi-lens block
+  reframed to auto-orchestration per tier; marker bumped **v2 → v3** (existing
+  projects pick up the new semantics on next `/adapt`).
+- **Global verification process** (user's `~/.claude/CLAUDE.md`) updated to
+  collapse the old self → pitfall → codex three-step into "pitfall-verification
+  auto-chains the model lenses per tier".
+
 ## [2.15.0] - 2026-06-21
 
 ### Added

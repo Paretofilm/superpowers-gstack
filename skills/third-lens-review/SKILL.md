@@ -13,15 +13,17 @@ The governing principle (field-proven): **cross-model agreement = high confidenc
 
 ## When to invoke (tiering)
 
+**Normally you do not invoke this skill by hand.** `pitfall-verification` is a multi-model orchestrator and calls this skill automatically as Stage 3 of its chain for **high-stakes** changes — so the third house fires as part of the standard verification flow, with nothing extra to remember. Invoke it directly only for an ad-hoc third-house read outside that flow.
+
 This is **not** for every change. The lens count scales with stakes, and each added lens must add a *house* or a *role*, never another generalist:
 
 | Change | Lenses |
 |--------|--------|
 | Trivial (docs, typo, rename) | Claude self-pitfall only |
-| Standard (feature, bugfix) | Claude + Codex |
-| **Ship-worthy / architecture / real-time / security / contracts / migrations-logic** | **Claude + Codex + this skill** |
+| Ship-worthy (version bump / CHANGELOG / `feat`/`fix`/`refactor` / public contract) | Claude + Codex |
+| **Ship-worthy AND architecture / real-time / security / contracts / migration-logic** | **Claude + Codex + this skill (third house)** |
 
-"Ship-worthy" = bumps a version file, produces a CHANGELOG entry, or affects public contracts (same bar as `/codex`). If the change is not ship-worthy, **do not run this skill** — it burns money and tokens for diminishing returns.
+If the change is not high-stakes, **do not run this skill** — it burns money and tokens for diminishing returns. The gate is owned by `pitfall-verification`'s tier table; this row mirrors it.
 
 ## Prerequisites
 
