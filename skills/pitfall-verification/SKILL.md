@@ -94,6 +94,15 @@ Verdict: CLEAN | ISSUES FOUND (see above)
 
 If round 1 surfaces issues, fix them, then run round 2 on the patched artifact. If round 2 is clean, declare done. If round 2 still finds issues, surface them to the user — do not silently run round 3.
 
+## Escalation: third lens for ship-worthy changes
+
+This skill is **lens 1** (Claude self-pitfall). For **ship-worthy / architecture / real-time / security / contract / migration-logic** changes, two more lenses follow on the *patched* artifact:
+
+- **Lens 2 — Codex** (`/codex review`): cross-file drift, concurrency, concrete run bugs.
+- **Lens 3 — a different model house** via `/superpowers-gstack:third-lens-review`: architecture-level mistakes and challenged assumptions two Western houses both took for granted, ending in an adversarial synthesis.
+
+Order: self-pitfall (this skill, max 2 rounds) → Codex → third-lens-review. Each later lens reads a cleaner artifact. The third lens is gated by stakes — **do not** run it on trivial or standard changes; the tiering table in `third-lens-review` governs. Trivial → lens 1 only. Standard (feature/bugfix) → lens 1 + 2. Ship-worthy → all three.
+
 ## Why two rounds
 
 One round catches the obvious pitfalls. Round 2, run on the patched artifact, catches pitfalls that the fixes from round 1 introduced or exposed. Beyond that, returns drop fast and reviewer fatigue introduces noise.
