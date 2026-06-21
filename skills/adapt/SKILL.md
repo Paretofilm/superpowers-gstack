@@ -364,14 +364,16 @@ If multiple commits land in a single session without ANY commit being tested, th
 The Multi-lens review block to insert (verbatim):
 
 ```markdown
-## Multi-lens review (ship-worthy changes) <!-- gstack-multi-lens-review-v2 -->
+## Multi-lens review (ship-worthy changes) <!-- gstack-multi-lens-review-v3 -->
 
-Substantive changes need different review lenses — each catches what the others miss:
+Substantive changes get multiple review lenses — different model houses, each catching what the others miss. **`pitfall-verification` orchestrates them automatically per tier — you do NOT invoke Codex or the third house by hand:**
 
 1. **Self-check** (always, ~30 sec): placeholders, consistency, scope drift, ambiguity
-2. **Pitfall verification** (always, max 2 rounds): invoke `/superpowers-gstack:pitfall-verification` — catches domain-specific traps (security, idempotency, contracts, edge cases, LLM-output quirks)
-3. **Codex review** (ship-worthy changes only): invoke `/codex review` — catches drift across files and cross-section inconsistency that self-review systematically misses
-4. **Third-house lens** (architecture / real-time / security / contracts / migration-logic only): invoke `/superpowers-gstack:third-lens-review` — a *different model house* via OpenRouter reads the patched artifact and finds what two Western houses both took for granted, ending in an adversarial synthesis
+2. **Self-pitfall** (always, max 2 rounds): `/superpowers-gstack:pitfall-verification` — domain-specific traps (security, idempotency, contracts, edge cases, LLM-output quirks)
+3. **Codex** (auto on ship-worthy): `/codex review` — cross-file drift and concrete run bugs self-review misses
+4. **Third house** (auto on high-stakes — architecture / real-time / security / contracts / migration-logic): `/superpowers-gstack:third-lens-review` — a *different model house* via OpenRouter, ending in an adversarial synthesis
+
+Stages 3–4 fire automatically per tier with **no confirmation prompt**; trivial changes (docs/typo) get only the free self-pitfall pass. Cost is reported after each call, not gated before it.
 
 ### What counts as "ship-worthy"
 
@@ -387,7 +389,7 @@ Substantive changes need different review lenses — each catches what the other
 - WIP commits (per Continuous Checkpoint mode)
 - Test-only additions where coverage is the only change
 
-### Why three lenses, not two
+### Why multiple lenses, not one
 
 Self-review catches "is this artifact good?" Pitfall catches "what typically breaks in this domain?" Codex catches "what's inconsistent across the codebase that author was too close to see?". Different lenses see different things; running fewer leaves a known gap.
 

@@ -1,6 +1,6 @@
 ---
 name: pitfall-verification
-description: Use after completing any PRD, spec, plan, or code implementation — verifies that artifact-specific pitfalls (security, idempotency, integration contracts, edge cases, LLM output) do not apply before declaring work done. Two rounds max.
+description: Use after completing any PRD, spec, plan, or code implementation — verifies that artifact-specific pitfalls (security, idempotency, integration contracts, edge cases, LLM output) do not apply before declaring work done. For substantive/ship-worthy changes this skill is a MULTI-MODEL orchestrator — it automatically chains Codex + a third model house + an adversarial synthesis after the self-pitfall rounds, with no separate invocation to remember.
 ---
 
 # Pitfall verification
@@ -8,6 +8,17 @@ description: Use after completing any PRD, spec, plan, or code implementation �
 Use this skill after finishing any PRD, spec, plan, or code artifact — before declaring the work done. It is NOT a generic review. It is a targeted check that *typical pitfalls for this type of artifact, in this domain, do not apply here*.
 
 Invoke with: `/superpowers-gstack:pitfall-verification`
+
+## This skill is a multi-model orchestrator
+
+For anything beyond a trivial change, one model is not enough — there is always more to find, and a single training distribution has fixed blind spots. So this skill does **not** stop at Claude's own pitfall pass. For **substantive / ship-worthy** changes it runs, as ONE automatic flow:
+
+1. **Self-pitfall** (Claude, lens 1) — the rounds below, max 2.
+2. **Codex** (lens 2) — `/codex review` on the patched artifact.
+3. **Third model house** (lens 3) — `/superpowers-gstack:third-lens-review` on the patched artifact.
+4. **Adversarial synthesis** — combine all findings, finding-is-real-until-refuted.
+
+**Stages 2–4 run automatically. Do NOT stop after the self-pitfall rounds to ask the user whether to run Codex or the third lens — run them.** The whole point is that there is nothing extra to remember: invoking pitfall-verification on substantive work *is* the multi-model review. The only thing that skips stages 2–4 is the **trivial** tier (see "Tier gate" below) — a typo or doc fix gets the free self-pitfall pass and nothing else.
 
 ## When to invoke
 
@@ -94,14 +105,45 @@ Verdict: CLEAN | ISSUES FOUND (see above)
 
 If round 1 surfaces issues, fix them, then run round 2 on the patched artifact. If round 2 is clean, declare done. If round 2 still finds issues, surface them to the user — do not silently run round 3.
 
-## Escalation: third lens for ship-worthy changes
+## Tier gate — which lenses run automatically
 
-This skill is **lens 1** (Claude self-pitfall). For **ship-worthy / architecture / real-time / security / contract / migration-logic** changes, two more lenses follow on the *patched* artifact:
+After the self-pitfall rounds, classify the change and run the rest of the chain **automatically** for its tier. Do not ask the user which lenses to run — the tier decides.
 
-- **Lens 2 — Codex** (`/codex review`): cross-file drift, concurrency, concrete run bugs.
-- **Lens 3 — a different model house** via `/superpowers-gstack:third-lens-review`: architecture-level mistakes and challenged assumptions two Western houses both took for granted, ending in an adversarial synthesis.
+| Tier | What it is | Lenses (all automatic) |
+|------|-----------|------------------------|
+| **Trivial** | docs, typo, comment-only, test-only-coverage, WIP checkpoint | Self-pitfall only — stop here |
+| **Ship-worthy** | bumps a version file, produces a CHANGELOG entry, `feat`/`fix`/`refactor` affecting runtime, or changes public contracts | Self-pitfall → **Codex** → synthesis |
+| **+ High-stakes** | a ship-worthy change that *also* touches **architecture / real-time / security / public contracts / migration logic** | …→ **third model house** → synthesis |
 
-Order: self-pitfall (this skill, max 2 rounds) → Codex → third-lens-review. Each later lens reads a cleaner artifact. The third lens is gated by stakes — **do not** run it on trivial or standard changes; the tiering table in `third-lens-review` governs. Trivial → lens 1 only. Standard (feature/bugfix) → lens 1 + 2. Ship-worthy → all three.
+In practice most substantive work is at least ship-worthy, so Codex runs by default — you no longer invoke it by hand. The third house adds itself on the high-stakes subset. Both fire **without a confirmation prompt**; cost is reported after each call, not gated before it.
+
+## Stages 2–4 — external lenses + synthesis (automatic per tier)
+
+Run on the **patched** artifact, in order — each later lens reads a cleaner surface.
+
+### Stage 2 — Codex (ship-worthy and above)
+
+Invoke `/codex review` on the patched artifact. Codex catches cross-file drift, concurrency contracts, and concrete run bugs (false timeouts, stale async-resume, double-acquire leaks) that self-review systematically misses. Fix what it finds. Run it automatically — do not ask first.
+
+**Idempotency guard:** if `/codex review` has already been run on this exact patched artifact earlier in the current flow (e.g. an orchestrator like `autoimplement` runs `/review` + `/codex review` itself around this skill), do **not** re-run it — fold the existing Codex findings into the Stage 4 synthesis instead. The goal is one Codex pass per patched state, not one per skill that mentions Codex.
+
+### Stage 3 — third model house (high-stakes only)
+
+Invoke `/superpowers-gstack:third-lens-review` on the patched artifact. A different model house (different training distribution → different blind spots) finds architecture-level mistakes ("you never wired it together"), degraded-state bugs, and challenged assumptions the two Western houses both took for granted. It picks the model by artifact type (`--role architecture`/`sensitive`/`correctness`) and runs its own adversarial synthesis of the third-house output. Run it automatically for the high-stakes tier — do not ask first.
+
+### Stage 4 — combined adversarial synthesis (mandatory whenever stage 2 or 3 ran)
+
+Do not dump raw findings. Fold Codex + third-house results into one verdict, **adversarially**: an external finding is REAL until you explicitly refute it with a reason (this counters LLM-judge agreement bias — failure-detection drops to ~50% when a judge is conciliatory, worse when it is partly judging its own earlier work). Log each dropped finding with *why*. Treat cross-model disagreement as the signal, not noise — every disagreement ends in an explicit, reasoned decision. Cross-model agreement = high-confidence green, no action.
+
+```
+Multi-lens verdict (tier: <trivial|ship-worthy|high-stakes>):
+- Lenses run: self-pitfall [+ Codex] [+ <third-house model id>]
+- CONFIRMED (fix now): [P1/P2] <finding> — <file:line> → <fix> (survived refutation because …)
+- DISAGREEMENT → DECISION: <finding> → <explicit reasoned call>
+- DROPPED (with reason): <finding> → <over-strict | handled at file:line | wrong>
+- Cost: $<sum from lens footers>
+- Verdict: CLEAN | FIX-THEN-RECHECK | SURFACE-TO-USER
+```
 
 ## Why two rounds
 
