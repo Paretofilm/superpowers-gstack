@@ -364,13 +364,14 @@ If multiple commits land in a single session without ANY commit being tested, th
 The Multi-lens review block to insert (verbatim):
 
 ```markdown
-## Multi-lens review (ship-worthy changes) <!-- gstack-multi-lens-review-v1 -->
+## Multi-lens review (ship-worthy changes) <!-- gstack-multi-lens-review-v2 -->
 
-Substantive changes need three different review lenses — each catches what the others miss:
+Substantive changes need different review lenses — each catches what the others miss:
 
 1. **Self-check** (always, ~30 sec): placeholders, consistency, scope drift, ambiguity
 2. **Pitfall verification** (always, max 2 rounds): invoke `/superpowers-gstack:pitfall-verification` — catches domain-specific traps (security, idempotency, contracts, edge cases, LLM-output quirks)
 3. **Codex review** (ship-worthy changes only): invoke `/codex review` — catches drift across files and cross-section inconsistency that self-review systematically misses
+4. **Third-house lens** (architecture / real-time / security / contracts / migration-logic only): invoke `/superpowers-gstack:third-lens-review` — a *different model house* via OpenRouter reads the patched artifact and finds what two Western houses both took for granted, ending in an adversarial synthesis
 
 ### What counts as "ship-worthy"
 
@@ -402,7 +403,16 @@ Acceptable for ship-worthy work. Skip codex explicitly for trivial changes; don'
 
 ### Order matters
 
-Run lenses in order: self → pitfall → codex. Each pass fixes issues the previous one couldn't catch. Running codex *before* pitfall wastes its tokens on issues a simpler pass would have surfaced first.
+Run lenses in order: self → pitfall → codex → (ship-worthy arch/RT/security) third-house. Each pass fixes issues the previous one couldn't catch and reads a cleaner artifact. Running codex *before* pitfall wastes its tokens on issues a simpler pass would have surfaced first; running the third house before codex pays a third model to re-find what codex would have caught.
+
+### Fourth lens: the third house (escalation)
+
+The first three lenses are all self/Anthropic or OpenAI (Codex). For the highest-stakes changes, add a *different model house* — its value is **training-distribution distance**, not raw IQ: it sees architecture-level mistakes ("you never wired it together"), degraded-state bugs, and challenged assumptions the others took for granted.
+
+- **Gate:** architecture, real-time, security, public contracts, or migration logic. Skip for trivial/standard changes.
+- **Routing by `--role`** (`scripts/third-lens-review.py`): `architecture`=GLM-5.2 (default, non-sensitive); `sensitive`=Gemini 3.1 Pro (Western infra — enforced via `--sensitive` for auth/keys/health/finance); `correctness`=DeepSeek V4-Pro; `countersynthesis`=GPT-5.5 (refutes the synthesis on the biggest changes).
+- **Cost:** ~$0.05/run (GLM), well under $1 even for a 4-house panel. Key in macOS Keychain `openrouter-api-key`.
+- **Synthesis is mandatory and adversarial:** a third-house finding is real until explicitly refuted; disagreement is the signal, not noise. Never dump raw output. See the skill for the synthesis format.
 ```
 
 **Insert or upgrade the Code reuse discipline section.** This section applies to ALL projects (the agentic-duplication failure mode is platform-agnostic). Scan CLAUDE.md for heading `^#{2,3} Code reuse discipline` and its version marker `<!-- gstack-code-reuse-vN -->`. Apply the four-case logic, but with a CRITICAL difference from the other marker-managed sections in case 3:

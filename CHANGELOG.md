@@ -1,5 +1,65 @@
 # Changelog
 
+## [2.15.0] - 2026-06-21
+
+### Added
+
+- **`/third-lens-review` skill + `scripts/third-lens-review.py`** — a third
+  (and optionally fourth) external model **house** in the multi-lens review,
+  for ship-worthy / architecture / real-time / security / contract /
+  migration-logic changes. Claude self-pitfall (lens 1) and Codex (lens 2)
+  share two Western training distributions; the third lens is a *different
+  house* whose value is **distribution distance, not raw IQ** — it finds
+  architecture-level mistakes ("you never wired it together"), degraded-state
+  bugs, and challenged assumptions the first two took for granted. Field-proven
+  on LiveSet Pro (2026-06-21): GLM-5.2 ran *after* Claude + Codex had fixed 14
+  issues and still surfaced real new value (dead code, use-after-free under
+  render, silently-dropped scheduler overflow, leaked late-arriving audio unit).
+
+  - **Role-keyed model routing** (ids verified on OpenRouter 2026-06-21):
+    `architecture`=`z-ai/glm-5.2` (default, 1M ctx, most distant, ~$0.05/run),
+    `sensitive`=`google/gemini-3.1-pro-preview` (Western infra),
+    `correctness`=`deepseek/deepseek-v4-pro`,
+    `countersynthesis`=`openai/gpt-5.5` (refutes Claude's own dedup on the
+    biggest changes). The 3rd/4th lens is selected by artifact type, maximizing
+    house-distance per added lens — never another stacked generalist.
+  - **Data-routing guardrail enforced in code (fail-closed):** `--sensitive`
+    checks the model against a Western-infra *allowlist* and refuses anything
+    not on it (an unknown/new house is refused, not silently allowed) for
+    auth/keys/health/finance artifacts. The guard does not depend on the agent
+    remembering it.
+  - **Reasoning-model handling:** sends `reasoning.effort` (`--effort`, default
+    medium) and defaults `--max-tokens` to 16000 so reasoning tokens don't
+    exhaust the budget before the answer; detects `finish_reason=length` /
+    empty content and emits an actionable message instead of a generic error.
+  - **Mandatory adversarial synthesis:** a third-house finding is real until
+    explicitly refuted (counters LLM-judge agreement bias, ~50% failure-
+    detection); disagreement is treated as the signal, not smoothed away.
+    Raw model output is never dumped without synthesis.
+  - **Live pricing:** cost is computed from OpenRouter `/models` pricing applied
+    to the real `usage` object — no hardcoded prices to go stale. Stdlib-only
+    (no pip), Keychain key (`openrouter-api-key`), `--dry-run` cost estimate,
+    `--check-credits` balance probe.
+  - Wired into `pitfall-verification` (escalation section), project `CLAUDE.md`
+    routing, `README.md`, and the generated-CLAUDE.md templates in
+    `setup-routing` + `adapt` (multi-lens-review marker bumped v1→v2, so existing
+    projects pick up the fourth lens on next `/adapt`).
+
+### Notes
+
+- End-to-end dogfooded — the tool reviewed *itself* (GLM-5.2 as lens 3 on its
+  own script + skill) and surfaced 5 real findings, all confirmed by adversarial
+  synthesis and fixed in this release: `tout`-None `TypeError` in the usage line,
+  `--check-credits` exiting 0 on a bad key, uncaught `JSONDecodeError`, silent
+  `--diff`+`--files` conflict, and a fail-*open* denylist for `--sensitive`
+  (converted to a fail-closed Western allowlist). The first dogfood run also
+  surfaced the reasoning-model empty-content bug (fixed via `reasoning.effort` +
+  16k default cap). `--dry-run`, `--check-credits`, and the `--sensitive`
+  refusal path all verified; live cost ~$0.005–0.03/run; balance probe working.
+- Tiering is unchanged for trivial/standard work — the third house is gated by
+  stakes and skipped below the ship-worthy bar; cost stays under ~$1 even for a
+  full 4-house panel at ~30k input tokens.
+
 ## [2.14.2] - 2026-05-27
 
 ### Fixed
