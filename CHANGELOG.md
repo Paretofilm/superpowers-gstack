@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.17.0] - 2026-06-22
+
+### Changed
+
+- **Superpowers updated to 6.0.3.** This release spans v6.0.0–v6.0.3 and brings significant changes to subagent-driven development, new harness support, brainstorming visual companion hardening, and install fixes.
+
+- **SDD scratch files moved to `.superpowers/sdd/`** (v6.0.3, #1780). Claude Code treats `.git/` as a protected path and blocked implementer subagent writes to `.git/sdd/`. Task briefs, implementer reports, review diffs, and the progress ledger now live in a self-ignoring `.superpowers/sdd/` directory — kept out of `git status` and commits, resolved per worktree via a shared `sdd-workspace` helper. Note: `git clean -fdx` will delete the progress ledger; recover from `git log` if that happens.
+
+- **Subagent-driven development reviewer rewrite** (v6.0.0). The two per-task reviewer prompts (`spec-reviewer-prompt.md` and `code-quality-reviewer-prompt.md`) are replaced by a single `task-reviewer-prompt.md` that returns both a spec-compliance verdict and a quality verdict in one pass. If you dispatch the old files directly, switch to the new one. Additional changes:
+  - One broad whole-branch review at the end on the most capable model, instead of re-reviewing everything task by task
+  - Plans get a pre-flight read before Phase 1 to catch internal conflicts and reviewer-flaggable issues upfront
+  - Diffs and task text now move as files (via new `task-brief` and `review-package` scripts) rather than pasted context
+  - Every dispatch now states its model explicitly; controllers can no longer inherit the session's most expensive model silently
+  - Controllers can no longer instruct reviewers to suppress findings or pre-rate severity
+  - Reviewers are read-only and skeptical of implementer rationales
+  - Stronger evidence requirements: reviewers cite file and line; implementer reports carry red/green TDD evidence
+
+- **Writing plans** (v6.0.0): plans now carry a Global Constraints block (rules binding every task) and per-task Interfaces blocks (what each task consumes and produces), reducing re-derivation overhead for controllers and reviewers.
+
+- **Worktrees now land in the project** (v6.0.0). `using-git-worktrees` and `finishing-a-development-branch` no longer use `~/.config/superpowers/worktrees/`. Worktrees now land in the project — an existing `.worktrees/` or `worktrees/` if present, otherwise a fresh `.worktrees/` — unless overridden. README Superpowers Commands table updated accordingly.
+
+- **Brainstorming visual companion security model** (v6.0.0). The companion now requires a per-session key on every request and WebSocket connection, sandboxes its file server (no symlinks, dotfiles, or path traversal), survives restarts with the same port and key, and raises its idle timeout from 30 minutes to 4 hours. The companion is now offered only when it would help, and only as its own message before the approval gate.
+
+- **New harness support** (v6.0.0): Kimi Code (plugin manifest + marketplace install), Pi (SessionStart extension, no compatibility shim needed), and Antigravity (`agy`) are now supported upstream. No changes to this plugin's routing tables — harness install docs live in the upstream Superpowers README.
+
+- **Install fix** (v6.0.2, #1778, #1774): the `evals` submodule is no longer shipped with the plugin; the eval harness now lives in its own repo. Fixes broken installs for some users.
+
+- **Codex version display fix** (v6.0.1): the brainstorm companion no longer reports "unknown" version in packaged Codex plugins; falls back to `.codex-plugin/plugin.json` when `package.json` is absent.
+
+- **Claude Code updated to 2.1.185** (was 2.1.150).
+
 ## [2.16.0] - 2026-06-21
 
 ### Changed
