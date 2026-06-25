@@ -178,9 +178,9 @@ Body sections (author each in full):
 | Exploratory / live | iOS | `ios-simulator` MCP (`ui_find_element`/`ui_tap`) or `/ios-qa` |
 | Visual regression | both | screenshot/vision diff + `/ios-design-review` |
 
-5. `## Fallback`: if a committed-regression route's scaffold Phase 0 refuses (e.g. iOS app not SwiftUI, or SPM-only with no .xcodeproj), degrade to the MCP-live row for that platform and emit an explicit note naming the unmet precondition. No false promise.
+5. `## Fallback`: degrade to the MCP-live row for the platform **only when the scaffold's Phase 0 actually refuses** — i.e. one of the scaffold's three refuse-conditions fires: (a) not a Swift project, (b) no SwiftUI scene detected (e.g. UIKit-/AppKit-only app), or (c) a UI-test target already exists. Emit an explicit note naming the unmet precondition. **SPM-only is NOT a fallback trigger** — the scaffold accepts `Package.swift` projects and proceeds (it generates files under `Tests/<App>UITests/` with a "SwiftPM can't host a UI-test bundle; add an .xcodeproj" warning). So for SPM-only iOS apps the dispatcher still routes to `/ios-e2e-scaffold`; it does NOT degrade to MCP-live.
 
-6. `## Output — routing-decision block`: the skill emits exactly one block and then stops:
+6. `## Output — routing-decision block`: the skill emits **one block per resolved platform** — normally exactly one; **two when the multiplatform tiebreak resolved to `both`** (one iOS block + one macOS block) — and then stops. Block format:
 ```
 ## /e2e-route decision
 Detected: platform=<iOS|macOS>, intent=<committed|exploratory|visual>, source=<scheme|.gstack/track|asked>
@@ -209,7 +209,7 @@ Expected: six `ok:` lines.
 
 - [ ] **Step 3: Dry-run the routing oracle — all 5 cells**
 
-Trace each row of the routing table with a concrete context and confirm the decision block names the documented executor. Also trace the fallback: iOS + committed + (SPM-only project) → degrades to `ios-simulator` MCP with an explicit note. Record the 6 traces as a fenced block in this step's notes.
+Trace each row of the routing table with a concrete context and confirm the decision block names the documented executor. Also trace: (a) the fallback — iOS + committed + a **UIKit-only** app (scaffold Phase 0 refuses "no SwiftUI scene") → degrades to `ios-simulator` MCP with an explicit note; (b) SPM-only iOS + committed → still routes to `/ios-e2e-scaffold` (NOT a fallback — confirms the SPM carve-out); (c) multiplatform + committed resolved to `both` → emits two decision blocks (iOS → `/ios-e2e-scaffold`, macOS → `/macos-e2e-scaffold`). Record the traces as a fenced block in this step's notes.
 
 - [ ] **Step 4: Commit**
 ```bash
