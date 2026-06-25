@@ -14,7 +14,7 @@
 - Skills live in `skills/<name>/SKILL.md` with YAML frontmatter `name:` + `description:` + `version:` (per existing skills).
 - `ios-e2e-scaffold` is **manual-invocation only** — same model as `macos-e2e-scaffold` / `setup-routing`. No auto-trigger hook.
 - `e2e-route` is **manual + CLAUDE.md routing** — no PostToolUse/UserPromptSubmit hook.
-- Identifier convention is `<ViewName>_<ControlType>_<Purpose>` (snake_case) — match `macos-e2e-scaffold` exactly; do NOT invent the `domene.skjerm.handling` form from the design doc (the macOS skill is the shipped source of truth and the dispatcher must point at one consistent convention). NOTE: design doc says `domene.skjerm.handling` — the shipped macOS skill uses `<ViewName>_<ControlType>_<Purpose>`. Resolve in favor of the shipped convention for consistency; record the decision in the skill.
+- Identifier convention is `<ViewName>_<ControlType>_<Purpose>` (snake_case) — match `macos-e2e-scaffold` exactly. The shipped macOS skill is the source of truth and the dispatcher must point at one consistent convention. (Design doc reconciled 2026-06-25 to this form.)
 - Bump plugin version whenever pushing plugin changes (or cache won't update).
 - Dual-track repo: skills must not assume web default. These are native-track skills — fine.
 
@@ -60,8 +60,16 @@ Phase 0 refuse-matrix (iOS variant):
 | Check | Detect via | Refuse-message |
 |---|---|---|
 | Swift project | `*.xcodeproj` or `Package.swift` in cwd | "Not a Swift project. /ios-e2e-scaffold requires .xcodeproj or Package.swift in project root." |
-| iOS SwiftUI app | iOS target (`Package.swift` `.iOS(.v` OR `.xcodeproj` scheme builds for iOS) AND SwiftUI scene (`@main` + `WindowGroup`/`App`) | "No iOS SwiftUI app target detected. Skill is iOS-only — for macOS use /macos-e2e-scaffold, for AppKit use /appkit-e2e-scaffold (deferred)." |
+| iOS SwiftUI app | **iOS-discriminating** signal (see below) AND SwiftUI scene (`@main` + `App`/`WindowGroup`/`TabView`/`NavigationStack`) | "No iOS SwiftUI app target detected. Skill is iOS-only — for macOS use /macos-e2e-scaffold, for AppKit use /appkit-e2e-scaffold (deferred)." |
 | Not already scaffolded | `<App>UITests/` with `*.swift` count > 1 | "UI test target already exists with N test files. Skill won't overwrite — extend manually instead." |
+
+> **iOS-discriminating signal — REQUIRED, because `WindowGroup` is cross-platform (shared with macOS) and does NOT identify iOS on its own.** Detect iOS via the FIRST that matches:
+> 1. SPM: `Package.swift` contains `.iOS(` in a `platforms:` clause (and the target is an app, not a library).
+> 2. xcodegen: `project.yml`/`xcodegen.yml` target has `platform: iOS`.
+> 3. plain `.xcodeproj`: `project.pbxproj` contains `SDKROOT = iphoneos` or `SUPPORTED_PLATFORMS = "?iphoneos` for the app target's build config.
+> 4. Corroborating (necessary-not-sufficient): `grep -rl 'import UIKit' --include='*.swift'` and absence of macOS-only scenes (`MenuBarExtra(`, `Settings {`, `Window(`).
+>
+> If a target builds for BOTH iOS and macOS (multiplatform: `.iOS(` AND `.macOS(` in Package.swift, or `SUPPORTED_PLATFORMS` lists both): Phase 0 **passes** (iOS is among the platforms) but emits a note — "Multiplatform target detected; scaffolding iOS-Simulator tests. Run /macos-e2e-scaffold separately for the macOS surface." Use `iphoneos`/`.iOS(` presence as sufficient; do not refuse just because macOS is also supported.
 
 Step 4 (Scene-walk) iOS root patterns — grep:
 ```
@@ -110,9 +118,9 @@ grep -q 'platform=iOS Simulator' "$F" && echo "ok:ios-destination"
 grep -q 'TabView' "$F" && grep -q 'NavigationStack' "$F" && echo "ok:ios-scene-patterns"
 grep -q '/macos-e2e-scaffold' "$F" && echo "ok:macos-crossref"
 grep -qi 'manual' "$F" && echo "ok:manual-only"
-! grep -q 'MenuBarExtra' "$F" && echo "ok:no-macos-only-tiers"
+! grep -qF "destination 'platform=macOS'" "$F" && echo "ok:no-macos-runner"
 ```
-Expected: eight `ok:` lines. Any missing → fix the corresponding section before continuing.
+Expected: eight `ok:` lines. Any missing → fix the corresponding section before continuing. (The last check confirms no macOS *runner destination* leaked in — it deliberately does NOT grep `MenuBarExtra`, which the iOS skill legitimately names in its platform-exclusion guidance.)
 
 - [ ] **Step 3: Dry-run scenario walk**
 
@@ -155,8 +163,9 @@ Body sections (author each in full):
    - No detectable scheme/target → ask once, else refuse.
 
 3. `## Routing inputs (read in order)`:
-   - **Intent** — CI env (`CI`/`GITHUB_ACTIONS` set) forces *committed*. Else infer from verbs: `utforsk`/`sjekk`/`dogfood`/`trykk gjennom`/`explore`/`smoke` → MCP-live; `må aldri knekke`/`regresjon`/`CI`/`regression` → committed. **Ambiguous → ask the user once.**
-   - **Platform** — detect via `XcodeBuildMCP` `show_build_settings`/`list_schemes` or `.gstack/track`; iOS vs macOS. Ask only if undetectable.
+   - **Intent** — detect CI by running Bash `[ -n "${CI:-}${GITHUB_ACTIONS:-}" ] && echo CI`; if set, force *committed* (a CI context cannot drive a live MCP simulator session). Else infer from the user's verbs: `utforsk`/`sjekk`/`dogfood`/`trykk gjennom`/`explore`/`smoke` → MCP-live; `må aldri knekke`/`regresjon`/`CI`/`regression` → committed. **Ambiguous (no verb signal, not in CI) → ask the user once: "Exploratory live run or committed regression test?"**
+   - **Platform** — detect via `XcodeBuildMCP` `show_build_settings`/`list_schemes` (read `SDKROOT`/`SUPPORTED_PLATFORMS`) or `.gstack/track`; iOS vs macOS. Detection mechanism (state it explicitly in the skill): run `mcp__XcodeBuildMCP__show_build_settings` and read `SUPPORTED_PLATFORMS`; if MCP unavailable, `grep -E 'SDKROOT|SUPPORTED_PLATFORMS' *.xcodeproj/project.pbxproj` or read `.gstack/track`. Ask only if undetectable.
+   - **Multiplatform tiebreak (REQUIRED — the user's premise is "both platforms"):** if the detected target supports BOTH iOS and macOS (`SUPPORTED_PLATFORMS` lists both, or `.gstack/track` = `both`, or two schemes one per platform), the platform is NOT uniquely determined. Resolve in this order: (a) if the test request names a platform ("test the iPhone flow", "macOS menu bar") → use it; (b) else ask the user once: "This app targets both iOS and macOS — route this test to iOS, macOS, or both?"; (c) "both" → emit two decision blocks (one per platform), each routing to its platform's executor.
    - **Verification kind** (optional) — functional/AX-assertion vs visual.
 
 4. `## Routing table` (the oracle — reproduce verbatim):

@@ -70,7 +70,7 @@ Emit a Phase 0 result block on success (scheme, source root, swift-file count, p
 
 1. **Audits** the SwiftUI Scene tree — walks from `@main App`, ranks views by
    interactive-control density, identifies top 5 flows.
-2. **Suggests** accessibility identifiers (`domene.skjerm.handling`) for each control
+2. **Suggests** accessibility identifiers (`<ViewName>_<ControlType>_<Purpose>`, snake_case — matching the shipped `macos-e2e-scaffold` convention) for each control
    in the top 5; applies after **batch confirmation**.
 3. **Generates** ranked TIER-1/2/3 XCUITest stubs with `XCTFail("not implemented")`
    placeholders, an identifier-convention doc, and a Claude-readable xcresult runner
@@ -142,8 +142,10 @@ the choice, and the exact next action (skill to invoke or MCP sequence). Then ha
 control back. It does **not** build/tap/assert itself, does **not** modify app files
 (the scaffold skills do that), and is **not** a QA-report writer.
 
-Shared foundation it points at (but does not own): the `domene.skjerm.handling`
-accessibility-identifier convention — both executors locate elements the same way.
+Shared foundation it points at (but does not own): the
+`<ViewName>_<ControlType>_<Purpose>` accessibility-identifier convention (owned by the
+scaffold skills, matching shipped `macos-e2e-scaffold`) — both executors locate
+elements the same way.
 
 ### Phase 0 — self-check
 
