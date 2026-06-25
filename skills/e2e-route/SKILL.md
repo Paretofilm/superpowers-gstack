@@ -53,7 +53,13 @@ platform), the platform is NOT uniquely determined. Resolve in order:
 - (b) Else ask the user once: "This app targets both iOS and macOS — route this test
   to iOS, macOS, or both?"
 - (c) `both` → emit **two** decision blocks (one iOS, one macOS), each routing to its
-  platform's executor.
+  platform's executor. **Run them SEQUENTIALLY with distinct per-platform target
+  directories** — `<App>iOSUITests/` for iOS, `<App>macOSUITests/` for macOS. This is
+  required because both scaffolds' "already scaffolded" Phase-0 check globs `*UITests/`
+  generically: if both wrote to the same `<App>UITests/`, the first scaffold's files
+  would make the second refuse with "already scaffolded", and they would also collide
+  on the same `xcodegen.yml`/`project.pbxproj` UI-test target. Each decision block's
+  "Next action" must name its platform-specific target dir so the two coexist.
 
 ### 3. Verification kind (optional refinement)
 
