@@ -68,7 +68,8 @@ colour, dark mode, or "does it look right" → the visual-regression row.
 | Committed regression | iOS | `/ios-e2e-scaffold` |
 | Exploratory / live | macOS | `XcodeBuildMCP` UI-automation (`snapshot_ui` → tap → screenshot) |
 | Exploratory / live | iOS | `ios-simulator` MCP (`ui_find_element` / `ui_tap`) or `/ios-qa` |
-| Visual regression | both | screenshot/vision diff + `/ios-design-review` |
+| Visual regression | iOS | screenshot/vision diff + `/ios-design-review` |
+| Visual regression | macOS | screenshot/vision diff + `/design-review` (generic designer's-eye QA — no macOS-specific reviewer exists) |
 
 ## Fallback
 
