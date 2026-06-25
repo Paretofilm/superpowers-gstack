@@ -418,13 +418,26 @@ Rewrite the tail of `main()` (everything after `system_prompt`/`user_msg` are bu
     user_msg = f"Review the following artifact:\n\n{content}"
 
     if transport == "openrouter":
+        key = resolve_key()  # fetch lazily — see P1 note below
         run_openrouter(system_prompt, user_msg, target, args, key)
     else:
         eprint("ERROR: cli transport not implemented yet.")
         sys.exit(4)
 ```
 
-Remove the now-dead inline `model = args.model or ...`, the inline `payload`/`resp`/printing, and the inline dry-run block from `main()` (they now live in `run_openrouter`). Keep `--check-credits` handling where it is (before dispatch).
+Remove the now-dead inline `model = args.model or ...`, the inline `payload`/`resp`/printing, and the inline dry-run block from `main()` (they now live in `run_openrouter`).
+
+**Relocate the OpenRouter key fetch (CONFIRMED P1 — flagged independently by both Codex and GLM-5.2).** The original `main()` calls `key = resolve_key()` unconditionally near the top (≈ line 211), which `sys.exit(3)`s when no OpenRouter key exists. That would break `--role countersynthesis`, whose entire point is to need no OpenRouter key. **Delete that eager top-level line.** Move key acquisition into the two places that actually need it:
+
+```python
+    # in the --check-credits early-exit block:
+    if args.check_credits:
+        key = resolve_key()
+        bal = get_credits(key)
+        ...
+```
+
+and the lazy fetch inside the `openrouter` dispatch branch (shown above). The `cli` path must NEVER call `resolve_key()`.
 
 - [ ] **Step 4: Run the full suite to verify it passes**
 
@@ -458,26 +471,29 @@ Append:
 import subprocess
 
 
+class _CodexArgs:
+    dry_run = False
+    max_tokens = 16000
+    effort = "medium"
+
+
 def test_run_codex_invokes_exec_and_prints(monkeypatch, capsys):
     captured = {}
 
-    def fake_run(cmd, input, capture_output, text, timeout):
+    def fake_run(cmd, input=None, **kwargs):  # **kwargs: encoding/errors/start_new_session/etc.
         captured["cmd"] = cmd
         captured["input"] = input
-        # codex writes its final message to the path after -o
         out_path = cmd[cmd.index("-o") + 1]
         with open(out_path, "w", encoding="utf-8") as fh:
             fh.write("P1 codex finding")
         class P:
             returncode = 0
             stderr = ""
+            stdout = ""
         return P()
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-
-    class Args:
-        dry_run = False
-    tlr.run_codex("SYS", "USER artifact", "codex", Args())
+    tlr.run_codex("SYS", "USER artifact", "codex", _CodexArgs())
     out = capsys.readouterr().out
     assert captured["cmd"][:2] == ["codex", "exec"]
     assert "--sandbox" in captured["cmd"] and "read-only" in captured["cmd"]
@@ -489,17 +505,15 @@ def test_run_codex_invokes_exec_and_prints(monkeypatch, capsys):
 
 
 def test_run_codex_nonzero_exits_4(monkeypatch):
-    def fake_run(cmd, input, capture_output, text, timeout):
+    def fake_run(cmd, input=None, **kwargs):
         class P:
             returncode = 1
             stderr = "boom"
+            stdout = ""
         return P()
     monkeypatch.setattr(subprocess, "run", fake_run)
-
-    class Args:
-        dry_run = False
     with pytest.raises(SystemExit) as e:
-        tlr.run_codex("SYS", "USER", "codex", Args())
+        tlr.run_codex("SYS", "USER", "codex", _CodexArgs())
     assert e.value.code == 4
 
 
@@ -507,12 +521,58 @@ def test_run_codex_missing_binary_exits_4(monkeypatch):
     def fake_run(*a, **k):
         raise FileNotFoundError()
     monkeypatch.setattr(subprocess, "run", fake_run)
-
-    class Args:
-        dry_run = False
     with pytest.raises(SystemExit) as e:
-        tlr.run_codex("SYS", "USER", "codex", Args())
+        tlr.run_codex("SYS", "USER", "codex", _CodexArgs())
     assert e.value.code == 4
+
+
+def test_run_codex_timeout_exits_4(monkeypatch):
+    def fake_run(cmd, input=None, **kwargs):
+        raise subprocess.TimeoutExpired(cmd, 600)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(SystemExit) as e:
+        tlr.run_codex("SYS", "USER", "codex", _CodexArgs())
+    assert e.value.code == 4
+
+
+def test_run_codex_empty_output_exits_4(monkeypatch):
+    def fake_run(cmd, input=None, **kwargs):
+        out_path = cmd[cmd.index("-o") + 1]
+        with open(out_path, "w", encoding="utf-8") as fh:
+            fh.write("   \n")  # whitespace-only → treated as empty
+        class P:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+        return P()
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(SystemExit) as e:
+        tlr.run_codex("SYS", "USER", "codex", _CodexArgs())
+    assert e.value.code == 4
+
+
+def test_main_countersynthesis_never_fetches_openrouter_key(monkeypatch):
+    """CONFIRMED P1: the CLI role must never call resolve_key()."""
+    monkeypatch.setattr("sys.argv", ["tlr", "--role", "countersynthesis", "--files", "x"])
+    monkeypatch.setattr(tlr, "gather_content", lambda args: "some artifact")
+    monkeypatch.setattr(tlr, "run_codex", lambda *a, **k: None)
+
+    def boom(*a, **k):
+        raise AssertionError("resolve_key() must not be called on the CLI path")
+    monkeypatch.setattr(tlr, "resolve_key", boom)
+    tlr.main()  # must not raise
+
+
+def test_main_cli_dry_run_skips_key(monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv",
+                        ["tlr", "--role", "countersynthesis", "--files", "x", "--dry-run"])
+    monkeypatch.setattr(tlr, "gather_content", lambda args: "some artifact")
+
+    def boom(*a, **k):
+        raise AssertionError("resolve_key() must not be called on the CLI dry-run path")
+    monkeypatch.setattr(tlr, "resolve_key", boom)
+    tlr.main()
+    assert "codex CLI" in capsys.readouterr().out
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -534,6 +594,12 @@ def run_codex(system_prompt, user_msg, target, args):
         print(f"Estimated input tokens: ~{est_in:,}")
         return
 
+    # --max-tokens / --effort are OpenRouter-only; warn so a user retrying a truncated
+    # review with a higher cap isn't silently ignored on the CLI path (GLM F5). The
+    # literals mirror the argparse defaults.
+    if args.max_tokens != 16000 or args.effort != "medium":
+        eprint("[note] --max-tokens/--effort are OpenRouter-specific; ignored by the codex CLI.")
+
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tf:
         out_path = tf.name
     try:
@@ -544,7 +610,12 @@ def run_codex(system_prompt, user_msg, target, args):
         cmd = [target, "exec", "--sandbox", "read-only", "--color", "never",
                "--skip-git-repo-check", "-o", out_path, "-"]
         try:
-            proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=600)
+            proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", timeout=600,
+                                  start_new_session=True)
+            # encoding="utf-8": non-ASCII diffs would raise UnicodeEncodeError under a
+            #   non-UTF-8 locale (GLM F3). start_new_session: isolate codex's process
+            #   group so a timeout kill doesn't orphan as much (GLM F2, minimal mitigation).
         except FileNotFoundError:
             eprint(f"ERROR: '{target}' CLI not found in PATH (needed for --role countersynthesis).")
             sys.exit(4)
@@ -552,7 +623,8 @@ def run_codex(system_prompt, user_msg, target, args):
             eprint(f"ERROR: '{target}' CLI timed out after 600s.")
             sys.exit(4)
         if proc.returncode != 0:
-            eprint(f"ERROR: {target} exec failed (exit {proc.returncode}):\n{proc.stderr.strip()[:500]}")
+            detail = (proc.stderr or proc.stdout or "").strip()[:500]  # codex may log to stdout (GLM F4)
+            eprint(f"ERROR: {target} exec failed (exit {proc.returncode}):\n{detail}")
             sys.exit(4)
         try:
             with open(out_path, encoding="utf-8") as fh:
@@ -574,9 +646,10 @@ def run_codex(system_prompt, user_msg, target, args):
             pass
 ```
 
-Replace the dispatch `else` branch in `main()`:
+Replace the dispatch `else` branch in `main()` (keeping the lazy key fetch from Task 4):
 ```python
     if transport == "openrouter":
+        key = resolve_key()  # lazy — CLI role needs no OpenRouter key (P1)
         run_openrouter(system_prompt, user_msg, target, args, key)
     else:
         run_codex(system_prompt, user_msg, target, args)
@@ -592,8 +665,9 @@ Expected: PASS — "unit: PASS", "All test suites passed."
 This step exists because three things about the real `codex exec` are assumed, not proven by the mocked unit tests: (a) `-o` captures the *full* review, not a truncated one-line summary; (b) piping the prompt via stdin runs non-interactively with no hang; (c) a real review artifact round-trips. Run a non-trivial input (not a one-liner) so a truncated summary would be visible:
 
 ```bash
-# --diff makes the script gather the diff itself (do NOT also pipe one in).
-python3 scripts/third-lens-review.py --role countersynthesis --diff --diff-base HEAD~3
+# Deterministic artifact (always exists, non-trivial) — avoids HEAD~3 not existing /
+# an empty diff on a shallow or short-history checkout.
+python3 scripts/third-lens-review.py --role countersynthesis --files scripts/third-lens-review.py
 ```
 Expected, ALL of:
 - A `===== THIRD-LENS RAW OUTPUT (codex CLI) =====` block containing **multiple sentences / several findings** (if it is one terse line, `-o` is giving a summary — switch the codex invocation to capture full stdout instead of `--output-last-message` and re-test before proceeding).
@@ -629,9 +703,9 @@ Find the role table row for `sensitive` and delete it. Update the `countersynthe
 | `countersynthesis` | `codex` CLI | OpenAI | refutes Claude's dedup; via codex CLI (subscription, no per-call cost) |
 ```
 
-Replace any prose mentioning `--sensitive` / Western-infra enforcement with one line:
+Replace any prose mentioning the old sensitive flag / Western-infra enforcement with the one line below. **Important:** the replacement text must NOT contain the literal removed-flag token (the double-dash + `sensitive`) — Step 5 greps this directory for that token and must find zero matches. Phrase it as "Western-infra guard" instead:
 ```markdown
-The `sensitive` role and its `--sensitive` fail-closed guard were removed in 2.18.0 (work is not sensitive; default is GLM-5.2).
+The sensitive role and its fail-closed Western-infra guard were removed in 2.18.0 (work is not sensitive; default lens is GLM-5.2).
 ```
 
 - [ ] **Step 2: Update `CLAUDE.md` routing bullet (line ~103)**
@@ -669,7 +743,7 @@ Run:
 ```bash
 grep -rn "WESTERN_PREFIXES\|--sensitive\|role sensitive\|gemini-3.1-pro-preview" scripts/ skills/third-lens-review/ CLAUDE.md
 ```
-Expected: no matches (or only inside `CHANGELOG.md`/this plan describing the removal). Fix any stragglers.
+Expected: **zero matches.** The grep scope deliberately excludes `CHANGELOG.md` and `docs/`, which legitimately describe the removal. Any match inside `scripts/` or `skills/third-lens-review/SKILL.md` is a straggler — fix it.
 
 - [ ] **Step 6: Commit**
 

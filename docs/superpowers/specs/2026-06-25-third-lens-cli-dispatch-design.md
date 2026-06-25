@@ -93,15 +93,25 @@ returns later, the guard must be reintroduced.
 
 ## Error handling
 
+- **OpenRouter key is fetched lazily.** `resolve_key()` must NOT run unconditionally at
+  the top of `main()` (it `sys.exit(3)`s without a key). The `cli` transport needs no
+  OpenRouter key, so the key is fetched only inside the `openrouter` dispatch branch and
+  inside the `--check-credits` early-exit. (Flagged independently by both external lenses
+  during plan review.)
 - `codex` not found / non-zero exit / empty output file → print a clear error to
   stderr and exit 4 (same class as an OpenRouter API failure), so the orchestrator
-  treats a CLI failure like any transport failure.
+  treats a CLI failure like any transport failure. The non-zero error message falls back
+  to `stdout` when `stderr` is empty (codex may log there).
 - `codex` timeout → reuse the 600s ceiling; on `subprocess.TimeoutExpired` exit 4 with
-  a "codex CLI timed out" message.
+  a "codex CLI timed out" message. The subprocess uses `encoding="utf-8", errors="replace"`
+  (non-ASCII diffs under a non-UTF-8 locale) and `start_new_session=True`.
+- `--max-tokens` / `--effort` are OpenRouter-only; on a `cli`-role they are inert, so
+  `run_codex` warns on stderr when either is non-default.
 - `--check-credits` and `--dry-run` pricing are OpenRouter-specific. For a `cli`-role:
-  - `--check-credits` still queries OpenRouter (it is about the OR balance) — unchanged.
+  - `--check-credits` queries OpenRouter (it is about the OR balance) and fetches its own
+    key — unchanged.
   - `--dry-run` prints "Transport: codex CLI (subscription — no OpenRouter cost)" and
-    the estimated input token count, but no `$` estimate.
+    the estimated input token count, but no `$` estimate, and never fetches a key.
 
 ## Testing (TDD)
 
