@@ -332,7 +332,7 @@ Skill cannot reliably modify `project.pbxproj` programmatically (one wrong line 
 # Runs iOS UI tests and emits Claude-readable JSON summary.
 # Requires Xcode 16+ for JSON xcresulttool format; falls back to plaintext on older.
 
-set -e
+set -uo pipefail
 
 SCHEME="<APP>"
 RESULT_BUNDLE="$(mktemp -d)/uitests.xcresult"
@@ -347,20 +347,23 @@ if ! xcrun simctl list devices available | grep -q 'iPhone 15'; then
   fi
 fi
 
+# Run the tests. Capture xcodebuild's OWN exit status via PIPESTATUS — piping into
+# `tail` would otherwise mask a non-zero status (tail returns 0), making a failing
+# committed-regression run look green in CI.
 xcodebuild test \
   -scheme "$SCHEME" \
   -destination "$DEST" \
   -only-testing:"${SCHEME}UITests" \
   -resultBundlePath "$RESULT_BUNDLE" \
   -quiet 2>&1 | tail -50
+TEST_STATUS=${PIPESTATUS[0]}
 
-# Parse xcresult to JSON summary (Xcode 16+)
-if xcrun xcresulttool get test-results summary --path "$RESULT_BUNDLE" --format json 2>/dev/null \
-   | jq '{total: .totalTestCount, passed: .passedTests, failed: .failedTests, results: [.testFailures[] | {test: .testIdentifier, file: .sourceCodeContext.location.filePath, line: .sourceCodeContext.location.lineNumber, message: .failureText}]}' 2>/dev/null; then
-  exit 0
-fi
+# Parse xcresult to JSON summary (Xcode 16+); fall back to plaintext on older Xcode.
+xcrun xcresulttool get test-results summary --path "$RESULT_BUNDLE" --format json 2>/dev/null \
+  | jq '{total: .totalTestCount, passed: .passedTests, failed: .failedTests, results: [.testFailures[] | {test: .testIdentifier, file: .sourceCodeContext.location.filePath, line: .sourceCodeContext.location.lineNumber, message: .failureText}]}' 2>/dev/null \
+  || { echo "(Xcode 16+ JSON format unavailable — falling back to plaintext)"; \
+       xcrun xcresulttool get --path "$RESULT_BUNDLE" 2>/dev/null | tail -100 || true; }
 
-# Fallback for older Xcode: plain xcresulttool dump
-echo "(Xcode 16+ JSON format unavailable — falling back to plaintext)"
-xcrun xcresulttool get --path "$RESULT_BUNDLE" 2>/dev/null | tail -100 || true
+# Exit with the REAL test status so CI / committed-regression runs fail when tests fail.
+exit "$TEST_STATUS"
 ```
