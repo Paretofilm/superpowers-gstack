@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="no" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>superpowers-gstack — Architecture Overview</title>
+<style>
+:root {
+  --bg: #0a0d12;
+  --bg-soft: #11151c;
+  --bg-glass: rgba(20, 24, 32, 0.65);
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text: #e7ebf2;
+  --text-soft: #9aa3b3;
+  --text-mute: #6b7382;
+  --accent: #d0ff3a;
+  --accent-soft: rgba(208, 255, 58, 0.13);
+  --accent-strong: #b3e000;
+  --layer-1: #4f78ff;
+  --layer-2: #ff7a59;
+  --layer-3: #d0ff3a;
+  --layer-4: #b988ff;
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+[data-theme="light"] {
+  --bg: #f6f7fa;
+  --bg-soft: #ffffff;
+  --bg-glass: rgba(255, 255, 255, 0.7);
+  --surface: rgba(0, 0, 0, 0.025);
+  --surface-hover: rgba(0, 0, 0, 0.05);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.14);
+  --text: #0e1218;
+  --text-soft: #404a5a;
+  --text-mute: #7d8694;
+  --accent: #6fb800;
+  --accent-soft: rgba(111, 184, 0, 0.13);
+  --accent-strong: #4a8000;
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.55;
+  font-size: 15px;
+  font-feature-settings: "ss01" on, "cv11" on;
+  -webkit-font-smoothing: antialiased;
+}
+body::before {
+  content: "";
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(900px circle at 10% -10%, rgba(79, 120, 255, 0.10), transparent 50%),
+    radial-gradient(700px circle at 90% 10%, rgba(208, 255, 58, 0.06), transparent 45%),
+    radial-gradient(800px circle at 50% 100%, rgba(185, 136, 255, 0.06), transparent 45%);
+  pointer-events: none;
+  z-index: -1;
+}
+.container { max-width: 1180px; margin: 0 auto; padding: 0 28px; }
+nav {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--border);
+}
+nav .container { display: flex; align-items: center; justify-content: space-between; padding-top: 14px; padding-bottom: 14px; }
+.brand { font-weight: 700; font-size: 14px; letter-spacing: -0.01em; }
+.brand .dot { color: var(--accent); }
+.nav-links { display: flex; gap: 22px; font-size: 13px; color: var(--text-soft); }
+.nav-links a { color: inherit; text-decoration: none; transition: color 0.15s; }
+.nav-links a:hover { color: var(--text); }
+.theme-toggle {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;
+  transition: background 0.15s;
+}
+.theme-toggle:hover { background: var(--surface-hover); }
+
+/* Hero */
+.hero { padding: 80px 0 60px; text-align: left; }
+.eyebrow {
+  display: inline-block;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--accent); padding: 5px 12px; background: var(--accent-soft);
+  border-radius: 100px; margin-bottom: 24px;
+}
+.hero h1 {
+  font-size: clamp(36px, 5.5vw, 64px); margin: 0 0 18px;
+  letter-spacing: -0.025em; line-height: 1.05; font-weight: 700;
+}
+.hero h1 .accent { color: var(--accent); }
+.hero p.lede {
+  font-size: 19px; color: var(--text-soft); margin: 0 0 36px; max-width: 720px;
+  line-height: 1.5;
+}
+.hero-stats { display: flex; gap: 32px; flex-wrap: wrap; }
+.stat { display: flex; flex-direction: column; gap: 2px; }
+.stat .num { font-size: 28px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+.stat .lbl { font-size: 12px; color: var(--text-mute); text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* Sections */
+section { padding: 60px 0; }
+section h2 {
+  font-size: 28px; margin: 0 0 14px;
+  letter-spacing: -0.018em; font-weight: 700;
+}
+section .section-lede {
+  font-size: 16px; color: var(--text-soft); margin: 0 0 40px;
+  max-width: 680px; line-height: 1.55;
+}
+
+/* Glass card */
+.card {
+  background: var(--surface);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.card:hover { border-color: var(--border-strong); }
+.card h3 {
+  margin: 0 0 8px; font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
+  display: flex; align-items: center; gap: 8px;
+}
+.card h3 .tag {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  color: var(--accent); background: var(--accent-soft);
+  padding: 3px 7px; border-radius: 100px; letter-spacing: 0.06em;
+}
+.card p { margin: 0; color: var(--text-soft); font-size: 13.5px; line-height: 1.5; }
+.card code {
+  font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  background: var(--surface-hover); padding: 1px 5px; border-radius: 4px; font-size: 12px;
+}
+
+/* Layer diagram */
+.diagram-wrap {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 32px;
+  overflow: hidden;
+}
+svg { display: block; max-width: 100%; height: auto; }
+svg text { font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; }
+
+/* Grid */
+.grid { display: grid; gap: 16px; }
+.grid-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 760px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+}
+
+/* Category headers */
+.category {
+  margin-top: 32px; margin-bottom: 14px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--text-mute);
+}
+.category .dot { display: inline-block; width: 8px; height: 8px; border-radius: 100px; margin-right: 8px; vertical-align: middle; }
+.category.cat-1 .dot { background: var(--layer-1); }
+.category.cat-2 .dot { background: var(--layer-2); }
+.category.cat-3 .dot { background: var(--layer-3); }
+.category.cat-4 .dot { background: var(--layer-4); }
+
+/* Audit table */
+.audit { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.audit th, .audit td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.audit th { color: var(--text-mute); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+.audit td.pill { width: 90px; }
+.audit td.pill span {
+  display: inline-block; padding: 3px 9px; border-radius: 100px;
+  font-size: 11px; font-weight: 600; background: var(--accent-soft); color: var(--accent);
+}
+.audit td.fix { color: var(--text-soft); }
+
+/* Code block */
+pre.code {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  overflow-x: auto;
+  font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-soft);
+}
+pre.code .key { color: var(--accent); }
+pre.code .com { color: var(--text-mute); font-style: italic; }
+
+footer {
+  margin-top: 80px; padding: 40px 0;
+  border-top: 1px solid var(--border);
+  color: var(--text-mute); font-size: 13px;
+}
+footer a { color: var(--text-soft); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <div class="brand"><span class="dot">●</span> superpowers-gstack <span style="color: var(--text-mute); font-weight: 400;">v2.14.2</span></div>
+    <div class="nav-links">
+      <a href="#layers">Layers</a>
+      <a href="#skills">Skills</a>
+      <a href="#workflow">Workflow</a>
+      <a href="#crossmodel">Cross-model</a>
+      <a href="#pipeline">Pipeline</a>
+    </div>
+    <button class="theme-toggle" onclick="toggleTheme()">☀ / ☾</button>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container">
+    <span class="eyebrow">Claude Code Plugin</span>
+    <h1>Routing, context, and <span class="accent">autoimplementation</span><br>for the Superpowers + GStack workflow.</h1>
+    <p class="lede">superpowers-gstack is a plugin layer that sits on top of obra/superpowers and garrytan/gstack. It generates project-specific CLAUDE.md routing, ships native-Apple review skills, automates plan execution, and runs an automated upstream-update pipeline.</p>
+    <div class="hero-stats">
+      <div class="stat"><div class="num">13</div><div class="lbl">Skills</div></div>
+      <div class="stat"><div class="num">3</div><div class="lbl">Layers</div></div>
+      <div class="stat"><div class="num">7</div><div class="lbl">Hooks</div></div>
+      <div class="stat"><div class="num">2.14.2</div><div class="lbl">Current version</div></div>
+    </div>
+  </div>
+</header>
+
+<!-- ARCHITECTURE LAYERS -->
+<section id="layers">
+  <div class="container">
+    <h2>Architecture in 4 layers</h2>
+    <p class="section-lede">Each layer is independently versioned and replaceable. superpowers-gstack only touches its own layer (the plugin) and the project CLAUDE.md generated for end-users — it never modifies upstream skills.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 1100 460" role="img" aria-label="Layer architecture">
+        <!-- Background grid (subtle) -->
+        <defs>
+          <linearGradient id="lay1" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#4f78ff" stop-opacity="0.85"/>
+            <stop offset="100%" stop-color="#4f78ff" stop-opacity="0.55"/>
+          </linearGradient>
+          <linearGradient id="lay2" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#ff7a59" stop-opacity="0.85"/>
+            <stop offset="100%" stop-color="#ff7a59" stop-opacity="0.55"/>
+          </linearGradient>
+          <linearGradient id="lay3" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#d0ff3a" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#d0ff3a" stop-opacity="0.55"/>
+          </linearGradient>
+          <linearGradient id="lay4" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#b988ff" stop-opacity="0.85"/>
+            <stop offset="100%" stop-color="#b988ff" stop-opacity="0.55"/>
+          </linearGradient>
+        </defs>
+
+        <!-- Layer 4: Project CLAUDE.md (top) -->
+        <g transform="translate(120, 30)">
+          <rect width="860" height="68" rx="14" fill="url(#lay4)" opacity="0.18"/>
+          <rect width="860" height="68" rx="14" fill="none" stroke="#b988ff" stroke-width="1" opacity="0.6"/>
+          <text x="24" y="32" fill="#e7ebf2" font-size="13" font-weight="700">Layer 4 · Project</text>
+          <text x="24" y="52" fill="#9aa3b3" font-size="12">CLAUDE.md — per-project skill routing generated by setup-routing / adapt</text>
+          <text x="836" y="42" fill="#b988ff" font-size="11" text-anchor="end" font-weight="600">Per-project</text>
+        </g>
+
+        <!-- Layer 3: superpowers-gstack -->
+        <g transform="translate(120, 118)">
+          <rect width="860" height="100" rx="14" fill="url(#lay3)" opacity="0.16"/>
+          <rect width="860" height="100" rx="14" fill="none" stroke="#d0ff3a" stroke-width="1.5" opacity="0.75"/>
+          <text x="24" y="30" fill="#e7ebf2" font-size="13" font-weight="700">Layer 3 · superpowers-gstack (this plugin)</text>
+          <text x="24" y="50" fill="#9aa3b3" font-size="12">13 skills: routing (setup-routing, adapt) · plan quality (pitfall-verification, quality-review)</text>
+          <text x="24" y="68" fill="#9aa3b3" font-size="12">native Apple (macos-/ios-native-review, swiftui-design-consultation, macos-e2e-scaffold)</text>
+          <text x="24" y="86" fill="#9aa3b3" font-size="12">workflow (autoimplement, office-hours-track-aware) · artifacts (htmlify, context-handoff)</text>
+          <text x="836" y="42" fill="#d0ff3a" font-size="11" text-anchor="end" font-weight="600">v2.14.2</text>
+        </g>
+
+        <!-- Layer 2: GStack -->
+        <g transform="translate(120, 238)">
+          <rect width="860" height="78" rx="14" fill="url(#lay2)" opacity="0.18"/>
+          <rect width="860" height="78" rx="14" fill="none" stroke="#ff7a59" stroke-width="1" opacity="0.6"/>
+          <text x="24" y="30" fill="#e7ebf2" font-size="13" font-weight="700">Layer 2 · GStack (garrytan/gstack)</text>
+          <text x="24" y="50" fill="#9aa3b3" font-size="12">/review · /codex · /ship · /office-hours · /plan-ceo-review · /plan-eng-review · /qa</text>
+          <text x="24" y="68" fill="#9aa3b3" font-size="12">/investigate · /design-review · /learn · /context-save · /browse · /scrape · ...</text>
+          <text x="836" y="42" fill="#ff7a59" font-size="11" text-anchor="end" font-weight="600">Upstream</text>
+        </g>
+
+        <!-- Layer 1: Superpowers -->
+        <g transform="translate(120, 336)">
+          <rect width="860" height="70" rx="14" fill="url(#lay1)" opacity="0.18"/>
+          <rect width="860" height="70" rx="14" fill="none" stroke="#4f78ff" stroke-width="1" opacity="0.6"/>
+          <text x="24" y="30" fill="#e7ebf2" font-size="13" font-weight="700">Layer 1 · Superpowers (obra/superpowers)</text>
+          <text x="24" y="50" fill="#9aa3b3" font-size="12">writing-plans · subagent-driven-development · executing-plans · brainstorming · systematic-debugging · TDD</text>
+          <text x="836" y="42" fill="#4f78ff" font-size="11" text-anchor="end" font-weight="600">Upstream</text>
+        </g>
+
+        <!-- Layer 0: Claude Code host (visual: enclosing box at the very bottom) -->
+        <g transform="translate(60, 425)">
+          <rect width="980" height="2" fill="#6b7382" opacity="0.4"/>
+          <text x="490" y="25" fill="#6b7382" font-size="11" text-anchor="middle" letter-spacing="0.18em">CLAUDE CODE HOST · Bash · Skill · Agent · AskUserQuestion</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="grid grid-3" style="margin-top: 28px;">
+      <div class="card">
+        <h3>L4 → L3 <span class="tag">Routes</span></h3>
+        <p>Project CLAUDE.md instructs Claude to invoke specific superpowers-gstack skills based on user phrasing.</p>
+      </div>
+      <div class="card">
+        <h3>L3 → L1+L2 <span class="tag">Composes</span></h3>
+        <p>Our skills call upstream skills via the <code>Skill</code> tool. We don't fork; we orchestrate.</p>
+      </div>
+      <div class="card">
+        <h3>L0 ← All <span class="tag">Executes</span></h3>
+        <p>Claude Code runs all bash, manages skill loading, dispatches subagents.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SKILLS CATALOG -->
+<section id="skills">
+  <div class="container">
+    <h2>The 13 skills</h2>
+    <p class="section-lede">Each skill is a markdown instruction set Claude reads and follows. No executable runtime — composition over reimplementation.</p>
+
+    <div class="category cat-3"><span class="dot"></span>Routing &amp; Setup</div>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>/setup-routing</h3>
+        <p>Asks about project type, evaluates relevant skills from both Superpowers and GStack, and emits a tailored CLAUDE.md routing block.</p>
+      </div>
+      <div class="card">
+        <h3>/adapt</h3>
+        <p>Adapts an existing project (one without a CLAUDE.md) by analyzing it, identifying gaps, and adding routing without losing existing content.</p>
+      </div>
+    </div>
+
+    <div class="category cat-1"><span class="dot"></span>Plan Quality</div>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>/pitfall-verification</h3>
+        <p>Targeted check that typical pitfalls (security, idempotency, contracts, edge cases, LLM output) do not apply to a finished PRD, spec, plan, or code artifact.</p>
+      </div>
+      <div class="card">
+        <h3>/quality-review</h3>
+        <p>Perceived-quality gate — hunts pitfalls that make a product feel cheap or broken even when it technically works.</p>
+      </div>
+    </div>
+
+    <div class="category cat-2"><span class="dot"></span>Native Apple</div>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>/macos-native-review</h3>
+        <p>HIG-citation-grounded conformance gate for macOS apps. 12 categories: vocabulary, controls, shortcuts, menu bar, lifecycle, etc.</p>
+      </div>
+      <div class="card">
+        <h3>/ios-native-review</h3>
+        <p>Same shape, iOS-specific surfaces: touch targets, navigation paradigm, modal presentation, Dynamic Island, haptics.</p>
+      </div>
+      <div class="card">
+        <h3>/swiftui-design-consultation</h3>
+        <p>Produces DESIGN.md + Swift Package starter. Inlines the platform question (iOS/macOS/both) on first run.</p>
+      </div>
+      <div class="card">
+        <h3>/macos-e2e-scaffold</h3>
+        <p>E2E test scaffold for macOS apps.</p>
+      </div>
+    </div>
+
+    <div class="category cat-4"><span class="dot"></span>Workflow Acceleration</div>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>/autoimplement <span class="tag">v2.14.2</span></h3>
+        <p>Auto-advance through a multi-phase plan. Dispatches subagent per phase, chains review + pitfall + codex at boundaries. Active pre-flight reviews the plan body itself before Phase 1 unless a marker commit exists.</p>
+      </div>
+      <div class="card">
+        <h3>/office-hours-track-aware</h3>
+        <p>Wraps upstream /office-hours with track inference (web vs native), inline platform question, approve-before-render gate.</p>
+      </div>
+    </div>
+
+    <div class="category cat-3"><span class="dot"></span>Context &amp; Artifacts</div>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>/context-handoff</h3>
+        <p>Structured handoff file (YAML frontmatter + prose) to docs/superpowers/handoff.md before /clear or /compact. Survives across machines.</p>
+      </div>
+      <div class="card">
+        <h3>/htmlify</h3>
+        <p>Beautiful, pedagogical HTML companions for MD artifacts. Auto-opens via --open. Per-directory dashboards.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WORKFLOW -->
+<section id="workflow">
+  <div class="container">
+    <h2>A typical workflow</h2>
+    <p class="section-lede">From idea to shipped feature, with review gates at every boundary. Cross-model adversarial (Claude + Codex) at the strongest gates.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 1100 470" role="img" aria-label="Workflow">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#9aa3b3"/>
+          </marker>
+          <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#d0ff3a"/>
+          </marker>
+        </defs>
+
+        <!-- Top row: linear flow -->
+        <!-- Step 1: Idea -->
+        <g transform="translate(40, 30)">
+          <rect width="160" height="60" rx="12" fill="#11151c" stroke="#4f78ff" stroke-width="1.5"/>
+          <text x="80" y="28" fill="#e7ebf2" font-size="13" font-weight="700" text-anchor="middle">Idea</text>
+          <text x="80" y="46" fill="#9aa3b3" font-size="11" text-anchor="middle">/office-hours</text>
+        </g>
+        <line x1="200" y1="60" x2="240" y2="60" stroke="#9aa3b3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+        <!-- Step 2: Plan -->
+        <g transform="translate(240, 30)">
+          <rect width="160" height="60" rx="12" fill="#11151c" stroke="#4f78ff" stroke-width="1.5"/>
+          <text x="80" y="28" fill="#e7ebf2" font-size="13" font-weight="700" text-anchor="middle">Plan</text>
+          <text x="80" y="46" fill="#9aa3b3" font-size="11" text-anchor="middle">/writing-plans</text>
+        </g>
+        <line x1="400" y1="60" x2="440" y2="60" stroke="#9aa3b3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+        <!-- Step 3: Review chain (highlighted as the critical gate) -->
+        <g transform="translate(440, 12)">
+          <rect width="220" height="96" rx="14" fill="#d0ff3a" fill-opacity="0.10" stroke="#d0ff3a" stroke-width="2"/>
+          <text x="110" y="28" fill="#d0ff3a" font-size="11" font-weight="700" text-anchor="middle" letter-spacing="0.1em">REVIEW CHAIN</text>
+          <text x="110" y="48" fill="#e7ebf2" font-size="12" text-anchor="middle">/pitfall-verification</text>
+          <text x="110" y="66" fill="#e7ebf2" font-size="12" text-anchor="middle">/codex review</text>
+          <text x="110" y="84" fill="#e7ebf2" font-size="12" text-anchor="middle">/plan-eng-review</text>
+        </g>
+        <line x1="660" y1="60" x2="700" y2="60" stroke="#d0ff3a" stroke-width="2" marker-end="url(#arrow-accent)"/>
+
+        <!-- Step 4: Implement -->
+        <g transform="translate(700, 30)">
+          <rect width="160" height="60" rx="12" fill="#11151c" stroke="#d0ff3a" stroke-width="1.5"/>
+          <text x="80" y="28" fill="#e7ebf2" font-size="13" font-weight="700" text-anchor="middle">Implement</text>
+          <text x="80" y="46" fill="#9aa3b3" font-size="11" text-anchor="middle">/autoimplement</text>
+        </g>
+        <line x1="860" y1="60" x2="900" y2="60" stroke="#9aa3b3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+        <!-- Step 5: Ship -->
+        <g transform="translate(900, 30)">
+          <rect width="160" height="60" rx="12" fill="#11151c" stroke="#ff7a59" stroke-width="1.5"/>
+          <text x="80" y="28" fill="#e7ebf2" font-size="13" font-weight="700" text-anchor="middle">Ship</text>
+          <text x="80" y="46" fill="#9aa3b3" font-size="11" text-anchor="middle">/ship</text>
+        </g>
+
+        <!-- Cross-bar: autoimplement detail -->
+        <g transform="translate(40, 140)">
+          <text x="0" y="14" fill="#9aa3b3" font-size="12" font-weight="600" letter-spacing="0.06em" text-transform="uppercase">Inside /autoimplement (per phase)</text>
+          <line x1="0" y1="22" x2="1020" y2="22" stroke="#9aa3b3" stroke-width="1" opacity="0.3"/>
+
+          <!-- Inner steps -->
+          <g transform="translate(0, 38)">
+            <!-- Pre-flight (NEW v2.14.0+) -->
+            <rect width="200" height="68" rx="10" fill="#11151c" stroke="#d0ff3a" stroke-width="1.5"/>
+            <text x="100" y="22" fill="#d0ff3a" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="0.06em">PRE-FLIGHT (v2.14.0+)</text>
+            <text x="100" y="40" fill="#e7ebf2" font-size="11" text-anchor="middle">/pitfall on plan</text>
+            <text x="100" y="56" fill="#e7ebf2" font-size="11" text-anchor="middle">/codex on plan</text>
+
+            <line x1="200" y1="34" x2="240" y2="34" stroke="#9aa3b3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+            <!-- Phase dispatch -->
+            <g transform="translate(240, 0)">
+              <rect width="180" height="68" rx="10" fill="#11151c" stroke="#4f78ff" stroke-width="1.5"/>
+              <text x="90" y="22" fill="#4f78ff" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="0.06em">DISPATCH</text>
+              <text x="90" y="40" fill="#e7ebf2" font-size="11" text-anchor="middle">Subagent</text>
+              <text x="90" y="56" fill="#e7ebf2" font-size="11" text-anchor="middle">&lt;PHASE_CONTENT&gt; envelope</text>
+            </g>
+
+            <line x1="420" y1="34" x2="460" y2="34" stroke="#9aa3b3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+            <!-- DONE verify -->
+            <g transform="translate(460, 0)">
+              <rect width="180" height="68" rx="10" fill="#11151c" stroke="#ff7a59" stroke-width="1.5"/>
+              <text x="90" y="22" fill="#ff7a59" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="0.06em">VERIFY DONE</text>
+              <text x="90" y="40" fill="#e7ebf2" font-size="11" text-anchor="middle">Clean tree?</text>
+              <text x="90" y="56" fill="#e7ebf2" font-size="11" text-anchor="middle">HEAD advanced?</text>
+            </g>
+
+            <line x1="640" y1="34" x2="680" y2="34" stroke="#9aa3b3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+            <!-- Review chain per phase -->
+            <g transform="translate(680, 0)">
+              <rect width="200" height="68" rx="10" fill="#d0ff3a" fill-opacity="0.10" stroke="#d0ff3a" stroke-width="2"/>
+              <text x="100" y="22" fill="#d0ff3a" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="0.06em">REVIEW CHAIN</text>
+              <text x="100" y="40" fill="#e7ebf2" font-size="11" text-anchor="middle">/review → /pitfall</text>
+              <text x="100" y="56" fill="#e7ebf2" font-size="11" text-anchor="middle">→ /codex (4-tier)</text>
+            </g>
+
+            <line x1="880" y1="34" x2="920" y2="34" stroke="#9aa3b3" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+            <!-- Advance -->
+            <g transform="translate(920, 0)">
+              <rect width="100" height="68" rx="10" fill="#11151c" stroke="#b988ff" stroke-width="1.5"/>
+              <text x="50" y="22" fill="#b988ff" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="0.06em">ADVANCE</text>
+              <text x="50" y="46" fill="#e7ebf2" font-size="11" text-anchor="middle">Next phase</text>
+            </g>
+          </g>
+
+          <!-- Loop arrow back -->
+          <path d="M 970,114 C 970,150 50,150 50,114" fill="none" stroke="#b988ff" stroke-width="1.5" stroke-dasharray="3 4" marker-end="url(#arrow)" opacity="0.7"/>
+          <text x="510" y="172" fill="#b988ff" font-size="11" text-anchor="middle" opacity="0.8">No AskUserQuestion between phases — that's the friction we are removing</text>
+        </g>
+
+        <!-- Cross-bar: review-chain classification -->
+        <g transform="translate(40, 326)">
+          <text x="0" y="14" fill="#9aa3b3" font-size="12" font-weight="600" letter-spacing="0.06em" text-transform="uppercase">Review chain 4-tier semantic classification</text>
+          <line x1="0" y1="22" x2="1020" y2="22" stroke="#9aa3b3" stroke-width="1" opacity="0.3"/>
+
+          <g transform="translate(0, 38)">
+            <rect x="0" y="0" width="240" height="60" rx="10" fill="#11151c" stroke="#2f7a3a" stroke-width="1.5"/>
+            <text x="120" y="22" fill="#76d28f" font-size="11" font-weight="700" text-anchor="middle" letter-spacing="0.06em">CLEAN</text>
+            <text x="120" y="44" fill="#9aa3b3" font-size="11" text-anchor="middle">No actionable findings → continue</text>
+
+            <rect x="260" y="0" width="240" height="60" rx="10" fill="#11151c" stroke="#5d7aa8" stroke-width="1.5"/>
+            <text x="380" y="22" fill="#9bb6e0" font-size="11" font-weight="700" text-anchor="middle" letter-spacing="0.06em">ADVISORY</text>
+            <text x="380" y="44" fill="#9aa3b3" font-size="11" text-anchor="middle">Non-blocking nits → echo, continue</text>
+
+            <rect x="520" y="0" width="240" height="60" rx="10" fill="#11151c" stroke="#d3a000" stroke-width="1.5"/>
+            <text x="640" y="22" fill="#f1c142" font-size="11" font-weight="700" text-anchor="middle" letter-spacing="0.06em">BLOCKING</text>
+            <text x="640" y="44" fill="#9aa3b3" font-size="11" text-anchor="middle">Bugs, P1 → STOP (policy-gated)</text>
+
+            <rect x="780" y="0" width="240" height="60" rx="10" fill="#11151c" stroke="#d04545" stroke-width="2"/>
+            <text x="900" y="22" fill="#ff6868" font-size="11" font-weight="700" text-anchor="middle" letter-spacing="0.06em">SEVERE</text>
+            <text x="900" y="44" fill="#9aa3b3" font-size="11" text-anchor="middle">Security, data loss → ALWAYS stop</text>
+          </g>
+        </g>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- CROSS-MODEL ADVERSARIAL -->
+<section id="crossmodel">
+  <div class="container">
+    <h2>Cross-model adversarial review</h2>
+    <p class="section-lede">Claude reviews catch one class of bugs. Codex catches another. Combined, they find structural blind-spots single-model review systematically misses.</p>
+
+    <div class="card" style="margin-bottom: 24px;">
+      <h3>Empirical evidence from this plugin's own development (May 2026)</h3>
+      <p>4 of the last 6 PRs landed bugs that codex caught and Claude's review/pitfall missed. Each bug was structurally invisible to single-model review.</p>
+    </div>
+
+    <table class="audit">
+      <thead>
+        <tr><th>PR</th><th>Bug</th><th>Caught by</th><th>Single-model blind-spot</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>#24</code></td>
+          <td>zsh portability — bare <code>status=</code> is read-only var</td>
+          <td class="pill"><span>user live dogfood</span></td>
+          <td class="fix">Bash snippets in SKILL.md execute via Claude Code's Bash tool with user $SHELL (zsh on macOS), not bash</td>
+        </tr>
+        <tr>
+          <td><code>#25</code></td>
+          <td>Fixture cross-run idempotency — <code>grep -c == 1</code> breaks on re-runs</td>
+          <td class="pill"><span>codex</span></td>
+          <td class="fix">Cross-run/temporal correctness is invisible to single-diff review</td>
+        </tr>
+        <tr>
+          <td><code>#26</code></td>
+          <td>4 P1/P2 in pre-flight design (empty commit marker, latest vs historical, codex-unavailable lie, advisory gap)</td>
+          <td class="pill"><span>codex × 3 rounds</span></td>
+          <td class="fix">Cross-section contract violations in a long SKILL.md spec</td>
+        </tr>
+        <tr>
+          <td><code>#28</code></td>
+          <td>Marker regex precision (4 attempts to converge)</td>
+          <td class="pill"><span>codex × 9 rounds</span></td>
+          <td class="fix">Subtle regex bypass cases + doc-consistency drift across multiple files</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- UPDATE PIPELINE -->
+<section id="pipeline">
+  <div class="container">
+    <h2>Automated upstream pipeline</h2>
+    <p class="section-lede">A weekly GitHub Action checks upstream Superpowers, GStack, and Claude Code for changes. If anything moved, Claude API auto-generates a PR with the manual updated. Self-repair on failures.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 1100 240" role="img" aria-label="Update pipeline">
+        <defs>
+          <marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#9aa3b3"/>
+          </marker>
+        </defs>
+
+        <!-- Trigger -->
+        <g transform="translate(40, 40)">
+          <rect width="180" height="80" rx="12" fill="#11151c" stroke="#b988ff" stroke-width="1.5"/>
+          <text x="90" y="28" fill="#b988ff" font-size="11" font-weight="700" text-anchor="middle" letter-spacing="0.06em">CRON TRIGGER</text>
+          <text x="90" y="50" fill="#e7ebf2" font-size="12" text-anchor="middle">Mondays</text>
+          <text x="90" y="66" fill="#9aa3b3" font-size="11" text-anchor="middle">07:23 UTC</text>
+        </g>
+
+        <line x1="220" y1="80" x2="260" y2="80" stroke="#9aa3b3" stroke-width="1.5" marker-end="url(#arrow2)"/>
+
+        <!-- Check upstream -->
+        <g transform="translate(260, 40)">
+          <rect width="220" height="80" rx="12" fill="#11151c" stroke="#4f78ff" stroke-width="1.5"/>
+          <text x="110" y="28" fill="#4f78ff" font-size="11" font-weight="700" text-anchor="middle" letter-spacing="0.06em">CHECK UPSTREAM</text>
+          <text x="110" y="50" fill="#e7ebf2" font-size="11" text-anchor="middle">garrytan/gstack · obra/superpowers</text>
+          <text x="110" y="66" fill="#e7ebf2" font-size="11" text-anchor="middle">@anthropic-ai/claude-code npm</text>
+        </g>
+
+        <line x1="480" y1="80" x2="520" y2="80" stroke="#9aa3b3" stroke-width="1.5" marker-end="url(#arrow2)"/>
+
+        <!-- Claude API -->
+        <g transform="translate(520, 40)">
+          <rect width="200" height="80" rx="12" fill="#11151c" stroke="#d0ff3a" stroke-width="1.5"/>
+          <text x="100" y="28" fill="#d0ff3a" font-size="11" font-weight="700" text-anchor="middle" letter-spacing="0.06em">CLAUDE API</text>
+          <text x="100" y="50" fill="#e7ebf2" font-size="11" text-anchor="middle">Sonnet 4.6 generates</text>
+          <text x="100" y="66" fill="#e7ebf2" font-size="11" text-anchor="middle">README/CHANGELOG patch</text>
+        </g>
+
+        <line x1="720" y1="80" x2="760" y2="80" stroke="#9aa3b3" stroke-width="1.5" marker-end="url(#arrow2)"/>
+
+        <!-- PR -->
+        <g transform="translate(760, 40)">
+          <rect width="200" height="80" rx="12" fill="#11151c" stroke="#ff7a59" stroke-width="1.5"/>
+          <text x="100" y="28" fill="#ff7a59" font-size="11" font-weight="700" text-anchor="middle" letter-spacing="0.06em">AUTO PR</text>
+          <text x="100" y="50" fill="#e7ebf2" font-size="11" text-anchor="middle">Bump plugin.json,</text>
+          <text x="100" y="66" fill="#e7ebf2" font-size="11" text-anchor="middle">prepend CHANGELOG entry</text>
+        </g>
+
+        <!-- Self-repair branch -->
+        <g transform="translate(260, 160)">
+          <rect width="700" height="50" rx="10" fill="#11151c" stroke="#d04545" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.85"/>
+          <text x="350" y="22" fill="#ff6868" font-size="11" font-weight="700" text-anchor="middle" letter-spacing="0.06em">SELF-REPAIR (on failure)</text>
+          <text x="350" y="40" fill="#9aa3b3" font-size="11" text-anchor="middle">Reads workflow logs → Claude API diagnoses → fix-PR with `auto-repair` label</text>
+        </g>
+        <path d="M 480,120 C 480,140 480,160 480,160" fill="none" stroke="#d04545" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
+      </svg>
+    </div>
+
+    <div class="grid grid-3" style="margin-top: 28px;">
+      <div class="card">
+        <h3>Annual cost</h3>
+        <p>~$2.60–$10 (52 weekly Sonnet calls × ~$0.05–$0.20 each). Charged to your <code>ANTHROPIC_API_KEY</code> secret.</p>
+      </div>
+      <div class="card">
+        <h3>Max plan not touched</h3>
+        <p>Runtime skill usage uses your session credentials (Max plan). Only the weekly cron and self-repair use the API key.</p>
+      </div>
+      <div class="card">
+        <h3>Self-healing</h3>
+        <p>If <code>check-updates.yml</code> fails, <code>self-repair.yml</code> diagnoses via Claude API and opens a fix PR automatically.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PLUGIN LIFECYCLE -->
+<section id="lifecycle">
+  <div class="container">
+    <h2>Plugin lifecycle</h2>
+    <p class="section-lede">Three commands you'll run. Restart alone is not enough — the cache is version-keyed.</p>
+
+    <div class="grid grid-3">
+      <div class="card">
+        <h3>1 · Install</h3>
+        <p>One time:</p>
+        <pre class="code"><span class="com"># in Claude Code</span>
+/plugin marketplace add \
+  Paretofilm/claude-marketplace
+
+/plugin install \
+  superpowers-gstack@paretofilm-plugins</pre>
+      </div>
+      <div class="card">
+        <h3>2 · Update</h3>
+        <p>When new version ships:</p>
+        <pre class="code"><span class="com"># pulls latest cache</span>
+/plugin update \
+  superpowers-gstack@paretofilm-plugins
+
+<span class="com"># syncs live router</span>
+/reload-plugins</pre>
+      </div>
+      <div class="card">
+        <h3>3 · Routing</h3>
+        <p>Per new project:</p>
+        <pre class="code"><span class="com"># bootstrap CLAUDE.md</span>
+/superpowers-gstack:setup-routing
+
+<span class="com"># or for existing project</span>
+/superpowers-gstack:adapt</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AUDIT TRAIL -->
+<section id="audit">
+  <div class="container">
+    <h2>Every skill carries its own audit trail</h2>
+    <p class="section-lede">High-trust skills (autoimplement, pitfall-verification) ship with an audit-trail section documenting which reviews ran on the skill itself before it was trusted to run on user code.</p>
+
+    <div class="card">
+      <h3>Example: autoimplement's audit trail</h3>
+      <p>13+ rounds of pre-ship review across v2.13.0 → v2.14.2, each row documented in <code>skills/autoimplement/SKILL.md</code>:</p>
+      <pre class="code" style="margin-top: 14px;">| Round                                     | Findings                              | Status                |
+| Plan v1 → pitfall                         | 11 issues                             | Fixed in v1           |
+| Plan v1 → codex review                    | 20 findings, 7 blockers               | Triggered v2 rewrite  |
+| Plan v2 → pitfall                         | 4 issues                              | Fixed inline          |
+| Plan v2 → codex review                    | 11 findings, 4 blockers               | All addressed         |
+| Code → pitfall                            | clean                                 | —                     |
+| Code → codex review                       | 6 findings (2 P1, 3 P2, 1 P3)         | All addressed         |
+| v2.13.1 live dogfood                      | zsh portability bug                   | Fixed: git_ prefix    |
+| v2.13.2 dogfood                           | fixture cross-run idempotency         | Fixed: grep -q        |
+| v2.14.0 design                            | feedback gap                          | Active pre-flight     |
+| v2.14.0 codex rounds 1–2                  | 5 findings (P1: empty marker, stale)  | All fixed             |
+| v2.14.1 system codex                      | 3 findings                            | Ship + backlog        |
+| v2.14.2 codex rounds 2–9                  | 12 findings (regex precision sweep)   | All fixed             |</pre>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+      <h3 style="color: var(--accent);">Why this matters</h3>
+      <p>The audit trail makes trust auditable. When a skill is "high-trust" (runs autonomously without human checkpoints), users can verify <em>this specific skill</em> went through the review chain — by reading the audit trail in the shipped SKILL.md itself.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 20px; align-items: flex-end;">
+      <div>
+        <strong style="color: var(--text);">superpowers-gstack</strong> · plugin for the Superpowers + GStack workflow<br>
+        Built by <a href="https://github.com/Paretofilm">@Paretofilm</a> · MIT licensed
+      </div>
+      <div style="text-align: right;">
+        <a href="https://github.com/Paretofilm/superpowers-gstack">github.com/Paretofilm/superpowers-gstack</a><br>
+        <span style="color: var(--text-mute);">v2.14.2 · 2026-05-28</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const cur = html.getAttribute('data-theme');
+  html.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+}
+</script>
+</body>
+</html>
