@@ -106,12 +106,12 @@ Sort views by `(reference_count + interactive_control_count)` descending. Tie-br
 - TIER-1 #3 (Error-recovery): pick first view (alphabetical by source-file name, then by line number — deterministic) containing `.alert(`, `errorMessage`, `failure`, or `error: Error`
 - TIER-2 (Modal): only if `.sheet(isPresented:`, `.sheet(item:`, `.fullScreenCover(`, or `.popover(` found in walked tree → `ModalAndSheetTests.swift`
 - TIER-2 (Tab-navigation): only if `TabView` found → `TabNavigationTests.swift` (assert tab switch changes selected content)
-- TIER-3 (Push-navigation): only if `NavigationStack` present AND (`NavigationLink(`-count ≥ 2 OR `.navigationDestination(` present) → `PushNavigationTests.swift` (list → detail push/pop)
+- TIER-3 (Push-navigation): only if (`NavigationStack` OR `NavigationSplitView`) present AND (any `NavigationLink(` OR `.navigationDestination(` present) → `PushNavigationTests.swift` (list → detail push/pop). NOTE: a single `NavigationLink(value:)` + `.navigationDestination(` is the modern master-detail idiom — do NOT require two links, or you miss the primary drill-down flow.
 - TIER-3 (Gestures/rotation): only if `.swipeActions(`, `.refreshable`, or orientation usage (`.onRotate`, `UIDevice.*orientation`, `@Environment(\.verticalSizeClass)`) found → `GestureAndRotationTests.swift`
 
 ### Step 7: Generate identifier suggestions
 For each control in top 5 views:
-- **Skip controls that already have `.accessibilityIdentifier(...)` set** — check next 5 lines after the control declaration. Already-identified controls listed in report under "Already identified (preserved)" but not re-suggested.
+- **Skip controls that already have `.accessibilityIdentifier(...)` set** — scan from the control declaration to the end of its modifier chain (balance braces/parens from the control's opening; cap at 25 lines as a safety bound). A 5-line window is too shallow: a `Button` with a long trailing `action:` closure can carry its `.accessibilityIdentifier(...)` 15+ lines down, and missing it makes the skill inject a second, different ID → an "Ambiguous Match" XCUITest failure at runtime. Already-identified controls are listed under "Already identified (preserved)" but not re-suggested.
 - **Skip controls inside `#Preview { ... }` blocks or `PreviewProvider` (`static var previews:`) conformances** — track brace-depth from `#Preview` or `static var previews` declarations; exclude when depth > 0.
 - Construct ID as `<ViewName>_<ControlType>_<Purpose>`
 - Purpose extracted from button label, action method name, or property name (in priority order)
@@ -165,7 +165,7 @@ Per Output-format section below.
 | 1 #3 Error-recovery | yes | first `.alert`/error-state view (alphabetical+line tiebreak) | `ErrorRecoveryTests.swift` |
 | 2 Modal | conditional | `.sheet(isPresented:`/`.sheet(item:`/`.fullScreenCover(`/`.popover(` present | `ModalAndSheetTests.swift` |
 | 2 Tab-navigation | conditional | `TabView` present | `TabNavigationTests.swift` |
-| 3 Push-navigation | conditional | `NavigationStack` + (`NavigationLink(`-count ≥ 2 or `.navigationDestination(`) | `PushNavigationTests.swift` |
+| 3 Push-navigation | conditional | (`NavigationStack`/`NavigationSplitView`) + (any `NavigationLink(` or `.navigationDestination(`) | `PushNavigationTests.swift` |
 | 3 Gestures/rotation | conditional | `.swipeActions(`/`.refreshable`/orientation usage present | `GestureAndRotationTests.swift` |
 
 **TIER-1 is non-negotiable.** Even on a project where heuristics return weak matches, three test files appear. Smoke validates app launches. Happy-path and Error-recovery may need user-tuning but provide a starting structure.
@@ -300,7 +300,7 @@ Skill cannot reliably modify `project.pbxproj` programmatically (one wrong line 
 | xcodegen not in PATH | `xcodegen` not found | Emit instruction: `brew install xcodegen` |
 | Named simulator missing | `iPhone 15` not in `simctl list` | Runner falls back to first available iOS Simulator (see runner template) |
 | Empty SwiftUI app | Step 4 yields zero interactive controls | Generate Smoke test only; report "No interactive controls found — only Smoke test generated. Add controls and re-invoke." |
-| Existing `.accessibilityIdentifier(...)` | Step 7 next-5-lines check | Preserve; report under "Already identified (preserved)" |
+| Existing `.accessibilityIdentifier(...)` | Step 7 modifier-chain scan (brace/paren-balanced, 25-line cap) | Preserve; report under "Already identified (preserved)" — avoids duplicate-ID "Ambiguous Match" failures |
 | Controls in `#Preview { ... }` / `PreviewProvider` | Step 7 brace-depth tracking | Exclude from suggestions and density count |
 | xcresulttool API mismatch | `xcrun xcresulttool` exits non-zero | Runner falls back to `tail -50` of plaintext xcodebuild output; header notes Xcode 16+ requirement |
 | xcodegen.yml unknown structure | Cannot find `targets:`/`name:` keys | Switch to plain .xcodeproj branch; do NOT modify yml; flag ambiguity in report |
@@ -337,13 +337,17 @@ set -uo pipefail
 SCHEME="<APP>"
 RESULT_BUNDLE="$(mktemp -d)/uitests.xcresult"
 
-# Pick a simulator: prefer iPhone 15; else first available iOS Simulator.
+# Pick a simulator: prefer an EXACT "iPhone 15"; else the first available iPhone by
+# UDID (robust to naming — avoids the "iPhone 15" substring matching "iPhone 15 Pro",
+# and avoids the digit-only grep missing "iPhone SE"). Targeting by id= is exact.
 DEST='platform=iOS Simulator,name=iPhone 15'
-if ! xcrun simctl list devices available | grep -q 'iPhone 15'; then
-  FALLBACK="$(xcrun simctl list devices available | grep -oE 'iPhone [0-9][^(]*' | head -1 | sed 's/ *$//')"
-  if [ -n "$FALLBACK" ]; then
-    DEST="platform=iOS Simulator,name=${FALLBACK}"
-    echo "(iPhone 15 unavailable — using ${FALLBACK})"
+if ! xcrun simctl list devices available | grep -q 'iPhone 15 ('; then
+  UDID="$(xcrun simctl list devices available | grep 'iPhone' | grep -oiE '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' | head -1)"
+  if [ -n "$UDID" ]; then
+    DEST="platform=iOS Simulator,id=${UDID}"
+    echo "(iPhone 15 unavailable — using first available iPhone simulator ${UDID})"
+  else
+    echo "(no iPhone simulator available — xcodebuild will report a destination error)"
   fi
 fi
 
