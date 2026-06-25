@@ -55,23 +55,26 @@ then dispatches by transport:
 - **`run_openrouter(system_prompt, user_msg, model, args, key)`** — the existing HTTP
   path, refactored out of `main()` into a function. Prints RAW OUTPUT + `[usage]`
   cost + `[balance]`.
-- **`run_codex(system_prompt, user_msg, args)`** — new. Shells out to:
+- **`run_codex(system_prompt, user_msg, target, args)`** — new. Shells out to:
   ```
-  codex exec --sandbox read-only --color never --skip-git-repo-check \
-    -o <tmpfile> "<system_prompt>\n\n<user_msg>"
+  codex exec --sandbox read-only --color never --skip-git-repo-check -o <tmpfile> -
   ```
-  Reads the agent's final message from `<tmpfile>` (via `-o/--output-last-message`,
-  which excludes conversational/tool noise), prints it in the same
+  with `<system_prompt>\n\n<user_msg>` piped on **stdin** (`exec -` reads instructions
+  from stdin). Stdin — not an argv arg — because a large diff would exceed ARG_MAX, and
+  a piped stdin (no TTY) also prevents codex from blocking on an interactive
+  trust/login/approval prompt. Reads the agent's final message from `<tmpfile>` (via
+  `-o/--output-last-message`), prints it in the same
   `===== THIRD-LENS RAW OUTPUT (codex CLI) =====` framing. Reports
   `[usage] via codex CLI (subscription — no per-call cost)`. Uses a
-  `tempfile.NamedTemporaryFile`; cleans up in a `finally`.
+  `tempfile.NamedTemporaryFile`; cleans up in a `finally`. The smoke test verifies `-o`
+  returns the full review rather than a truncated summary.
 
-### Why `read-only` sandbox + inline content
+### Why `read-only` sandbox + stdin-fed content
 
-The artifact (diff or file contents) is passed inline in the prompt, so codex never
-needs to touch the repo. `--sandbox read-only` is the safe floor; `--skip-git-repo-check`
-lets it run even when invoked outside a git tree (mirrors the OpenRouter path's
-indifference to repo state).
+The artifact (diff or file contents) is fed to codex on stdin, so codex never needs to
+touch the repo. `--sandbox read-only` is the safe floor (bounds any prompt-injection in
+reviewed content to read-only actions); `--skip-git-repo-check` lets it run even when
+invoked outside a git tree (mirrors the OpenRouter path's indifference to repo state).
 
 ## Removals
 

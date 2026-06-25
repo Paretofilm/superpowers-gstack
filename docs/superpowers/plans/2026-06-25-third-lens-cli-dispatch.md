@@ -448,7 +448,7 @@ git commit -m "refactor(third-lens): extract run_openrouter + transport dispatch
 
 **Interfaces:**
 - Consumes: dispatch `else` branch from Task 4.
-- Produces: `run_codex(system_prompt, user_msg, target, args) -> None` — shells out to `codex exec`, prints RAW OUTPUT framing labelled `(codex CLI)`, reports subscription usage; `sys.exit(4)` on any CLI failure.
+- Produces: `run_codex(system_prompt, user_msg, target, args) -> None` — shells out to `codex exec -` with the prompt on **stdin** (ARG_MAX-safe, non-interactive), prints RAW OUTPUT framing labelled `(codex CLI)`, reports subscription usage; `sys.exit(4)` on any CLI failure.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -461,8 +461,9 @@ import subprocess
 def test_run_codex_invokes_exec_and_prints(monkeypatch, capsys):
     captured = {}
 
-    def fake_run(cmd, capture_output, text, timeout):
+    def fake_run(cmd, input, capture_output, text, timeout):
         captured["cmd"] = cmd
+        captured["input"] = input
         # codex writes its final message to the path after -o
         out_path = cmd[cmd.index("-o") + 1]
         with open(out_path, "w", encoding="utf-8") as fh:
@@ -480,14 +481,15 @@ def test_run_codex_invokes_exec_and_prints(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert captured["cmd"][:2] == ["codex", "exec"]
     assert "--sandbox" in captured["cmd"] and "read-only" in captured["cmd"]
-    assert "-o" in captured["cmd"]
+    assert captured["cmd"][-1] == "-"  # prompt comes from stdin, not argv (ARG_MAX safe)
+    assert "USER artifact" in captured["input"]  # artifact piped via stdin
     assert "===== THIRD-LENS RAW OUTPUT (codex CLI) =====" in out
     assert "P1 codex finding" in out
     assert "subscription" in out
 
 
 def test_run_codex_nonzero_exits_4(monkeypatch):
-    def fake_run(cmd, capture_output, text, timeout):
+    def fake_run(cmd, input, capture_output, text, timeout):
         class P:
             returncode = 1
             stderr = "boom"
@@ -535,10 +537,14 @@ def run_codex(system_prompt, user_msg, target, args):
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tf:
         out_path = tf.name
     try:
+        # Pass the prompt via STDIN (`exec -` reads instructions from stdin), NOT as an
+        # argv arg: a large diff would blow past ARG_MAX. Piping stdin also means there is
+        # no TTY, so codex cannot block on an interactive trust/login/approval prompt — it
+        # runs non-interactively or fails fast instead of hanging for the full timeout.
         cmd = [target, "exec", "--sandbox", "read-only", "--color", "never",
-               "--skip-git-repo-check", "-o", out_path, prompt]
+               "--skip-git-repo-check", "-o", out_path, "-"]
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=600)
         except FileNotFoundError:
             eprint(f"ERROR: '{target}' CLI not found in PATH (needed for --role countersynthesis).")
             sys.exit(4)
@@ -581,13 +587,18 @@ Replace the dispatch `else` branch in `main()`:
 Run: `bash tests/run.sh --unit`
 Expected: PASS — "unit: PASS", "All test suites passed."
 
-- [ ] **Step 5: Live smoke test (manual, optional but recommended)**
+- [ ] **Step 5: Live smoke test (manual — REQUIRED, verifies codex behaviour the mocks can't)**
 
-Run (from the repo root, small diff):
+This step exists because three things about the real `codex exec` are assumed, not proven by the mocked unit tests: (a) `-o` captures the *full* review, not a truncated one-line summary; (b) piping the prompt via stdin runs non-interactively with no hang; (c) a real review artifact round-trips. Run a non-trivial input (not a one-liner) so a truncated summary would be visible:
+
 ```bash
-echo "def f(): return 1/0" | python3 scripts/third-lens-review.py --role countersynthesis
+# --diff makes the script gather the diff itself (do NOT also pipe one in).
+python3 scripts/third-lens-review.py --role countersynthesis --diff --diff-base HEAD~3
 ```
-Expected: a `===== THIRD-LENS RAW OUTPUT (codex CLI) =====` block with at least one finding, then the subscription usage line. If `codex` prompts for trust/login, resolve that once interactively, then re-run.
+Expected, ALL of:
+- A `===== THIRD-LENS RAW OUTPUT (codex CLI) =====` block containing **multiple sentences / several findings** (if it is one terse line, `-o` is giving a summary — switch the codex invocation to capture full stdout instead of `--output-last-message` and re-test before proceeding).
+- The run returns within the timeout with **no interactive prompt** (proves the stdin/non-interactive path). If codex blocks on a trust/login prompt, run `codex login` / trust the dir ONCE interactively, then confirm the piped invocation no longer prompts.
+- Ends with `[usage] via codex CLI (subscription — no per-call cost)`.
 
 - [ ] **Step 6: Commit**
 
