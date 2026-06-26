@@ -52,7 +52,8 @@ oppdrag (naturlig språk) + første skjermbilde
 
 | Komponent | Ansvar | Avhenger av |
 |---|---|---|
-| **Loop-motor** | Kjør turn-loopen, kall Gemini, dispatch handlinger, stopp-betingelser | Gemini SDK, executor-grensesnitt |
+| **Loop-motor** | Kjør turn-loopen, kall Gemini, dispatch handlinger, stopp-betingelser | Gemini SDK, action-adapter |
+| **Action-adapter** | Map computer_use-handlinger → executor-primitiver (kanonisk schema) | executor-grensesnitt |
 | **Executor-grensesnitt** | `screenshot()`, `tap()`, `swipe()`, `type()`, `coordinate_space()` — abstraherer plattform | (definisjon) |
 | **idb-executor** (touch) | Skjermbilde + touch-injeksjon i sim mot device-UDID | `idb`, booted sim |
 | **cliclick-executor** (cursor) | Skjermbilde av vindu + skjermkoordinat-klikk (macOS, fase 4) | `screencapture`, `cliclick`, vindus-deteksjon |
@@ -68,7 +69,7 @@ Hver komponent har én klar oppgave og kan testes uavhengig. Executor-grensesnit
 - **Modell:** `gemini-3.5-flash` (Googles anbefalte computer-use-modell per juni 2026).
 - **Tool-deklarasjon:** `{"type": "computer_use", "environment": "mobile", "enable_prompt_injection_detection": true}` for iOS/iPadOS; `"desktop"` for macOS-fasen.
 - **API:** `client.interactions.create()`; turene kjedes via `previous_interaction_id`. Hvert svar fra et utført steg sendes tilbake som `function_result` med ny skjermbilde-`image`.
-- **Handlinger:** `click`/`tap`, `type`, `scroll`, `press_key`, `drag_and_drop`, `wait`, m.fl. Argumenter inkluderer `x`, `y`, `intent`.
+- **Handlinger:** `click`/`tap`, `type`, `scroll`, `press_key`, `drag_and_drop`, `wait`, m.fl. Argumenter inkluderer `x`, `y`, `intent`. **Action-adapter-kontrakt:** modellens handlingsrom er bredere enn executor-primitivene, så et adapter-lag mapper hver computer_use-handling til en executor-primitiv: `scroll` → retnings-`swipe` (scroll er **kjerne**-navigasjon på mobil, ikke edge case — må ikke returneres som `unsupported`), `press_key` → `idb ui button` der støttet, `wait` → bounded no-op, `drag_and_drop` → `swipe`/drag eller eksplisitt `unsupported` hvis idb ikke dekker det. Adapteren testes med innspilte action-fixtures.
 - **Koordinater:** normalisert **0–1000**, ikke piksler. Denormaliseres mot skjermbildets dimensjon, deretter inn i executorens koordinatrom (§6).
 - **Nøkkel:** `gemini-api-key-paid` fra Keychain (samme mønster som `gemini-media`; fjern arvet `GOOGLE_API_KEY`/`GEMINI_API_KEY` fra env så kun eksplisitt nøkkel gjelder).
 
@@ -83,7 +84,7 @@ idb injiserer touch-events direkte i simulatoren mot dens device-UDID, i **devic
 1. Ta skjermbilde av simulatoren (`xcrun simctl io <udid> screenshot` eller `idb`), som er rent app-innhold i device-piksler.
 2. Modellen gir koordinat normalisert 0–1000 mot det skjermbildet.
 3. Denormaliser 0–1000 → device-piksel → device-points (del på device-backing-scale, som er kjent fra device-typen — ingen vindus-zoom inne i bildet).
-4. **Valider mot device-bounds** (0–1000-range); utenfor → reject (se §7).
+4. **Valider mot app-safe interaksjonsområde**, ikke bare det rå device-rektangelet (§7): en koordinat innenfor device-bounds kan likevel treffe status-bar/home-indicator eller trigge system-edge-gestures (Control Center, app-switcher, Notification Center). Reserver orientering-/device-bevisste edge-exclusion-soner; edge-gestures krever eksplisitt override. Helst utledes app-frame/safe-area i pre-flight (accessibility-spørring/XCTest-helper).
 5. Utfør via `idb ui tap/swipe/text/button` mot UDID.
 
 Dette krever ingen vindus-deteksjon, ingen skjerm-offset, ingen fysisk-skjerm-klikk. **`idb`-avhengighet:** `brew install facebook/fb/idb-companion` + `pip install fb-idb`; pre-flight resolver `idb`-stien eksplisitt (`command -v idb`) og verifiserer at companion er tilkoblet mål-UDID, ellers fail-closed med install/connect-kommando.
@@ -114,7 +115,8 @@ Etter hver utført handling, **vent et fast kort settling-delay (~300 ms) før n
 - **Maks-steg:** default ~25, hard stopp mot runaway-loop som koster penger. Konfigurerbar.
 - **Per-steg-budsjett:** Gemini-kall + handling + settling, samlet bounded; hindrer henging.
 - **Pre-flight + launch-state-kontrakt:** verifiser booted sim/vindu + at executor-verktøyet (idb/cliclick) er resolvbart og tilkoblet. **Etabler kjent app-tilstand** for reproduserbarhet: relaunch mål-appen via `simctl`, sett orientering/appearance/tekststørrelse, håndter eller fail på system-permission-dialoger, loggfør device-UDID + bundle-id + state i rapporten.
-- **App-i-forgrunn-invariant (per steg):** mål-appen kan krasje eller miste forgrunnen (system-dialog, URL→Safari, permission-prompt). Før hvert steg, verifiser at mål-appen fortsatt er i forgrunnen; mismatch → avbryt med `app_left_foreground`, bevar delvise skjermbilder. **Deteksjonsmekanismen er en åpen antagelse:** `xcrun simctl` har ingen dokumentert «frontmost app»-spørring, så spiken må etablere hvordan dette faktisk leses (kandidater: `simctl spawn` + launchservices, `idb list-apps` prosess-state, eller en visuell heuristikk fra skjermbildet). Inntil verifisert, behandles dette som en best-effort-sjekk.
+- **App-i-forgrunn-invariant (per steg, fase-1-blokker):** mål-appen kan krasje eller miste forgrunnen (system-dialog, URL→Safari, permission-prompt). Før hvert steg, verifiser at mål-appen er i forgrunnen; mismatch → avbryt med `app_left_foreground`, bevar delvise skjermbilder. Dette er **hovedguarden mot runaway/feil-skjerm**, så den må ikke shippe degradert: **fase 1 er blokkert på en verifisert forgrunns-oracle.** Foretrukket mekanisme er en XCTest-probe på `XCUIApplication(bundleIdentifier:).state == .runningForeground` (`xcrun simctl` har ingen dokumentert «frontmost»-spørring). Klarer ikke spiken å etablere en pålitelig oracle, må kontrakten i designet svekkes eksplisitt — ikke hevdes som fail-closed.
+- **Teardown (signal-trygg):** pre-flight muterer sim-state (relaunch, orientering, appearance, permission-dialoger). Killes scriptet midt i en kjøring (Ctrl-C, hard timeout, krasj), står simulatoren i ukjent tilstand som neste `relaunch` ikke nødvendigvis nullstiller (in-app-navigasjon, åpne system-dialoger, gitte permissions). Legg en teardown som kjører både på normal exit og signal (trap SIGINT/SIGTERM) — minimum dokumenter hvilke pre-flight-steg som er idempotente (relaunch) vs. ikke (permission-grants, in-app-state), slik at operatøren vet når manuell sim-reset trengs.
 - **Prompt injection-deteksjon:** `enable_prompt_injection_detection: true`.
 - **Ingen destruktiv intensjon:** oppdrags-prompten instruerer agenten til å utforske/observere, ikke utføre kjøp/sletting/sending. Lav risiko i en simulator uten ekte konto-tilgang.
 
@@ -126,16 +128,20 @@ Etter hver utført handling, **vent et fast kort settling-delay (~300 ms) før n
 
 Computer-use-modellen er optimalisert for å **navigere**, ikke **kritisere design**. Derfor skilles fasene:
 
-- **Fase A — utforsk:** loop-motoren driver app-en og lagrer skjermbilder kun ved **faktisk skjerm-endring** (perceptuell-hash-delta over terskel mot forrige lagrede) — ikke ett per steg. Uten dedup gir en modell som sitter fast 25 nesten-identiske skjermbilder som forsøpler kritiker og rapport.
+- **Fase A — utforsk:** loop-motoren driver app-en. **Dedup gjelder kritiker-*input*, ikke evidens-*retensjon*.** Til evidens beholdes alltid: skjermbilder for `rejected`/`failed`/`unsupported`/`app_left_foreground`-steg, første og siste skjerm, og en lav-rate sample — slik at en transient error-overlay eller modal som vises og forsvinner ikke går tapt. Til kritiker dedupes nesten-like skjermbilder (perceptuell-hash-delta) så en fastlåst modell ikke sender 25 like bilder. Hvert lagrede skjermbilde bærer `produced_by_steps: [12,13,14]` (hvilke steg som ledet til den skjermtilstanden), så et kritiker-funn på «skjermbilde #7» kan spores tilbake til handlingene — de to nummereringsrommene (steg vs. skjermbilde) må eksplisitt lenkes.
 - **Fase B — visuell kritiker:** de **dedupede** skjermbildene sendes til en Gemini vision-modell med en kritiker-prompt («finn visuelle problemer: overlapp, avkutting, kontrast, justering, layout-brudd, off-screen-elementer»). O(N) vision-kall uavhengig av steg-antall, så input cappes og kjøres evt. i chunks. **Kostnadsmodell** som loggføres: `steg × (computer_use + opplasting) + unike_skjermbilder × vision-kall`.
 
 **Output:** en Markdown-rapport + skjermbilde-mappe: oppdrag og miljø (plattform + device-UDID); handlingslogg (steg-nr, action, intent, validert/avvist koordinat); kritiker-funn rangert med skjermbilde-referanse; sluttstatus (`fullført`/`maks-steg-nådd`/`feilet`/`app_left_foreground`).
+
+**Skill-wrapper-grense (bevarer kontekst-renheten):** kjerne-rasjonale (§2/§3) er at skjermbilder ikke går gjennom Claudes kontekst. Derfor: rapporten *på disk* har full Markdown + skjermbilde-filer, men det skill-wrapperen **returnerer til Claude er en tekst-only oppsummering** (funn-tekst + filstier, **ingen inline-bilder**). Claude kan valgfritt åpne enkelt-skjermbilder ved behov, men default-stien holder dem ute av konteksten. Dette er en kontrakt, ikke en implementasjonsdetalj.
 
 ## 9. Feilhåndtering
 
 **Action-result-protokoll (kritisk for loop-integritet):** computer_use er en kjedet interaksjon — *hvert* `function_call` må besvares med et `function_result` i neste tur, også når handlingen feilet. Å «logge og hoppe over» lokalt desynkroniserer interaction-staten (modellen vet ikke at handlingen feilet og gjentar den). Send **alltid** et normalisert resultat tilbake — `success` / `rejected` (bounds/fokus) / `unsupported` (ukjent handling) / `timeout` — med årsak + ferskt skjermbilde, før neste steg.
 
-**Ikke-atomisk eksekusjon (idempotens):** handling-eksekusjon (idb/cliclick) og result-innsending (nettverk) er *ikke* atomisk. Feiler `function_result`-opplastingen *etter* at handlingen alt er utført, må handlingen **ikke** re-eksekveres ved retry — send et syntetisk «utført, resultat utilgjengelig»-resultat, eller start frisk interaction fra siste skjermbilde.
+**Ikke-atomisk eksekusjon (per-steg-journal):** handling-eksekusjon (idb/cliclick) og result-innsending (nettverk) er *ikke* atomisk. For å aldri duplisere et tap/tekst-innslag ved retry, føres en **per-steg-journal** med tilstand `planned → validated → executed → result_sent` + action-id + skjermbilde-hash. Retry-logikk inspiserer journalen og **re-eksekverer aldri et `executed`-steg** — den sender kun resultatet på nytt.
+
+**Recovery ved tapt interaction-kjede:** hvis `function_result`-opplasting er uttømt for retries, **start IKKE en naiv frisk interaction fra siste skjermbilde** — en frisk interaction har null minne om hva som er utforsket, og re-utforsker fra scratch (kan tømme maks-steg på repetisjon og gi en *dårligere* rapport enn et rent stopp). I fase 1 behandles tapt kjede som **terminal**: stopp med delvis rapport (enklest og ærligst om hva som gikk tapt). En kontekst-seedet videreføring («allerede utforsket: …, ikke gjenta») er en mulig senere optimalisering, ikke fase-1-scope.
 
 Øvrige tilfeller:
 - Ingen booted sim / vindu ikke funnet / executor-verktøy ikke resolvbart/tilkoblet → avbryt i pre-flight med handlingsbar melding.
@@ -148,7 +154,7 @@ Computer-use-modellen er optimalisert for å **navigere**, ikke **kritisere desi
 
 Loopen er ikke-deterministisk (LLM), så **infrastrukturen testes deterministisk** og **agenten kjøres som smoke-test**:
 - **Enhetstester:** koordinat-mapper per executor (idb: 0–1000 → device-points per device-klasse; cliclick: 0–1000 → bilde-piksel → dynamisk skala → offset → bounds-reject, inkl. ikke-100%-zoom og utenfor-bounds), executor-grensesnitt-kontrakt, rapport-bygger.
-- **`--dry-run`:** kjør loopen og logg planlagte handlinger uten å utføre tap/klikk.
+- **`--dry-run` (single-turn planning-probe):** kan *ikke* være «kjør hele loopen uten å utføre» — den kjedede interaksjonen krever et nytt skjermbilde *etter* hver handling for å gå videre, så uten utførelse staller eller repeterer modellen. Definert som: send initial-skjermbilde + oppdrag, få **ett** `function_call`, logg den planlagte (mappede) handlingen, stopp. For å teste hele loop-rørleggingen brukes i stedet en **mock-executor** som returnerer pre-seedede skjermbilder fra fixtures.
 - **Smoke-test:** kjør mot en enkel SwiftUI-app i iPhone-simulatoren; verifiser rapport + skjermbilder. Gjenta for iPad i fase 2.
 
 ## 11. Faser
@@ -167,3 +173,4 @@ Loopen er ikke-deterministisk (LLM), så **infrastrukturen testes deterministisk
 - **R4 (premiss-risiko, høyest verdi å avklare tidlig):** computer_use-modellene er trent på desktop-cursor-miljøer, men driver her en touch-enhet. idb gir *ekte* touch-injeksjon (bedre enn muse-emulering), men (a) gir modellen fornuftige touch-handlinger for iPhone/iPad i det hele tatt, og (b) dekker idb dem? `tap`/`swipe`/`text`/`button` er solide; **multi-touch og komplekse iPad-gestures (pinch, rotate, Stage Manager-drag) er ikke garantert** og er et ikke-mål i fase 1–2. **Verifiser i samme tidlige spike som R1.**
 - **R5 (akseptert restrisiko, kun macOS/cliclick):** tastatur-fokus-guarden er best-effort, ikke ekte fail-closed (TOCTOU-vindu, §7). Gjelder ikke idb/sim. Akseptert for et ikke-destruktivt utforskingsverktøy.
 - **R6 (avhengighet):** `idb`/`idb-companion` er en ekstra, til tider vedlikeholdstung avhengighet. Prisen aksepteres fordi idb fjerner hele den fysisk-skjerm-pitfall-klassen og gir ekte touch. Pre-flight feiler closed med install/connect-veiledning hvis idb mangler.
+- **R7 (fase-1-blokker):** forgrunns-invarianten (§7) er hovedguarden mot runaway/feil-skjerm, men deteksjonsmekanismen er uverifisert (`simctl` har ingen «frontmost»-spørring). **Fase 1 er blokkert på at spiken etablerer en pålitelig oracle** (foretrukket: XCTest `XCUIApplication.state`-probe). Lykkes ikke det, må guard-claimet svekkes eksplisitt i designet — ikke shippes som fail-closed mens det er degradert.
