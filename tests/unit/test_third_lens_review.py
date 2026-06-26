@@ -19,3 +19,24 @@ tlr = load_tlr()
 def test_module_loads_and_has_default_prompt():
     assert tlr.DEFAULT_PROMPT
     assert callable(tlr.main)
+
+
+import pytest
+
+
+def test_sensitive_flag_is_removed(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["tlr", "--sensitive", "--files", "x"])
+    with pytest.raises(SystemExit) as e:
+        tlr.main()
+    assert e.value.code == 2  # argparse rejects unknown flag
+
+
+def test_sensitive_role_is_removed(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["tlr", "--role", "sensitive"])
+    with pytest.raises(SystemExit) as e:
+        tlr.main()
+    assert e.value.code == 2  # invalid choice
+
+
+def test_western_prefixes_gone():
+    assert not hasattr(tlr, "WESTERN_PREFIXES")

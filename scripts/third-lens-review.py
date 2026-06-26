@@ -13,11 +13,8 @@ Design notes:
   OPENROUTER_API_KEY as fallback. Never pass keys on the command line.
 - Pricing is fetched live from OpenRouter /models and applied to the real `usage`
   object — no hardcoded prices to go stale.
-- `--sensitive` refuses non-Western model houses (Zhipu/DeepSeek) IN CODE, so the
-  data-routing guardrail does not depend on the agent remembering it.
-
-Exit codes: 0 ok | 2 usage error | 3 auth/key error | 4 API/network error
-           | 5 sensitive-data routing violation | 6 nothing to review
+Exit codes: 0 ok | 2 usage error | 3 auth/key error | 4 API/network/CLI failure
+           | 6 nothing to review
 """
 
 import argparse
@@ -35,20 +32,9 @@ KEYCHAIN_ACCOUNT = "openrouter-api-key"
 # Default lens-by-role models (verified present on OpenRouter 2026-06-21).
 ROLE_MODELS = {
     "architecture": "z-ai/glm-5.2",            # default 3rd lens: 1M ctx, most distant distribution
-    "sensitive": "google/gemini-3.1-pro-preview",  # Western infra for auth/keys/health/finance
     "correctness": "deepseek/deepseek-v4-pro",  # LiveCodeBench leader, correctness sniper
     "countersynthesis": "openai/gpt-5.5",       # refutes Claude's dedup on the biggest changes
 }
-
-# --sensitive uses an ALLOWLIST (fail-closed): only model houses on Western infra are
-# permitted for sensitive code. An unknown/new house is REFUSED rather than silently
-# allowed — a denylist for a security guard fails open, which is the wrong default.
-# Audit this list when adding a new --role default.
-WESTERN_PREFIXES = (
-    "openai/", "google/", "anthropic/", "x-ai/", "meta-llama/", "mistralai/",
-    "cohere/", "microsoft/", "amazon/", "ai21/", "nvidia/", "perplexity/",
-    "inflection/", "databricks/",
-)
 
 
 def eprint(*a):
@@ -201,8 +187,6 @@ def main():
                     help="completion token cap (includes reasoning tokens on reasoning models)")
     ap.add_argument("--effort", choices=["low", "medium", "high"], default="medium",
                     help="reasoning effort for reasoning models (caps the reasoning-token blowout)")
-    ap.add_argument("--sensitive", action="store_true",
-                    help="refuse non-Western model houses (auth/keys/health/finance code)")
     ap.add_argument("--dry-run", action="store_true",
                     help="estimate input size + cost, do not call the model")
     ap.add_argument("--check-credits", action="store_true", help="print OpenRouter balance and exit")
@@ -219,13 +203,6 @@ def main():
         return
 
     model = args.model or ROLE_MODELS[args.role]
-
-    if args.sensitive and not any(model.startswith(p) for p in WESTERN_PREFIXES):
-        eprint(f"REFUSED: --sensitive set but model '{model}' is not on the Western-infra "
-               f"allowlist (fail-closed for sensitive code).")
-        eprint(f"Use a Western lens, e.g. --role sensitive ({ROLE_MODELS['sensitive']}) "
-               f"or --role countersynthesis ({ROLE_MODELS['countersynthesis']}).")
-        sys.exit(5)
 
     content = gather_content(args)
     if not content.strip():
