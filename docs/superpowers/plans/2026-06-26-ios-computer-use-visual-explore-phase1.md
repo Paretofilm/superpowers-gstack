@@ -717,10 +717,17 @@ git commit -m "feat(computer-use): idb executor (screenshot/tap/swipe/type)"
   - `is_app_foreground(udid: str, bundle_id: str) -> bool` — **oracle per SPIKE-FINDINGS (Task 1, R7)**
   - `preflight(udid: str, bundle_id: str) -> dict` — kjører alle sjekker + relaunch + loggfører state
 
+> **SPIKE-justert (Task 1, R7):** foreground-oracle = **prosess lever** (`launchctl list` inneholder
+> `UIKitApplication:<bundle>`) **OG ikke på hjemskjerm**. Hjemskjerm-markør = describe-all-element
+> med `AXUniqueId == "spotlight-pill"` — en **stabil, lokaliserings-uavhengig** identifikator
+> (i motsetning til lokaliserte labels som "Appbibliotek"/"App Library"). XCTest `.runningForeground`
+> er kanonisk men krever bygd test-bundle → utsatt forbi fase 1.
+
 - [ ] **Step 1: Write the failing test**
 
 `tests/unit/computer_use/test_preflight.py`:
 ```python
+import json
 import pytest
 from test_smoke import load
 pf = load("preflight")
@@ -736,6 +743,38 @@ def test_resolve_missing_tool_raises(monkeypatch):
 def test_resolve_present_tool_returns_path(monkeypatch):
     monkeypatch.setattr(pf.shutil, "which", lambda n: "/opt/homebrew/bin/idb")
     assert pf.resolve_tool("idb") == "/opt/homebrew/bin/idb"
+
+
+def _fake_run(launchctl_out, describe_out):
+    class R:
+        pass
+
+    def run(args, **kw):
+        r = R()
+        r.stdout = launchctl_out if "launchctl" in args else describe_out
+        r.returncode = 0
+        return r
+    return run
+
+
+def test_foreground_true_when_running_and_not_home(monkeypatch):
+    monkeypatch.setattr(pf.subprocess, "run", _fake_run(
+        "501 0 UIKitApplication:com.x.app[abcd]\n",
+        json.dumps([{"type": "Application", "AXUniqueId": None}])))
+    assert pf.is_app_foreground("U", "com.x.app") is True
+
+
+def test_foreground_false_when_on_home(monkeypatch):
+    monkeypatch.setattr(pf.subprocess, "run", _fake_run(
+        "501 0 UIKitApplication:com.x.app[abcd]\n",
+        json.dumps([{"AXUniqueId": "spotlight-pill"}])))
+    assert pf.is_app_foreground("U", "com.x.app") is False
+
+
+def test_foreground_false_when_process_dead(monkeypatch):
+    monkeypatch.setattr(pf.subprocess, "run", _fake_run(
+        "", json.dumps([{"type": "Application"}])))
+    assert pf.is_app_foreground("U", "com.x.app") is False
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -745,8 +784,9 @@ Expected: FAIL.
 
 - [ ] **Step 3: Write minimal implementation**
 
-`scripts/computer_use/preflight.py` (oracle-kropp per SPIKE-FINDINGS):
+`scripts/computer_use/preflight.py`:
 ```python
+import json
 import shutil
 import subprocess
 
@@ -768,10 +808,28 @@ def resolve_tool(name: str) -> str:
     return path
 
 
+def _process_running(udid: str, bundle_id: str) -> bool:
+    out = subprocess.run(["xcrun", "simctl", "spawn", udid, "launchctl", "list"],
+                         capture_output=True, text=True).stdout
+    return f"UIKitApplication:{bundle_id}" in out
+
+
+def _on_home_screen(udid: str) -> bool:
+    out = subprocess.run(["idb", "ui", "describe-all", "--udid", udid],
+                         capture_output=True, text=True).stdout
+    try:
+        elems = json.loads(out)
+    except (json.JSONDecodeError, ValueError):
+        return False
+    # 'spotlight-pill' er en stabil, lokaliserings-uavhengig hjemskjerm-markør (SPIKE-FINDINGS R7)
+    return any(e.get("AXUniqueId") == "spotlight-pill" for e in elems)
+
+
 def is_app_foreground(udid: str, bundle_id: str) -> bool:
-    # MEKANISME PER SPIKE-FINDINGS (R7). Default: XCTest-probe eller idb-state.
-    # Erstatt med den verifiserte oracle-en fra Task 1.
-    raise NotImplementedError("Sett inn verifisert foreground-oracle fra SPIKE-FINDINGS.md")
+    """R7-oracle: app fremme = prosess lever OG ikke på hjemskjerm (SPIKE-FINDINGS, Task 1)."""
+    if not _process_running(udid, bundle_id):
+        return False
+    return not _on_home_screen(udid)
 
 
 def preflight(udid: str, bundle_id: str) -> dict:
@@ -783,11 +841,13 @@ def preflight(udid: str, bundle_id: str) -> dict:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m pytest tests/unit/computer_use/test_preflight.py -v`
-Expected: PASS (2 tester).
+Expected: PASS (5 tester).
 
-- [ ] **Step 5: Implementer `is_app_foreground` per SPIKE-FINDINGS + manuell verifisering**
+- [ ] **Step 5: Manuell live-verifisering av oracle (controller, booted sim)**
 
-Sett inn den verifiserte oracle-mekanismen (Task 1 Step 5). Verifiser manuelt at den returnerer `True` når appen er fremme og `False` når du sender den til hjemskjermen.
+Med booted sim: bekreft `is_app_foreground(udid, bundle)` returnerer `True` når mål-appen er fremme
+og `False` etter at appen termineres / hjemskjerm vises. (Logikken er enhetstestet i Step 1; dette
+verifiserer de reelle `launchctl`/`describe-all`-kommandoene mot faktisk sim.)
 
 - [ ] **Step 6: Commit**
 
