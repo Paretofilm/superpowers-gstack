@@ -71,3 +71,26 @@ def test_out_of_safe_area_is_rejected_not_executed():
     loop.run("x", ex, cl, max_steps=5, safe_area=safe)
     assert not ex.taps, "utenfor safe-area skulle IKKE tappes"
     assert cl.results == ["rejected"]
+
+
+def test_screenshot_persistence(tmp_path):
+    import pathlib
+    ex, cl = FakeExec(), TapThenDone()
+    out = loop.run("utforsk", ex, cl, max_steps=5, safe_area=_safe(),
+                   screenshot_dir=tmp_path)
+
+    # baseline screenshot (index 0) must exist
+    baseline = out["baseline_screenshot"]
+    assert baseline is not None, "baseline_screenshot should be set"
+    assert pathlib.Path(baseline).exists(), "shot_000.png should exist on disk"
+    assert pathlib.Path(baseline).name == "shot_000.png"
+
+    # post-action screenshot for step 1 must exist
+    shot_001 = tmp_path / "shot_001.png"
+    assert shot_001.exists(), "shot_001.png should exist after one executed step"
+
+    # journal entry for step 1 must carry a screenshot path pointing to an existing file
+    step_entry = out["journal"][0]
+    assert "screenshot" in step_entry, "journal entry must have 'screenshot' key"
+    assert step_entry["screenshot"] is not None
+    assert pathlib.Path(step_entry["screenshot"]).exists()

@@ -8,7 +8,7 @@ class Turn:
     done: bool            # avledet av interaction.status av klienten
 
 
-def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.3):
+def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.3, screenshot_dir=None):
     import importlib.util, pathlib
     pkg = pathlib.Path(__file__).resolve().parent
     def _load(n):
@@ -16,8 +16,21 @@ def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.3):
         m = importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
     actions, coords = _load("actions"), _load("coords")
 
+    _shot_dir = None
+    if screenshot_dir is not None:
+        _shot_dir = pathlib.Path(screenshot_dir)
+        _shot_dir.mkdir(parents=True, exist_ok=True)
+
+    def _persist(png_bytes, idx):
+        if _shot_dir is None:
+            return None
+        path = _shot_dir / f"shot_{idx:03d}.png"
+        path.write_bytes(png_bytes)
+        return str(path)
+
     journal = []
     shot = executor.screenshot()
+    baseline_path = _persist(shot, 0)
     turn = client.start(mission, shot)
     step = 0
     while turn.action and not turn.done and step < max_steps:
@@ -45,12 +58,13 @@ def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.3):
         elif ea.kind == "type":
             executor.type_text(ea.params["text"]); entry["state"] = "executed"
         elif ea.kind == "wait":
-            time.sleep(settle); entry["state"] = "executed"
+            entry["state"] = "executed"
         else:
             kind, reason = "unsupported", ea.params.get("original")
         time.sleep(settle)
         shot = executor.screenshot()
+        entry["screenshot"] = _persist(shot, step)
         turn = client.respond(kind, shot, reason)
         entry["state"] = "result_sent"; entry["result"] = kind
     status = "fullført" if (turn and turn.done) else "maks-steg-nådd"
-    return {"journal": journal, "status": status}
+    return {"journal": journal, "status": status, "baseline_screenshot": baseline_path}
