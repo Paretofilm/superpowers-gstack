@@ -160,11 +160,16 @@ git commit -m "chore(computer-use): package + pytest scaffold"
 - Create: `scripts/computer_use/coords.py`
 - Test: `tests/unit/computer_use/test_coords.py`
 
+> **SPIKE-justert (Task 1):** `idb ui tap` tar **device-points**, og computer_use-koordinater er
+> 0–1000 normalisert mot **punkt-rommet** (`describe-all` Application-frame, f.eks. 402×874 for
+> iPhone 17 Pro). Denormaliser derfor direkte mot punkt-dimensjoner — **ingen piksler, ingen
+> backing-scale, ingen Pillow**. Verifisert: `(450,365)` → `(181,319)` pt traff "Generelt"-raden.
+
 **Interfaces:**
 - Produces:
   - `Point` (namedtuple `x: float`, `y: float`) — device-points
   - `SafeArea` (dataclass `left: float`, `top: float`, `right: float`, `bottom: float`) — points
-  - `denormalize(x: int, y: int, img_w: int, img_h: int, scale: float) -> Point` — 0–1000 → device-points
+  - `denormalize(x: int, y: int, point_w: float, point_h: float) -> Point` — 0–1000 → device-points (mot punkt-rommet)
   - `in_safe_area(p: Point, safe: SafeArea) -> bool`
 
 - [ ] **Step 1: Write the failing test**
@@ -175,11 +180,17 @@ from test_smoke import load
 coords = load("coords")
 
 
-def test_denormalize_center_3x():
-    # 500/1000 of a 1170x2532 px image, backing scale 3.0 → points = px/scale
-    p = coords.denormalize(500, 500, 1170, 2532, 3.0)
-    assert round(p.x, 1) == round(1170 * 0.5 / 3.0, 1)
-    assert round(p.y, 1) == round(2532 * 0.5 / 3.0, 1)
+def test_denormalize_against_points():
+    # SPIKE-verifisert: (450,365) normalisert mot 402x874 pt (iPhone 17 Pro) → "Generelt"-raden
+    p = coords.denormalize(450, 365, 402, 874)
+    assert round(p.x, 1) == round(450 / 1000 * 402, 1)  # 180.9
+    assert round(p.y, 1) == round(365 / 1000 * 874, 1)  # 319.0
+
+
+def test_denormalize_center():
+    p = coords.denormalize(500, 500, 402, 874)
+    assert round(p.x, 1) == 201.0
+    assert round(p.y, 1) == 437.0
 
 
 def test_in_safe_area_rejects_status_bar():
@@ -212,11 +223,10 @@ class SafeArea:
     bottom: float
 
 
-def denormalize(x: int, y: int, img_w: int, img_h: int, scale: float) -> Point:
-    """0–1000 normalisert → device-points. scale = pixel/point (backing scale)."""
-    px = x / 1000.0 * img_w
-    py = y / 1000.0 * img_h
-    return Point(px / scale, py / scale)
+def denormalize(x: int, y: int, point_w: float, point_h: float) -> Point:
+    """0–1000 normalisert → device-points, mot punkt-rommet (describe-all Application-frame).
+    Ingen piksel/scale-konvertering: idb ui tap tar punkter (SPIKE-FINDINGS, Task 1)."""
+    return Point(x / 1000.0 * point_w, y / 1000.0 * point_h)
 
 
 def in_safe_area(p: Point, safe: SafeArea) -> bool:
@@ -226,7 +236,7 @@ def in_safe_area(p: Point, safe: SafeArea) -> bool:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m pytest tests/unit/computer_use/test_coords.py -v`
-Expected: PASS (2 tester).
+Expected: PASS (3 tester).
 
 - [ ] **Step 5: Commit**
 
