@@ -29,12 +29,21 @@ import urllib.request
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 KEYCHAIN_ACCOUNT = "openrouter-api-key"
 
-# Default lens-by-role models (verified present on OpenRouter 2026-06-21).
-ROLE_MODELS = {
-    "architecture": "z-ai/glm-5.2",            # default 3rd lens: 1M ctx, most distant distribution
-    "correctness": "deepseek/deepseek-v4-pro",  # LiveCodeBench leader, correctness sniper
-    "countersynthesis": "openai/gpt-5.5",       # refutes Claude's dedup on the biggest changes
+# Default lens-by-role transport + target.
+# OpenRouter for distant houses with no CLI; the codex CLI for OpenAI (subscription).
+ROLE_SPEC = {
+    "architecture": {"transport": "openrouter", "target": "z-ai/glm-5.2"},
+    "correctness": {"transport": "openrouter", "target": "deepseek/deepseek-v4-pro"},
+    "countersynthesis": {"transport": "cli", "target": "codex"},
 }
+
+
+def resolve_transport(role, model_override):
+    """Return (transport, target). An explicit --model always forces OpenRouter."""
+    if model_override:
+        return ("openrouter", model_override)
+    spec = ROLE_SPEC[role]
+    return (spec["transport"], spec["target"])
 
 
 def eprint(*a):
@@ -180,8 +189,8 @@ def main():
     ap.add_argument("--diff", action="store_true", help="review `git diff` instead of files")
     ap.add_argument("--diff-base", default="HEAD", help="git ref to diff against (default HEAD)")
     ap.add_argument("--model", default=None, help="OpenRouter model id (overrides --role)")
-    ap.add_argument("--role", choices=list(ROLE_MODELS), default="architecture",
-                    help="pick model by role (default architecture=GLM-5.2)")
+    ap.add_argument("--role", choices=list(ROLE_SPEC), default="architecture",
+                    help="pick lens by role (default architecture=GLM-5.2 on OpenRouter)")
     ap.add_argument("--prompt", default=None, help="extra instructions appended to the review prompt")
     ap.add_argument("--max-tokens", type=int, default=16000,
                     help="completion token cap (includes reasoning tokens on reasoning models)")
@@ -202,7 +211,7 @@ def main():
         print(f"OpenRouter balance: ${bal:.2f}")
         return
 
-    model = args.model or ROLE_MODELS[args.role]
+    model = args.model or ROLE_SPEC[args.role]["target"]
 
     content = gather_content(args)
     if not content.strip():

@@ -40,3 +40,17 @@ def test_sensitive_role_is_removed(monkeypatch):
 
 def test_western_prefixes_gone():
     assert not hasattr(tlr, "WESTERN_PREFIXES")
+
+
+def test_resolve_transport_openrouter_roles():
+    assert tlr.resolve_transport("architecture", None) == ("openrouter", "z-ai/glm-5.2")
+    assert tlr.resolve_transport("correctness", None) == ("openrouter", "deepseek/deepseek-v4-pro")
+
+
+def test_resolve_transport_cli_role():
+    assert tlr.resolve_transport("countersynthesis", None) == ("cli", "codex")
+
+
+def test_model_override_forces_openrouter():
+    assert tlr.resolve_transport("countersynthesis", "anthropic/claude-3.5") == \
+        ("openrouter", "anthropic/claude-3.5")
