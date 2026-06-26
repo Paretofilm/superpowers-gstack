@@ -14,6 +14,42 @@ TOP_INSET = 50.0     # status-bar / dynamic island (punkter)
 BOTTOM_INSET = 40.0  # home-indikator (punkter)
 
 
+def journal_to_action_log(journal):
+    """Transform loop journal entries to action_log shape for report.build_markdown.
+
+    Loop journal entry: {"step", "state", "raw", "result", "screenshot"}
+    where raw = {"name", "arguments": {...}, "id", ...}
+
+    Action log entry: {"step", "action", "intent", "coord", "result", "produced_by_steps", "screenshot"}
+    """
+    log = []
+    for e in journal:
+        raw = e.get("raw") or {}
+        args = raw.get("arguments") or {}
+
+        # Infer coordinate string from action type
+        if "x" in args:
+            # click, tap-like actions
+            coord = f"({args.get('x')},{args.get('y')})"
+        elif "start_x" in args:
+            # drag_and_drop, swipe-like actions
+            coord = f"({args.get('start_x')},{args.get('start_y')})->({args.get('end_x')},{args.get('end_y')})"
+        else:
+            # scroll, input, or other actions without coordinates
+            coord = "-"
+
+        log.append({
+            "step": e.get("step"),
+            "action": raw.get("name", "?"),
+            "intent": args.get("intent", ""),
+            "coord": coord,
+            "result": e.get("result", ""),
+            "produced_by_steps": [e.get("step")],
+            "screenshot": e.get("screenshot"),
+        })
+    return log
+
+
 def parse_args(argv):
     p = argparse.ArgumentParser(prog="ios-visual-explore")
     p.add_argument("--udid", required=True)
@@ -66,6 +102,7 @@ def main(argv=None):
             retained.append(e["screenshot"])
 
     findings = critic.criticize(retained, client=gemini.VisionCritic()) if retained else []
+    action_log = journal_to_action_log(journal)
     report_path = out / "report.md"
-    report_path.write_text(report.build_markdown(args.mission, env, journal, findings, result["status"]))
+    report_path.write_text(report.build_markdown(args.mission, env, action_log, findings, result["status"]))
     print(report.text_summary(findings, str(report_path), str(shots)))
