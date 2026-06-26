@@ -1,11 +1,11 @@
 ---
 name: third-lens-review
-description: Use after Claude self-pitfall + Codex have reviewed a SHIP-WORTHY / architecture / real-time / security / contract change — runs a third (and optionally fourth) external model lens via OpenRouter on the PATCHED artifact, then an adversarial synthesis. The third lens is a different model house (different training distribution → different blind spots) that finds what the first two took for granted. Not for trivial or standard changes.
+description: Use after Claude self-pitfall + Codex have reviewed a SHIP-WORTHY / architecture / real-time / security / contract change — runs a third (and optionally fourth) external model lens (OpenRouter for distant houses, the codex CLI for OpenAI) on the PATCHED artifact, then an adversarial synthesis. The third lens is a different model house (different training distribution → different blind spots) that finds what the first two took for granted. Not for trivial or standard changes.
 ---
 
 # Third-lens review
 
-The third lens in superpowers-gstack's multi-lens review. Lenses 1–2 are **Claude self-pitfall** (`pitfall-verification`) and **Codex** (`/codex review`). This skill adds **lens 3** — a different model *house* (different training distribution → different blind spots) reading the **already-patched** artifact via OpenRouter — followed by a mandatory **adversarial synthesis**.
+The third lens in superpowers-gstack's multi-lens review. Lenses 1–2 are **Claude self-pitfall** (`pitfall-verification`) and **Codex** (`/codex review`). This skill adds **lens 3** — a different model *house* (different training distribution → different blind spots) reading the **already-patched** artifact (via OpenRouter for distant houses, or the `codex` CLI for the countersynthesis role) — followed by a mandatory **adversarial synthesis**.
 
 Invoke with: `/superpowers-gstack:third-lens-review`
 

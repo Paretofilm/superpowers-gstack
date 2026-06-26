@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""third-lens-review.py — run a single external "third lens" review via OpenRouter.
+"""third-lens-review.py — run a single external "third lens" review (OpenRouter or the codex CLI, by role).
 
 Part of superpowers-gstack's multi-lens review. Claude (author/self-pitfall) and
 Codex (OpenAI) are lenses 1 and 2; this script runs lens 3 (and optionally 4) on a
@@ -319,14 +319,14 @@ def run_codex(system_prompt, user_msg, target, args):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Run a single external third-lens review via OpenRouter.")
+    ap = argparse.ArgumentParser(description="Run a single external third-lens review (OpenRouter or the codex CLI, by role).")
     ap.add_argument("--files", nargs="*", default=[],
                     help="files/globs to review (recursive ** supported). Omit to read stdin.")
     ap.add_argument("--diff", action="store_true", help="review `git diff` instead of files")
     ap.add_argument("--diff-base", default="HEAD", help="git ref to diff against (default HEAD)")
     ap.add_argument("--model", default=None, help="OpenRouter model id (overrides --role)")
     ap.add_argument("--role", choices=list(ROLE_SPEC), default="architecture",
-                    help="pick lens by role (default architecture=GLM-5.2 on OpenRouter)")
+                    help="pick lens by role (default architecture=GLM-5.2 via OpenRouter; countersynthesis uses the codex CLI)")
     ap.add_argument("--prompt", default=None, help="extra instructions appended to the review prompt")
     ap.add_argument("--max-tokens", type=int, default=16000,
                     help="completion token cap (includes reasoning tokens on reasoning models)")
