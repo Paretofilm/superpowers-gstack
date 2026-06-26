@@ -79,12 +79,13 @@ class VisionCritic:
         self.model = model
 
     def analyze(self, screenshot_paths) -> list:
-        from google.genai import types
-        prompt = _load("critic").CRITIC_PROMPT
-        parts = [types.Part.from_text(text=prompt)]
-        for p in screenshot_paths:
-            parts.append(types.Part.from_bytes(data=open(p, "rb").read(), mime_type="image/png"))
         try:
+            from google.genai import types
+            prompt = _load("critic").CRITIC_PROMPT
+            parts = [types.Part.from_text(text=prompt)]
+            for p in screenshot_paths:
+                with open(p, "rb") as f:
+                    parts.append(types.Part.from_bytes(data=f.read(), mime_type="image/png"))
             resp = self._client.models.generate_content(model=self.model, contents=parts)
             text = (resp.text or "").strip()
             if text.startswith("```"):

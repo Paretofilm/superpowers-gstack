@@ -83,6 +83,7 @@ def main(argv=None):
     out = pathlib.Path(args.out or f"computer-use-runs/run-{int(time.time())}")
     shots = out / "screenshots"
     out.mkdir(parents=True, exist_ok=True)
+    shots.mkdir(parents=True, exist_ok=True)
 
     try:
         result = loop.run(args.mission, executor, client, max_steps=args.max_steps,
@@ -92,13 +93,12 @@ def main(argv=None):
         pass
 
     journal = result["journal"]
-    last = len(journal)
     retained = []
     if result.get("baseline_screenshot"):
         retained.append(result["baseline_screenshot"])
     for e in journal:
         if e.get("screenshot") and dedup.should_retain(
-                e.get("result", "success"), e["step"] == 1, e["step"] == last):
+                e.get("result", "success"), e is journal[0], e is journal[-1]):
             retained.append(e["screenshot"])
 
     findings = critic.criticize(retained, client=gemini.VisionCritic()) if retained else []
