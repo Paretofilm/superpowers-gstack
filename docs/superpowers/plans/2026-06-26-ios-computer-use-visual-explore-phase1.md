@@ -1029,12 +1029,21 @@ def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.3):
 bruker fakes; ekte form verifisert i Task 1 og kjøres live i Task 11):
 ```python
 import base64
+import importlib.util
 import json
 import os
+import pathlib
 import subprocess
-from dataclasses import dataclass
 
-from loop import Turn  # samme Turn-dataklasse  (lastes via sys.path i shimmen)
+
+def _load(n):
+    s = importlib.util.spec_from_file_location(n, pathlib.Path(__file__).resolve().parent / f"{n}.py")
+    m = importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
+
+
+# Turn lastes via samme importlib-mønster som loop bruker for sine sibling-moduler —
+# robust både under pakke-import (shim) og test-harness; loop.run leser .action/.done duck-typet.
+Turn = _load("loop").Turn
 
 TOOL = [{"type": "computer_use", "environment": "mobile",
          "enable_prompt_injection_detection": True}]

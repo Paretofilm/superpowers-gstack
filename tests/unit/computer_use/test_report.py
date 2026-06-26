@@ -21,3 +21,10 @@ def test_text_summary_has_no_inline_images():
     assert "![" not in s              # ingen inline-bilde-markdown
     assert "/p/report.md" in s        # filsti ja
     assert "knapp avkuttet" in s
+
+
+def test_text_summary_neutralizes_inline_image_in_finding_text():
+    adversarial = [{"severity": "P1", "text": "see ![shot](x.png) here", "screenshot": "s.png"}]
+    s = report.text_summary(adversarial, "/p/report.md", "/p/shots")
+    assert "![" not in s
+    assert "see !\\[shot](x.png) here" in s
