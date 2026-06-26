@@ -160,6 +160,36 @@ def test_run_codex_empty_output_exits_4(monkeypatch):
     assert e.value.code == 4
 
 
+def test_run_codex_unreadable_output_exits_4(monkeypatch):
+    """OSError when run_codex tries to open the output file should exit 4."""
+    captured = {}
+    _real_open = open  # save before monkeypatching
+
+    def fake_run(cmd, input=None, **kwargs):
+        out_path = cmd[cmd.index("-o") + 1]
+        captured["out_path"] = out_path
+        with _real_open(out_path, "w", encoding="utf-8") as fh:
+            fh.write("codex output here")
+        class P:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+        return P()
+
+    def bad_open(path, mode="r", **kwargs):
+        # Raise OSError only when run_codex reads its output file (read mode).
+        if captured.get("out_path") and str(path) == captured["out_path"] and "w" not in mode:
+            raise OSError("simulated unreadable output file")
+        return _real_open(path, mode, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr("builtins.open", bad_open)
+
+    with pytest.raises(SystemExit) as e:
+        tlr.run_codex("SYS", "USER", "codex", _CodexArgs())
+    assert e.value.code == 4
+
+
 def test_main_countersynthesis_never_fetches_openrouter_key(monkeypatch):
     """CONFIRMED P1: the CLI role must never call resolve_key()."""
     monkeypatch.setattr("sys.argv", ["tlr", "--role", "countersynthesis", "--files", "x"])
