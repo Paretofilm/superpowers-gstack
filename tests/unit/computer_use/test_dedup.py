@@ -1,0 +1,20 @@
+from test_smoke import load
+dedup = load("dedup")
+
+
+def test_hamming():
+    assert dedup.hamming(0b1010, 0b1000) == 1
+
+
+def test_retain_keeps_rejected_and_endpoints():
+    assert dedup.should_retain("rejected", False, False) is True
+    assert dedup.should_retain("app_left_foreground", False, False) is True
+    assert dedup.should_retain("success", True, False) is True   # første
+    assert dedup.should_retain("success", False, True) is True   # siste
+    assert dedup.should_retain("success", False, False) is False # vanlig → dedup-kandidat
+
+
+def test_critic_dup_threshold():
+    assert dedup.is_critic_dup(0b1111, 0b1111, threshold=2) is True
+    assert dedup.is_critic_dup(0b1111, 0b0000, threshold=2) is False
+    assert dedup.is_critic_dup(0b1111, None) is False  # ingen forrige
