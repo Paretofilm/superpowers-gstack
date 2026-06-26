@@ -865,12 +865,19 @@ git commit -m "feat(computer-use): preflight + foreground oracle"
 - Create: `scripts/computer_use/loop.py`
 - Test: `tests/unit/computer_use/test_loop.py`
 
+> **SPIKE-justert (Task 1 + runde 2):** (1) handlinger denormaliseres fra **`ea.params`** (adapteren
+> har allerede pakket ut nested `arguments`), ikke fra rå `turn.action`. (2) `coordinate_space()`
+> returnerer **`(point_w, point_h)`** (2-tuple, ingen scale). (3) `swipe` tar **to punkter** (begge
+> safe-area-sjekkes). (4) terminal-signal kommer fra **`interaction.status`** — klienten setter
+> `Turn.done = (status != "requires_action")`. (5) result-kjeding bruker `previous_interaction_id` +
+> `call_id = step["id"]`, innkapslet i `ComputerUseClient`.
+
 **Interfaces:**
 - Consumes: `actions.adapt`, `coords.denormalize`/`in_safe_area`, `IdbExecutor`, `dedup`, `report`.
 - Produces:
-  - `gemini.ComputerUseClient` med `start(mission, screenshot_png) -> Turn` og `respond(result_kind, screenshot_png, reason) -> Turn` (kjeding per SPIKE-FINDINGS)
+  - `gemini.ComputerUseClient` med `start(mission, screenshot_png) -> Turn` og `respond(result_kind, screenshot_png, reason) -> Turn`. Internt: lagrer `previous_interaction_id` + siste `call_id`; avleder `done` fra `interaction.status`.
   - `Turn` (dataclass: `action: dict | None`, `done: bool`)
-  - `loop.run(mission, executor, client, *, max_steps=25, safe_area, scale) -> dict` (rapport-data + journal)
+  - `loop.run(mission, executor, client, *, max_steps=25, safe_area, settle=0.3) -> dict` (journal + status). **Ingen `scale`-param** — leses som punkt-dims fra `coordinate_space()`.
 
 - [ ] **Step 1: Write the failing test (mocket klient + executor, verifiserer journal + result-protokoll)**
 
@@ -880,38 +887,75 @@ from test_smoke import load
 loop = load("loop")
 
 
+def _turn(action, done):
+    return load("loop").Turn(action=action, done=done)
+
+
+def _safe():
+    return load("coords").SafeArea(0, 0, 402, 874)
+
+
 class FakeExec:
-    def __init__(self): self.taps = []
+    def __init__(self):
+        self.taps = []
+        self.swipes = []
     def screenshot(self): return b"PNG"
-    def coordinate_space(self): return (1170, 2532, 3.0)
+    def coordinate_space(self): return (402.0, 874.0)   # punkt-dims, ingen scale
     def tap(self, p): self.taps.append(p)
-    def swipe(self, p, d): pass
+    def swipe(self, start, end): self.swipes.append((start, end))
     def type_text(self, t): pass
 
 
-class FakeClient:
-    """Emitterer ett tap så 'done'."""
+class TapThenDone:
     def __init__(self): self.results = []
     def start(self, mission, shot):
-        return loop_turn({"name": "click", "x": 500, "y": 500}, False)
+        return _turn({"name": "click", "arguments": {"x": 500, "y": 500}}, False)
     def respond(self, kind, shot, reason):
         self.results.append(kind)
-        return loop_turn(None, True)
+        return _turn(None, True)
 
 
-def loop_turn(action, done):
-    T = load("loop").Turn
-    return T(action=action, done=done)
-
-
-def test_loop_executes_then_sends_result_and_journals():
-    co = load("coords")
-    safe = co.SafeArea(0, 0, 390, 844)
-    ex, cl = FakeExec(), FakeClient()
-    out = loop.run("utforsk", ex, cl, max_steps=5, safe_area=safe, scale=3.0)
+def test_loop_executes_tap_then_sends_result_and_journals():
+    ex, cl = FakeExec(), TapThenDone()
+    out = loop.run("utforsk", ex, cl, max_steps=5, safe_area=_safe())
     assert ex.taps, "tap skulle blitt utført"
     assert cl.results == ["success"], "function_result måtte sendes etter handling"
     assert out["journal"][0]["state"] == "result_sent"
+    assert out["status"] == "fullført"
+
+
+class DragThenDone:
+    def __init__(self): self.results = []
+    def start(self, mission, shot):
+        return _turn({"name": "drag_and_drop",
+                      "arguments": {"start_x": 500, "start_y": 800,
+                                    "end_x": 500, "end_y": 200}}, False)
+    def respond(self, kind, shot, reason):
+        self.results.append(kind); return _turn(None, True)
+
+
+def test_drag_and_drop_swipes_two_points():
+    ex, cl = FakeExec(), DragThenDone()
+    loop.run("scroll", ex, cl, max_steps=5, safe_area=_safe())
+    assert ex.swipes, "swipe skulle blitt utført med to punkter"
+    start, end = ex.swipes[0]
+    assert end.y < start.y   # 'scroll ned' => end_y < start_y
+
+
+class TapOutOfBounds:
+    def __init__(self): self.results = []
+    def start(self, mission, shot):
+        return _turn({"name": "click", "arguments": {"x": 500, "y": 5}}, False)
+    def respond(self, kind, shot, reason):
+        self.results.append(kind); return _turn(None, True)
+
+
+def test_out_of_safe_area_is_rejected_not_executed():
+    safe = load("coords").SafeArea(0, 60, 402, 800)  # y=5 -> 4.4pt, over top=60
+    ex, cl = FakeExec(), TapOutOfBounds()
+    loop.run("x", ex, cl, max_steps=5, safe_area=safe)
+    assert not ex.taps, "utenfor safe-area skulle IKKE tappes"
+    assert cl.results == ["rejected"]
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -921,8 +965,6 @@ Expected: FAIL.
 
 - [ ] **Step 3: Write minimal implementation**
 
-`scripts/computer_use/gemini.py` — tynn wrapper rundt computer_use (interactions) **per SPIKE-FINDINGS**; eksponerer `ComputerUseClient`, `Turn`. (Konkret request/response-form settes fra Task 1.)
-
 `scripts/computer_use/loop.py`:
 ```python
 import time
@@ -931,12 +973,11 @@ from dataclasses import dataclass
 
 @dataclass
 class Turn:
-    action: dict | None
-    done: bool
+    action: dict | None   # computer_use-steg (nestet) eller None når ferdig
+    done: bool            # avledet av interaction.status av klienten
 
 
-def run(mission, executor, client, *, max_steps=25, safe_area, scale, settle=0.3):
-    # importer rene moduler via samme loader som testene bruker
+def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.3):
     import importlib.util, pathlib
     pkg = pathlib.Path(__file__).resolve().parent
     def _load(n):
@@ -953,16 +994,23 @@ def run(mission, executor, client, *, max_steps=25, safe_area, scale, settle=0.3
         entry = {"step": step, "state": "planned", "raw": turn.action}
         journal.append(entry)
         ea = actions.adapt(turn.action)
-        img_w, img_h, sc = executor.coordinate_space()
+        point_w, point_h = executor.coordinate_space()
         kind, reason = "success", None
-        if ea.kind in ("tap", "swipe"):
-            p = coords.denormalize(turn.action["x"], turn.action["y"], img_w, img_h, sc)
+        if ea.kind == "tap":
+            p = coords.denormalize(ea.params["x"], ea.params["y"], point_w, point_h)
             if not coords.in_safe_area(p, safe_area):
                 kind, reason = "rejected", "outside safe area"
             else:
                 entry["state"] = "validated"
-                (executor.tap(p) if ea.kind == "tap" else executor.swipe(p, ea.params["direction"]))
-                entry["state"] = "executed"
+                executor.tap(p); entry["state"] = "executed"
+        elif ea.kind == "swipe":
+            start = coords.denormalize(ea.params["start_x"], ea.params["start_y"], point_w, point_h)
+            end = coords.denormalize(ea.params["end_x"], ea.params["end_y"], point_w, point_h)
+            if not (coords.in_safe_area(start, safe_area) and coords.in_safe_area(end, safe_area)):
+                kind, reason = "rejected", "outside safe area"
+            else:
+                entry["state"] = "validated"
+                executor.swipe(start, end); entry["state"] = "executed"
         elif ea.kind == "type":
             executor.type_text(ea.params["text"]); entry["state"] = "executed"
         elif ea.kind == "wait":
@@ -977,10 +1025,77 @@ def run(mission, executor, client, *, max_steps=25, safe_area, scale, settle=0.3
     return {"journal": journal, "status": status}
 ```
 
+`scripts/computer_use/gemini.py` — spike-forankret computer_use-klient (IKKE enhetstestet; loop-testene
+bruker fakes; ekte form verifisert i Task 1 og kjøres live i Task 11):
+```python
+import base64
+import json
+import os
+import subprocess
+from dataclasses import dataclass
+
+from loop import Turn  # samme Turn-dataklasse  (lastes via sys.path i shimmen)
+
+TOOL = [{"type": "computer_use", "environment": "mobile",
+         "enable_prompt_injection_detection": True}]
+
+
+def _api_key() -> str:
+    # SPIKE-FINDINGS: SDK plukker arvet GOOGLE_API_KEY/GEMINI_API_KEY — pop begge først.
+    for k in ("GOOGLE_API_KEY", "GEMINI_API_KEY"):
+        os.environ.pop(k, None)
+    return subprocess.run(
+        ["security", "find-generic-password", "-a", os.environ["USER"],
+         "-s", "gemini-api-key-paid", "-w"],
+        capture_output=True, text=True, check=True).stdout.strip()
+
+
+class ComputerUseClient:
+    def __init__(self, model: str = "gemini-3.5-flash"):
+        import google.genai as g
+        self._client = g.Client(api_key=_api_key())
+        self.model = model
+        self._prev_id = None
+        self._call_id = None
+        self._name = None
+
+    def _consume(self, interaction) -> Turn:
+        d = interaction.model_dump()
+        self._prev_id = d.get("id")
+        done = d.get("status") != "requires_action"
+        steps = d.get("steps") or []
+        fc = next((s for s in steps if s.get("type") == "function_call"), None)
+        if fc:
+            self._call_id = fc.get("id")
+            self._name = fc.get("name")
+            return Turn(action=fc, done=done)
+        return Turn(action=None, done=True)
+
+    def start(self, mission: str, screenshot_png: bytes) -> Turn:
+        b64 = base64.b64encode(screenshot_png).decode()
+        inter = self._client.interactions.create(
+            model=self.model,
+            input=[{"type": "text", "text": mission},
+                   {"type": "image", "data": b64, "mime_type": "image/png"}],
+            tools=TOOL)
+        return self._consume(inter)
+
+    def respond(self, result_kind: str, screenshot_png: bytes, reason=None) -> Turn:
+        b64 = base64.b64encode(screenshot_png).decode()
+        fr = {"type": "function_result", "name": self._name, "call_id": self._call_id,
+              "result": [{"type": "text",
+                          "text": json.dumps({"status": result_kind, "reason": reason})},
+                         {"type": "image", "data": b64, "mime_type": "image/png"}]}
+        inter = self._client.interactions.create(
+            model=self.model, previous_interaction_id=self._prev_id,
+            input=[fr], tools=TOOL)
+        return self._consume(inter)
+```
+
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m pytest tests/unit/computer_use/test_loop.py -v`
-Expected: PASS.
+Expected: PASS (3 tester).
 
 - [ ] **Step 5: Commit**
 
