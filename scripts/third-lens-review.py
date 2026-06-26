@@ -182,45 +182,8 @@ DEFAULT_PROMPT = (
 )
 
 
-def main():
-    ap = argparse.ArgumentParser(description="Run a single external third-lens review via OpenRouter.")
-    ap.add_argument("--files", nargs="*", default=[],
-                    help="files/globs to review (recursive ** supported). Omit to read stdin.")
-    ap.add_argument("--diff", action="store_true", help="review `git diff` instead of files")
-    ap.add_argument("--diff-base", default="HEAD", help="git ref to diff against (default HEAD)")
-    ap.add_argument("--model", default=None, help="OpenRouter model id (overrides --role)")
-    ap.add_argument("--role", choices=list(ROLE_SPEC), default="architecture",
-                    help="pick lens by role (default architecture=GLM-5.2 on OpenRouter)")
-    ap.add_argument("--prompt", default=None, help="extra instructions appended to the review prompt")
-    ap.add_argument("--max-tokens", type=int, default=16000,
-                    help="completion token cap (includes reasoning tokens on reasoning models)")
-    ap.add_argument("--effort", choices=["low", "medium", "high"], default="medium",
-                    help="reasoning effort for reasoning models (caps the reasoning-token blowout)")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="estimate input size + cost, do not call the model")
-    ap.add_argument("--check-credits", action="store_true", help="print OpenRouter balance and exit")
-    args = ap.parse_args()
-
-    key = resolve_key()
-
-    if args.check_credits:
-        bal = get_credits(key)
-        if bal is None:
-            eprint("ERROR: could not retrieve balance (bad key or network).")
-            sys.exit(3)
-        print(f"OpenRouter balance: ${bal:.2f}")
-        return
-
-    model = args.model or ROLE_SPEC[args.role]["target"]
-
-    content = gather_content(args)
-    if not content.strip():
-        eprint("ERROR: nothing to review (empty diff / no files / empty stdin).")
-        sys.exit(6)
-
-    system_prompt = DEFAULT_PROMPT + (f"\n\nExtra instructions:\n{args.prompt}" if args.prompt else "")
-    user_msg = f"Review the following artifact:\n\n{content}"
-
+def run_openrouter(system_prompt, user_msg, model, args, key):
+    """Run a review via OpenRouter HTTP API. Prints RAW OUTPUT + usage + balance."""
     # rough pre-flight token estimate (chars/4) for the cost note
     est_in = (len(system_prompt) + len(user_msg)) // 4
     p_in, p_out = get_pricing(key, model)
@@ -291,6 +254,52 @@ def main():
     bal = get_credits(key)
     if bal is not None:
         print(f"[balance] OpenRouter ${bal:.2f} remaining")
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Run a single external third-lens review via OpenRouter.")
+    ap.add_argument("--files", nargs="*", default=[],
+                    help="files/globs to review (recursive ** supported). Omit to read stdin.")
+    ap.add_argument("--diff", action="store_true", help="review `git diff` instead of files")
+    ap.add_argument("--diff-base", default="HEAD", help="git ref to diff against (default HEAD)")
+    ap.add_argument("--model", default=None, help="OpenRouter model id (overrides --role)")
+    ap.add_argument("--role", choices=list(ROLE_SPEC), default="architecture",
+                    help="pick lens by role (default architecture=GLM-5.2 on OpenRouter)")
+    ap.add_argument("--prompt", default=None, help="extra instructions appended to the review prompt")
+    ap.add_argument("--max-tokens", type=int, default=16000,
+                    help="completion token cap (includes reasoning tokens on reasoning models)")
+    ap.add_argument("--effort", choices=["low", "medium", "high"], default="medium",
+                    help="reasoning effort for reasoning models (caps the reasoning-token blowout)")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="estimate input size + cost, do not call the model")
+    ap.add_argument("--check-credits", action="store_true", help="print OpenRouter balance and exit")
+    args = ap.parse_args()
+
+    if args.check_credits:
+        key = resolve_key()
+        bal = get_credits(key)
+        if bal is None:
+            eprint("ERROR: could not retrieve balance (bad key or network).")
+            sys.exit(3)
+        print(f"OpenRouter balance: ${bal:.2f}")
+        return
+
+    transport, target = resolve_transport(args.role, args.model)
+
+    content = gather_content(args)
+    if not content.strip():
+        eprint("ERROR: nothing to review (empty diff / no files / empty stdin).")
+        sys.exit(6)
+
+    system_prompt = DEFAULT_PROMPT + (f"\n\nExtra instructions:\n{args.prompt}" if args.prompt else "")
+    user_msg = f"Review the following artifact:\n\n{content}"
+
+    if transport == "openrouter":
+        key = resolve_key()  # lazy — cli path must never call resolve_key()
+        run_openrouter(system_prompt, user_msg, target, args, key)
+    else:
+        eprint("ERROR: cli transport not implemented yet.")
+        sys.exit(4)
 
 
 if __name__ == "__main__":

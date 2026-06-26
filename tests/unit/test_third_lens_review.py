@@ -54,3 +54,24 @@ def test_resolve_transport_cli_role():
 def test_model_override_forces_openrouter():
     assert tlr.resolve_transport("countersynthesis", "anthropic/claude-3.5") == \
         ("openrouter", "anthropic/claude-3.5")
+
+
+def test_run_openrouter_prints_framing(monkeypatch, capsys):
+    fake_resp = {
+        "choices": [{"message": {"content": "P2 finding here"}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 100, "completion_tokens": 50, "cost": 0.01},
+    }
+    monkeypatch.setattr(tlr, "http_json", lambda *a, **k: fake_resp)
+    monkeypatch.setattr(tlr, "get_pricing", lambda *a, **k: (1e-6, 2e-6))
+    monkeypatch.setattr(tlr, "get_credits", lambda *a, **k: 4.47)
+
+    class Args:
+        max_tokens = 16000
+        effort = "medium"
+        dry_run = False
+        prompt = None
+    tlr.run_openrouter("SYS", "USER", "z-ai/glm-5.2", Args(), "fakekey")
+    out = capsys.readouterr().out
+    assert "===== THIRD-LENS RAW OUTPUT (z-ai/glm-5.2) =====" in out
+    assert "P2 finding here" in out
+    assert "END RAW OUTPUT" in out
