@@ -4,3 +4,5 @@ docs/superpowers/handoff.md
 **/.superpowers-html/
 .superpowers-html/
 __pycache__/
+.antigravitycli/
+.superpowers/
