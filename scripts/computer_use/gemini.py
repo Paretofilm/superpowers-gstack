@@ -69,3 +69,27 @@ class ComputerUseClient:
             model=self.model, previous_interaction_id=self._prev_id,
             input=[fr], tools=TOOL)
         return self._consume(inter)
+
+
+class VisionCritic:
+    """Ekte Gemini-vision-kritiker. analyze(paths) -> findings. Degraderer til [] ved enhver feil."""
+    def __init__(self, model: str = "gemini-3.5-flash"):
+        import google.genai as g
+        self._client = g.Client(api_key=_api_key())
+        self.model = model
+
+    def analyze(self, screenshot_paths) -> list:
+        from google.genai import types
+        prompt = _load("critic").CRITIC_PROMPT
+        parts = [types.Part.from_text(text=prompt)]
+        for p in screenshot_paths:
+            parts.append(types.Part.from_bytes(data=open(p, "rb").read(), mime_type="image/png"))
+        try:
+            resp = self._client.models.generate_content(model=self.model, contents=parts)
+            text = (resp.text or "").strip()
+            if text.startswith("```"):
+                text = text.split("```", 2)[1].removeprefix("json").strip()
+            data = json.loads(text)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
