@@ -41,6 +41,8 @@ class IdbExecutor:
         piksel/scale-konvertering (SPIKE-FINDINGS, Task 1)."""
         out = self._run(["idb", "ui", "describe-all", "--udid", self.udid])
         elems = json.loads(out)
+        if not isinstance(elems, list):
+            raise ValueError("describe-all did not return a list")
         app = next((e for e in elems if e.get("type") == "Application"), None)
         if app is None:
             raise ValueError("No Application element in describe-all output")

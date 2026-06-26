@@ -20,8 +20,11 @@ def build_markdown(mission, env, action_log, findings, status) -> str:
     return "\n".join(lines) + "\n"
 
 
-def text_summary(findings, report_path, screenshot_dir) -> str:
-    head = [f"Visuell utforsking ferdig. Full rapport: {report_path}",
-            f"Skjermbilder: {screenshot_dir}", f"{len(findings)} funn:"]
+def text_summary(findings, report_path, screenshot_dir, status=None) -> str:
+    head = []
+    if status is not None:
+        head.append(f"Status: {_s(status)}")
+    head += [f"Visuell utforsking ferdig. Full rapport: {report_path}",
+             f"Skjermbilder: {screenshot_dir}", f"{len(findings)} funn:"]
     body = [f"- {_s(f.get('severity',''))} {_s(f.get('text',''))} ({_s(f.get('screenshot',''))})" for f in findings]
     return "\n".join(head + body)

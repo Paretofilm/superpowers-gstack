@@ -2,6 +2,7 @@ import argparse
 import importlib.util
 import json
 import pathlib
+import sys
 import time
 
 
@@ -10,8 +11,8 @@ def _load(n):
     m = importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
 
 
-TOP_INSET = 50.0     # status-bar / dynamic island (punkter)
-BOTTOM_INSET = 40.0  # home-indikator (punkter)
+TOP_INSET = 50.0     # status-bar / dynamic island (points)
+BOTTOM_INSET = 40.0  # home indicator (points)
 
 
 def journal_to_action_log(journal):
@@ -56,7 +57,7 @@ def parse_args(argv):
     p.add_argument("--bundle", required=True)
     p.add_argument("mission")
     p.add_argument("--max-steps", type=int, default=25, dest="max_steps")
-    p.add_argument("--out", default=None, help="output-mappe (default: computer-use-runs/run-<ts>)")
+    p.add_argument("--out", default=None, help="output directory (default: computer-use-runs/run-<ts>)")
     p.add_argument("--dry-run", action="store_true", dest="dry_run")
     return p.parse_args(argv)
 
@@ -74,7 +75,7 @@ def main(argv=None):
     client = gemini.ComputerUseClient()
 
     if args.dry_run:
-        # single-turn planning-probe (ingen handling utføres)
+        # single-turn planning probe (no actions executed)
         turn = client.start(args.mission, executor.screenshot())
         print(json.dumps({"dry_run": True, "planned": turn.action, "done": turn.done},
                          ensure_ascii=False, indent=2))
@@ -85,24 +86,30 @@ def main(argv=None):
     out.mkdir(parents=True, exist_ok=True)
     shots.mkdir(parents=True, exist_ok=True)
 
+    # Default: report will be written with error status if loop never completes
+    result = {"journal": [], "status": "error", "baseline_screenshot": None}
     try:
         result = loop.run(args.mission, executor, client, max_steps=args.max_steps,
-                          safe_area=safe, screenshot_dir=str(shots))
-    finally:
-        # teardown (spec §7): aldri destruktivt; sim-state forblir som den er.
-        pass
+                          safe_area=safe, screenshot_dir=str(shots),
+                          foreground_check=lambda: preflight.is_app_foreground(args.udid, args.bundle))
+    except Exception as exc:
+        print(f"loop.run failed: {exc}", file=sys.stderr)
 
-    journal = result["journal"]
-    retained = []
-    if result.get("baseline_screenshot"):
-        retained.append(result["baseline_screenshot"])
-    for e in journal:
-        if e.get("screenshot") and dedup.should_retain(
-                e.get("result", "success"), e is journal[0], e is journal[-1]):
-            retained.append(e["screenshot"])
+    # Always build and write the report, even on abnormal failure
+    try:
+        journal = result["journal"]
+        retained = []
+        if result.get("baseline_screenshot"):
+            retained.append(result["baseline_screenshot"])
+        for e in journal:
+            if e.get("screenshot") and dedup.should_retain(
+                    e.get("result", "success"), e is journal[0], e is journal[-1]):
+                retained.append(e["screenshot"])
 
-    findings = critic.criticize(retained, client=gemini.VisionCritic()) if retained else []
-    action_log = journal_to_action_log(journal)
-    report_path = out / "report.md"
-    report_path.write_text(report.build_markdown(args.mission, env, action_log, findings, result["status"]))
-    print(report.text_summary(findings, str(report_path), str(shots)))
+        findings = critic.criticize(retained, client=gemini.VisionCritic()) if retained else []
+        action_log = journal_to_action_log(journal)
+        report_path = out / "report.md"
+        report_path.write_text(report.build_markdown(args.mission, env, action_log, findings, result["status"]))
+        print(report.text_summary(findings, str(report_path), str(shots), status=result["status"]))
+    except Exception as exc:
+        print(f"report generation failed: {exc}", file=sys.stderr)

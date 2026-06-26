@@ -60,19 +60,31 @@ The skill writes **two artefacts** to the output directory and prints a **text-o
 | Artefakt | Beskrivelse |
 |----------|-------------|
 | `<out>/report.md` | Full Markdown report: mission, environment info, step journal, critic findings |
-| `<out>/screenshots/` | Deduplicated screenshots retained from the run |
+| `<out>/screenshots/` | Retained screenshots from the run (every step is persisted; the critic input is selected by status + first/last endpoints via `should_retain`) |
 
 **Stdout** contains only text: file paths and a structured summary of findings. It never includes inline images or base64 data. This keeps the Claude context clean when the summary is captured or pasted into a conversation.
 
 ## Interpreting results
 
-- **status: success** — the mission completed without hitting the step limit
-- **status: step_limit** — the run exhausted `--max-steps`; consider increasing it or narrowing the mission
-- **status: error** — an unrecoverable error (idb failure, API error); check the journal in `report.md`
-- Findings in the report are produced by the Gemini vision critic and may include false positives; treat them as leads, not definitive bugs
+The `status` field in the report and stdout summary is a stable machine token with exactly four possible values:
+
+- **`completed`** — the model signalled it was done before hitting the step limit
+- **`step_limit`** — the run exhausted `--max-steps`; consider increasing it or narrowing the mission
+- **`app_left_foreground`** — the foreground oracle detected the target app was no longer in the foreground (e.g. backgrounded or crashed); the partial journal is still written
+- **`error`** — abnormal failure (idb error, API error, screenshot failure); check the journal in `report.md` for the first failing step
+
+Findings in the report are produced by the Gemini vision critic and may include false positives; treat them as leads, not definitive bugs. A report is always written even on `error` status — the journal up to the point of failure is preserved.
 
 ## Architecture note
 
 The skill orchestrates five layers built in Phase 1:
 `preflight` → `executor_idb` → `loop` (Gemini computer-use) → `dedup` → `critic` + `report`.
 VisionCritic (in `scripts/computer_use/gemini.py`) runs the evidence screenshots through Gemini vision; it degrades gracefully to an empty findings list on any API error — the run never crashes on critic failure.
+
+## Deferred to Phase 2
+
+The following capabilities are implemented but not yet wired into the live pipeline:
+
+- **Perceptual near-duplicate dedup** — `ahash`/`is_critic_dup` in `dedup.py` are present but intentionally not wired (avoids an image-decode dependency). Phase 2 will gate critic input on visual similarity.
+- **Gemini-3 `signature` echo** — multi-step thought continuity via interaction signatures.
+- **Richer action coverage** — `go_back`, `long_press`, `press_key` action kinds are not yet handled in `actions.py`.

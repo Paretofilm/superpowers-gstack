@@ -33,6 +33,8 @@ def _on_home_screen(udid: str) -> bool:
         elems = json.loads(out)
     except (json.JSONDecodeError, ValueError):
         return False
+    if not isinstance(elems, list):
+        return False
     # 'spotlight-pill' er en stabil, lokaliserings-uavhengig hjemskjerm-markør (SPIKE-FINDINGS R7)
     return any(e.get("AXUniqueId") == "spotlight-pill" for e in elems)
 

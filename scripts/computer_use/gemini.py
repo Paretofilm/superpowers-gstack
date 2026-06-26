@@ -1,4 +1,5 @@
 import base64
+import getpass
 import importlib.util
 import json
 import os
@@ -24,7 +25,7 @@ def _api_key() -> str:
     for k in ("GOOGLE_API_KEY", "GEMINI_API_KEY"):
         os.environ.pop(k, None)
     return subprocess.run(
-        ["security", "find-generic-password", "-a", os.environ["USER"],
+        ["security", "find-generic-password", "-a", os.environ.get("USER") or getpass.getuser(),
          "-s", "gemini-api-key-paid", "-w"],
         capture_output=True, text=True, check=True).stdout.strip()
 
