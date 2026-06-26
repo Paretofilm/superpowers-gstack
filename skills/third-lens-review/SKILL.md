@@ -33,7 +33,7 @@ If the change is not high-stakes, **do not run this skill** — it burns money a
 
 ## Model routing (which third lens, by artifact type)
 
-The script picks the model by `--role`. All ids verified present on OpenRouter (2026-06-21):
+The script picks the lens by `--role`. `architecture` and `correctness` run via OpenRouter (ids verified 2026-06-21); `countersynthesis` runs via the `codex` CLI (subscription):
 
 | `--role` | Model | House | Use when |
 |----------|-------|-------|----------|
