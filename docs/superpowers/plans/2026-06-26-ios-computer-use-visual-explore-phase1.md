@@ -565,37 +565,65 @@ git commit -m "feat(computer-use): markdown report builder + text-only summary"
 - Create: `scripts/computer_use/executor_idb.py`
 - Test: `tests/unit/computer_use/test_executor_idb.py`
 
+> **SPIKE-justert (Task 1 + runde 2):** `idb ui tap`/`idb ui swipe` tar **device-points** (ingen
+> piksler/scale). Swipe er **to punkter** (`drag_and_drop` gir start+end), så signaturen er
+> `swipe(start, end)` → `idb ui swipe x1 y1 x2 y2`. `coordinate_space()` returnerer **punkt-
+> dimensjonene** lest fra `idb ui describe-all` Application-frame — **ingen Pillow, ingen
+> backing-scale, ingen piksel-parse**.
+
 **Interfaces:**
-- Consumes: `coords.Point`, `coords.SafeArea`.
+- Consumes: `coords.Point`.
 - Produces:
   - `IdbExecutor(udid: str)` med metoder:
     - `screenshot() -> bytes` (PNG)
-    - `tap(p: Point) -> None`
-    - `swipe(p: Point, direction: str) -> None`
-    - `type_text(text: str) -> None`
-    - `coordinate_space() -> tuple[int,int,float]` (img_w, img_h, backing_scale)
-  - Bruker subprocess til `xcrun simctl` + `idb`. **Justér kommando-form per SPIKE-FINDINGS.md (Task 1).**
+    - `tap(p: Point) -> None` — `idb ui tap` (punkter)
+    - `swipe(start: Point, end: Point) -> None` — `idb ui swipe x1 y1 x2 y2` (punkter)
+    - `type_text(text: str) -> None` — `idb ui text`
+    - `coordinate_space() -> tuple[float, float]` — `(point_w, point_h)` fra describe-all Application-frame
+  - Bruker subprocess til `xcrun simctl` + `idb`.
 
 - [ ] **Step 1: Write the failing test (kommando-bygging, mocket subprocess)**
 
 `tests/unit/computer_use/test_executor_idb.py`:
 ```python
+import json
 from test_smoke import load
 ex = load("executor_idb")
-
-
-def test_tap_builds_idb_command(monkeypatch):
-    calls = []
-    monkeypatch.setattr(ex, "_run", lambda args: calls.append(args) or b"")
-    e = ex.IdbExecutor("UDID-1")
-    e.tap(ex_point(195.0, 400.0))
-    assert calls and "tap" in calls[-1]
-    assert "UDID-1" in " ".join(calls[-1])
 
 
 def ex_point(x, y):
     coords = load("coords")
     return coords.Point(x, y)
+
+
+def test_tap_builds_idb_command(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ex, "_run", lambda self, args: calls.append(args) or b"")
+    e = ex.IdbExecutor("UDID-1")
+    e.tap(ex_point(195.0, 400.0))
+    assert calls and "tap" in calls[-1]
+    assert "195" in calls[-1] and "400" in calls[-1]
+    assert "UDID-1" in calls[-1]
+
+
+def test_swipe_builds_two_point_command(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ex, "_run", lambda self, args: calls.append(args) or b"")
+    e = ex.IdbExecutor("UDID-1")
+    e.swipe(ex_point(200.0, 700.0), ex_point(200.0, 300.0))
+    args = calls[-1]
+    assert "swipe" in args
+    # begge endepunktene i kommandoen
+    assert "200" in args and "700" in args and "300" in args
+
+
+def test_coordinate_space_reads_point_frame(monkeypatch):
+    app = [{"type": "Application", "frame": {"x": 0, "y": 0, "width": 402, "height": 874}}]
+    monkeypatch.setattr(ex, "_run",
+                        lambda self, a: json.dumps(app).encode() if "describe-all" in a else b"")
+    e = ex.IdbExecutor("UDID-1")
+    pw, ph = e.coordinate_space()
+    assert pw == 402.0 and ph == 874.0
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -605,8 +633,9 @@ Expected: FAIL.
 
 - [ ] **Step 3: Write minimal implementation**
 
-`scripts/computer_use/executor_idb.py` (kommando-former per SPIKE-FINDINGS):
+`scripts/computer_use/executor_idb.py`:
 ```python
+import json
 import subprocess
 
 
@@ -629,33 +658,28 @@ class IdbExecutor:
     def tap(self, p) -> None:
         self._run(["idb", "ui", "tap", str(round(p.x)), str(round(p.y)), "--udid", self.udid])
 
-    def swipe(self, p, direction: str) -> None:
-        dx, dy = {"down": (0, 300), "up": (0, -300),
-                  "left": (-300, 0), "right": (300, 0)}.get(direction, (0, 300))
-        x2, y2 = round(p.x) + dx, round(p.y) + dy
-        self._run(["idb", "ui", "swipe", str(round(p.x)), str(round(p.y)),
-                   str(x2), str(y2), "--udid", self.udid])
+    def swipe(self, start, end) -> None:
+        # idb ui swipe tar to punkter (start -> end); drag_and_drop/scroll gir begge (SPIKE).
+        self._run(["idb", "ui", "swipe",
+                   str(round(start.x)), str(round(start.y)),
+                   str(round(end.x)), str(round(end.y)), "--udid", self.udid])
 
     def type_text(self, text: str) -> None:
         self._run(["idb", "ui", "text", text, "--udid", self.udid])
 
-    def coordinate_space(self) -> tuple[int, int, float]:
-        """(img_w_px, img_h_px, backing_scale). Leser skjermbilde-piksler +
-        utleder scale fra device logical size (per SPIKE-FINDINGS, Task 1)."""
-        from PIL import Image  # eller minimal PNG-header-parse om PIL unngås
-        import io
-        png = self.screenshot()
-        w, h = Image.open(io.BytesIO(png)).size
-        scale = self._device_backing_scale()  # f.eks. 3.0 for de fleste moderne iPhones
-        return (w, h, scale)
-
-    def _device_backing_scale(self) -> float:
-        # Utled fra device-typen (SPIKE-FINDINGS Task 1 Step 2). Placeholder-default 3.0;
-        # erstatt med faktisk oppslag mot `simctl list devices` / device-klasse-tabell.
-        return 3.0
+    def coordinate_space(self) -> tuple[float, float]:
+        """(point_w, point_h) fra describe-all Application-frame. idb tar punkter, så ingen
+        piksel/scale-konvertering (SPIKE-FINDINGS, Task 1)."""
+        out = self._run(["idb", "ui", "describe-all", "--udid", self.udid])
+        elems = json.loads(out)
+        app = next(e for e in elems if e.get("type") == "Application")
+        f = app["frame"]
+        return (float(f["width"]), float(f["height"]))
 ```
 
-> Merk: `coordinate_space` legger til `Pillow` som dep i `ios-visual-explore`-shimmen (Task 11), eller bruk en minimal PNG-IHDR-parse (bytes 16–24) for å unngå avhengigheten.
+> Merk: ingen tredjeparts-avhengighet — `coordinate_space` leser punkt-dimensjonene fra describe-all
+> (Application-frame), så `ios-visual-explore`-shimmen (Task 11) trenger bare `google-genai`.
+> `_run` er en instansmetode (tar `self`) slik at testene kan monkeypatche den per instans.
 
 - [ ] **Step 4: Run test to verify it passes**
 
