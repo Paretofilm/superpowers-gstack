@@ -22,11 +22,11 @@ def test_swipe_builds_two_point_command(monkeypatch):
     calls = []
     monkeypatch.setattr(ex.IdbExecutor, "_run", lambda self, args: calls.append(args) or b"")
     e = ex.IdbExecutor("UDID-1")
-    e.swipe(ex_point(200.0, 700.0), ex_point(200.0, 300.0))
+    e.swipe(ex_point(200.0, 700.0), ex_point(250.0, 300.0))
     args = calls[-1]
     assert "swipe" in args
-    # begge endepunktene i kommandoen
-    assert "200" in args and "700" in args and "300" in args
+    # begge endepunktene i kommandoen — alle fire koordinater
+    assert "200" in args and "700" in args and "250" in args and "300" in args
 
 
 def test_coordinate_space_reads_point_frame(monkeypatch):
@@ -36,3 +36,14 @@ def test_coordinate_space_reads_point_frame(monkeypatch):
     e = ex.IdbExecutor("UDID-1")
     pw, ph = e.coordinate_space()
     assert pw == 402.0 and ph == 874.0
+
+
+def test_type_text_builds_idb_command(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ex.IdbExecutor, "_run", lambda self, args: calls.append(args) or b"")
+    e = ex.IdbExecutor("UDID-1")
+    e.type_text("hei")
+    args = calls[-1]
+    assert "text" in args
+    assert "hei" in args
+    assert "UDID-1" in args
