@@ -21,14 +21,22 @@ def resolve_tool(name: str) -> str:
 
 
 def _process_running(udid: str, bundle_id: str) -> bool:
-    out = subprocess.run(["xcrun", "simctl", "spawn", udid, "launchctl", "list"],
-                         capture_output=True, text=True).stdout
+    # F3: timeout=10 for launchctl probe; timeout → treat as not-running (conservative)
+    try:
+        out = subprocess.run(["xcrun", "simctl", "spawn", udid, "launchctl", "list"],
+                             capture_output=True, text=True, timeout=10).stdout
+    except subprocess.TimeoutExpired:
+        return False
     return f"UIKitApplication:{bundle_id}" in out
 
 
 def _on_home_screen(udid: str) -> bool:
-    out = subprocess.run(["idb", "ui", "describe-all", "--udid", udid],
-                         capture_output=True, text=True).stdout
+    # F3: timeout=30 for idb UI call; timeout → treat as not-home (conservative)
+    try:
+        out = subprocess.run(["idb", "ui", "describe-all", "--udid", udid],
+                             capture_output=True, text=True, timeout=30).stdout
+    except subprocess.TimeoutExpired:
+        return False
     try:
         elems = json.loads(out)
     except (json.JSONDecodeError, ValueError):
@@ -48,5 +56,6 @@ def is_app_foreground(udid: str, bundle_id: str) -> bool:
 
 def preflight(udid: str, bundle_id: str) -> dict:
     resolve_tool("idb")
-    subprocess.run(["xcrun", "simctl", "launch", udid, bundle_id], check=True)
+    # F3: timeout=30 for simctl launch
+    subprocess.run(["xcrun", "simctl", "launch", udid, bundle_id], check=True, timeout=30)
     return {"udid": udid, "bundle_id": bundle_id, "platform": "ios"}

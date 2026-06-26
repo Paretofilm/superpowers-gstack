@@ -33,7 +33,8 @@ def adapt(step: dict) -> ExecutorAction:
             "start_x": _clamp(x), "start_y": _clamp(y),
             "end_x": _clamp(x + dx), "end_y": _clamp(y + dy),
         })
-    if name in ("type", "press_key"):
+    # F8: press_key is phase-2-deferred; honest rejection beats silent no-op
+    if name == "type":
         return ExecutorAction("type", {"text": args.get("text", "")})
     if name == "wait":
         return ExecutorAction("wait", {})

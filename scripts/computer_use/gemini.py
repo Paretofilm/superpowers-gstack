@@ -49,7 +49,8 @@ class ComputerUseClient:
             self._call_id = fc.get("id")
             self._name = fc.get("name")
             return Turn(action=fc, done=done)
-        return Turn(action=None, done=True)
+        # F7: respect derived done — requires_action with no function_call → done=False
+        return Turn(action=None, done=done)
 
     def start(self, mission: str, screenshot_png: bytes) -> Turn:
         b64 = base64.b64encode(screenshot_png).decode()
@@ -75,19 +76,21 @@ class ComputerUseClient:
 class VisionCritic:
     """Ekte Gemini-vision-kritiker. analyze(paths) -> findings. Degraderer til [] ved enhver feil."""
     def __init__(self, model: str = "gemini-3.5-flash"):
-        import google.genai as g
-        self._client = g.Client(api_key=_api_key())
+        # F4: lazy client — construction deferred to analyze() so keychain failure degrades to []
         self.model = model
+        self._client = None
 
     def analyze(self, screenshot_paths) -> list:
         try:
+            import google.genai as g
             from google.genai import types
+            client = g.Client(api_key=_api_key())
             prompt = _load("critic").CRITIC_PROMPT
             parts = [types.Part.from_text(text=prompt)]
             for p in screenshot_paths:
                 with open(p, "rb") as f:
                     parts.append(types.Part.from_bytes(data=f.read(), mime_type="image/png"))
-            resp = self._client.models.generate_content(model=self.model, contents=parts)
+            resp = client.models.generate_content(model=self.model, contents=parts)
             text = (resp.text or "").strip()
             if text.startswith("```"):
                 text = text.split("```", 2)[1].removeprefix("json").strip()

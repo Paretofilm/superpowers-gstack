@@ -115,8 +115,8 @@ def test_foreground_check_breaks_loop_with_app_left_foreground():
 
     def fg_check():
         call_count[0] += 1
-        # Return False after the first foreground check (i.e. after first action)
-        return call_count[0] < 1
+        # Pass the pre-loop check (call 1), return False after the first action (call 2+)
+        return call_count[0] <= 1
 
     out = loop.run("explore", ex, cl, max_steps=10, safe_area=_safe(),
                    foreground_check=fg_check)
@@ -127,3 +127,58 @@ def test_foreground_check_breaks_loop_with_app_left_foreground():
     last_entry = out["journal"][-1]
     assert last_entry.get("result") == "app_left_foreground", (
         f"Last journal entry result should be 'app_left_foreground', got {last_entry.get('result')!r}")
+
+
+# --- New tests for F6, F9, F2 ---
+
+class RespondRaisesClient:
+    """Client whose respond() always raises — covers F6."""
+    def start(self, mission, shot):
+        return _turn({"name": "click", "arguments": {"x": 200, "y": 400}}, False)
+    def respond(self, kind, shot, reason):
+        raise RuntimeError("simulated network error")
+
+
+def test_respond_failure_sets_error_not_success():
+    """F6: a respond() exception must mark the step result as 'error', never as 'success'."""
+    ex, cl = FakeExec(), RespondRaisesClient()
+    out = loop.run("test", ex, cl, max_steps=5, safe_area=_safe())
+    assert out["status"] == "error", f"expected status 'error', got {out['status']!r}"
+    assert len(out["journal"]) >= 1
+    failing = out["journal"][-1]
+    assert failing["result"] == "error", (
+        f"failing step result should be 'error', got {failing['result']!r}")
+    assert failing.get("state") == "respond_failed"
+
+
+def test_foreground_check_false_before_any_action():
+    """F9: foreground_check returning False on the pre-loop call → status 'app_left_foreground'
+    and no taps executed."""
+    ex = FakeExec()
+    cl = TapThenDone()
+    out = loop.run("test", ex, cl, max_steps=5, safe_area=_safe(),
+                   foreground_check=lambda: False)
+    assert out["status"] == "app_left_foreground", (
+        f"expected 'app_left_foreground', got {out['status']!r}")
+    assert len(ex.taps) == 0, f"no taps should have been executed, got {ex.taps}"
+    assert out["journal"] == [], "journal should be empty when stopped before first action"
+
+
+class BadCoordClient:
+    """Client emitting a click with a non-numeric x coord — covers F2."""
+    def start(self, mission, shot):
+        return _turn({"name": "click", "arguments": {"x": "oops", "y": 5}}, False)
+    def respond(self, kind, shot, reason):
+        return _turn(None, True)
+
+
+def test_malformed_action_coord_is_failed_not_crash():
+    """F2: adapt() or denormalize() raising inside the step try must produce a 'failed' journal
+    entry, not crash loop.run and lose the journal."""
+    ex, cl = FakeExec(), BadCoordClient()
+    out = loop.run("test", ex, cl, max_steps=5, safe_area=_safe())
+    assert out["journal"], "journal must not be empty"
+    assert out["journal"][0]["result"] == "failed", (
+        f"bad-coord step should be 'failed', got {out['journal'][0]['result']!r}")
+    # Run must complete normally (not raise)
+    assert out["status"] in ("completed", "step_limit", "error")

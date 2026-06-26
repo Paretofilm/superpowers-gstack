@@ -68,32 +68,40 @@ def main(argv=None):
     coords, loop = _load("coords"), _load("loop")
     dedup, report, critic, gemini = _load("dedup"), _load("report"), _load("critic"), _load("gemini")
 
-    env = preflight.preflight(args.udid, args.bundle)   # resolve idb + launch app
-    executor = executor_idb.IdbExecutor(args.udid)
-    point_w, point_h = executor.coordinate_space()
-    safe = coords.SafeArea(0, TOP_INSET, point_w, point_h - BOTTOM_INSET)
-    client = gemini.ComputerUseClient()
-
     if args.dry_run:
         # single-turn planning probe (no actions executed)
+        env = preflight.preflight(args.udid, args.bundle)
+        executor = executor_idb.IdbExecutor(args.udid)
+        point_w, point_h = executor.coordinate_space()
+        safe = coords.SafeArea(0, TOP_INSET, point_w, point_h - BOTTOM_INSET)
+        client = gemini.ComputerUseClient()
         turn = client.start(args.mission, executor.screenshot())
         print(json.dumps({"dry_run": True, "planned": turn.action, "done": turn.done},
                          ensure_ascii=False, indent=2))
         return
 
-    out = pathlib.Path(args.out or f"computer-use-runs/run-{int(time.time())}")
+    # F1: default env and result before setup so report can always be written
+    env = {"platform": "ios", "udid": args.udid, "bundle_id": args.bundle}
+    result = {"journal": [], "status": "error", "baseline_screenshot": None}
+
+    # F10: nanosecond timestamp avoids same-second run-dir collisions
+    out = pathlib.Path(args.out or f"computer-use-runs/run-{time.time_ns()}")
     shots = out / "screenshots"
     out.mkdir(parents=True, exist_ok=True)
     shots.mkdir(parents=True, exist_ok=True)
 
-    # Default: report will be written with error status if loop never completes
-    result = {"journal": [], "status": "error", "baseline_screenshot": None}
+    # F1: wrap setup AND loop.run in one guard so any failure still produces a report
     try:
+        env = preflight.preflight(args.udid, args.bundle)
+        executor = executor_idb.IdbExecutor(args.udid)
+        point_w, point_h = executor.coordinate_space()
+        safe = coords.SafeArea(0, TOP_INSET, point_w, point_h - BOTTOM_INSET)
+        client = gemini.ComputerUseClient()
         result = loop.run(args.mission, executor, client, max_steps=args.max_steps,
                           safe_area=safe, screenshot_dir=str(shots),
                           foreground_check=lambda: preflight.is_app_foreground(args.udid, args.bundle))
     except Exception as exc:
-        print(f"loop.run failed: {exc}", file=sys.stderr)
+        print(f"setup/loop failed: {exc}", file=sys.stderr)
 
     # Always build and write the report, even on abnormal failure
     try:
@@ -101,9 +109,10 @@ def main(argv=None):
         retained = []
         if result.get("baseline_screenshot"):
             retained.append(result["baseline_screenshot"])
-        for e in journal:
+        # F12: index-based first/last check — robust to copy/serialize
+        for i, e in enumerate(journal):
             if e.get("screenshot") and dedup.should_retain(
-                    e.get("result", "success"), e is journal[0], e is journal[-1]):
+                    e.get("result", "success"), i == 0, i == len(journal) - 1):
                 retained.append(e["screenshot"])
 
         findings = critic.criticize(retained, client=gemini.VisionCritic()) if retained else []

@@ -32,13 +32,24 @@ def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.3,
     baseline = _persist(shot, 0)
     turn = client.start(mission, shot)
     step = 0
+
+    # F9: foreground check before the first action
+    if foreground_check is not None:
+        try:
+            alive = foreground_check()
+        except Exception:
+            alive = True
+        if not alive:
+            return {"journal": [], "status": "app_left_foreground", "baseline_screenshot": baseline}
+
     while turn.action and not turn.done and step < max_steps:
         step += 1
         entry = {"step": step, "state": "planned", "raw": turn.action}
         journal.append(entry)
-        ea = actions.adapt(turn.action)
         kind, reason = "success", None
         try:
+            # F2: adapt inside try so malformed actions are caught as "failed" entries
+            ea = actions.adapt(turn.action)
             if ea.kind == "tap":
                 p = coords.denormalize(ea.params["x"], ea.params["y"], point_w, point_h)
                 if not coords.in_safe_area(p, safe_area):
@@ -64,7 +75,8 @@ def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.3,
         try:
             shot = executor.screenshot()
         except Exception as exc:
-            entry["state"] = "result_sent"; entry["result"] = "error"
+            # F6: explicit state so journal never falsely claims success
+            entry["state"] = "screenshot_failed"; entry["result"] = "error"
             status = "error"; break
         entry["screenshot"] = _persist(shot, step)
         if foreground_check is not None:
@@ -78,7 +90,8 @@ def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.3,
         try:
             turn = client.respond(kind, shot, reason)
         except Exception:
-            entry["state"] = "result_sent"; entry["result"] = kind
+            # F6: respond failure must not report the action kind as result
+            entry["state"] = "respond_failed"; entry["result"] = "error"
             status = "error"; break
         entry["state"] = "result_sent"; entry["result"] = kind
     if status is None:

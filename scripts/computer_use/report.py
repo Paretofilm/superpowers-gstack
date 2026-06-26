@@ -4,18 +4,19 @@ def _s(v):
 
 
 def build_markdown(mission, env, action_log, findings, status) -> str:
+    # F5: _s() applied to all LLM/user-controlled interpolated fields
     lines = ["# Visuell utforsking — rapport", "",
-             f"**Oppdrag:** {mission}", "",
-             f"**Miljø:** {env.get('platform')} / UDID {env.get('udid')} / {env.get('bundle_id')}",
-             f"**Sluttstatus:** {status}", "", "## Handlingslogg", ""]
+             f"**Oppdrag:** {_s(mission)}", "",
+             f"**Miljø:** {_s(env.get('platform'))} / UDID {_s(env.get('udid'))} / {_s(env.get('bundle_id'))}",
+             f"**Sluttstatus:** {_s(status)}", "", "## Handlingslogg", ""]
     for a in action_log:
-        lines.append(f"- Steg {a['step']}: `{a['action']}` — {a['intent']} "
-                     f"@ {a.get('coord','-')} → {a['result']} (skjerm fra steg {', '.join(str(s) for s in a.get('produced_by_steps', []))})")
+        lines.append(f"- Steg {a['step']}: `{_s(a['action'])}` — {_s(a['intent'])} "
+                     f"@ {_s(a.get('coord','-'))} → {_s(a['result'])} (skjerm fra steg {', '.join(_s(s) for s in a.get('produced_by_steps', []))})")
     lines += ["", "## Funn", ""]
     for finding in findings:
-        severity = str(finding.get('severity', ''))
-        text = str(finding.get('text', ''))
-        screenshot = str(finding.get('screenshot', ''))
+        severity = _s(finding.get('severity', ''))
+        text = _s(finding.get('text', ''))
+        screenshot = _s(finding.get('screenshot', ''))
         lines.append(f"- **{severity}** {text} — `{screenshot}`")
     return "\n".join(lines) + "\n"
 

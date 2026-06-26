@@ -43,3 +43,10 @@ def test_wait_is_noop():
 def test_unknown_is_unsupported():
     a = actions.adapt({"name": "teleport", "arguments": {}})
     assert a.kind == "unsupported"
+
+
+def test_press_key_is_unsupported():
+    """F8: press_key is phase-2-deferred; must be rejected as unsupported, not silently no-op'd."""
+    a = actions.adapt({"name": "press_key", "arguments": {"key": "Return"}})
+    assert a.kind == "unsupported", (
+        f"press_key should be 'unsupported', got {a.kind!r}")

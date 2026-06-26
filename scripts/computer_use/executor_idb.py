@@ -11,7 +11,8 @@ class IdbExecutor:
         self.udid = udid
 
     def _run(self, args: list[str]) -> bytes:
-        return subprocess.run(args, capture_output=True, check=True).stdout
+        # F3: bounded timeout so hung idb/simctl calls propagate as TimeoutExpired
+        return subprocess.run(args, capture_output=True, check=True, timeout=30).stdout
 
     def screenshot(self) -> bytes:
         # simctl skriver til fil; les bytes
@@ -34,6 +35,7 @@ class IdbExecutor:
                    str(round(end.x)), str(round(end.y)), "--udid", self.udid])
 
     def type_text(self, text: str) -> None:
+        text = text[:1000]  # F11: cap to prevent pathological argv sizes
         self._run(["idb", "ui", "text", text, "--udid", self.udid])
 
     def coordinate_space(self) -> tuple[float, float]:
