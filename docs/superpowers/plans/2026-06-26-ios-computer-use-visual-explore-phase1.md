@@ -253,11 +253,21 @@ git commit -m "feat(computer-use): coordinate mapper + safe-area validation"
 - Create: `scripts/computer_use/actions.py`
 - Test: `tests/unit/computer_use/test_actions.py`
 
+> **SPIKE-justert (Task 1 + runde 2):** computer_use-handlinger er **nestet** —
+> `{"name": ..., "arguments": {...}, "id": ..., "signature": ...}` — koordinatene ligger i
+> `arguments`, ikke flatt. Scroll emitteres som **`drag_and_drop`** med to punkter
+> (`start_x/start_y` → `end_x/end_y`, 0–1000 normalisert), bekreftet i ekte kjøring. Adapteren
+> normaliserer derfor alle dra/scroll-handlinger til **én `swipe`-primitiv med to punkter**
+> (normalisert), slik at executoren (Task 7) bare trenger `swipe(start, end)`. `scroll` (hvis det
+> dukker opp) utledes til start/end fra retning med en fast, klampet delta.
+
 **Interfaces:**
 - Consumes: ingen.
 - Produces:
   - `ExecutorAction` (dataclass `kind: str`, `params: dict`) — `kind` ∈ {`tap`,`swipe`,`type`,`wait`,`unsupported`}
-  - `adapt(cu_action: dict) -> ExecutorAction` — mapper computer_use-handling → executor-primitiv
+  - `adapt(step: dict) -> ExecutorAction` — mapper et computer_use-steg (nestet) → executor-primitiv.
+    `swipe`-params er normaliserte `{start_x,start_y,end_x,end_y}` (0–1000); `tap`-params er `{x,y}` (0–1000).
+    Loop (Task 9) denormaliserer mot punkter.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -267,24 +277,46 @@ from test_smoke import load
 actions = load("actions")
 
 
-def test_tap_passthrough():
-    a = actions.adapt({"name": "click", "x": 500, "y": 400})
-    assert a.kind == "tap" and a.params["x"] == 500 and a.params["y"] == 400
+def test_click_maps_to_tap():
+    # SPIKE-verifisert nested form
+    a = actions.adapt({"name": "click",
+                       "arguments": {"x": 450, "y": 365, "intent": "tap row"}})
+    assert a.kind == "tap"
+    assert a.params["x"] == 450 and a.params["y"] == 365
 
 
-def test_scroll_maps_to_swipe():
-    a = actions.adapt({"name": "scroll", "x": 500, "y": 500, "direction": "down"})
+def test_drag_and_drop_maps_to_swipe_two_points():
+    # SPIKE runde-2: scroll kommer som drag_and_drop med start/end
+    a = actions.adapt({"name": "drag_and_drop",
+                       "arguments": {"start_x": 500, "start_y": 800,
+                                     "end_x": 500, "end_y": 200}})
     assert a.kind == "swipe"
-    assert a.params["direction"] == "down"   # scroll er KJERNE-navigasjon, ikke unsupported
+    assert a.params["start_x"] == 500 and a.params["start_y"] == 800
+    assert a.params["end_x"] == 500 and a.params["end_y"] == 200
+
+
+def test_scroll_derives_swipe_endpoints():
+    # 'scroll down' => innhold nedover => finger opp => end_y < start_y
+    a = actions.adapt({"name": "scroll",
+                       "arguments": {"x": 500, "y": 500, "direction": "down"}})
+    assert a.kind == "swipe"
+    assert a.params["end_y"] < a.params["start_y"]
+    # klampet til [0,1000]
+    assert 0 <= a.params["end_y"] <= 1000 and 0 <= a.params["start_y"] <= 1000
+
+
+def test_type_passthrough():
+    a = actions.adapt({"name": "type", "arguments": {"text": "hei"}})
+    assert a.kind == "type" and a.params["text"] == "hei"
 
 
 def test_wait_is_noop():
-    a = actions.adapt({"name": "wait"})
+    a = actions.adapt({"name": "wait", "arguments": {}})
     assert a.kind == "wait"
 
 
 def test_unknown_is_unsupported():
-    a = actions.adapt({"name": "teleport"})
+    a = actions.adapt({"name": "teleport", "arguments": {}})
     assert a.kind == "unsupported"
 ```
 
@@ -299,6 +331,8 @@ Expected: FAIL.
 ```python
 from dataclasses import dataclass
 
+SCROLL_DELTA = 250  # normalisert 0–1000 dra-lengde når scroll utledes fra retning
+
 
 @dataclass
 class ExecutorAction:
@@ -306,17 +340,32 @@ class ExecutorAction:
     params: dict
 
 
-def adapt(cu: dict) -> ExecutorAction:
-    name = cu.get("name", "")
+def _clamp(v: float) -> float:
+    return max(0, min(1000, v))
+
+
+def adapt(step: dict) -> ExecutorAction:
+    name = step.get("name", "")
+    args = step.get("arguments", {}) or {}
     if name in ("click", "tap"):
-        return ExecutorAction("tap", {"x": cu["x"], "y": cu["y"]})
-    if name == "scroll":
+        return ExecutorAction("tap", {"x": args.get("x"), "y": args.get("y")})
+    if name == "drag_and_drop":
         return ExecutorAction("swipe", {
-            "x": cu.get("x"), "y": cu.get("y"),
-            "direction": cu.get("direction", "down"),
+            "start_x": args.get("start_x"), "start_y": args.get("start_y"),
+            "end_x": args.get("end_x"), "end_y": args.get("end_y"),
+        })
+    if name == "scroll":
+        # 'scroll down' = se nedover = finger swiper opp = end_y < start_y
+        x = args.get("x", 500); y = args.get("y", 500)
+        d = args.get("direction", "down")
+        dy = {"down": -SCROLL_DELTA, "up": SCROLL_DELTA}.get(d, 0)
+        dx = {"left": SCROLL_DELTA, "right": -SCROLL_DELTA}.get(d, 0)
+        return ExecutorAction("swipe", {
+            "start_x": _clamp(x), "start_y": _clamp(y),
+            "end_x": _clamp(x + dx), "end_y": _clamp(y + dy),
         })
     if name in ("type", "press_key"):
-        return ExecutorAction("type", {"text": cu.get("text", "")})
+        return ExecutorAction("type", {"text": args.get("text", "")})
     if name == "wait":
         return ExecutorAction("wait", {})
     return ExecutorAction("unsupported", {"original": name})
@@ -325,7 +374,7 @@ def adapt(cu: dict) -> ExecutorAction:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m pytest tests/unit/computer_use/test_actions.py -v`
-Expected: PASS (4 tester).
+Expected: PASS (6 tester).
 
 - [ ] **Step 5: Commit**
 

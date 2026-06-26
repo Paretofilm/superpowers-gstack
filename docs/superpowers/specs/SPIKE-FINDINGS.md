@@ -160,3 +160,30 @@ budsjett-bekymring; bildet er den dominerende posten (relevant for dedup-gevinst
 
 Ingen av funnene velter arkitekturen (alt. A) eller fase-rekkefølgen — de strammer signaturene i
 Task 3, 4, 7, 8, 9. **Gaten er grønn: bygg videre fra Task 2.**
+
+---
+
+## Addendum (runde 2) — scroll emitteres som `drag_and_drop` ⚠️
+
+Fanget under bygging (ekte kall, scrollbar Generelt-skjerm). Oppdrag "Scroll down to see more
+settings below" ga **ikke** `scroll`, men:
+
+```json
+{"name": "drag_and_drop",
+ "arguments": {"start_x": 500, "start_y": 800, "end_x": 500, "end_y": 200,
+               "intent": "Scroll down to reveal more settings below"},
+ "id": "qps43mmd", "type": "function_call"}
+```
+
+- **Scrolling kommer som `drag_and_drop`** med **to punkter** (`start_x/start_y` → `end_x/end_y`),
+  begge 0–1000 normalisert. Et dra fra y=800 → y=200 = swipe opp = scroll ned.
+- `scroll` (med `{x,y,direction}`) kan fortsatt forekomme i andre kontekster, men `drag_and_drop`
+  er det observerte for scroll-intensjon. Adapteren må håndtere **begge**.
+
+**Konsekvens for plan:**
+- **Task 4 (`adapt`):** `drag_and_drop` → `swipe`-primitiv med `{start_x,start_y,end_x,end_y}` fra
+  `arguments`. Behold `scroll`→swipe defensivt. Begge leser fra nested `arguments`.
+- **Task 7 (`executor.swipe`):** signatur tar **to punkter** `swipe(start: Point, end: Point)` →
+  `idb ui swipe <x1> <y1> <x2> <y2>` (idb tar nettopp start+slutt). Erstatter punkt+retning-formen.
+- **Task 9 (loop):** denormaliser **begge** endepunktene for `drag_and_drop`; safe-area-sjekk på
+  begge. `click` denormaliserer ett punkt som før.
