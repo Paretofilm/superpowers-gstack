@@ -37,12 +37,11 @@ The script picks the model by `--role`. All ids verified present on OpenRouter (
 
 | `--role` | Model | House | Use when |
 |----------|-------|-------|----------|
-| `architecture` *(default)* | `z-ai/glm-5.2` | Zhipu | non-sensitive arch/RT/system changes — 1M ctx fits the whole repo, most distribution-distant, ~$0.05/run |
-| `sensitive` | `google/gemini-3.1-pro-preview` | Google | auth, keys, health, finance, PII — **Western infra** (no Chinese routing) |
-| `correctness` | `deepseek/deepseek-v4-pro` | DeepSeek | correctness-heavy: idempotency, money math, migration logic — LiveCodeBench leader |
-| `countersynthesis` | `openai/gpt-5.5` | OpenAI | the biggest changes only — refutes Claude's own dedup (see Step 4) |
+| `architecture` *(default)* | `z-ai/glm-5.2` | Zhipu | default 3rd lens — most distant distribution; OpenRouter |
+| `correctness` | `deepseek/deepseek-v4-pro` | DeepSeek | correctness sniper; OpenRouter |
+| `countersynthesis` | `codex` CLI | OpenAI | refutes Claude's dedup; via codex CLI (subscription, no per-call cost) |
 
-**Data-routing guardrail (enforced in code, fail-closed):** GLM and DeepSeek run on non-Western infra. For sensitive code, pass `--sensitive` — the script checks the model against a **Western-infra allowlist** and refuses anything not on it (an unknown/new house is refused, not silently allowed). Do not bypass this for auth/credential/health/finance artifacts.
+The sensitive role and its fail-closed Western-infra guard were removed in 2.18.0 (work is not sensitive; default lens is GLM-5.2).
 
 **Reasoning models:** GLM-5.2 and DeepSeek are reasoning models — they spend completion tokens *thinking* before answering. The script sends `reasoning.effort` (default `medium`; tune with `--effort low|medium|high`) and defaults `--max-tokens` to 16000 so reasoning does not exhaust the budget before the answer. If you see `finish_reason=length` / empty output, raise `--max-tokens` or lower `--effort`.
 
@@ -51,15 +50,13 @@ The script picks the model by `--role`. All ids verified present on OpenRouter (
 ## Sequence
 
 1. **Confirm lens 1–2 are done** and the artifact is patched. If not, stop and finish them first.
-2. **Pick the role** from the table (artifact type → `--role`). Sensitive code → `--sensitive` + a Western role.
+2. **Pick the role** from the table (artifact type → `--role`).
 3. **Run the script** on the patched artifact:
    ```bash
    # by files/globs:
    python3 scripts/third-lens-review.py --files "src/**/*.swift" --role architecture
    # or on the diff:
    python3 scripts/third-lens-review.py --diff --diff-base main --role architecture
-   # sensitive code (refuses non-Western houses):
-   python3 scripts/third-lens-review.py --files "src/auth/**" --sensitive --role sensitive
    ```
    Tip: `--dry-run` first to see the cost estimate on a large artifact.
 4. **Adversarial synthesis (Claude, mandatory).** Never dump the raw output and stop. Run a synthesis over it — see below.
@@ -72,7 +69,7 @@ A third lens **without** synthesis is noise: a different-house model over-genera
 - **Log each dropped finding with *why*** (over-strict for this domain? already handled at file:line? factually wrong?). A silent drop is indistinguishable from a missed bug.
 - **Treat disagreement as the signal.** Every cross-model disagreement must end in an explicit, reasoned decision — not a smoothed-over average. (Field example: GLM's *wrong* "sample-accurate crossfade" finding forced the precise rule no lens had stated — *MIDI delivery needs sample precision; fade-envelope tolerates 20–50 ms*. The over-strict finding was the trigger for the right call.)
 - **Agreement across houses = high-confidence green.** Where all lenses agree, no action needed; note it.
-- **For the biggest changes only** (arch/RT/security): run a `--role countersynthesis` (GPT-5.5) pass that *refutes Claude's dedup decisions*. Cheap insurance (~$0.45) against bias bortrasjonalisering of a real finding.
+- **For the biggest changes only** (arch/RT/security): run a `--role countersynthesis` pass (via the codex CLI, subscription — no per-call cost) that *refutes Claude's dedup decisions*. Cheap insurance against bias bortrasjonalisering of a real finding.
 
 ### Synthesis output format
 
@@ -103,7 +100,6 @@ Always present the raw output's key findings *and* the synthesis. Never the raw 
 - Not for trivial or standard changes — tiering gates it. Running three houses on a typo is waste.
 - Not a replacement for `pitfall-verification` or `/codex` — it is the **third** lens, after both.
 - Not autonomous: the script fetches the lens; the *agent* owns the adversarial synthesis and the ship decision.
-- Not for sensitive code on non-Western houses — use `--sensitive` + a Western role.
 
 ## Why a third lens (field evidence)
 
