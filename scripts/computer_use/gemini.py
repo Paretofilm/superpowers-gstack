@@ -90,6 +90,23 @@ class VisionCritic:
             if text.startswith("```"):
                 text = text.split("```", 2)[1].removeprefix("json").strip()
             data = json.loads(text)
-            return data if isinstance(data, list) else []
+            if not isinstance(data, list):
+                return []
+
+            # Normalize findings: coerce fields to str, map screenshot int → path
+            norm = []
+            for f in data:
+                if not isinstance(f, dict):
+                    continue
+                sc = f.get("screenshot")
+                # If screenshot is an int, map it to the corresponding path (1-indexed)
+                if isinstance(sc, int) and 1 <= sc <= len(screenshot_paths):
+                    sc = screenshot_paths[sc - 1]
+                norm.append({
+                    "severity": str(f.get("severity", "")),
+                    "text": str(f.get("text", "")),
+                    "screenshot": str(sc) if sc is not None else ""
+                })
+            return norm
         except Exception:
             return []
