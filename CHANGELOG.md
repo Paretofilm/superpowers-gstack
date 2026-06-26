@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.18.0
+
+### Changed
+- third-lens-review: `countersynthesis` now runs through the `codex` CLI (subscription) instead of OpenRouter `openai/gpt-5.5`. `architecture` (GLM-5.2) and `correctness` (DeepSeek V4-Pro) stay on OpenRouter — no CLI exists for those houses.
+
+### Removed
+- third-lens-review: the `sensitive` role and its fail-closed `--sensitive` guard (`WESTERN_PREFIXES` allowlist, exit code 5). Work targeted by this plugin is not sensitive; the default lens is GLM-5.2.
+
+### Added
+- `tests/unit/` pytest suite for `third-lens-review.py`, wired into `tests/run.sh --unit`.
+
 ## [2.16.0] - 2026-06-21
 
 ### Changed

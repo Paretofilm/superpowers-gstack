@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""third-lens-review.py — run a single external "third lens" review via OpenRouter.
+"""third-lens-review.py — run a single external "third lens" review (OpenRouter or the codex CLI, by role).
 
 Part of superpowers-gstack's multi-lens review. Claude (author/self-pitfall) and
 Codex (OpenAI) are lenses 1 and 2; this script runs lens 3 (and optionally 4) on a
@@ -13,11 +13,8 @@ Design notes:
   OPENROUTER_API_KEY as fallback. Never pass keys on the command line.
 - Pricing is fetched live from OpenRouter /models and applied to the real `usage`
   object — no hardcoded prices to go stale.
-- `--sensitive` refuses non-Western model houses (Zhipu/DeepSeek) IN CODE, so the
-  data-routing guardrail does not depend on the agent remembering it.
-
-Exit codes: 0 ok | 2 usage error | 3 auth/key error | 4 API/network error
-           | 5 sensitive-data routing violation | 6 nothing to review
+Exit codes: 0 ok | 2 usage error | 3 auth/key error | 4 API/network/CLI failure
+           | 6 nothing to review
 """
 
 import argparse
@@ -26,29 +23,28 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 KEYCHAIN_ACCOUNT = "openrouter-api-key"
 
-# Default lens-by-role models (verified present on OpenRouter 2026-06-21).
-ROLE_MODELS = {
-    "architecture": "z-ai/glm-5.2",            # default 3rd lens: 1M ctx, most distant distribution
-    "sensitive": "google/gemini-3.1-pro-preview",  # Western infra for auth/keys/health/finance
-    "correctness": "deepseek/deepseek-v4-pro",  # LiveCodeBench leader, correctness sniper
-    "countersynthesis": "openai/gpt-5.5",       # refutes Claude's dedup on the biggest changes
+# Default lens-by-role transport + target.
+# OpenRouter for distant houses with no CLI; the codex CLI for OpenAI (subscription).
+ROLE_SPEC = {
+    "architecture": {"transport": "openrouter", "target": "z-ai/glm-5.2"},
+    "correctness": {"transport": "openrouter", "target": "deepseek/deepseek-v4-pro"},
+    "countersynthesis": {"transport": "cli", "target": "codex"},
 }
 
-# --sensitive uses an ALLOWLIST (fail-closed): only model houses on Western infra are
-# permitted for sensitive code. An unknown/new house is REFUSED rather than silently
-# allowed — a denylist for a security guard fails open, which is the wrong default.
-# Audit this list when adding a new --role default.
-WESTERN_PREFIXES = (
-    "openai/", "google/", "anthropic/", "x-ai/", "meta-llama/", "mistralai/",
-    "cohere/", "microsoft/", "amazon/", "ai21/", "nvidia/", "perplexity/",
-    "inflection/", "databricks/",
-)
+
+def resolve_transport(role, model_override):
+    """Return (transport, target). An explicit --model always forces OpenRouter."""
+    if model_override:
+        return ("openrouter", model_override)
+    spec = ROLE_SPEC[role]
+    return (spec["transport"], spec["target"])
 
 
 def eprint(*a):
@@ -187,54 +183,8 @@ DEFAULT_PROMPT = (
 )
 
 
-def main():
-    ap = argparse.ArgumentParser(description="Run a single external third-lens review via OpenRouter.")
-    ap.add_argument("--files", nargs="*", default=[],
-                    help="files/globs to review (recursive ** supported). Omit to read stdin.")
-    ap.add_argument("--diff", action="store_true", help="review `git diff` instead of files")
-    ap.add_argument("--diff-base", default="HEAD", help="git ref to diff against (default HEAD)")
-    ap.add_argument("--model", default=None, help="OpenRouter model id (overrides --role)")
-    ap.add_argument("--role", choices=list(ROLE_MODELS), default="architecture",
-                    help="pick model by role (default architecture=GLM-5.2)")
-    ap.add_argument("--prompt", default=None, help="extra instructions appended to the review prompt")
-    ap.add_argument("--max-tokens", type=int, default=16000,
-                    help="completion token cap (includes reasoning tokens on reasoning models)")
-    ap.add_argument("--effort", choices=["low", "medium", "high"], default="medium",
-                    help="reasoning effort for reasoning models (caps the reasoning-token blowout)")
-    ap.add_argument("--sensitive", action="store_true",
-                    help="refuse non-Western model houses (auth/keys/health/finance code)")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="estimate input size + cost, do not call the model")
-    ap.add_argument("--check-credits", action="store_true", help="print OpenRouter balance and exit")
-    args = ap.parse_args()
-
-    key = resolve_key()
-
-    if args.check_credits:
-        bal = get_credits(key)
-        if bal is None:
-            eprint("ERROR: could not retrieve balance (bad key or network).")
-            sys.exit(3)
-        print(f"OpenRouter balance: ${bal:.2f}")
-        return
-
-    model = args.model or ROLE_MODELS[args.role]
-
-    if args.sensitive and not any(model.startswith(p) for p in WESTERN_PREFIXES):
-        eprint(f"REFUSED: --sensitive set but model '{model}' is not on the Western-infra "
-               f"allowlist (fail-closed for sensitive code).")
-        eprint(f"Use a Western lens, e.g. --role sensitive ({ROLE_MODELS['sensitive']}) "
-               f"or --role countersynthesis ({ROLE_MODELS['countersynthesis']}).")
-        sys.exit(5)
-
-    content = gather_content(args)
-    if not content.strip():
-        eprint("ERROR: nothing to review (empty diff / no files / empty stdin).")
-        sys.exit(6)
-
-    system_prompt = DEFAULT_PROMPT + (f"\n\nExtra instructions:\n{args.prompt}" if args.prompt else "")
-    user_msg = f"Review the following artifact:\n\n{content}"
-
+def run_openrouter(system_prompt, user_msg, model, args, key):
+    """Run a review via OpenRouter HTTP API. Prints RAW OUTPUT + usage + balance."""
     # rough pre-flight token estimate (chars/4) for the cost note
     est_in = (len(system_prompt) + len(user_msg)) // 4
     p_in, p_out = get_pricing(key, model)
@@ -305,6 +255,112 @@ def main():
     bal = get_credits(key)
     if bal is not None:
         print(f"[balance] OpenRouter ${bal:.2f} remaining")
+
+
+def run_codex(system_prompt, user_msg, target, args):
+    """Run the third lens via the codex CLI (OpenAI, subscription). target is the binary name."""
+    prompt = f"{system_prompt}\n\n{user_msg}"
+    if args.dry_run:
+        est_in = len(prompt) // 4
+        print("Transport: codex CLI (subscription — no OpenRouter cost)")
+        print(f"Estimated input tokens: ~{est_in:,}")
+        return
+
+    # --max-tokens / --effort are OpenRouter-only; warn so a user retrying a truncated
+    # review with a higher cap isn't silently ignored on the CLI path (GLM F5). The
+    # literals mirror the argparse defaults.
+    if args.max_tokens != 16000 or args.effort != "medium":
+        eprint("[note] --max-tokens/--effort are OpenRouter-specific; ignored by the codex CLI.")
+
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tf:
+        out_path = tf.name
+    try:
+        # Pass the prompt via STDIN (`exec -` reads instructions from stdin), NOT as an
+        # argv arg: a large diff would blow past ARG_MAX. Piping stdin also means there is
+        # no TTY, so codex cannot block on an interactive trust/login/approval prompt — it
+        # runs non-interactively or fails fast instead of hanging for the full timeout.
+        cmd = [target, "exec", "--sandbox", "read-only", "--color", "never",
+               "--skip-git-repo-check", "-o", out_path, "-"]
+        try:
+            proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", timeout=600,
+                                  start_new_session=True)
+            # encoding="utf-8": non-ASCII diffs would raise UnicodeEncodeError under a
+            #   non-UTF-8 locale (GLM F3). start_new_session: isolate codex's process
+            #   group so a timeout kill doesn't orphan as much (GLM F2, minimal mitigation).
+        except FileNotFoundError:
+            eprint(f"ERROR: '{target}' CLI not found in PATH (needed for --role countersynthesis).")
+            sys.exit(4)
+        except subprocess.TimeoutExpired:
+            eprint(f"ERROR: '{target}' CLI timed out after 600s.")
+            sys.exit(4)
+        if proc.returncode != 0:
+            detail = (proc.stderr or proc.stdout or "").strip()[:500]  # codex may log to stdout (GLM F4)
+            eprint(f"ERROR: {target} exec failed (exit {proc.returncode}):\n{detail}")
+            sys.exit(4)
+        try:
+            with open(out_path, encoding="utf-8") as fh:
+                text = fh.read()
+        except OSError as e:
+            eprint(f"ERROR: could not read {target} output: {e}")
+            sys.exit(4)
+        if not text.strip():
+            eprint(f"ERROR: {target} returned empty output.")
+            sys.exit(4)
+        print("===== THIRD-LENS RAW OUTPUT (codex CLI) =====\n")
+        print(text.rstrip())
+        print("\n===== END RAW OUTPUT — agent must run adversarial synthesis over this =====")
+        print("\n[usage] via codex CLI (subscription — no per-call cost)")
+    finally:
+        try:
+            os.unlink(out_path)
+        except OSError:
+            pass
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Run a single external third-lens review (OpenRouter or the codex CLI, by role).")
+    ap.add_argument("--files", nargs="*", default=[],
+                    help="files/globs to review (recursive ** supported). Omit to read stdin.")
+    ap.add_argument("--diff", action="store_true", help="review `git diff` instead of files")
+    ap.add_argument("--diff-base", default="HEAD", help="git ref to diff against (default HEAD)")
+    ap.add_argument("--model", default=None, help="OpenRouter model id (overrides --role)")
+    ap.add_argument("--role", choices=list(ROLE_SPEC), default="architecture",
+                    help="pick lens by role (default architecture=GLM-5.2 via OpenRouter; countersynthesis uses the codex CLI)")
+    ap.add_argument("--prompt", default=None, help="extra instructions appended to the review prompt")
+    ap.add_argument("--max-tokens", type=int, default=16000,
+                    help="completion token cap (includes reasoning tokens on reasoning models)")
+    ap.add_argument("--effort", choices=["low", "medium", "high"], default="medium",
+                    help="reasoning effort for reasoning models (caps the reasoning-token blowout)")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="estimate input size + cost, do not call the model")
+    ap.add_argument("--check-credits", action="store_true", help="print OpenRouter balance and exit")
+    args = ap.parse_args()
+
+    if args.check_credits:
+        key = resolve_key()
+        bal = get_credits(key)
+        if bal is None:
+            eprint("ERROR: could not retrieve balance (bad key or network).")
+            sys.exit(3)
+        print(f"OpenRouter balance: ${bal:.2f}")
+        return
+
+    transport, target = resolve_transport(args.role, args.model)
+
+    content = gather_content(args)
+    if not content.strip():
+        eprint("ERROR: nothing to review (empty diff / no files / empty stdin).")
+        sys.exit(6)
+
+    system_prompt = DEFAULT_PROMPT + (f"\n\nExtra instructions:\n{args.prompt}" if args.prompt else "")
+    user_msg = f"Review the following artifact:\n\n{content}"
+
+    if transport == "openrouter":
+        key = resolve_key()  # lazy — CLI role needs no OpenRouter key (P1)
+        run_openrouter(system_prompt, user_msg, target, args, key)
+    else:
+        run_codex(system_prompt, user_msg, target, args)
 
 
 if __name__ == "__main__":
