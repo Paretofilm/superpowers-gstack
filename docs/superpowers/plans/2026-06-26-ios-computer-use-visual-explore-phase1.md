@@ -1218,9 +1218,27 @@ Expected: FAIL.
 
 - [ ] **Step 3: Write minimal implementation**
 
+> **SPIKE-justert:** orchestreringen bruker de ferdige interfacene: `coordinate_space() -> (pw, ph)`,
+> `loop.run(..., screenshot_dir=...)` (returnerer `journal` + `status` + `baseline_screenshot`),
+> `critic.criticize(paths, client=...)`. `VisionCritic` (det ekte vision-passet) ligger i `gemini.py`
+> og kjøres KUN i live-smoke (degraderer grasiøst til `[]` ved feil — aldri krasj på kritiker).
+
 `scripts/computer_use/cli.py`:
 ```python
 import argparse
+import importlib.util
+import json
+import pathlib
+import time
+
+
+def _load(n):
+    s = importlib.util.spec_from_file_location(n, pathlib.Path(__file__).resolve().parent / f"{n}.py")
+    m = importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
+
+
+TOP_INSET = 50.0     # status-bar / dynamic island (punkter)
+BOTTOM_INSET = 40.0  # home-indikator (punkter)
 
 
 def parse_args(argv):
@@ -1229,15 +1247,81 @@ def parse_args(argv):
     p.add_argument("--bundle", required=True)
     p.add_argument("mission")
     p.add_argument("--max-steps", type=int, default=25, dest="max_steps")
+    p.add_argument("--out", default=None, help="output-mappe (default: computer-use-runs/run-<ts>)")
     p.add_argument("--dry-run", action="store_true", dest="dry_run")
     return p.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
-    # orkestrer: preflight → loop.run → dedup → critic → report; skriv rapport til disk,
-    # skriv text_summary til stdout (kontekst-renhet). --dry-run: single-turn planning-probe.
-    ...
+    preflight, executor_idb = _load("preflight"), _load("executor_idb")
+    coords, loop = _load("coords"), _load("loop")
+    dedup, report, critic, gemini = _load("dedup"), _load("report"), _load("critic"), _load("gemini")
+
+    env = preflight.preflight(args.udid, args.bundle)   # resolve idb + launch app
+    executor = executor_idb.IdbExecutor(args.udid)
+    point_w, point_h = executor.coordinate_space()
+    safe = coords.SafeArea(0, TOP_INSET, point_w, point_h - BOTTOM_INSET)
+    client = gemini.ComputerUseClient()
+
+    if args.dry_run:
+        # single-turn planning-probe (ingen handling utføres)
+        turn = client.start(args.mission, executor.screenshot())
+        print(json.dumps({"dry_run": True, "planned": turn.action, "done": turn.done},
+                         ensure_ascii=False, indent=2))
+        return
+
+    out = pathlib.Path(args.out or f"computer-use-runs/run-{int(time.time())}")
+    shots = out / "screenshots"
+    out.mkdir(parents=True, exist_ok=True)
+
+    try:
+        result = loop.run(args.mission, executor, client, max_steps=args.max_steps,
+                          safe_area=safe, screenshot_dir=str(shots))
+    finally:
+        # teardown (spec §7): aldri destruktivt; sim-state forblir som den er.
+        pass
+
+    journal = result["journal"]
+    last = len(journal)
+    retained = []
+    if result.get("baseline_screenshot"):
+        retained.append(result["baseline_screenshot"])
+    for e in journal:
+        if e.get("screenshot") and dedup.should_retain(
+                e.get("result", "success"), e["step"] == 1, e["step"] == last):
+            retained.append(e["screenshot"])
+
+    findings = critic.criticize(retained, client=gemini.VisionCritic()) if retained else []
+    report_path = out / "report.md"
+    report_path.write_text(report.build_markdown(args.mission, env, journal, findings, result["status"]))
+    print(report.text_summary(findings, str(report_path), str(shots)))
+```
+
+Legg til i `scripts/computer_use/gemini.py` (det ekte vision-pass; IKKE enhetstestet — live i Step 6):
+```python
+class VisionCritic:
+    """Ekte Gemini-vision-kritiker. analyze(paths) -> findings. Degraderer til [] ved enhver feil."""
+    def __init__(self, model: str = "gemini-3.5-flash"):
+        import google.genai as g
+        self._client = g.Client(api_key=_api_key())
+        self.model = model
+
+    def analyze(self, screenshot_paths) -> list:
+        from google.genai import types
+        prompt = _load("critic").CRITIC_PROMPT
+        parts = [types.Part.from_text(text=prompt)]
+        for p in screenshot_paths:
+            parts.append(types.Part.from_bytes(data=open(p, "rb").read(), mime_type="image/png"))
+        try:
+            resp = self._client.models.generate_content(model=self.model, contents=parts)
+            text = (resp.text or "").strip()
+            if text.startswith("```"):
+                text = text.split("```", 2)[1].removeprefix("json").strip()
+            data = json.loads(text)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
 ```
 
 `scripts/ios-visual-explore` (uv-shim, `chmod +x`):
@@ -1256,7 +1340,7 @@ main()
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python3 -m pytest tests/unit/computer_use/test_cli.py -v`
-Expected: PASS (2 tester).
+Expected: PASS (2 tester). (Orchestreringen + `VisionCritic` er live-only; enhetstestene dekker kun `parse_args`.)
 
 - [ ] **Step 5: Skriv skill-wrapper**
 
