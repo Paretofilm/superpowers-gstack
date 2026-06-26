@@ -75,3 +75,110 @@ def test_run_openrouter_prints_framing(monkeypatch, capsys):
     assert "===== THIRD-LENS RAW OUTPUT (z-ai/glm-5.2) =====" in out
     assert "P2 finding here" in out
     assert "END RAW OUTPUT" in out
+
+
+import subprocess
+
+
+class _CodexArgs:
+    dry_run = False
+    max_tokens = 16000
+    effort = "medium"
+
+
+def test_run_codex_invokes_exec_and_prints(monkeypatch, capsys):
+    captured = {}
+
+    def fake_run(cmd, input=None, **kwargs):  # **kwargs: encoding/errors/start_new_session/etc.
+        captured["cmd"] = cmd
+        captured["input"] = input
+        out_path = cmd[cmd.index("-o") + 1]
+        with open(out_path, "w", encoding="utf-8") as fh:
+            fh.write("P1 codex finding")
+        class P:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+        return P()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    tlr.run_codex("SYS", "USER artifact", "codex", _CodexArgs())
+    out = capsys.readouterr().out
+    assert captured["cmd"][:2] == ["codex", "exec"]
+    assert "--sandbox" in captured["cmd"] and "read-only" in captured["cmd"]
+    assert captured["cmd"][-1] == "-"  # prompt comes from stdin, not argv (ARG_MAX safe)
+    assert "USER artifact" in captured["input"]  # artifact piped via stdin
+    assert "===== THIRD-LENS RAW OUTPUT (codex CLI) =====" in out
+    assert "P1 codex finding" in out
+    assert "subscription" in out
+
+
+def test_run_codex_nonzero_exits_4(monkeypatch):
+    def fake_run(cmd, input=None, **kwargs):
+        class P:
+            returncode = 1
+            stderr = "boom"
+            stdout = ""
+        return P()
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(SystemExit) as e:
+        tlr.run_codex("SYS", "USER", "codex", _CodexArgs())
+    assert e.value.code == 4
+
+
+def test_run_codex_missing_binary_exits_4(monkeypatch):
+    def fake_run(*a, **k):
+        raise FileNotFoundError()
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(SystemExit) as e:
+        tlr.run_codex("SYS", "USER", "codex", _CodexArgs())
+    assert e.value.code == 4
+
+
+def test_run_codex_timeout_exits_4(monkeypatch):
+    def fake_run(cmd, input=None, **kwargs):
+        raise subprocess.TimeoutExpired(cmd, 600)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(SystemExit) as e:
+        tlr.run_codex("SYS", "USER", "codex", _CodexArgs())
+    assert e.value.code == 4
+
+
+def test_run_codex_empty_output_exits_4(monkeypatch):
+    def fake_run(cmd, input=None, **kwargs):
+        out_path = cmd[cmd.index("-o") + 1]
+        with open(out_path, "w", encoding="utf-8") as fh:
+            fh.write("   \n")  # whitespace-only → treated as empty
+        class P:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+        return P()
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(SystemExit) as e:
+        tlr.run_codex("SYS", "USER", "codex", _CodexArgs())
+    assert e.value.code == 4
+
+
+def test_main_countersynthesis_never_fetches_openrouter_key(monkeypatch):
+    """CONFIRMED P1: the CLI role must never call resolve_key()."""
+    monkeypatch.setattr("sys.argv", ["tlr", "--role", "countersynthesis", "--files", "x"])
+    monkeypatch.setattr(tlr, "gather_content", lambda args: "some artifact")
+    monkeypatch.setattr(tlr, "run_codex", lambda *a, **k: None)
+
+    def boom(*a, **k):
+        raise AssertionError("resolve_key() must not be called on the CLI path")
+    monkeypatch.setattr(tlr, "resolve_key", boom)
+    tlr.main()  # must not raise
+
+
+def test_main_cli_dry_run_skips_key(monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv",
+                        ["tlr", "--role", "countersynthesis", "--files", "x", "--dry-run"])
+    monkeypatch.setattr(tlr, "gather_content", lambda args: "some artifact")
+
+    def boom(*a, **k):
+        raise AssertionError("resolve_key() must not be called on the CLI dry-run path")
+    monkeypatch.setattr(tlr, "resolve_key", boom)
+    tlr.main()
+    assert "codex CLI" in capsys.readouterr().out

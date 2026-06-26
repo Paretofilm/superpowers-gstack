@@ -23,6 +23,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 
@@ -256,6 +257,67 @@ def run_openrouter(system_prompt, user_msg, model, args, key):
         print(f"[balance] OpenRouter ${bal:.2f} remaining")
 
 
+def run_codex(system_prompt, user_msg, target, args):
+    """Run the third lens via the codex CLI (OpenAI, subscription). target is the binary name."""
+    prompt = f"{system_prompt}\n\n{user_msg}"
+    if args.dry_run:
+        est_in = len(prompt) // 4
+        print("Transport: codex CLI (subscription — no OpenRouter cost)")
+        print(f"Estimated input tokens: ~{est_in:,}")
+        return
+
+    # --max-tokens / --effort are OpenRouter-only; warn so a user retrying a truncated
+    # review with a higher cap isn't silently ignored on the CLI path (GLM F5). The
+    # literals mirror the argparse defaults.
+    if args.max_tokens != 16000 or args.effort != "medium":
+        eprint("[note] --max-tokens/--effort are OpenRouter-specific; ignored by the codex CLI.")
+
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tf:
+        out_path = tf.name
+    try:
+        # Pass the prompt via STDIN (`exec -` reads instructions from stdin), NOT as an
+        # argv arg: a large diff would blow past ARG_MAX. Piping stdin also means there is
+        # no TTY, so codex cannot block on an interactive trust/login/approval prompt — it
+        # runs non-interactively or fails fast instead of hanging for the full timeout.
+        cmd = [target, "exec", "--sandbox", "read-only", "--color", "never",
+               "--skip-git-repo-check", "-o", out_path, "-"]
+        try:
+            proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", timeout=600,
+                                  start_new_session=True)
+            # encoding="utf-8": non-ASCII diffs would raise UnicodeEncodeError under a
+            #   non-UTF-8 locale (GLM F3). start_new_session: isolate codex's process
+            #   group so a timeout kill doesn't orphan as much (GLM F2, minimal mitigation).
+        except FileNotFoundError:
+            eprint(f"ERROR: '{target}' CLI not found in PATH (needed for --role countersynthesis).")
+            sys.exit(4)
+        except subprocess.TimeoutExpired:
+            eprint(f"ERROR: '{target}' CLI timed out after 600s.")
+            sys.exit(4)
+        if proc.returncode != 0:
+            detail = (proc.stderr or proc.stdout or "").strip()[:500]  # codex may log to stdout (GLM F4)
+            eprint(f"ERROR: {target} exec failed (exit {proc.returncode}):\n{detail}")
+            sys.exit(4)
+        try:
+            with open(out_path, encoding="utf-8") as fh:
+                text = fh.read()
+        except OSError as e:
+            eprint(f"ERROR: could not read {target} output: {e}")
+            sys.exit(4)
+        if not text.strip():
+            eprint(f"ERROR: {target} returned empty output.")
+            sys.exit(4)
+        print("===== THIRD-LENS RAW OUTPUT (codex CLI) =====\n")
+        print(text.rstrip())
+        print("\n===== END RAW OUTPUT — agent must run adversarial synthesis over this =====")
+        print("\n[usage] via codex CLI (subscription — no per-call cost)")
+    finally:
+        try:
+            os.unlink(out_path)
+        except OSError:
+            pass
+
+
 def main():
     ap = argparse.ArgumentParser(description="Run a single external third-lens review via OpenRouter.")
     ap.add_argument("--files", nargs="*", default=[],
@@ -295,11 +357,10 @@ def main():
     user_msg = f"Review the following artifact:\n\n{content}"
 
     if transport == "openrouter":
-        key = resolve_key()  # lazy — cli path must never call resolve_key()
+        key = resolve_key()  # lazy — CLI role needs no OpenRouter key (P1)
         run_openrouter(system_prompt, user_msg, target, args, key)
     else:
-        eprint("ERROR: cli transport not implemented yet.")
-        sys.exit(4)
+        run_codex(system_prompt, user_msg, target, args)
 
 
 if __name__ == "__main__":
