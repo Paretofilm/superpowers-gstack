@@ -19,11 +19,14 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODE="${1:-all}"
 
 case "$MODE" in
-  --integration|integration|all|"")
-    RUN_INTEGRATION=true
+  --integration|integration)
+    RUN_INTEGRATION=true; RUN_UNIT=false
     ;;
   --unit|unit)
-    RUN_INTEGRATION=false
+    RUN_INTEGRATION=false; RUN_UNIT=true
+    ;;
+  all|"")
+    RUN_INTEGRATION=true; RUN_UNIT=true
     ;;
   -h|--help)
     sed -n '2,15p' "$0"
@@ -36,6 +39,18 @@ case "$MODE" in
 esac
 
 FAIL=0
+
+if [ "${RUN_UNIT:-false}" = "true" ]; then
+  echo "=========================================="
+  echo "Unit tests (pytest, fast, no API)"
+  echo "=========================================="
+  if pytest "$REPO_ROOT/tests/unit" -q; then
+    echo ">>> unit: PASS"
+  else
+    echo ">>> unit: FAIL"
+    FAIL=$((FAIL + 1))
+  fi
+fi
 
 if [ "${RUN_INTEGRATION:-false}" = "true" ]; then
   echo "=========================================="
