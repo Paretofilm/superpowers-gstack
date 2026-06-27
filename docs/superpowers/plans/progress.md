@@ -32,9 +32,10 @@ Spike: `docs/superpowers/specs/SPIKE-FINDINGS.md` (Fase 2 addendum, commit `d96a
 
 - **Task 8:** complete (commit `d134eb2`, 64 suite = 63 + 1, gjort inline — triviell one-liner). `**Miljø:**`-linjen utvidet med orientation/device_class/safe-area-source via `.get()`+`_s()` (eldre env-dicts rendrer fortsatt grasiøst).
 
+- **Task 9:** complete (commit `afdad05`, docs-only, inline). SKILL.md: `--orientation` i invoke-blokk + iPad-landskap-eksempel; ny «iPad and orientation»-seksjon (manuell rotasjon S5, fullskjerm-only S6, INSET_TABLE, AXLabel-oracle S7, settle-retry + cold-boot); «Known limitations» (orientering persisterer, Slide-Over-hull, ingen split/SM). Rettet doc-påstand: tapp utenfor safe-area **avvises** (loop.py:55,62), styres ikke.
+
 ## Remaining
 - ~~Task 3 (derive_insets)~~ — DEFERRED (S1, ikke levedyktig).
-- **Task 9:** SKILL.md — iPad-docs, --orientation (operatør-roterer), kjente begrensninger.
 - **Task 10:** full suite grønn + iPhone-portrett-regresjon.
 - **Task 11:** live-smoke iPad portrett + landskap (manuell rotasjon) + iPhone-portrett-regresjon.
 
