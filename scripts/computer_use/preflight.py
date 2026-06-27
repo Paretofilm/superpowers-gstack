@@ -1,6 +1,9 @@
 import json
+import os
 import shutil
+import struct
 import subprocess
+import tempfile
 import time
 
 INSTALL_HINTS = {
@@ -71,11 +74,87 @@ def is_app_foreground(udid, baseline_app_label, baseline_full_width):
     return width >= 0.95 * baseline_full_width
 
 
-def preflight(udid: str, bundle_id: str) -> dict:
-    resolve_tool("idb")
-    # F3: timeout=30 for simctl launch
+def _terminate(udid, bundle_id):
+    subprocess.run(["xcrun", "simctl", "terminate", udid, bundle_id],
+                   capture_output=True, timeout=15)  # ok if not running
+
+
+def _launch(udid, bundle_id):
     subprocess.run(["xcrun", "simctl", "launch", udid, bundle_id], check=True, timeout=30)
-    return {"udid": udid, "bundle_id": bundle_id, "platform": "ios"}
+
+
+def _frame_matches_orientation(app, orientation):
+    f = app.get("frame") or {}
+    w, h = float(f.get("width", 0)), float(f.get("height", 0))
+    return (w >= h) if orientation == "landscape" else (h >= w)
+
+
+def _screenshot_width_px(udid):
+    """Full-screen screenshot pixel width via PNG IHDR header (stdlib only, no Pillow)."""
+    fd, path = tempfile.mkstemp(suffix=".png")
+    os.close(fd)
+    try:
+        subprocess.run(["xcrun", "simctl", "io", udid, "screenshot", path],
+                       capture_output=True, check=True, timeout=30)
+        with open(path, "rb") as f:
+            head = f.read(24)
+    finally:
+        os.unlink(path)
+    if head[:8] != b"\x89PNG\r\n\x1a\n":
+        raise PreflightError("screenshot is not a PNG")
+    return struct.unpack(">I", head[16:20])[0]
+
+
+def _validate_fullscreen(point_w, shot_w_px):
+    """S6: app is fullscreen iff screenshot_px / frame_pt is a clean @2x or @3x scale.
+    A split-view / Stage Manager window has a narrower frame -> non-integer or 4x/6x ratio."""
+    if point_w <= 0:
+        raise PreflightError("Application frame has zero width")
+    scale = shot_w_px / point_w
+    nearest = round(scale)
+    if nearest not in (2, 3) or abs(scale - nearest) > 0.02:
+        raise PreflightError(
+            f"app not fullscreen: screenshot {shot_w_px}px / frame {point_w}pt = {scale:.3f}, "
+            f"not a clean @2x/@3x backing scale (split view / Stage Manager? make the app fullscreen)")
+    return nearest
+
+
+def _load_coords():
+    import importlib.util, pathlib
+    p = pathlib.Path(__file__).resolve().parent / "coords.py"
+    s = importlib.util.spec_from_file_location("computer_use_coords", p)
+    m = importlib.util.module_from_spec(s)
+    s.loader.exec_module(m)
+    return m
+
+
+def preflight(udid, bundle_id, orientation):
+    """Terminate -> launch -> settle -> verify orientation (operator-set, S5) ->
+    validate fullscreen via screenshot/scale (S6) -> capture baseline -> build SafeArea from table (S1)."""
+    coords = _load_coords()
+    resolve_tool("idb")
+    _terminate(udid, bundle_id)
+    _launch(udid, bundle_id)
+    elems = _describe_all_settled(udid)
+    app = _app_element(elems)
+    if app is None:
+        raise PreflightError("no Application element after launch/settle")
+    if not _frame_matches_orientation(app, orientation):
+        raise PreflightError(
+            f"Application frame does not match '{orientation}'. "
+            f"Rotate the sim to {orientation} first (Simulator.app: Cmd+Left/Right), then re-run.")
+    label = app.get("AXLabel")
+    if label is None:
+        raise PreflightError("Application has no AXLabel; cannot establish foreground oracle reference")
+    f = app.get("frame") or {}
+    point_w, point_h = float(f.get("width", 0)), float(f.get("height", 0))
+    _validate_fullscreen(point_w, _screenshot_width_px(udid))
+    dc = device_class(udid)
+    sa = coords.table_insets(dc, orientation, point_w, point_h)
+    return {"udid": udid, "bundle_id": bundle_id, "platform": "ios",
+            "orientation": orientation, "device_class": dc,
+            "safe_area": sa, "safe_area_source": "table",
+            "baseline_full_width": point_w, "baseline_app_label": label}
 
 
 def _device_type_id(udid):

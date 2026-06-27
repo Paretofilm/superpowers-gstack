@@ -102,3 +102,60 @@ def test_device_class_iphone_17_pro_max_is_island(monkeypatch):
     monkeypatch.setattr(pf, "_device_type_id",
                         lambda udid: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max")
     assert pf.device_class("X") == "iphone_island"
+
+
+def _ipad_app_elems(width=834, height=1210, label="Innstillinger"):
+    return [{"type": "Application", "AXLabel": label,
+             "frame": {"x": 0, "y": 0, "width": width, "height": height}},
+            {"type": "Button"}, {"type": "Cell"}, {"type": "StaticText"}, {"type": "Image"}]
+
+
+def _patch_preflight_happy(monkeypatch, elems, shot_px, dc="ipad"):
+    monkeypatch.setattr(pf, "resolve_tool", lambda n: "/bin/true")
+    monkeypatch.setattr(pf, "_terminate", lambda u, b: None)
+    monkeypatch.setattr(pf, "_launch", lambda u, b: None)
+    monkeypatch.setattr(pf, "_describe_all_settled", lambda u: elems)
+    monkeypatch.setattr(pf, "device_class", lambda u: dc)
+    monkeypatch.setattr(pf, "_screenshot_width_px", lambda u: shot_px)
+
+
+def test_preflight_builds_safe_area_and_strips_elems(monkeypatch):
+    elems = _ipad_app_elems(834, 1210, "Innstillinger")
+    _patch_preflight_happy(monkeypatch, elems, shot_px=1668)  # 1668/834 = 2.0 exact @2x
+    env = pf.preflight("U", "com.apple.Preferences", "portrait")
+    assert env["safe_area_source"] == "table"
+    assert env["baseline_full_width"] == 834.0
+    assert env["baseline_app_label"] == "Innstillinger"
+    assert env["device_class"] == "ipad"
+    assert env["orientation"] == "portrait"
+    assert "describe_all_elems" not in env
+    assert env["safe_area"].top == 24
+    assert env["safe_area"].bottom == 1210 - 20
+
+
+def test_preflight_fails_closed_on_wrong_orientation(monkeypatch):
+    elems = _ipad_app_elems(834, 1210, "Innstillinger")  # h>w = portrait, but we ask landscape
+    _patch_preflight_happy(monkeypatch, elems, shot_px=1668)
+    with pytest.raises(pf.PreflightError):
+        pf.preflight("U", "com.apple.Preferences", "landscape")
+
+
+def test_preflight_fails_closed_on_non_fullscreen(monkeypatch):
+    elems = _ipad_app_elems(500, 1210, "Innstillinger")  # split: 1668/500=3.336, not clean @2x/@3x
+    _patch_preflight_happy(monkeypatch, elems, shot_px=1668)
+    with pytest.raises(pf.PreflightError):
+        pf.preflight("U", "com.apple.Preferences", "portrait")
+
+
+def test_preflight_fails_closed_on_half_split_clean_scale(monkeypatch):
+    elems = _ipad_app_elems(417, 1210, "Innstillinger")  # exact half: 1668/417=4.0 -> not in {2,3}
+    _patch_preflight_happy(monkeypatch, elems, shot_px=1668)
+    with pytest.raises(pf.PreflightError):
+        pf.preflight("U", "com.apple.Preferences", "portrait")
+
+
+def test_preflight_fails_closed_on_missing_axlabel(monkeypatch):
+    elems = _ipad_app_elems(834, 1210, None)
+    _patch_preflight_happy(monkeypatch, elems, shot_px=1668)
+    with pytest.raises(pf.PreflightError):
+        pf.preflight("U", "com.apple.Preferences", "portrait")
