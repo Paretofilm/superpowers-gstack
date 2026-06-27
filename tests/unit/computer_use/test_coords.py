@@ -36,3 +36,10 @@ def test_table_insets_unknown_raises():
     import pytest
     with pytest.raises(KeyError):
         coords.table_insets("nosuchdevice", "portrait", 100.0, 100.0)
+
+
+def test_iphone_portrait_regression_vs_phase1():
+    # Phase-1 hardcoded: SafeArea(0, 50, w, h-40). New table path for iphone_notch portrait
+    # must stay in the same ballpark so existing iPhone runs don't regress.
+    sa = coords.table_insets("iphone_notch", "portrait", 390.0, 844.0)
+    assert sa.top >= 44 and (844.0 - sa.bottom) >= 20
