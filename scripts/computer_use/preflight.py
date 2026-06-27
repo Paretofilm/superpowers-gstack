@@ -59,7 +59,15 @@ def _app_element(elems):
 
 def is_app_foreground(udid, baseline_app_label, baseline_full_width):
     """S7 oracle: target app is frontmost AND fullscreen, via AXLabel self-reference.
-    AXLabel-mismatch subsumes home detection (home label != target). Fail-closed to False."""
+    AXLabel-mismatch subsumes home detection (home label != target). Fail-closed to False.
+
+    Called per loop step, so it inherits the full SETTLE budget on purpose: that window is the
+    navigation-vs-departure DISAMBIGUATOR. A transient mid-navigation tree settles within it (then
+    we read AXLabel); a departure to home stays persistently degenerate (SPIKE: home dump is
+    `DockFolderViewService`, 1 element) and never settles -> False -> correct abort. Do NOT shorten
+    the budget (slow legitimate navigations would false-abort) nor fail-open on never-settle (home
+    departures, which are exactly the never-settle case, would be missed). A faster path would need a
+    home-signature fast-detect, which reverses the S2/S7 decision to drop home markers."""
     try:
         elems = _describe_all_settled(udid)
     except PreflightError:
