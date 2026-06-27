@@ -24,9 +24,10 @@ Spike: `docs/superpowers/specs/SPIKE-FINDINGS.md` (Fase 2 addendum, commit `d96a
 
 - **Task 4:** complete (commit `9a8c13a` + korrekthetsfiks `139dda6`, 51 suite = 48 + 3 pinning). `device_class(udid)` via `simctl list -j` → `INSET_TABLE`-nøkkel; ukjent device → `PreflightError` (fail-closed). FIKS: subagenten fanget 2 ekte stub-bugs verifisert mot ekte simctl — (a) `"pro-max"` falsk-positiv (notch 11/12/13 Pro Max → island) + redundant → slettet; (b) `"iphone-air"` falsk-negativ (Air har Dynamic Island) → lagt til. Island/notch-splitten nå pinnet (var helt utestet). ⚠️ FOR FINAL REVIEW: island er allowlist-per-generasjon — fremtidig `iPhone-18` resolver stille til notch (ingen test tvinger årlig edit); fail-closed beskytter kun ekte ikke-iPhone/iPad.
 
+- **Task 5:** complete (commit `0be1d9a`, 55 suite = 51 − 3 gamle foreground + 7 nye). AXLabel-selvreferanse-oracle: `is_app_foreground(udid, baseline_app_label, baseline_full_width)` → frontmost `Application.AXLabel == baseline_app_label ∧ width ≥ 0.95×baseline`. Nye helpers `_describe_all_raw` + `_describe_all_settled` (>3 typede elementer, 8×2s, reiser `PreflightError` ved aldri-stabil — oracle fanger→False, Task 6 lar propagere→fail-closed). Fjernet `_on_home_screen`, `_process_running`, spotlight-pill, `_fake_run` (grep-zero bekreftet). AXLabel None → fail-closed False. ⚠️ TASK 7 MÅ FIKSE `cli.py:102` — kaller fortsatt gammel 2-arg-form i lazy lambda (suite grønn fordi aldri invokert). ⚠️ FOR FINAL REVIEW: 0.95-terskel + `>3`-boundary er utestede heuristikker (kalibreres ved Task 11 live-smoke); ubrukt `json`-import i test_preflight.py (harmløs).
+
 ## Remaining
 - ~~Task 3 (derive_insets)~~ — DEFERRED (S1, ikke levedyktig).
-- **Task 5:** oracle via AXLabel-selvreferanse + settle-retry; fjern _on_home_screen. Erstatt 3 eksisterende 2-arg-tester.
 - **Task 6:** preflight — verifiser orientering (ikke sett), baseline via skjermbilde/scale, fang baseline_app_label, settle-retry, bygg SafeArea fra table_insets.
 - **Task 7:** cli — --orientation, env["safe_area"], foreground-closure med baseline_app_label + baseline_full_width.
 - **Task 8:** report — utvid Miljø-linjen (orientation/device_class/safe_area_source).
