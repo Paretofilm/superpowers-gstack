@@ -59,3 +59,25 @@ def preflight(udid: str, bundle_id: str) -> dict:
     # F3: timeout=30 for simctl launch
     subprocess.run(["xcrun", "simctl", "launch", udid, bundle_id], check=True, timeout=30)
     return {"udid": udid, "bundle_id": bundle_id, "platform": "ios"}
+
+
+def _device_type_id(udid):
+    out = subprocess.run(["xcrun", "simctl", "list", "devices", "-j"],
+                         capture_output=True, text=True, timeout=20).stdout
+    data = json.loads(out)
+    for devs in data.get("devices", {}).values():
+        for d in devs:
+            if d.get("udid") == udid:
+                return d.get("deviceTypeIdentifier", "")
+    return ""
+
+
+def device_class(udid):
+    tid = _device_type_id(udid).lower()
+    if "ipad" in tid:
+        return "ipad"
+    if any(m in tid for m in ("iphone-15", "iphone-16", "iphone-17", "pro-max", "iphone-14-pro")):
+        return "iphone_island"
+    if "iphone" in tid:
+        return "iphone_notch"
+    raise PreflightError(f"Unknown device type '{tid}' for {udid}; add it to device_class()")

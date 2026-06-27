@@ -46,3 +46,14 @@ def test_foreground_false_when_process_dead(monkeypatch):
     monkeypatch.setattr(pf.subprocess, "run", _fake_run(
         "", json.dumps([{"type": "Application"}])))
     assert pf.is_app_foreground("U", "com.x.app") is False
+
+
+def test_device_class_ipad(monkeypatch):
+    monkeypatch.setattr(pf, "_device_type_id", lambda udid: "com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch")
+    assert pf.device_class("X") == "ipad"
+
+
+def test_device_class_unknown_fails_closed(monkeypatch):
+    monkeypatch.setattr(pf, "_device_type_id", lambda udid: "com.apple.CoreSimulator.SimDeviceType.Apple-Watch")
+    with pytest.raises(pf.PreflightError):
+        pf.device_class("X")
