@@ -123,6 +123,14 @@ def test_device_class_home_button_fails_closed(monkeypatch):
             pf.device_class("X")
 
 
+def test_screenshot_dims_rejects_truncated_png(monkeypatch):
+    # simctl wrote a corrupt/empty file -> mkstemp's empty file stays empty (run is a no-op);
+    # the <24-byte guard must raise a clear PreflightError, not a confusing struct.error.
+    monkeypatch.setattr(pf.subprocess, "run", lambda *a, **k: None)
+    with pytest.raises(pf.PreflightError):
+        pf._screenshot_dims("U")
+
+
 def test_device_class_x_generation_is_notch(monkeypatch):
     # X/XR/XS all notch via the explicit allowlist
     for tid in ("iPhone-X", "iPhone-XR", "iPhone-XS-Max"):

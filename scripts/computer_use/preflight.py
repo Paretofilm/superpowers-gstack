@@ -100,8 +100,8 @@ def _screenshot_dims(udid):
             head = f.read(24)
     finally:
         os.unlink(path)
-    if head[:8] != b"\x89PNG\r\n\x1a\n":
-        raise PreflightError("screenshot is not a PNG")
+    if len(head) < 24 or head[:8] != b"\x89PNG\r\n\x1a\n":
+        raise PreflightError("screenshot is not a valid PNG (truncated or wrong format)")
     w, h = struct.unpack(">II", head[16:24])
     return w, h
 
