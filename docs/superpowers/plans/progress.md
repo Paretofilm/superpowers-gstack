@@ -30,9 +30,10 @@ Spike: `docs/superpowers/specs/SPIKE-FINDINGS.md` (Fase 2 addendum, commit `d96a
 
 - **Task 7:** complete (commit `4b259b7`, 63 suite = 60 + 3). cli.py: `--orientation {portrait,landscape}` default portrait; begge stier bruker `env["safe_area"]`; fjernet `TOP_INSET`/`BOTTOM_INSET` + `coords`-import (grep-zero). 3-arg `preflight()` på begge kallsteder. **KRITISK FIKS:** closure sender `env["baseline_app_label"]` (AXLabel), IKKE `args.bundle` (stubben hadde feil arg — ville aldri matchet → loop-exit på steg 1). F1 default-env seedet med orientation/device_class/safe_area_source. Inngangspunkt = wrapper `scripts/ios-visual-explore` (uv-script → `cli.main()`); `--orientation` verifisert via `--help`. cli.py har ingen `__main__`-guard, men trengs ikke (wrapper invokerer). ⚠️ FINAL REVIEW: `--dry-run` kjører nå full preflight (orientation/fullskjerm-validering + launch) — ikke lenger ren bivirkningsfri probe; defensibelt (trenger skjermbilde fra foregrunns-app), men en utvidelse.
 
+- **Task 8:** complete (commit `d134eb2`, 64 suite = 63 + 1, gjort inline — triviell one-liner). `**Miljø:**`-linjen utvidet med orientation/device_class/safe-area-source via `.get()`+`_s()` (eldre env-dicts rendrer fortsatt grasiøst).
+
 ## Remaining
 - ~~Task 3 (derive_insets)~~ — DEFERRED (S1, ikke levedyktig).
-- **Task 8:** report — utvid Miljø-linjen (orientation/device_class/safe_area_source).
 - **Task 9:** SKILL.md — iPad-docs, --orientation (operatør-roterer), kjente begrensninger.
 - **Task 10:** full suite grønn + iPhone-portrett-regresjon.
 - **Task 11:** live-smoke iPad portrett + landskap (manuell rotasjon) + iPhone-portrett-regresjon.
