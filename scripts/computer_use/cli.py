@@ -68,7 +68,7 @@ def main(argv=None):
     if args.dry_run:
         # single-turn planning probe (no actions executed)
         env = preflight.preflight(args.udid, args.bundle, args.orientation)
-        executor = executor_idb.IdbExecutor(args.udid)
+        executor = executor_idb.IdbExecutor(args.udid, orientation=args.orientation)
         client = gemini.ComputerUseClient()
         turn = client.start(args.mission, executor.screenshot())
         print(json.dumps({"dry_run": True, "planned": turn.action, "done": turn.done},
@@ -89,7 +89,7 @@ def main(argv=None):
     # F1: wrap setup AND loop.run in one guard so any failure still produces a report
     try:
         env = preflight.preflight(args.udid, args.bundle, args.orientation)
-        executor = executor_idb.IdbExecutor(args.udid)
+        executor = executor_idb.IdbExecutor(args.udid, orientation=args.orientation)
         safe = env["safe_area"]
         client = gemini.ComputerUseClient()
         result = loop.run(args.mission, executor, client, max_steps=args.max_steps,

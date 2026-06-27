@@ -38,6 +38,26 @@ def test_coordinate_space_reads_point_frame(monkeypatch):
     assert pw == 402.0 and ph == 874.0
 
 
+def test_screenshot_rotates_in_landscape(monkeypatch):
+    # simctl captures the native-portrait buffer even in landscape UI; the executor must rotate
+    # the PNG upright so the model sees the same orientation as the landscape Application frame.
+    calls = []
+    monkeypatch.setattr(ex.IdbExecutor, "_run", lambda self, args: calls.append(args) or b"")
+    e = ex.IdbExecutor("UDID-1", orientation="landscape")
+    e.screenshot()
+    assert any("screenshot" in c for c in calls)
+    assert any("sips" in c and "90" in c for c in calls), "landscape screenshot must be sips-rotated"
+
+
+def test_screenshot_no_rotate_in_portrait(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ex.IdbExecutor, "_run", lambda self, args: calls.append(args) or b"")
+    e = ex.IdbExecutor("UDID-1")  # default portrait
+    e.screenshot()
+    assert any("screenshot" in c for c in calls)
+    assert not any("sips" in c for c in calls), "portrait screenshot must NOT be rotated"
+
+
 def test_type_text_builds_idb_command(monkeypatch):
     calls = []
     monkeypatch.setattr(ex.IdbExecutor, "_run", lambda self, args: calls.append(args) or b"")
