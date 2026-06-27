@@ -28,9 +28,10 @@ Spike: `docs/superpowers/specs/SPIKE-FINDINGS.md` (Fase 2 addendum, commit `d96a
 
 - **Task 6:** complete (commit `71a3802`, 60 suite = 55 + 5). `preflight(udid, bundle_id, orientation)` 3-arg: terminate→launch→`_describe_all_settled`→verifiser frame-aspekt mot orientering (S5: setter IKKE, fail-closed «roter manuelt»)→`_validate_fullscreen` via skjermbilde-px/frame-pt = ren @2x/@3x (S6, droppet `_device_full_width`)→`table_insets` (S1, `safe_area_source="table"`). Fanger `baseline_app_label` (fail-closed hvis None). Nye helpers: `_terminate`, `_launch`, `_frame_matches_orientation`, `_screenshot_width_px` (PNG IHDR via struct), `_validate_fullscreen`, `_load_coords`. ⚠️ TASK 7 MÅ FIKSE `cli.py:73,95` — kaller gammel 2-arg `preflight()` (runtime). ⚠️ FINAL REVIEW: scale-heuristikk har én teoretisk false-accept (SM-vindu @ ~556pt på @2x → ratio 3.0); lav risiko. `_frame_matches_orientation` `>=` begge grener (kvadratisk matcher begge — benign).
 
+- **Task 7:** complete (commit `4b259b7`, 63 suite = 60 + 3). cli.py: `--orientation {portrait,landscape}` default portrait; begge stier bruker `env["safe_area"]`; fjernet `TOP_INSET`/`BOTTOM_INSET` + `coords`-import (grep-zero). 3-arg `preflight()` på begge kallsteder. **KRITISK FIKS:** closure sender `env["baseline_app_label"]` (AXLabel), IKKE `args.bundle` (stubben hadde feil arg — ville aldri matchet → loop-exit på steg 1). F1 default-env seedet med orientation/device_class/safe_area_source. Inngangspunkt = wrapper `scripts/ios-visual-explore` (uv-script → `cli.main()`); `--orientation` verifisert via `--help`. cli.py har ingen `__main__`-guard, men trengs ikke (wrapper invokerer). ⚠️ FINAL REVIEW: `--dry-run` kjører nå full preflight (orientation/fullskjerm-validering + launch) — ikke lenger ren bivirkningsfri probe; defensibelt (trenger skjermbilde fra foregrunns-app), men en utvidelse.
+
 ## Remaining
 - ~~Task 3 (derive_insets)~~ — DEFERRED (S1, ikke levedyktig).
-- **Task 7:** cli — --orientation, env["safe_area"], foreground-closure med baseline_app_label + baseline_full_width.
 - **Task 8:** report — utvid Miljø-linjen (orientation/device_class/safe_area_source).
 - **Task 9:** SKILL.md — iPad-docs, --orientation (operatør-roterer), kjente begrensninger.
 - **Task 10:** full suite grønn + iPhone-portrett-regresjon.
