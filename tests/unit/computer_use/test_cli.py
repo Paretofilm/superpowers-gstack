@@ -69,3 +69,19 @@ def test_mapped_log_renders_markdown():
     assert "test mission" in md
     assert "click" in md
     assert "test action" in md
+
+
+def test_parse_args_orientation_default():
+    a = cli.parse_args(["--udid", "U", "--bundle", "B", "explore"])
+    assert a.orientation == "portrait"
+
+
+def test_parse_args_orientation_landscape():
+    a = cli.parse_args(["--udid", "U", "--bundle", "B", "--orientation", "landscape", "explore"])
+    assert a.orientation == "landscape"
+
+
+def test_no_hardcoded_insets():
+    import inspect
+    src = inspect.getsource(cli)
+    assert "TOP_INSET" not in src and "BOTTOM_INSET" not in src
