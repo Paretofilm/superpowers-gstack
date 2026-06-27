@@ -15,7 +15,7 @@ Before any other action, run three refuse-conditions. Any failure → return ear
 | Check | Detect via | Refuse-message |
 |---|---|---|
 | Swift project | `*.xcodeproj` directory or `Package.swift` in cwd | "Not a Swift project. /macos-e2e-scaffold requires .xcodeproj or Package.swift in project root." |
-| SwiftUI macOS app | grep `WindowGroup\|Window(\|Settings {\|MenuBarExtra(` in `*.swift` under source root | "No SwiftUI macOS app target detected. Skill is macOS-only — for iOS use /ios-e2e-scaffold (deferred), for AppKit use /appkit-e2e-scaffold (deferred)." |
+| SwiftUI macOS app | grep `WindowGroup\|Window(\|Settings {\|MenuBarExtra(` in `*.swift` under source root | "No SwiftUI macOS app target detected. Skill is macOS-only — for iOS use /ios-e2e-scaffold, for AppKit use /appkit-e2e-scaffold (deferred)." |
 | Not already scaffolded | `<App>UITests/` exists with `find ... -name '*.swift' \| wc -l` > 1 | "UI test target already exists with N test files. Skill won't overwrite — extend manually instead." |
 
 Always emit Phase 0 result on success:
@@ -44,7 +44,7 @@ Proceeding with audit + scaffold.
 
 - **Not a review skill.** Does not analyse spec/plan/PRD artefacts. Use `/pitfall-verification` (will-it-work?), `/quality-review` (will-it-feel-premium?), or `/macos-native-review` (is-it-Apple-native?) for those.
 - **Not a code-quality reviewer.** Does not check view-code idioms (use Antoine van der Lee's `swiftui-expert-skill`) or unit-test idioms (use `swift-testing-expert`).
-- **Not iOS-aware.** Use `/ios-e2e-scaffold` (deferred — IDEAS.md).
+- **Not iOS-aware.** Use `/ios-e2e-scaffold`.
 - **Not AppKit-aware.** Use `/appkit-e2e-scaffold` (deferred).
 - **Not snapshot-aware.** Use `/swiftui-snapshot-scaffold` (deferred).
 - **Not auto-invoked.** Manual `/macos-e2e-scaffold` only — same model as `setup-routing`.

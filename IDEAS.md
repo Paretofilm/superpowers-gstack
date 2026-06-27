@@ -89,7 +89,7 @@ When a skill ships, its entry moves to the "Shipped" section below with the comm
 
 ---
 
-## `ios-e2e-scaffold` (proposed 2026-04-29, deferred)
+## `ios-e2e-scaffold` (proposed 2026-04-29, SHIPPED 2026-06-25 v2.19.0)
 
 **Gap.** XCUITest scaffolding for iOS SwiftUI apps; same shape as the (now-shipped) `macos-e2e-scaffold` but with iOS-specific heuristics — gestures, tab-bar, modals with sheet detents, device-rotation, safe-area, NavigationStack vs WindowGroup at the Scene root.
 
@@ -108,7 +108,19 @@ Out: macOS, watchOS, AppKit.
 
 **Differentiation.** Different heuristic targets (iOS top-flows differ from macOS), different runner-script destination, different identifier examples. Not a wrapper around macos-e2e-scaffold — distinct heuristic with iOS-specific TIER mappings.
 
-**Status.** Deferred until observed need. v1.10.0 ships `macos-e2e-scaffold` only.
+**Status.** Shipped 2026-06-25 (v2.19.0). See `skills/ios-e2e-scaffold/SKILL.md`. Phase 0 hardened beyond the original proposal: `WindowGroup` is cross-platform, so iOS detection requires an iOS-discriminating signal (`SDKROOT = iphoneos` / `.iOS(` / `platform: iOS`), not `WindowGroup` alone. Multiplatform targets pass with a note. Runner picks `iPhone 15` else falls back to first available iOS Simulator.
+
+---
+
+## `e2e-route` (proposed + SHIPPED 2026-06-25 v2.19.0)
+
+**Gap.** No routing layer above the E2E executors. `macos-e2e-scaffold`, `ios-e2e-scaffold`, and the MCP-live simulator tools each cover one (platform × intent) cell, but nothing decides *which* executor a given test request needs.
+
+**Scope.** Pure dispatcher — reads context (platform via SUPPORTED_PLATFORMS/.gstack/track × intent via CI-env/verbs × verification kind) and routes to the right executor, then hands off. Owns no execution: no build/tap/assert, no file modification, no test-stub generation. Manual `/e2e-route` + CLAUDE.md routing; not auto-hooked.
+
+**Method.** Routing table keyed on (intent × platform). Committed→scaffold skills; exploratory→MCP-live; visual→`/ios-design-review`. Multiplatform tiebreak asks iOS/macOS/both (both → two decision blocks). Fallback to MCP-live only on a real scaffold Phase 0 refusal (not on SPM-only, which the scaffolds accept).
+
+**Status.** Shipped 2026-06-25 (v2.19.0). See `skills/e2e-route/SKILL.md`. The router *above* the deferred/shipped scaffold skills — `swiftui-snapshot-scaffold` and `appkit-e2e-scaffold` remain deferred and would slot into the routing table when built.
 
 ---
 

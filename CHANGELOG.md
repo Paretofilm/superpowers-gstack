@@ -1,6 +1,36 @@
 # Changelog
 
-## 2.18.0
+## [2.19.0] - 2026-06-27
+
+### Added
+
+- **`ios-e2e-scaffold` skill** — one-shot XCUITest scaffolding for iOS SwiftUI
+  apps. Mirrors `macos-e2e-scaffold`'s deterministic Read+Grep heuristic with
+  iOS-specific substitutions: `TabView`/`NavigationStack`/`NavigationSplitView`
+  scene-walk, iOS TIER mappings (Modal/sheet, Tab-navigation, Push-navigation,
+  Gestures/rotation), and an iOS-Simulator runner (`platform=iOS Simulator,
+  name=iPhone 15` with fallback to the first available simulator). Phase 0 is
+  hardened against the `WindowGroup` cross-platform trap — iOS detection requires
+  an iOS-discriminating signal (`SDKROOT = iphoneos` / `.iOS(` / `platform: iOS`),
+  and multiplatform targets pass with a note. Manual invocation only.
+- **`e2e-route` skill** — a pure-dispatcher that routes a Swift E2E test request to
+  the right executor from context (platform × intent × verification kind) and hands
+  off without owning execution. Routes committed-regression → scaffold skills,
+  exploratory → MCP-live simulator automation, visual → `/ios-design-review`. CI-env
+  forces committed; ambiguous intent and multiplatform targets ask once
+  (`both` → two decision blocks). Fallback to MCP-live only on a real scaffold
+  Phase 0 refusal — SPM-only is not a fallback trigger. Manual + CLAUDE.md routing.
+
+### Changed
+
+- `IDEAS.md` — `ios-e2e-scaffold` marked shipped; new `e2e-route` entry added as the
+  router above the scaffold skills. `swiftui-snapshot-scaffold` and
+  `appkit-e2e-scaffold` remain deferred.
+- `macos-e2e-scaffold` cross-references to `/ios-e2e-scaffold` updated from
+  "(deferred)" to shipped.
+- `CLAUDE.md` — routing rules for `/e2e-route` and `/ios-e2e-scaffold`.
+
+## [2.18.0] - 2026-06-26
 
 ### Changed
 - third-lens-review: `countersynthesis` now runs through the `codex` CLI (subscription) instead of OpenRouter `openai/gpt-5.5`. `architecture` (GLM-5.2) and `correctness` (DeepSeek V4-Pro) stay on OpenRouter — no CLI exists for those houses.
