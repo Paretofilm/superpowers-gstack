@@ -140,6 +140,20 @@ Out: macOS, watchOS, AppKit.
 
 ---
 
+## `live-swiftui` som macOS-executor for computer-use (Tier 2) — integrasjonsnote (raised 2026-06-27)
+
+**Gap.** Computer-use-spec-en (`docs/superpowers/specs/2026-06-26-ios-computer-use-visual-explore-design.md`) planlegger macOS-driveren (Fase 4) via **cliclick**, som klikker på den **fysiske** skjermen. Spec-en erkjenner selv at dette er den skjøreste, siste fasen: den arver en hel pitfall-klasse (vindus-deteksjon, dynamisk zoom/skala-mapping, tastatur-fokus-kapring — R5 er "akseptert restrisiko, best-effort, ikke ekte fail-closed"). `idb` slipper unna alt dette på iOS fordi det injiserer i simulatorens **eget koordinatrom**, ikke fysisk skjerm.
+
+**Idé.** `live-swiftui` (separat prosjekt, `~/Developer/live-swiftui` — MCP-render-server for macOS SwiftUI) er macOS-analogen til `idb`: den eier NSHostingView-en og kan injisere `tap`/`type` i view-ets **eget koordinatrom** uten å røre fysisk skjerm. Den eksponerer allerede `screenshot` + `dump_tree` (out-of-process AX) over MCP, og har `tap`/`type`/`set_state` på v0.5-backloggen. Hvis den interaksjonsflaten designes mot **executor-grensesnittet** i computer-use-spec-en, kan `live-swiftui` bli en tredje executor (`live-swiftui-executor`) bak samme loop-motor — det **rene alternativet til cliclick** for macOS.
+
+**Differentiation.** Erstatter ikke loop-motoren, VisionCritic, action-adapteren eller rapport-byggeren — alt det forblir gstack-policy. `live-swiftui` leverer kun executor-**primitivene** (screenshot/tap/type i koordinatrom + AX-fakta). Klar mekanisme-vs-policy-grense, dokumentert i `live-swiftui/docs/boundary-live-swiftui-vs-superpowers-gstack.md`.
+
+**Trade-off å avveie.** `live-swiftui` driver et rendret `#Preview` (in-/sub-prosess NSHostingView), ikke nødvendigvis hele den launchede appen — så den passer **komponent-/view-nivå** macOS-utforsking. cliclick driver et hvilket som helst ekte app-vindu (helhetlig, men skjørt). De kan sameksistere som to macOS-executorer for ulike behov; poenget er at cliclick-investeringen ikke bør gjøres *uten* å vurdere `live-swiftui`-stien først.
+
+**Status.** Open — beslutning ønskes **før** computer-use Fase 4 (cliclick) bygges, og **før** `live-swiftui` v0.5 bygger sine interaksjons-tools (så kontrakten koordineres én gang, ikke to). Ikke blokkerende for Fase 1–3 (iOS/iPadOS via idb).
+
+---
+
 ## Partial-artifact verification — når er `pitfall-verification` for tidlig? (proposed 2026-05-21, open question)
 
 **Gap.** `pitfall-verification` er kalibrert for *komplette artefakter* — ferdige specs, planer eller kode. Skill-en har et "maks to runder"-budsjett. Men under lange brainstorming/design-sesjoner produseres sub-artefakter inkrementelt (f.eks. én arkitektur-seksjon av fem). Å kjøre den fulle skill-en på partial output gir enten (a) false positives om "manglende seksjoner" som bare ikke er skrevet ennå, eller (b) bruker opp runde-budsjettet tidlig så den endelige komplette-artefakt-runden har mindre headroom.
