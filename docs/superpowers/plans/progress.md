@@ -22,9 +22,10 @@ Spike: `docs/superpowers/specs/SPIKE-FINDINGS.md` (Fase 2 addendum, commit `d96a
 - **Task 1 (SPIKE):** complete (commit `d96ae02`). Gate grønn — 5 antagelser downgradet til implementerbare fallbacks, arkitektur intakt.
 - **Task 2:** complete (commit `e244414`, TDD rød→grønn, 46 suite = 43 baseline + 3 nye). `INSET_TABLE` + `table_insets` appended; `denormalize`/`in_safe_area`/`SafeArea` urørt; `KeyError` på ukjent device_class er tilsiktet (Task 7 mapper → `PreflightError`). ⚠️ FOR FINAL REVIEW: inset-verdiene er HIG-hypoteser, ikke pinnet av testen (`iphone_island` landskap tester kun `left>0 ∧ right<w`); visuell verifisering ved Task 11. iPad landskap = portrett `(0,24,0,20)` (ingen side-insets — korrekt, iPad har ingen notch/island).
 
+- **Task 4:** complete (commit `9a8c13a` + korrekthetsfiks `139dda6`, 51 suite = 48 + 3 pinning). `device_class(udid)` via `simctl list -j` → `INSET_TABLE`-nøkkel; ukjent device → `PreflightError` (fail-closed). FIKS: subagenten fanget 2 ekte stub-bugs verifisert mot ekte simctl — (a) `"pro-max"` falsk-positiv (notch 11/12/13 Pro Max → island) + redundant → slettet; (b) `"iphone-air"` falsk-negativ (Air har Dynamic Island) → lagt til. Island/notch-splitten nå pinnet (var helt utestet). ⚠️ FOR FINAL REVIEW: island er allowlist-per-generasjon — fremtidig `iPhone-18` resolver stille til notch (ingen test tvinger årlig edit); fail-closed beskytter kun ekte ikke-iPhone/iPad.
+
 ## Remaining
 - ~~Task 3 (derive_insets)~~ — DEFERRED (S1, ikke levedyktig).
-- **Task 4:** device_class (for INSET_TABLE-oppslag; fail-closed ukjent).
 - **Task 5:** oracle via AXLabel-selvreferanse + settle-retry; fjern _on_home_screen. Erstatt 3 eksisterende 2-arg-tester.
 - **Task 6:** preflight — verifiser orientering (ikke sett), baseline via skjermbilde/scale, fang baseline_app_label, settle-retry, bygg SafeArea fra table_insets.
 - **Task 7:** cli — --orientation, env["safe_area"], foreground-closure med baseline_app_label + baseline_full_width.
