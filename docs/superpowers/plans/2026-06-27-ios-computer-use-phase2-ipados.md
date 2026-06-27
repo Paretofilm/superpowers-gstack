@@ -22,7 +22,22 @@
 
 ---
 
-### Task 1: SPIKE — verify iPad assumptions (GATE, no production code)
+## ⚠️ SPIKE-ADJUSTMENTS (authoritative — Task 1 ran 2026-06-27, see SPIKE-FINDINGS Fase 2 addendum)
+
+The spike (commit `d96ae02`) overturned five assumptions. **Tasks 2–7 below are superseded by these adjustments; implement the adjusted version:**
+
+1. **Task 2 is the PRIMARY safe-area path** (not a fallback). `INSET_TABLE` is how iPad safe-area is produced — describe-all exposes no status-bar/home-indicator elements (S1).
+2. **Task 3 (`derive_insets`) is DEFERRED out of Phase 2** — not viable on iPad (would be untested dead code). Revisit only if a future iOS exposes inset elements. Skip Task 3.
+3. **Task 5 oracle uses `Application.AXLabel` self-reference, NOT `bundleID`** (S7: no bundleID field). Capture `baseline_app_label` at launch; `is_app_foreground(udid, baseline_app_label, baseline_full_width)` checks `Application.AXLabel == baseline_app_label AND width ≥ 0.95×baseline`. This subsumes home detection (home label ≠ target) — remove `_on_home_screen`/`spotlight-pill`. **Wrap every describe-all in settle-retry** (retry until >3 typed elements; iPad describe-all is flaky during transitions).
+4. **Task 6 preflight does NOT set orientation** (S5: impossible via simctl/idb). It VERIFIES the Application-frame aspect matches `--orientation`, fail-closed otherwise ("rotate the sim to <orientation> first: Simulator.app Cmd+←/→"). Baseline-fullscreen validated via **screenshot-width / backing-scale ≈ frame-width** (S6), NOT a hardcoded `_device_full_width` table (drop it). Capture `baseline_app_label` here too.
+5. **Task 4 `device_class` is kept** for `INSET_TABLE` lookup only (not baseline validation).
+6. **Settle-retry lives in preflight/oracle describe-all, NOT in loop.py** — loop's screenshot is pixels (unaffected); loop stays byte-for-byte unchanged.
+
+Global Constraint amended: replace "baseline that does not match device full-width" with "baseline whose frame-width ≠ screenshot-width/scale".
+
+---
+
+### Task 1: SPIKE — verify iPad assumptions (GATE, no production code) — ✅ DONE (commit d96ae02)
 
 **Files:**
 - Modify: `docs/superpowers/specs/SPIKE-FINDINGS.md` (append a "Fase 2 (iPadOS) addendum")
