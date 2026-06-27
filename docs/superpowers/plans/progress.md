@@ -34,10 +34,11 @@ Spike: `docs/superpowers/specs/SPIKE-FINDINGS.md` (Fase 2 addendum, commit `d96a
 
 - **Task 9:** complete (commit `afdad05`, docs-only, inline). SKILL.md: `--orientation` i invoke-blokk + iPad-landskap-eksempel; ny «iPad and orientation»-seksjon (manuell rotasjon S5, fullskjerm-only S6, INSET_TABLE, AXLabel-oracle S7, settle-retry + cold-boot); «Known limitations» (orientering persisterer, Slide-Over-hull, ingen split/SM). Rettet doc-påstand: tapp utenfor safe-area **avvises** (loop.py:55,62), styres ikke.
 
+- **Task 10:** complete (commit `741300d`, 65 suite = 43 Fase 1 + 22 Fase 2, inline). iPhone-portrett-regresjonstest: `iphone_notch` portrett-tabell (top=47≥44, bunn-inset=34≥20) holder samme ballpark som Fase 1s hardkodede (0,50,w,h-40).
+
 ## Remaining
 - ~~Task 3 (derive_insets)~~ — DEFERRED (S1, ikke levedyktig).
-- **Task 10:** full suite grønn + iPhone-portrett-regresjon.
-- **Task 11:** live-smoke iPad portrett + landskap (manuell rotasjon) + iPhone-portrett-regresjon.
+- **Task 11:** live-smoke iPad portrett + landskap (manuell rotasjon) + iPhone-portrett-regresjon. ⚠️ KREVER OPERATØR (manuell rotasjon) + paid Gemini-API.
 
 ## Lessons / gotchas
 - iPad cold-boot: SpringBoard/UI tar ~30-60s etter "booted"; svart skjerm + tomt AX-tre til UI rendrer. Poll til describe-all gir >3 typede elementer.
