@@ -20,9 +20,9 @@ Spike: `docs/superpowers/specs/SPIKE-FINDINGS.md` (Fase 2 addendum, commit `d96a
 
 ## Completed
 - **Task 1 (SPIKE):** complete (commit `d96ae02`). Gate grønn — 5 antagelser downgradet til implementerbare fallbacks, arkitektur intakt.
+- **Task 2:** complete (commit `e244414`, TDD rød→grønn, 46 suite = 43 baseline + 3 nye). `INSET_TABLE` + `table_insets` appended; `denormalize`/`in_safe_area`/`SafeArea` urørt; `KeyError` på ukjent device_class er tilsiktet (Task 7 mapper → `PreflightError`). ⚠️ FOR FINAL REVIEW: inset-verdiene er HIG-hypoteser, ikke pinnet av testen (`iphone_island` landskap tester kun `left>0 ∧ right<w`); visuell verifisering ved Task 11. iPad landskap = portrett `(0,24,0,20)` (ingen side-insets — korrekt, iPad har ingen notch/island).
 
 ## Remaining
-- **Task 2:** INSET_TABLE + table_insets (PRIMÆR safe-area-sti). iPad-insets ~24pt topp / ~20pt bunn (HIG; verifiser visuelt). Landskap = side-insets.
 - ~~Task 3 (derive_insets)~~ — DEFERRED (S1, ikke levedyktig).
 - **Task 4:** device_class (for INSET_TABLE-oppslag; fail-closed ukjent).
 - **Task 5:** oracle via AXLabel-selvreferanse + settle-retry; fjern _on_home_screen. Erstatt 3 eksisterende 2-arg-tester.
