@@ -36,9 +36,11 @@ Spike: `docs/superpowers/specs/SPIKE-FINDINGS.md` (Fase 2 addendum, commit `d96a
 
 - **Task 10:** complete (commit `741300d`, 65 suite = 43 Fase 1 + 22 Fase 2, inline). iPhone-portrett-regresjonstest: `iphone_notch` portrett-tabell (top=47≥44, bunn-inset=34≥20) holder samme ballpark som Fase 1s hardkodede (0,50,w,h-40).
 
+- **FINAL MULTI-LENS REVIEW:** complete (self-pitfall + Codex GATE-PASS + GLM-5.2 architecture). 71 suite. 4 funn fikset: (1) landskap fullskjerm-validering — sortert-dim + samme-scale-begge-akser, lukket OGSÅ Stage-Manager-556pt-false-accept (`21f1a84`); (2) device_class fail-open → notch-allowlist + raise, + bonus 16e/17e-fiks (`531f4c2`); (3) truncated-PNG-guard, cross-house Codex+GLM (`cf65fcd`). 1 begrunnet KEEP: oracle settle-budsjett = navigation-vs-departure-disambiguator, dokumentert (`36a8654`) — live-smoke måler latens. 2 begrunnet DROP: iPhone-landskap-insets (utenfor Fase 2 testet scope), _load_coords klasse-identitet (pre-eksisterende, duck-typed, hele-kodebase-scope). Kost: GLM $0.07.
+
 ## Remaining
 - ~~Task 3 (derive_insets)~~ — DEFERRED (S1, ikke levedyktig).
-- **Task 11:** live-smoke iPad portrett + landskap (manuell rotasjon) + iPhone-portrett-regresjon. ⚠️ KREVER OPERATØR (manuell rotasjon) + paid Gemini-API.
+- **Task 11:** live-smoke iPad portrett + landskap (manuell rotasjon) + iPhone-portrett-regresjon. ⚠️ KREVER OPERATØR (manuell rotasjon) + paid Gemini-API. WATCH (fra review): per-steg oracle-latens / falsk `app_left_foreground`-abort (GLM Finding 1) — mål kjøretid + sjekk for tidlig abort.
 
 ## Lessons / gotchas
 - iPad cold-boot: SpringBoard/UI tar ~30-60s etter "booted"; svart skjerm + tomt AX-tre til UI rendrer. Poll til describe-all gir >3 typede elementer.
