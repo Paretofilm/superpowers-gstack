@@ -187,3 +187,40 @@ settings below" ga **ikke** `scroll`, men:
   `idb ui swipe <x1> <y1> <x2> <y2>` (idb tar nettopp start+slutt). Erstatter punkt+retning-formen.
 - **Task 9 (loop):** denormaliser **begge** endepunktene for `drag_and_drop`; safe-area-sjekk på
   begge. `click` denormaliserer ett punkt som før.
+
+---
+
+# Fase 2 (iPadOS) addendum — Task 1 gate
+
+> Verifiserer S1–S7 (iPad-spesifikke antagelser) mot kjørende iPad-sim før Fase 2-kode.
+> **Spiken overturnet fem antagelser** — Tasks 2–8 justeres (se «Plan-justeringer» nederst).
+
+**Rigg:** iPad Pro 11-inch (M5), iOS 26.5 (UDID `87BAE6A6-2750-4254-A25A-F2CFFF3226BC`),
+`idb` (companion auto-koblet), testapp = innebygd Innstillinger (`com.apple.Preferences`).
+Dato: 2026-06-27. Spiken bruker kun idb/simctl (computer_use-API-formen ble verifisert i Fase 1).
+
+## Funn per antagelse
+
+| # | Antagelse | Resultat | Bevis |
+|---|-----------|----------|-------|
+| **S1** | describe-all eksponerer status-bar/home-indicator-frames → derive insets | **DOWNGRADED** | Treet har **ingen** slike elementer; innholdet starter på y=32, Application-frame er eneste geometri. → **`INSET_TABLE` primær** (GLMs P3-utfordring var korrekt). |
+| **S2** | `spotlight-pill` markerer iPad-hjemskjerm | **DOWNGRADED → erstattet** | `spotlight-pill` finnes ikke på iPad-hjem; hjem-dump er degenerert (`DockFolderViewService`, 1 element). → hjem-deteksjon via **AXLabel-mismatch** (S7), ikke en markør. |
+| **S4** | idb touch virker på iPad | **CONFIRMED** | `idb ui tap 582 375` (senter «Om») navigerte til Om-skjermen («Navn, iPad», «iPadOS-versjon, 26.5», «Modellnavn, iPad Pro 11-inch (M5)»). Punkter, som Fase 1. |
+| **S5** | simctl/idb kan sette orientering i pre-flight | **DOWNGRADED** | **Verken `simctl ui` (ingen orientation-subkommando) eller `idb ui` (kun describe/tap/button/text/key/swipe) kan rotere.** → verktøyet **setter ikke** orientering; operatøren roterer manuelt (Simulator.app Cmd+←/→), verktøyet **verifiserer** via frame-aspekt og fail-closer ved mismatch. |
+| **S6** | baseline = device-full-bredde fra hardkodet `device_class`-tabell | **REVIDERT** | Application-frame = **834×1210** (per-modell; 11" M5 ≠ min 820×1180-hypotese). Backing scale **@2x** (skjermbilde 1668×2420 = frame×2). → valider fullskjerm via **skjermbilde-bredde/scale ≈ frame-bredde** (modell-uavhengig), ikke hardkodet per-klasse-tabell. `baseline_full_width` = Application-frame-bredde fanget ved launch. |
+| **S7** | Application-elementet har `bundleID` → oracle matcher frontmost==target | **DOWNGRADED → adaptert** | **Ingen `bundleID`/identifier/pid på Application.** Men `AXLabel` = appens visningsnavn («Innstillinger»). → oracle bruker **AXLabel-selvreferanse**: fang `Application.AXLabel` ved launch, sammenlign i loop. Fanger BÅDE feil-app OG hjem (hjem-label `DockFolderViewService` ≠ target). Lokale-uavhengig (selvrefererende). Caveat: AXLabel kan være `None` for enkelte apper → fall til prosess+bredde-heuristikk. |
+
+## Tverrgående funn — describe-all er flaky på iPad ⚠️
+
+idb `describe-all` returnerer intermitterende **degenererte tre** (1 element / tomme labels) under transisjoner (rett etter launch/terminate/tap). Bekreftet: et fast settle (Fase 1 brukte 300 ms) er **utilstrekkelig** for iPad. **Settle-retry-til-stabilt** løste det fullstendig (retry til >3 typede elementer, ~8 forsøk × 2 s; tap-navigasjon ble korrekt fanget etter retry). Gjelder ALLE describe-all-kall: coordinate_space, baseline-fangst, og foreground-oracle.
+
+## Plan-justeringer (FØR Tasks 2–8 bygges)
+
+1. **Task 2/3 (coords):** `INSET_TABLE` er **primær** (ikke fallback) — derive_insets fra tre er ikke levedyktig (S1). Behold `derive_insets`-funksjonen som valgfri sekundær/fremtidig, men default-stien er tabell. iPad-insets måles separat (status-bar/home-indicator vises ikke i treet, så bruk HIG/skjermbilde-inspeksjon: iPad ~24 pt topp, ~20 pt bunn — verifiser visuelt).
+2. **Task 5 (oracle):** bruk **`Application.AXLabel`-selvreferanse**, ikke `bundleID` (S7). Signatur: fang `baseline_app_label` i preflight; `is_app_foreground(udid, baseline_app_label, baseline_full_width)`. **Legg inn settle-retry** i describe-all-kallet (tverrgående funn). Fjern `spotlight-pill`/`_on_home_screen` — AXLabel-mismatch subsumerer hjem-deteksjon.
+3. **Task 6 (preflight):** **fjern orientation-SETTING** (S5 umulig). I stedet: **verifiser** at Application-frame-aspekt matcher `--orientation`, fail-closed ellers med «roter simulatoren til <orientering> først (Simulator.app: Cmd+←/→)». Baseline-validering mot **skjermbilde-bredde/scale** (S6), ikke hardkodet device-full-bredde. Fang `baseline_app_label` her. Alle describe-all via settle-retry.
+4. **Task 4 (device_class):** beholdes for `INSET_TABLE`-oppslag, men **ikke** for baseline-validering (S6 bruker skjermbilde-dim i stedet).
+5. **`_device_full_width`-tabellen (Task 6 i planen): FJERNES** — erstattet av skjermbilde/scale-måling.
+6. **Settle-konstant:** Fase 1s `settle=0.3` i loop.py er for kort for iPad describe-all, men loop.py forblir urørt: retry-robusthet legges i preflight/oracle-describe-all, ikke i loop-settlet (skjermbildet i loop er piksler og påvirkes ikke).
+
+**Gaten:** S4 grønn (touch virker). S1/S2/S5/S6/S7 downgradet til konkrete, implementerbare fallbacks. **Ingen av funnene velter arkitekturen** (pluggbar executor, fullskjerm-only) eller fase-rekkefølgen — de strammer Tasks 2–6. **Bygg videre fra Task 2 med justeringene over.**

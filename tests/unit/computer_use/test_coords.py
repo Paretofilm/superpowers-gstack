@@ -20,3 +20,26 @@ def test_in_safe_area_rejects_status_bar():
     assert coords.in_safe_area(coords.Point(200, 400), safe) is True
     assert coords.in_safe_area(coords.Point(200, 30), safe) is False   # i status-bar
     assert coords.in_safe_area(coords.Point(200, 810), safe) is False  # under home-indicator
+
+
+def test_table_insets_ipad_portrait():
+    sa = coords.table_insets("ipad", "portrait", 820.0, 1180.0)
+    assert (sa.left, sa.top, sa.right, sa.bottom) == (0, 24, 820.0, 1160.0)
+
+
+def test_table_insets_landscape_has_side_insets():
+    sa = coords.table_insets("iphone_island", "landscape", 852.0, 393.0)
+    assert sa.left > 0 and sa.right < 852.0
+
+
+def test_table_insets_unknown_raises():
+    import pytest
+    with pytest.raises(KeyError):
+        coords.table_insets("nosuchdevice", "portrait", 100.0, 100.0)
+
+
+def test_iphone_portrait_regression_vs_phase1():
+    # Phase-1 hardcoded: SafeArea(0, 50, w, h-40). New table path for iphone_notch portrait
+    # must stay in the same ballpark so existing iPhone runs don't regress.
+    sa = coords.table_insets("iphone_notch", "portrait", 390.0, 844.0)
+    assert sa.top >= 44 and (844.0 - sa.bottom) >= 20

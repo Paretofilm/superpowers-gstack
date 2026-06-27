@@ -7,8 +7,9 @@ import tempfile
 
 
 class IdbExecutor:
-    def __init__(self, udid: str):
+    def __init__(self, udid: str, orientation: str = "portrait"):
         self.udid = udid
+        self.orientation = orientation
 
     def _run(self, args: list[str]) -> bytes:
         # F3: bounded timeout so hung idb/simctl calls propagate as TimeoutExpired
@@ -20,6 +21,15 @@ class IdbExecutor:
         os.close(fd)
         try:
             self._run(["xcrun", "simctl", "io", self.udid, "screenshot", path])
+            if self.orientation == "landscape":
+                # `simctl io screenshot` captures the native-portrait framebuffer regardless of UI
+                # rotation, so a landscape app lands rotated 90° inside a portrait-shaped PNG. The
+                # computer-use model would then see content whose orientation does not match the
+                # landscape Application frame that `denormalize` maps taps against → transposed taps.
+                # Rotate the PNG upright (clockwise, matching a "Rotate Left"/Cmd+Left simulator) so
+                # image orientation == frame orientation == idb tap space. iPad safe-area is symmetric,
+                # so pinning the contract to left-rotation loses nothing; SKILL.md documents it.
+                self._run(["sips", "-r", "90", path])
             with open(path, "rb") as f:
                 return f.read()
         finally:

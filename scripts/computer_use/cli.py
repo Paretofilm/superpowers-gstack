@@ -11,10 +11,6 @@ def _load(n):
     m = importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
 
 
-TOP_INSET = 50.0     # status-bar / dynamic island (points)
-BOTTOM_INSET = 40.0  # home indicator (points)
-
-
 def journal_to_action_log(journal):
     """Transform loop journal entries to action_log shape for report.build_markdown.
 
@@ -59,21 +55,20 @@ def parse_args(argv):
     p.add_argument("--max-steps", type=int, default=25, dest="max_steps")
     p.add_argument("--out", default=None, help="output directory (default: computer-use-runs/run-<ts>)")
     p.add_argument("--dry-run", action="store_true", dest="dry_run")
+    p.add_argument("--orientation", choices=["portrait", "landscape"], default="portrait")
     return p.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
     preflight, executor_idb = _load("preflight"), _load("executor_idb")
-    coords, loop = _load("coords"), _load("loop")
+    loop = _load("loop")
     dedup, report, critic, gemini = _load("dedup"), _load("report"), _load("critic"), _load("gemini")
 
     if args.dry_run:
         # single-turn planning probe (no actions executed)
-        env = preflight.preflight(args.udid, args.bundle)
-        executor = executor_idb.IdbExecutor(args.udid)
-        point_w, point_h = executor.coordinate_space()
-        safe = coords.SafeArea(0, TOP_INSET, point_w, point_h - BOTTOM_INSET)
+        env = preflight.preflight(args.udid, args.bundle, args.orientation)
+        executor = executor_idb.IdbExecutor(args.udid, orientation=args.orientation)
         client = gemini.ComputerUseClient()
         turn = client.start(args.mission, executor.screenshot())
         print(json.dumps({"dry_run": True, "planned": turn.action, "done": turn.done},
@@ -81,7 +76,8 @@ def main(argv=None):
         return
 
     # F1: default env and result before setup so report can always be written
-    env = {"platform": "ios", "udid": args.udid, "bundle_id": args.bundle}
+    env = {"platform": "ios", "udid": args.udid, "bundle_id": args.bundle,
+           "orientation": args.orientation, "device_class": "unknown", "safe_area_source": "n/a"}
     result = {"journal": [], "status": "error", "baseline_screenshot": None}
 
     # F10: nanosecond timestamp avoids same-second run-dir collisions
@@ -92,14 +88,14 @@ def main(argv=None):
 
     # F1: wrap setup AND loop.run in one guard so any failure still produces a report
     try:
-        env = preflight.preflight(args.udid, args.bundle)
-        executor = executor_idb.IdbExecutor(args.udid)
-        point_w, point_h = executor.coordinate_space()
-        safe = coords.SafeArea(0, TOP_INSET, point_w, point_h - BOTTOM_INSET)
+        env = preflight.preflight(args.udid, args.bundle, args.orientation)
+        executor = executor_idb.IdbExecutor(args.udid, orientation=args.orientation)
+        safe = env["safe_area"]
         client = gemini.ComputerUseClient()
         result = loop.run(args.mission, executor, client, max_steps=args.max_steps,
                           safe_area=safe, screenshot_dir=str(shots),
-                          foreground_check=lambda: preflight.is_app_foreground(args.udid, args.bundle))
+                          foreground_check=lambda: preflight.is_app_foreground(
+                              args.udid, env["baseline_app_label"], env["baseline_full_width"]))
     except Exception as exc:
         print(f"setup/loop failed: {exc}", file=sys.stderr)
 
