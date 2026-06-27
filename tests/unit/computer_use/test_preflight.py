@@ -110,18 +110,18 @@ def _ipad_app_elems(width=834, height=1210, label="Innstillinger"):
             {"type": "Button"}, {"type": "Cell"}, {"type": "StaticText"}, {"type": "Image"}]
 
 
-def _patch_preflight_happy(monkeypatch, elems, shot_px, dc="ipad"):
+def _patch_preflight_happy(monkeypatch, elems, shot_dims, dc="ipad"):
     monkeypatch.setattr(pf, "resolve_tool", lambda n: "/bin/true")
     monkeypatch.setattr(pf, "_terminate", lambda u, b: None)
     monkeypatch.setattr(pf, "_launch", lambda u, b: None)
     monkeypatch.setattr(pf, "_describe_all_settled", lambda u: elems)
     monkeypatch.setattr(pf, "device_class", lambda u: dc)
-    monkeypatch.setattr(pf, "_screenshot_width_px", lambda u: shot_px)
+    monkeypatch.setattr(pf, "_screenshot_dims", lambda u: shot_dims)
 
 
 def test_preflight_builds_safe_area_and_strips_elems(monkeypatch):
     elems = _ipad_app_elems(834, 1210, "Innstillinger")
-    _patch_preflight_happy(monkeypatch, elems, shot_px=1668)  # 1668/834 = 2.0 exact @2x
+    _patch_preflight_happy(monkeypatch, elems, shot_dims=(1668, 2420))  # exact @2x both axes
     env = pf.preflight("U", "com.apple.Preferences", "portrait")
     assert env["safe_area_source"] == "table"
     assert env["baseline_full_width"] == 834.0
@@ -133,29 +133,49 @@ def test_preflight_builds_safe_area_and_strips_elems(monkeypatch):
     assert env["safe_area"].bottom == 1210 - 20
 
 
+def test_preflight_landscape_accepts_unrotated_screenshot(monkeypatch):
+    # landscape app frame 1210x834; simctl may keep the native-portrait buffer 1668x2420.
+    # sorted-dimension comparison must still accept it as fullscreen (@2x on both axes).
+    elems = _ipad_app_elems(1210, 834, "Innstillinger")
+    _patch_preflight_happy(monkeypatch, elems, shot_dims=(1668, 2420))
+    env = pf.preflight("U", "com.apple.Preferences", "landscape")
+    assert env["orientation"] == "landscape"
+    assert env["baseline_full_width"] == 1210.0
+
+
+def test_preflight_landscape_accepts_rotated_screenshot(monkeypatch):
+    # same landscape app, but simctl DID rotate the screenshot to 2420x1668 -> must also pass
+    elems = _ipad_app_elems(1210, 834, "Innstillinger")
+    _patch_preflight_happy(monkeypatch, elems, shot_dims=(2420, 1668))
+    env = pf.preflight("U", "com.apple.Preferences", "landscape")
+    assert env["orientation"] == "landscape"
+
+
 def test_preflight_fails_closed_on_wrong_orientation(monkeypatch):
     elems = _ipad_app_elems(834, 1210, "Innstillinger")  # h>w = portrait, but we ask landscape
-    _patch_preflight_happy(monkeypatch, elems, shot_px=1668)
+    _patch_preflight_happy(monkeypatch, elems, shot_dims=(1668, 2420))
     with pytest.raises(pf.PreflightError):
         pf.preflight("U", "com.apple.Preferences", "landscape")
 
 
 def test_preflight_fails_closed_on_non_fullscreen(monkeypatch):
-    elems = _ipad_app_elems(500, 1210, "Innstillinger")  # split: 1668/500=3.336, not clean @2x/@3x
-    _patch_preflight_happy(monkeypatch, elems, shot_px=1668)
+    elems = _ipad_app_elems(500, 1210, "Innstillinger")  # split: short-axis 1668/500=3.336 not clean
+    _patch_preflight_happy(monkeypatch, elems, shot_dims=(1668, 2420))
     with pytest.raises(pf.PreflightError):
         pf.preflight("U", "com.apple.Preferences", "portrait")
 
 
-def test_preflight_fails_closed_on_half_split_clean_scale(monkeypatch):
-    elems = _ipad_app_elems(417, 1210, "Innstillinger")  # exact half: 1668/417=4.0 -> not in {2,3}
-    _patch_preflight_happy(monkeypatch, elems, shot_px=1668)
+def test_preflight_fails_closed_on_stage_manager_one_aligned_axis(monkeypatch):
+    # 556pt SM window on @2x: short-axis 1668/556=3.0 aligns, but long-axis 2420/1210=2.0 differs.
+    # non-uniform scale -> rejected (the theoretical single-axis false-accept is closed).
+    elems = _ipad_app_elems(556, 1210, "Innstillinger")
+    _patch_preflight_happy(monkeypatch, elems, shot_dims=(1668, 2420))
     with pytest.raises(pf.PreflightError):
         pf.preflight("U", "com.apple.Preferences", "portrait")
 
 
 def test_preflight_fails_closed_on_missing_axlabel(monkeypatch):
     elems = _ipad_app_elems(834, 1210, None)
-    _patch_preflight_happy(monkeypatch, elems, shot_px=1668)
+    _patch_preflight_happy(monkeypatch, elems, shot_dims=(1668, 2420))
     with pytest.raises(pf.PreflightError):
         pf.preflight("U", "com.apple.Preferences", "portrait")

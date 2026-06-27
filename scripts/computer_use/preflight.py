@@ -89,8 +89,8 @@ def _frame_matches_orientation(app, orientation):
     return (w >= h) if orientation == "landscape" else (h >= w)
 
 
-def _screenshot_width_px(udid):
-    """Full-screen screenshot pixel width via PNG IHDR header (stdlib only, no Pillow)."""
+def _screenshot_dims(udid):
+    """Full-screen screenshot (width, height) in pixels via PNG IHDR header (stdlib only, no Pillow)."""
     fd, path = tempfile.mkstemp(suffix=".png")
     os.close(fd)
     try:
@@ -102,20 +102,29 @@ def _screenshot_width_px(udid):
         os.unlink(path)
     if head[:8] != b"\x89PNG\r\n\x1a\n":
         raise PreflightError("screenshot is not a PNG")
-    return struct.unpack(">I", head[16:20])[0]
+    w, h = struct.unpack(">II", head[16:24])
+    return w, h
 
 
-def _validate_fullscreen(point_w, shot_w_px):
-    """S6: app is fullscreen iff screenshot_px / frame_pt is a clean @2x or @3x scale.
-    A split-view / Stage Manager window has a narrower frame -> non-integer or 4x/6x ratio."""
-    if point_w <= 0:
-        raise PreflightError("Application frame has zero width")
-    scale = shot_w_px / point_w
-    nearest = round(scale)
-    if nearest not in (2, 3) or abs(scale - nearest) > 0.02:
+def _validate_fullscreen(point_w, point_h, shot_w_px, shot_h_px):
+    """S6: app is fullscreen iff the screenshot matches the Application frame at the SAME clean
+    @2x/@3x backing scale on BOTH axes.
+
+    Compares SORTED dimensions so the check is robust to whether simctl rotates the screenshot
+    buffer to match landscape UI (it may capture the native-portrait buffer instead — unverified
+    across Xcode versions). Requiring ONE shared integer scale across both axes also rejects a
+    split-view / Stage-Manager window whose narrow frame coincidentally aligns on a single axis
+    (e.g. a 556pt window on @2x: short-axis 3x but long-axis 2x -> not uniform -> rejected)."""
+    fp = sorted((float(point_w), float(point_h)))
+    sp = sorted((float(shot_w_px), float(shot_h_px)))
+    if fp[0] <= 0:
+        raise PreflightError("Application frame has zero dimension")
+    nearest = round(sp[1] / fp[1])  # long-axis scale is the reference
+    if nearest not in (2, 3) or any(abs(s / p - nearest) > 0.02 for s, p in zip(sp, fp)):
         raise PreflightError(
-            f"app not fullscreen: screenshot {shot_w_px}px / frame {point_w}pt = {scale:.3f}, "
-            f"not a clean @2x/@3x backing scale (split view / Stage Manager? make the app fullscreen)")
+            f"app not fullscreen: screenshot {sp[0]:.0f}x{sp[1]:.0f}px vs frame "
+            f"{fp[0]:.0f}x{fp[1]:.0f}pt is not a uniform @2x/@3x backing scale "
+            f"(split view / Stage Manager? make the app fullscreen)")
     return nearest
 
 
@@ -148,7 +157,8 @@ def preflight(udid, bundle_id, orientation):
         raise PreflightError("Application has no AXLabel; cannot establish foreground oracle reference")
     f = app.get("frame") or {}
     point_w, point_h = float(f.get("width", 0)), float(f.get("height", 0))
-    _validate_fullscreen(point_w, _screenshot_width_px(udid))
+    shot_w, shot_h = _screenshot_dims(udid)
+    _validate_fullscreen(point_w, point_h, shot_w, shot_h)
     dc = device_class(udid)
     sa = coords.table_insets(dc, orientation, point_w, point_h)
     return {"udid": udid, "bundle_id": bundle_id, "platform": "ios",
