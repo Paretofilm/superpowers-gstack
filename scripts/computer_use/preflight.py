@@ -182,11 +182,19 @@ def device_class(udid):
     tid = _device_type_id(udid).lower()
     if "ipad" in tid:
         return "ipad"
+    # "e" budget models (16e, 17e) carry a notch, NOT Dynamic Island. Check them BEFORE the
+    # island substrings below, which would otherwise catch them via "iphone-16"/"iphone-17".
+    if any(m in tid for m in ("iphone-16e", "iphone-17e")):
+        return "iphone_notch"
     # Dynamic Island debuted on iPhone 14 Pro; allowlist by generation.
     # NOTE: "pro-max" omitted on purpose — it false-matches notch 11/12/13 Pro Max,
     # and every island Pro Max is already caught by its iphone-1N / iphone-14-pro prefix.
     if any(m in tid for m in ("iphone-15", "iphone-16", "iphone-17", "iphone-14-pro", "iphone-air")):
         return "iphone_island"
-    if "iphone" in tid:
+    # Notch generations X–14 (non-Pro) as an EXPLICIT allowlist, not a catch-all. A catch-all
+    # `if "iphone"` would guess notch for unmodeled iPhones — fail-OPEN: a future Island device
+    # would silently get notch's smaller top inset and allow taps into the unsafe zone. Home-button
+    # iPhones (SE/6s/7/8) have no INSET_TABLE row at all. Fall through to the fail-closed raise.
+    if any(m in tid for m in ("iphone-x", "iphone-11", "iphone-12", "iphone-13", "iphone-14")):
         return "iphone_notch"
-    raise PreflightError(f"Unknown device type '{tid}' for {udid}; add it to device_class()")
+    raise PreflightError(f"Unmodeled device type '{tid}' for {udid}; add it to device_class()")

@@ -104,6 +104,33 @@ def test_device_class_iphone_17_pro_max_is_island(monkeypatch):
     assert pf.device_class("X") == "iphone_island"
 
 
+def test_device_class_e_models_are_notch(monkeypatch):
+    # 16e/17e are budget models WITH a notch, not Dynamic Island — must be checked before
+    # the "iphone-16"/"iphone-17" island substrings catch them.
+    for tid in ("iPhone-16e", "iPhone-17e"):
+        monkeypatch.setattr(pf, "_device_type_id",
+                            lambda udid, t=tid: f"com.apple.CoreSimulator.SimDeviceType.{t}")
+        assert pf.device_class("X") == "iphone_notch", tid
+
+
+def test_device_class_home_button_fails_closed(monkeypatch):
+    # home-button iPhones (SE, 6s/7/8) have no notch/island and no INSET_TABLE row —
+    # fail closed (raise) instead of guessing notch, per the global fail-closed constraint.
+    for tid in ("iPhone-SE-3rd-generation", "iPhone-8-Plus"):
+        monkeypatch.setattr(pf, "_device_type_id",
+                            lambda udid, t=tid: f"com.apple.CoreSimulator.SimDeviceType.{t}")
+        with pytest.raises(pf.PreflightError):
+            pf.device_class("X")
+
+
+def test_device_class_x_generation_is_notch(monkeypatch):
+    # X/XR/XS all notch via the explicit allowlist
+    for tid in ("iPhone-X", "iPhone-XR", "iPhone-XS-Max"):
+        monkeypatch.setattr(pf, "_device_type_id",
+                            lambda udid, t=tid: f"com.apple.CoreSimulator.SimDeviceType.{t}")
+        assert pf.device_class("X") == "iphone_notch", tid
+
+
 def _ipad_app_elems(width=834, height=1210, label="Innstillinger"):
     return [{"type": "Application", "AXLabel": label,
              "frame": {"x": 0, "y": 0, "width": width, "height": height}},
