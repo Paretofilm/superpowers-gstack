@@ -16,36 +16,60 @@ def test_resolve_present_tool_returns_path(monkeypatch):
     assert pf.resolve_tool("idb") == "/opt/homebrew/bin/idb"
 
 
-def _fake_run(launchctl_out, describe_out):
-    class R:
-        pass
-
-    def run(args, **kw):
-        r = R()
-        r.stdout = launchctl_out if "launchctl" in args else describe_out
-        r.returncode = 0
-        return r
-    return run
+def _elems(ax_label, width):
+    return [{"type": "Application", "AXLabel": ax_label,
+             "frame": {"x": 0, "y": 0, "width": width, "height": 1180}},
+            {"type": "Button"}, {"type": "StaticText"},
+            {"type": "Cell"}, {"type": "Image"}]
 
 
-def test_foreground_true_when_running_and_not_home(monkeypatch):
-    monkeypatch.setattr(pf.subprocess, "run", _fake_run(
-        "501 0 UIKitApplication:com.x.app[abcd]\n",
-        json.dumps([{"type": "Application", "AXUniqueId": None}])))
-    assert pf.is_app_foreground("U", "com.x.app") is True
+def test_foreground_true_when_target_fullscreen(monkeypatch):
+    monkeypatch.setattr(pf, "_describe_all_settled", lambda udid: _elems("Innstillinger", 834))
+    assert pf.is_app_foreground("U", "Innstillinger", 834.0) is True
 
 
-def test_foreground_false_when_on_home(monkeypatch):
-    monkeypatch.setattr(pf.subprocess, "run", _fake_run(
-        "501 0 UIKitApplication:com.x.app[abcd]\n",
-        json.dumps([{"AXUniqueId": "spotlight-pill"}])))
-    assert pf.is_app_foreground("U", "com.x.app") is False
+def test_foreground_false_when_other_app_frontmost(monkeypatch):
+    monkeypatch.setattr(pf, "_describe_all_settled", lambda udid: _elems("Safari", 834))
+    assert pf.is_app_foreground("U", "Innstillinger", 834.0) is False
 
 
-def test_foreground_false_when_process_dead(monkeypatch):
-    monkeypatch.setattr(pf.subprocess, "run", _fake_run(
-        "", json.dumps([{"type": "Application"}])))
-    assert pf.is_app_foreground("U", "com.x.app") is False
+def test_foreground_false_when_split_narrow(monkeypatch):
+    monkeypatch.setattr(pf, "_describe_all_settled", lambda udid: _elems("Innstillinger", 500))
+    assert pf.is_app_foreground("U", "Innstillinger", 834.0) is False
+
+
+def test_foreground_false_when_axlabel_none(monkeypatch):
+    # caveat: AXLabel can be None for some apps -> cannot self-reference -> fail-closed False
+    monkeypatch.setattr(pf, "_describe_all_settled", lambda udid: _elems(None, 834))
+    assert pf.is_app_foreground("U", "Innstillinger", 834.0) is False
+
+
+def test_foreground_false_when_never_settles(monkeypatch):
+    def boom(udid):
+        raise pf.PreflightError("never settled")
+    monkeypatch.setattr(pf, "_describe_all_settled", boom)
+    assert pf.is_app_foreground("U", "Innstillinger", 834.0) is False
+
+
+def test_describe_all_settled_retries_until_stable(monkeypatch):
+    calls = {"n": 0}
+    def fake_raw(udid):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            return [{"type": "Application"}]          # degenerate: 1 typed elem
+        return _elems("Innstillinger", 834)           # stable: >3 typed elems
+    monkeypatch.setattr(pf, "_describe_all_raw", fake_raw)
+    monkeypatch.setattr(pf.time, "sleep", lambda s: None)
+    out = pf._describe_all_settled("U")
+    assert calls["n"] == 3
+    assert any(e.get("type") == "Application" for e in out)
+
+
+def test_describe_all_settled_raises_when_never_stable(monkeypatch):
+    monkeypatch.setattr(pf, "_describe_all_raw", lambda udid: [{"type": "Application"}])
+    monkeypatch.setattr(pf.time, "sleep", lambda s: None)
+    with pytest.raises(pf.PreflightError):
+        pf._describe_all_settled("U", attempts=3, delay=0)
 
 
 def test_device_class_ipad(monkeypatch):

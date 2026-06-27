@@ -1,6 +1,7 @@
 import json
 import shutil
 import subprocess
+import time
 
 INSTALL_HINTS = {
     "idb": "brew install facebook/fb/idb-companion && pip install fb-idb",
@@ -20,38 +21,54 @@ def resolve_tool(name: str) -> str:
     return path
 
 
-def _process_running(udid: str, bundle_id: str) -> bool:
-    # F3: timeout=10 for launchctl probe; timeout → treat as not-running (conservative)
-    try:
-        out = subprocess.run(["xcrun", "simctl", "spawn", udid, "launchctl", "list"],
-                             capture_output=True, text=True, timeout=10).stdout
-    except subprocess.TimeoutExpired:
-        return False
-    return f"UIKitApplication:{bundle_id}" in out
+SETTLE_ATTEMPTS = 8
+SETTLE_DELAY = 2.0
 
 
-def _on_home_screen(udid: str) -> bool:
-    # F3: timeout=30 for idb UI call; timeout → treat as not-home (conservative)
-    try:
-        out = subprocess.run(["idb", "ui", "describe-all", "--udid", udid],
-                             capture_output=True, text=True, timeout=30).stdout
-    except subprocess.TimeoutExpired:
-        return False
-    try:
-        elems = json.loads(out)
-    except (json.JSONDecodeError, ValueError):
-        return False
+def _describe_all_raw(udid):
+    out = subprocess.run(["idb", "ui", "describe-all", "--udid", udid],
+                         capture_output=True, text=True, timeout=30).stdout
+    elems = json.loads(out)
     if not isinstance(elems, list):
-        return False
-    # 'spotlight-pill' er en stabil, lokaliserings-uavhengig hjemskjerm-markør (SPIKE-FINDINGS R7)
-    return any(e.get("AXUniqueId") == "spotlight-pill" for e in elems)
+        raise ValueError("describe-all did not return a list")
+    return elems
 
 
-def is_app_foreground(udid: str, bundle_id: str) -> bool:
-    """R7-oracle: app fremme = prosess lever OG ikke på hjemskjerm (SPIKE-FINDINGS, Task 1)."""
-    if not _process_running(udid, bundle_id):
+def _describe_all_settled(udid, attempts=SETTLE_ATTEMPTS, delay=SETTLE_DELAY):
+    """iPad describe-all returns a degenerate tree during transitions (SPIKE Fase 2).
+    Retry until the tree has >3 typed elements; raise PreflightError if it never settles."""
+    last = []
+    for i in range(attempts):
+        try:
+            last = _describe_all_raw(udid)
+        except (subprocess.TimeoutExpired, ValueError, json.JSONDecodeError):
+            last = []
+        if sum(1 for e in last if e.get("type")) > 3:
+            return last
+        if i < attempts - 1:
+            time.sleep(delay)
+    raise PreflightError(f"describe-all never settled (>3 typed elems) after {attempts} attempts")
+
+
+def _app_element(elems):
+    return next((e for e in elems if e.get("type") == "Application"), None)
+
+
+def is_app_foreground(udid, baseline_app_label, baseline_full_width):
+    """S7 oracle: target app is frontmost AND fullscreen, via AXLabel self-reference.
+    AXLabel-mismatch subsumes home detection (home label != target). Fail-closed to False."""
+    try:
+        elems = _describe_all_settled(udid)
+    except PreflightError:
         return False
-    return not _on_home_screen(udid)
+    app = _app_element(elems)
+    if app is None:
+        return False
+    label = app.get("AXLabel")
+    if label is None or label != baseline_app_label:
+        return False
+    width = float((app.get("frame") or {}).get("width", 0))
+    return width >= 0.95 * baseline_full_width
 
 
 def preflight(udid: str, bundle_id: str) -> dict:
