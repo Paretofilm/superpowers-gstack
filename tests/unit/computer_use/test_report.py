@@ -50,3 +50,10 @@ def test_build_markdown_coerces_non_string_fields():
     assert "crash on launch" in md
     assert "1" in md
     assert "123" in md  # int coerced to str
+
+
+def test_report_shows_orientation_and_source():
+    env = {"udid": "U", "bundle_id": "com.x.app", "platform": "ios",
+           "orientation": "landscape", "device_class": "ipad", "safe_area_source": "table"}
+    md = report.build_markdown("explore", env, [], [], "completed")
+    assert "landscape" in md and "ipad" in md and "table" in md
