@@ -76,7 +76,10 @@ def device_class(udid):
     tid = _device_type_id(udid).lower()
     if "ipad" in tid:
         return "ipad"
-    if any(m in tid for m in ("iphone-15", "iphone-16", "iphone-17", "pro-max", "iphone-14-pro")):
+    # Dynamic Island debuted on iPhone 14 Pro; allowlist by generation.
+    # NOTE: "pro-max" omitted on purpose — it false-matches notch 11/12/13 Pro Max,
+    # and every island Pro Max is already caught by its iphone-1N / iphone-14-pro prefix.
+    if any(m in tid for m in ("iphone-15", "iphone-16", "iphone-17", "iphone-14-pro", "iphone-air")):
         return "iphone_island"
     if "iphone" in tid:
         return "iphone_notch"

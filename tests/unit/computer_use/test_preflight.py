@@ -57,3 +57,24 @@ def test_device_class_unknown_fails_closed(monkeypatch):
     monkeypatch.setattr(pf, "_device_type_id", lambda udid: "com.apple.CoreSimulator.SimDeviceType.Apple-Watch")
     with pytest.raises(pf.PreflightError):
         pf.device_class("X")
+
+
+def test_device_class_pro_max_pre14_is_notch(monkeypatch):
+    # iPhone 11/12/13 Pro Max har notch, ikke Dynamic Island (debut: 14 Pro)
+    monkeypatch.setattr(pf, "_device_type_id",
+                        lambda udid: "com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro-Max")
+    assert pf.device_class("X") == "iphone_notch"
+
+
+def test_device_class_iphone_air_is_island(monkeypatch):
+    # iPhone Air har Dynamic Island
+    monkeypatch.setattr(pf, "_device_type_id",
+                        lambda udid: "com.apple.CoreSimulator.SimDeviceType.iPhone-Air")
+    assert pf.device_class("X") == "iphone_island"
+
+
+def test_device_class_iphone_17_pro_max_is_island(monkeypatch):
+    # regresjon: ekte island-Pro-Max fanges fortsatt (via iphone-17-prefix), ikke pro-max-substring
+    monkeypatch.setattr(pf, "_device_type_id",
+                        lambda udid: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max")
+    assert pf.device_class("X") == "iphone_island"
