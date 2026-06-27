@@ -40,7 +40,7 @@ Spike: `docs/superpowers/specs/SPIKE-FINDINGS.md` (Fase 2 addendum, commit `d96a
 
 ## Remaining
 - ~~Task 3 (derive_insets)~~ — DEFERRED (S1, ikke levedyktig).
-- **Task 11:** live-smoke iPad portrett + landskap (manuell rotasjon) + iPhone-portrett-regresjon. ⚠️ KREVER OPERATØR (manuell rotasjon) + paid Gemini-API. WATCH (fra review): per-steg oracle-latens / falsk `app_left_foreground`-abort (GLM Finding 1) — mål kjøretid + sjekk for tidlig abort.
+- **Task 11:** IN PROGRESS. ✅ iPad-portrett-smoke PASS (`run-1782590411231861000`: status=completed, device_class=ipad, safe-area=table, 4 shots, 3 funn, text-only, ~12s/steg). ✅ iPhone-17-Pro-portrett-regresjon PASS (`run-1782590506105913000`: status=step_limit, device_class=iphone_island, safe-area=table, 6 shots, 2 funn). WATCH-element (GLM Finding 1 oracle-latens/falsk-abort) manifesterte IKKE — begge rene. ⏳ GJENSTÅR: iPad-LANDSKAP-smoke — krever manuell rotasjon (S5). Verifiserer den orientering-robuste fullskjerm-fiksen (`21f1a84`) empirisk.
 
 ## Lessons / gotchas
 - iPad cold-boot: SpringBoard/UI tar ~30-60s etter "booted"; svart skjerm + tomt AX-tre til UI rendrer. Poll til describe-all gir >3 typede elementer.
