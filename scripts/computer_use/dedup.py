@@ -1,4 +1,9 @@
-RETAIN_STATUSES = {"rejected", "failed", "unsupported", "timeout", "app_left_foreground"}
+# H1: a visual-issue finder must critique every screen the run REACHED. A successful step lands on
+# a newly-navigated screen — exactly what to inspect — so "success" is retained alongside problem
+# steps and endpoints. (Near-duplicate suppression of e.g. successive scrolls is the job of the
+# perceptual ahash dedup below, the future optimization; until it is wired we retain all captured
+# screens rather than silently dropping the explored ones.)
+RETAIN_STATUSES = {"success", "rejected", "failed", "unsupported", "timeout", "app_left_foreground"}
 
 
 def ahash(gray_pixels, side: int = 8) -> int:
