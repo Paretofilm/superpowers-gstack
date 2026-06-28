@@ -4,6 +4,12 @@ import json
 import os
 import subprocess
 import tempfile
+import time
+
+# SPIKE: iPad describe-all degenerates during transitions; retry until a usable tree.
+# Applies to ALL describe-all calls — coordinate_space included (mirrors preflight's settle).
+_SETTLE_ATTEMPTS = 8
+_SETTLE_DELAY = 2.0
 
 
 class IdbExecutor:
@@ -50,13 +56,25 @@ class IdbExecutor:
 
     def coordinate_space(self) -> tuple[float, float]:
         """(point_w, point_h) fra describe-all Application-frame. idb tar punkter, så ingen
-        piksel/scale-konvertering (SPIKE-FINDINGS, Task 1)."""
-        out = self._run(["idb", "ui", "describe-all", "--udid", self.udid])
-        elems = json.loads(out)
-        if not isinstance(elems, list):
-            raise ValueError("describe-all did not return a list")
-        app = next((e for e in elems if e.get("type") == "Application"), None)
-        if app is None:
-            raise ValueError("No Application element in describe-all output")
-        f = app["frame"]
-        return (float(f["width"]), float(f["height"]))
+        piksel/scale-konvertering (SPIKE-FINDINGS, Task 1).
+
+        Settle-retry: iPad describe-all can hand back a degenerate tree (no Application) right after
+        launch/transition. The SPIKE requires retry on ALL describe-all calls — including this one,
+        which is hoisted once at loop start, so a single flake would otherwise kill the whole run."""
+        last = "no Application element"
+        for i in range(_SETTLE_ATTEMPTS):
+            try:
+                elems = json.loads(self._run(["idb", "ui", "describe-all", "--udid", self.udid]))
+                if isinstance(elems, list):
+                    app = next((e for e in elems if e.get("type") == "Application"), None)
+                    if app is not None and isinstance(app.get("frame"), dict):
+                        f = app["frame"]
+                        return (float(f["width"]), float(f["height"]))
+                    last = "no Application element"
+                else:
+                    last = "describe-all did not return a list"
+            except (json.JSONDecodeError, ValueError) as e:
+                last = str(e)
+            if i < _SETTLE_ATTEMPTS - 1:
+                time.sleep(_SETTLE_DELAY)
+        raise ValueError(f"describe-all never yielded an Application frame after {_SETTLE_ATTEMPTS} attempts ({last})")
