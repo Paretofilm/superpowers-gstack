@@ -128,6 +128,62 @@ This is why the routing layer stays thin: element-lookup is identical whether th
 executor is `ui_find_element("PlanListView_Button_GeneratePlan")` (MCP-live) or
 `app.buttons["PlanListView_Button_GeneratePlan"].tap()` (XCUITest).
 
+## Simulator readiness ladder (MCP-live only)
+
+When the routed executor is **MCP-live** (`ios-simulator` / `XcodeBuildMCP` / raw
+`idb`+`simctl`), readiness is not a single boolean. "Booted" exists at three levels that
+lag each other unpredictably — sometimes by **minutes** on a cold iOS 26 boot:
+
+| Level | Signal | Reality |
+|---|---|---|
+| 1 | `xcrun simctl list devices booted` shows `Booted` | CoreSimulator state — earliest, a diagnostic not a gate |
+| 2 | `xcrun simctl bootstatus <udid> -b` returns | launchd/system services — neither sufficient nor necessary for automation; a diagnostic not a gate |
+| 3 | `describe-all` / `snapshot_ui` returns a non-degenerate tree | SpringBoard rendered, AX bridge live — **the only readiness gate** |
+
+These are **not a clean monotonic ladder.** In the 2026-06-27 incident `bootstatus -b`
+(level 2) was *still blocking* after the UI (level 3) was already up. Treat level 3 as the
+only readiness gate; levels 1–2 are diagnostics you read, never conditions you wait on.
+
+**Rules — these prevent stranded passive waits:**
+
+1. **Poll the precondition you actually need (level 3), not a proxy.** A device that
+   reports `Booted` can still show a black screen with an empty AX tree. Gate the first
+   probe on a non-degenerate tree, not on `Booted`.
+2. **Never block on `bootstatus -b` as your wakeup signal.** It can block far longer than
+   the device takes to become usable — or indefinitely, if its boot-completion condition
+   is never met — so it always needs an external timeout. Instead run a bounded
+   `run_in_background` until-loop that *exits* the moment the level-3 precondition is true
+   (one notification, within seconds):
+   ```bash
+   # Ready ≠ "Booted". A cold-boot AX tree can contain elements whose frames are
+   # all null/0 (degenerate) — so gate on REAL geometry, not just on nodes existing.
+   # REPLACE the ready() body with a check against YOUR tool's actual output (an
+   # element with a NON-ZERO frame width — a label alone does not prove geometry).
+   # Confirm field names once against a real dump. Note: idb roles are bare ("Button",
+   # "Application"), NOT AX-prefixed — do not grep for "AXButton". Until you replace it,
+   # ready() fails loudly, so the loop can never falsely report success.
+   ready() {
+     echo "readiness predicate not implemented — replace ready()" >&2
+     return 1
+   }
+   start=$SECONDS
+   until ready; do
+     if [ $((SECONDS - start)) -gt 120 ]; then
+       echo "TIMEOUT: AX tree still degenerate" >&2
+       exit 1   # fail loudly — a wrapping background task must NOT notify "ready"
+     fi
+     sleep 1
+   done
+   ```
+3. **Always pair "I'll be notified when the task finishes" with a fallback wakeup.** The
+   harness re-invokes on task *completion*; a hung task strands you forever. Set a
+   `ScheduleWakeup` fallback (or a bounded `Monitor` timeout) so a hang can't cost 10
+   idle minutes. If your only plan is "I'll be notified automatically," you have no plan
+   for the notification not arriving.
+4. **Never emit a bare "waiting."** Either you are actively polling (a background
+   until-loop that exits) or you hand control back. Idle-waiting on an opaque blocking
+   command is the anti-pattern that wasted real time on a Fase-2 iPad spike (2026-06-27).
+
 ## Relationship to other skills
 
 | Skill | Layer | Asks |
