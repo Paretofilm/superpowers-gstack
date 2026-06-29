@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.20.0] - 2026-06-29
+
+### Changed (Superpowers 6.0.3 upstream)
+
+- **SDD scratch files moved to `.superpowers/sdd/`** — Superpowers 6.0.0 relocated task briefs, implementer reports, review diffs, and the progress ledger out of `.git/sdd/` (blocked by Claude Code's protected-path policy) into a self-ignoring `.superpowers/sdd/` directory in the working tree. The workspace is git-ignored and resolved per worktree via a shared `sdd-workspace` helper. Note: `git clean -fdx` will delete the progress ledger; recover from `git log`. Updated `/superpowers:subagent-driven-development` description in README and Superpowers Commands table.
+- **Worktrees now land in the project** — `using-git-worktrees` and `finishing-a-development-branch` no longer use `~/.config/superpowers/worktrees/`. Worktrees now land in the project — an existing `.worktrees/` or `worktrees/` if present, otherwise a fresh `.worktrees/` — unless overridden. Updated README command table.
+- **SDD reviewer rewrite** — Single `task-reviewer-prompt.md` replaces the two-prompt `spec-reviewer-prompt.md` + `code-quality-reviewer-prompt.md` flow. One reviewer per task returns both spec-compliance and quality verdicts. A whole-branch review runs at the end on the most capable model. Plans get a pre-flight conflict check before the first task. Diffs and task text now move as files (`task-brief` and `review-package` scripts). Every dispatch now states its model. Controllers can no longer instruct reviewers to ignore findings or pre-rate severity.
+- **`third-lens-review` routing update** — `countersynthesis` role now runs via the codex CLI (subscription) instead of OpenRouter `openai/gpt-5.5`. The `sensitive` role and its `--sensitive` guard have been removed (carried forward from v2.18.0). Updated README description.
+- **Brainstorming visual companion security hardening** — per-session key guards all requests and WebSocket connections; file server sandbox enforced (no symlinks, dotfiles, or path traversal); companion offered only when it helps; survives restarts with same port and key; idle timeout extended from 30 minutes to 4 hours. (Superpowers 6.0.0)
+- **Superpowers now supports Kimi Code, Pi, and Antigravity harnesses** — each ships its own bootstrap, tool-mapping reference, and tests. Pi has native skills (no compatibility shim needed). (Superpowers 6.0.0)
+
+### Changed (Claude Code 2.1.195)
+
+- Claude Code updated from 2.1.150 to 2.1.195. VERSIONS.md advanced accordingly.
+
+### Removed (Superpowers 6.0.0)
+
+- **`evals` submodule removed from plugin** (6.0.2) — the eval harness now lives in its own repo; removed to fix plugin install failures for some users.
+
 ## [2.19.0] - 2026-06-27
 
 ### Added
