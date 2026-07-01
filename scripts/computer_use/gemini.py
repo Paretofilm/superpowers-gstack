@@ -4,12 +4,35 @@ import importlib.util
 import json
 import os
 import pathlib
+import re
 import subprocess
 
 
 def _load(n):
     s = importlib.util.spec_from_file_location(n, pathlib.Path(__file__).resolve().parent / f"{n}.py")
     m = importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
+
+
+def _resolve_screenshot(sc, paths):
+    """Map a critic finding's screenshot reference to a batch-local path (1-indexed).
+
+    The critic prompt asks it to reference the image number, so `sc` may be an int (3), a string
+    index ("3", "Bilde 3", "image 3"), an already-resolved path, or None. A path with its own
+    digits (timestamps) must pass through unre-indexed."""
+    if isinstance(sc, str) and ("/" in sc or sc.endswith(".png")):
+        return sc  # already a path
+    idx = None
+    if isinstance(sc, bool):
+        idx = None
+    elif isinstance(sc, int):
+        idx = sc
+    elif isinstance(sc, str):
+        m = re.search(r"\d+", sc)
+        if m:
+            idx = int(m.group())
+    if idx is not None and 1 <= idx <= len(paths):
+        return paths[idx - 1]
+    return str(sc) if sc is not None else ""
 
 
 # Turn lastes via samme importlib-mønster som loop bruker for sine sibling-moduler —
@@ -80,15 +103,21 @@ class VisionCritic:
         self.model = model
         self._client = None
 
-    def analyze(self, screenshot_paths) -> list:
+    def analyze(self, items, mission=None) -> list:
+        # items: list of {"path", "caption"} or bare path strings (normalized below).
         try:
             import google.genai as g
             from google.genai import types
             client = g.Client(api_key=_api_key())
-            prompt = _load("critic").CRITIC_PROMPT
-            parts = [types.Part.from_text(text=prompt)]
-            for p in screenshot_paths:
-                with open(p, "rb") as f:
+            norm = [it if isinstance(it, dict) else {"path": it, "caption": ""} for it in items]
+            screenshot_paths = [it["path"] for it in norm]
+            parts = [types.Part.from_text(text=_load("critic").CRITIC_PROMPT)]
+            if mission:
+                parts.append(types.Part.from_text(text=f"Oppdraget som drev utforskingen: {mission}"))
+            for i, it in enumerate(norm, 1):
+                cap = it.get("caption") or ""
+                parts.append(types.Part.from_text(text=f"Bilde {i}: {cap}"))
+                with open(it["path"], "rb") as f:
                     parts.append(types.Part.from_bytes(data=f.read(), mime_type="image/png"))
             resp = client.models.generate_content(model=self.model, contents=parts)
             text = (resp.text or "").strip()
@@ -99,19 +128,15 @@ class VisionCritic:
                 return []
 
             # Normalize findings: coerce fields to str, map screenshot int → path
-            norm = []
+            out = []
             for f in data:
                 if not isinstance(f, dict):
                     continue
-                sc = f.get("screenshot")
-                # If screenshot is an int, map it to the corresponding path (1-indexed)
-                if isinstance(sc, int) and 1 <= sc <= len(screenshot_paths):
-                    sc = screenshot_paths[sc - 1]
-                norm.append({
+                out.append({
                     "severity": str(f.get("severity", "")),
                     "text": str(f.get("text", "")),
-                    "screenshot": str(sc) if sc is not None else ""
+                    "screenshot": _resolve_screenshot(f.get("screenshot"), screenshot_paths)
                 })
-            return norm
+            return out
         except Exception:
             return []

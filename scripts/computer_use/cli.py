@@ -102,16 +102,22 @@ def main(argv=None):
     # Always build and write the report, even on abnormal failure
     try:
         journal = result["journal"]
-        retained = []
+        retained = []  # list of {"path", "caption"} — caption gives the critic per-screen context
         if result.get("baseline_screenshot"):
-            retained.append(result["baseline_screenshot"])
+            retained.append({"path": result["baseline_screenshot"],
+                             "caption": "Startskjerm (baseline, før noen handling)"})
         # F12: index-based first/last check — robust to copy/serialize
         for i, e in enumerate(journal):
             if e.get("screenshot") and dedup.should_retain(
                     e.get("result", "success"), i == 0, i == len(journal) - 1):
-                retained.append(e["screenshot"])
+                raw = e.get("raw") or {}
+                a = raw.get("arguments") or {}
+                caption = (f"Etter steg {e.get('step')}: {raw.get('name', '?')} "
+                           f"{a.get('intent', '')} → {e.get('result', '')}").strip()
+                retained.append({"path": e["screenshot"], "caption": caption})
 
-        findings = critic.criticize(retained, client=gemini.VisionCritic()) if retained else []
+        findings = (critic.criticize(retained, client=gemini.VisionCritic(), mission=args.mission)
+                    if retained else [])
         action_log = journal_to_action_log(journal)
         report_path = out / "report.md"
         report_path.write_text(report.build_markdown(args.mission, env, action_log, findings, result["status"]))
