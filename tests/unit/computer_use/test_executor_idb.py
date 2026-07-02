@@ -8,6 +8,22 @@ def ex_point(x, y):
     return coords.Point(x, y)
 
 
+def test_run_surfaces_stderr_on_failure(monkeypatch):
+    # A non-zero idb exit must raise with stderr included so the model can self-correct;
+    # the default CalledProcessError hides stderr ("returned non-zero exit status 1").
+    class R:
+        returncode = 1
+        stdout = b""
+        stderr = b"element not found: foo"
+    monkeypatch.setattr(ex.subprocess, "run", lambda *a, **k: R())
+    e = ex.IdbExecutor("UDID-1")
+    try:
+        e._run(["idb", "ui", "tap", "1", "2"])
+        assert False, "should have raised"
+    except Exception as exc:
+        assert "element not found: foo" in str(exc), f"stderr must surface, got {exc!r}"
+
+
 def test_tap_builds_idb_command(monkeypatch):
     calls = []
     monkeypatch.setattr(ex.IdbExecutor, "_run", lambda self, args: calls.append(args) or b"")

@@ -1,6 +1,23 @@
 import time
 from dataclasses import dataclass
 
+_API_RETRIES = 2       # retries beyond the first attempt (3 tries total)
+_API_RETRY_BASE = 1.0  # seconds; exponential backoff between attempts
+
+
+def _call_with_retry(fn):
+    """Bounded retry for a computer-use API call: one transient blip (rate limit, 5xx, network)
+    should not lose the whole unattended run. Re-raises the last error if all attempts fail."""
+    last = None
+    for attempt in range(_API_RETRIES + 1):
+        try:
+            return fn()
+        except Exception as e:
+            last = e
+            if attempt < _API_RETRIES:
+                time.sleep(_API_RETRY_BASE * (2 ** attempt))
+    raise last
+
 
 @dataclass
 class Turn:
@@ -8,8 +25,11 @@ class Turn:
     done: bool            # derived from interaction.status by the client
 
 
-def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.3,
+def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.5,
         screenshot_dir=None, foreground_check=None):
+    # settle=0.5: the post-action screenshot must land AFTER the UI transition, not mid-animation.
+    # Standard iOS push/pop is ~0.35s and modal presentation ~0.5s; 0.3s could capture a half-rendered
+    # frame that both the driving model and the critic then misread. 0.5s covers the common cases.
     import importlib.util, pathlib
     pkg = pathlib.Path(__file__).resolve().parent
     def _load(n):
@@ -30,7 +50,7 @@ def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.3,
     status = None
     shot = executor.screenshot()
     baseline = _persist(shot, 0)
-    turn = client.start(mission, shot)
+    turn = _call_with_retry(lambda: client.start(mission, shot))
     step = 0
 
     # F9: foreground check before the first action
@@ -88,12 +108,19 @@ def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.3,
                 entry["state"] = "result_sent"; entry["result"] = "app_left_foreground"
                 status = "app_left_foreground"; break
         try:
-            turn = client.respond(kind, shot, reason)
+            turn = _call_with_retry(lambda: client.respond(kind, shot, reason))
         except Exception:
-            # F6: respond failure must not report the action kind as result
+            # F6: respond failure (after bounded retry) must not report the action kind as result
             entry["state"] = "respond_failed"; entry["result"] = "error"
             status = "error"; break
         entry["state"] = "result_sent"; entry["result"] = kind
     if status is None:
-        status = "completed" if (turn and turn.done) else "step_limit"
+        if turn and turn.done:
+            status = "completed"
+        elif turn and turn.action is None:
+            # loop exited because the model returned no action while not done — an abnormal
+            # empty/malformed turn (requires_action without a function_call), not step exhaustion.
+            status = "error"
+        else:
+            status = "step_limit"  # ran out of steps with an action still pending
     return {"journal": journal, "status": status, "baseline_screenshot": baseline}

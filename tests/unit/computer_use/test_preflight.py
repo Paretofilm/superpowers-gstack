@@ -178,6 +178,33 @@ def test_preflight_landscape_accepts_unrotated_screenshot(monkeypatch):
     assert env["baseline_full_width"] == 1210.0
 
 
+def _resolve_missing(missing):
+    def r(name):
+        if name == missing:
+            raise pf.PreflightError(f"Mangler '{name}'.")
+        return f"/usr/bin/{name}"
+    return r
+
+
+def test_preflight_landscape_requires_sips(monkeypatch):
+    # landscape screenshots are rotated with sips; if sips is missing, fail closed at preflight
+    # with an actionable message instead of a confusing per-screenshot failure inside the loop.
+    elems = _ipad_app_elems(1210, 834, "Innstillinger")
+    _patch_preflight_happy(monkeypatch, elems, shot_dims=(1668, 2420))
+    monkeypatch.setattr(pf, "resolve_tool", _resolve_missing("sips"))
+    with pytest.raises(pf.PreflightError):
+        pf.preflight("U", "com.apple.Preferences", "landscape")
+
+
+def test_preflight_portrait_does_not_require_sips(monkeypatch):
+    # portrait never rotates -> sips absence must NOT block a portrait run
+    elems = _ipad_app_elems(834, 1210, "Innstillinger")
+    _patch_preflight_happy(monkeypatch, elems, shot_dims=(1668, 2420))
+    monkeypatch.setattr(pf, "resolve_tool", _resolve_missing("sips"))
+    env = pf.preflight("U", "com.apple.Preferences", "portrait")
+    assert env["orientation"] == "portrait"
+
+
 def test_preflight_landscape_accepts_rotated_screenshot(monkeypatch):
     # same landscape app, but simctl DID rotate the screenshot to 2420x1668 -> must also pass
     elems = _ipad_app_elems(1210, 834, "Innstillinger")

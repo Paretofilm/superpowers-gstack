@@ -26,7 +26,8 @@ def adapt(step: dict) -> ExecutorAction:
     if name == "scroll":
         # 'scroll down' = se nedover = finger swiper opp = end_y < start_y
         x = args.get("x", 500); y = args.get("y", 500)
-        d = args.get("direction", "down")
+        # normalize: LLMs capitalize/pad ('Down', ' up ') → a case-sensitive lookup would 0-delta no-op
+        d = str(args.get("direction", "down")).strip().lower()
         dy = {"down": -SCROLL_DELTA, "up": SCROLL_DELTA}.get(d, 0)
         dx = {"left": SCROLL_DELTA, "right": -SCROLL_DELTA}.get(d, 0)
         return ExecutorAction("swipe", {

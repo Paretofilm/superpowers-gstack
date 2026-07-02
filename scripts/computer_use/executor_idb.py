@@ -18,8 +18,14 @@ class IdbExecutor:
         self.orientation = orientation
 
     def _run(self, args: list[str]) -> bytes:
-        # F3: bounded timeout so hung idb/simctl calls propagate as TimeoutExpired
-        return subprocess.run(args, capture_output=True, check=True, timeout=30).stdout
+        # F3: bounded timeout so hung idb/simctl calls propagate as TimeoutExpired.
+        # check=False + explicit raise so the model gets stderr ("element not found") for
+        # self-correction, not the bare "returned non-zero exit status 1" CalledProcessError hides.
+        r = subprocess.run(args, capture_output=True, check=False, timeout=30)
+        if r.returncode != 0:
+            err = (r.stderr or b"").decode(errors="replace").strip()
+            raise RuntimeError(f"{' '.join(args)} failed (exit {r.returncode}): {err or 'no stderr'}")
+        return r.stdout
 
     def screenshot(self) -> bytes:
         # simctl skriver til fil; les bytes
@@ -73,7 +79,8 @@ class IdbExecutor:
                     last = "no Application element"
                 else:
                     last = "describe-all did not return a list"
-            except (json.JSONDecodeError, ValueError) as e:
+            except (json.JSONDecodeError, ValueError, RuntimeError, subprocess.TimeoutExpired) as e:
+                # transient idb failure/timeout during a transition → retry within the settle budget
                 last = str(e)
             if i < _SETTLE_ATTEMPTS - 1:
                 time.sleep(_SETTLE_DELAY)

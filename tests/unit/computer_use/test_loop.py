@@ -1,5 +1,12 @@
+import pytest
 from test_smoke import load
 loop = load("loop")
+
+
+@pytest.fixture(autouse=True)
+def _no_sleep(monkeypatch):
+    # keep retry/settle backoff from slowing the suite
+    monkeypatch.setattr(loop.time, "sleep", lambda s: None)
 
 
 def _turn(action, done):
@@ -162,6 +169,75 @@ def test_foreground_check_false_before_any_action():
         f"expected 'app_left_foreground', got {out['status']!r}")
     assert len(ex.taps) == 0, f"no taps should have been executed, got {ex.taps}"
     assert out["journal"] == [], "journal should be empty when stopped before first action"
+
+
+class FlakyThenDone:
+    """respond() fails twice then succeeds — a bounded retry must recover the run instead of
+    losing all remaining exploration to one transient API blip (rate limit / 5xx)."""
+    def __init__(self): self.attempts = 0
+    def start(self, mission, shot):
+        return _turn({"name": "click", "arguments": {"x": 500, "y": 500}}, False)
+    def respond(self, kind, shot, reason):
+        self.attempts += 1
+        if self.attempts < 3:
+            raise RuntimeError("transient 503")
+        return _turn(None, True)
+
+
+def test_respond_retries_transient_failure():
+    ex, cl = FakeExec(), FlakyThenDone()
+    out = loop.run("test", ex, cl, max_steps=5, safe_area=_safe())
+    assert cl.attempts == 3, "should have retried twice before succeeding"
+    assert out["status"] == "completed"
+
+
+class StartFlakyThenOk:
+    """start() fails once then succeeds — retry must cover the initial turn too."""
+    def __init__(self): self.attempts = 0
+    def start(self, mission, shot):
+        self.attempts += 1
+        if self.attempts < 2:
+            raise RuntimeError("transient at start")
+        return _turn({"name": "click", "arguments": {"x": 500, "y": 500}}, False)
+    def respond(self, kind, shot, reason):
+        return _turn(None, True)
+
+
+def test_start_retries_transient_failure():
+    ex, cl = FakeExec(), StartFlakyThenOk()
+    out = loop.run("test", ex, cl, max_steps=5, safe_area=_safe())
+    assert cl.attempts == 2
+    assert out["status"] == "completed"
+
+
+class EmptyFirstTurnClient:
+    """start() returns no action and not-done — an abnormal 'requires_action with no function_call'
+    (empty/malformed API turn). Must be reported as 'error', not the misleading 'step_limit'."""
+    def start(self, mission, shot):
+        return _turn(None, False)
+    def respond(self, kind, shot, reason):
+        return _turn(None, True)
+
+
+def test_empty_first_turn_is_error_not_step_limit():
+    ex, cl = FakeExec(), EmptyFirstTurnClient()
+    out = loop.run("test", ex, cl, max_steps=5, safe_area=_safe())
+    assert out["status"] == "error", f"expected 'error', got {out['status']!r}"
+    assert out["journal"] == []
+
+
+class ImmediateDoneClient:
+    """start() returns no action but done=True — a legitimate 'nothing to do, already complete'."""
+    def start(self, mission, shot):
+        return _turn(None, True)
+    def respond(self, kind, shot, reason):
+        return _turn(None, True)
+
+
+def test_done_with_no_action_is_completed():
+    ex, cl = FakeExec(), ImmediateDoneClient()
+    out = loop.run("test", ex, cl, max_steps=5, safe_area=_safe())
+    assert out["status"] == "completed", f"expected 'completed', got {out['status']!r}"
 
 
 class BadCoordClient:
