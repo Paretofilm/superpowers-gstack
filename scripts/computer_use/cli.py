@@ -116,6 +116,12 @@ def main(argv=None):
                            f"{a.get('intent', '')} → {e.get('result', '')}").strip()
                 retained.append({"path": e["screenshot"], "caption": caption})
 
+        # Collapse visually near-identical successive screens so the critic isn't billed for
+        # redundant pixels (e.g. a scroll that hit the end). Decode failures hash to None → kept.
+        if retained:
+            hashes = [dedup.ahash_png(it["path"]) for it in retained]
+            retained = dedup.perceptual_dedup(retained, hashes)
+
         findings = (critic.criticize(retained, client=gemini.VisionCritic(), mission=args.mission)
                     if retained else [])
         action_log = journal_to_action_log(journal)
