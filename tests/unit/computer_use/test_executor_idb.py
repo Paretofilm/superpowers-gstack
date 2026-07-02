@@ -45,6 +45,57 @@ def test_swipe_builds_two_point_command(monkeypatch):
     assert "200" in args and "700" in args and "250" in args and "300" in args
 
 
+def test_long_press_is_zero_length_swipe_with_duration(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ex.IdbExecutor, "_run", lambda self, args: calls.append(args) or b"")
+    e = ex.IdbExecutor("UDID-1")
+    e.long_press(ex_point(300.0, 500.0))
+    args = calls[-1]
+    assert "swipe" in args and "--duration" in args
+    # same start and end point (a press, not a drag)
+    assert args.count("300") == 2 and args.count("500") == 2
+
+
+def test_go_back_edge_swipes_from_left(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ex.IdbExecutor, "_run", lambda self, args: calls.append(args) or b"")
+    e = ex.IdbExecutor("UDID-1")
+    e.go_back(402.0, 874.0)
+    args = calls[-1]
+    assert "swipe" in args
+    # starts at (or near) the left edge and moves right, mid-height
+    sx = float(args[args.index("swipe") + 1])
+    ex_x = float(args[args.index("swipe") + 3])
+    assert sx <= 2 and ex_x > sx, "go_back must be a left-edge swipe moving inward"
+
+
+def test_press_key_maps_known_name_to_hid(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ex.IdbExecutor, "_run", lambda self, args: calls.append(args) or b"")
+    e = ex.IdbExecutor("UDID-1")
+    e.press_key("Return")
+    args = calls[-1]
+    assert "key" in args and "40" in args  # HID usage id for Return/Enter
+
+
+def test_press_key_passes_numeric_keycode(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ex.IdbExecutor, "_run", lambda self, args: calls.append(args) or b"")
+    e = ex.IdbExecutor("UDID-1")
+    e.press_key(42)
+    assert "42" in calls[-1]
+
+
+def test_press_key_unknown_name_raises(monkeypatch):
+    monkeypatch.setattr(ex.IdbExecutor, "_run", lambda self, args: b"")
+    e = ex.IdbExecutor("UDID-1")
+    try:
+        e.press_key("Nonsense")
+        assert False, "unknown key name should raise (loop marks it failed)"
+    except ValueError:
+        pass
+
+
 def test_coordinate_space_reads_point_frame(monkeypatch):
     app = [{"type": "Application", "frame": {"x": 0, "y": 0, "width": 402, "height": 874}}]
     monkeypatch.setattr(ex.IdbExecutor, "_run",

@@ -34,7 +34,19 @@ def adapt(step: dict) -> ExecutorAction:
             "start_x": _clamp(x), "start_y": _clamp(y),
             "end_x": _clamp(x + dx), "end_y": _clamp(y + dy),
         })
-    # F8: press_key is phase-2-deferred; honest rejection beats silent no-op
+    if name == "long_press":
+        return ExecutorAction("long_press", {"x": args.get("x"), "y": args.get("y")})
+    if name == "go_back":
+        return ExecutorAction("go_back", {})  # iOS edge-swipe; no coords, resolved in the loop
+    if name == "press_key":
+        # accept {"key": ...} or {"keys": [...]}; a missing key degrades to unsupported (no blind press)
+        key = args.get("key")
+        if key is None:
+            keys = args.get("keys")
+            key = keys[0] if isinstance(keys, list) and keys else None
+        if key is None:
+            return ExecutorAction("unsupported", {"original": name})
+        return ExecutorAction("press_key", {"key": key})
     if name == "type":
         return ExecutorAction("type", {"text": args.get("text", "")})
     if name == "wait":

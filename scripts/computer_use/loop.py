@@ -83,6 +83,17 @@ def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.5,
                     kind, reason = "rejected", "outside safe area"
                 else:
                     entry["state"] = "validated"; executor.swipe(start, end); entry["state"] = "executed"
+            elif ea.kind == "long_press":
+                p = coords.denormalize(ea.params["x"], ea.params["y"], point_w, point_h)
+                if not coords.in_safe_area(p, safe_area):
+                    kind, reason = "rejected", "outside safe area"
+                else:
+                    entry["state"] = "validated"; executor.long_press(p); entry["state"] = "executed"
+            elif ea.kind == "go_back":
+                # system edge-swipe; deliberately not safe-area-checked (it must start at the edge)
+                entry["state"] = "validated"; executor.go_back(point_w, point_h); entry["state"] = "executed"
+            elif ea.kind == "press_key":
+                executor.press_key(ea.params["key"]); entry["state"] = "executed"
             elif ea.kind == "type":
                 executor.type_text(ea.params["text"]); entry["state"] = "executed"
             elif ea.kind == "wait":

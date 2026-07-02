@@ -60,6 +60,37 @@ class IdbExecutor:
         text = text[:1000]  # F11: cap to prevent pathological argv sizes
         self._run(["idb", "ui", "text", text, "--udid", self.udid])
 
+    def long_press(self, p: "Point", duration: float = 1.0) -> None:
+        # a long press is a zero-length swipe held for `duration` (idb has no press-duration on tap)
+        x, y = str(round(p.x)), str(round(p.y))
+        self._run(["idb", "ui", "swipe", x, y, x, y, "--duration", str(duration), "--udid", self.udid])
+
+    def go_back(self, point_w: float, point_h: float) -> None:
+        # iOS has no Back button; the system "back" is an interactive-pop edge-swipe from the left.
+        # Start ~1pt from the edge (x=0 can miss the gesture recognizer) and drag inward, mid-height.
+        y = str(round(point_h / 2))
+        self._run(["idb", "ui", "swipe", "1", y, str(round(point_w * 0.45)), y,
+                   "--duration", "0.2", "--udid", self.udid])
+
+    # HID usage ids for the common keys computer-use emits by name (idb ui key takes a keycode).
+    _HID = {"return": 40, "enter": 40, "escape": 41, "esc": 41, "backspace": 42, "delete": 42,
+            "tab": 43, "space": 44, "spacebar": 44}
+
+    def press_key(self, key) -> None:
+        if isinstance(key, bool):
+            raise ValueError(f"invalid key: {key!r}")
+        if isinstance(key, int):
+            code = key
+        else:
+            k = str(key).strip().lower()
+            if k.isdigit():
+                code = int(k)
+            elif k in self._HID:
+                code = self._HID[k]
+            else:
+                raise ValueError(f"unknown key name '{key}'; no HID mapping")
+        self._run(["idb", "ui", "key", str(code), "--udid", self.udid])
+
     def coordinate_space(self) -> tuple[float, float]:
         """(point_w, point_h) fra describe-all Application-frame. idb tar punkter, så ingen
         piksel/scale-konvertering (SPIKE-FINDINGS, Task 1).
