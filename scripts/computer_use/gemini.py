@@ -71,6 +71,11 @@ class ComputerUseClient:
         if fc:
             self._call_id = fc.get("id")
             self._name = fc.get("name")
+            # Gemini-3 thought signatures (fc["signature"]) need NOT be echoed back: we drive the
+            # session with previous_interaction_id (see respond()), so the server holds the thought
+            # chain across turns. The signature is still preserved verbatim in the journal via
+            # entry["raw"] == fc, for observability. (SPIKE-FINDINGS: echo unnecessary; confirmed
+            # across many multi-step live runs.)
             return Turn(action=fc, done=done)
         # F7: respect derived done — requires_action with no function_call → done=False
         return Turn(action=None, done=done)

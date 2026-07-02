@@ -106,10 +106,8 @@ The skill orchestrates five layers built in Phase 1:
 `preflight` → `executor_idb` → `loop` (Gemini computer-use) → `dedup` → `critic` + `report`.
 VisionCritic (in `scripts/computer_use/gemini.py`) runs the evidence screenshots through Gemini vision; it degrades gracefully to an empty findings list on any API error — the run never crashes on critic failure.
 
-## Deferred to Phase 2
+## Capability notes
 
-The following capabilities are implemented but not yet wired into the live pipeline:
-
-- **Perceptual near-duplicate dedup** — `ahash`/`is_critic_dup` in `dedup.py` are present but intentionally not wired (avoids an image-decode dependency). Phase 2 will gate critic input on visual similarity.
-- **Gemini-3 `signature` echo** — multi-step thought continuity via interaction signatures.
-- **Richer action coverage** — `go_back`, `long_press`, `press_key` action kinds are not yet handled in `actions.py`.
+- **Perceptual near-duplicate dedup** — WIRED. `ahash_png` (in `dedup.py`) decodes each retained screen via `sips` downscale → 8×8 BMP (stdlib parse, no Pillow) and `perceptual_dedup` collapses visually near-identical successive screens before the critic runs, so the critic isn't billed for redundant pixels (e.g. a scroll that hit the end). A decode failure keeps the screen.
+- **Richer action coverage** — WIRED. `long_press` (held zero-length swipe), `go_back` (iOS interactive-pop edge-swipe from the left; not safe-area-checked since it starts at the edge), and `press_key` (idb `key` with a HID mapping for Return/Escape/Backspace/Tab/Space; numeric keycodes pass through) are handled in `actions.py` + `executor_idb.py`.
+- **Gemini-3 `signature` echo** — NOT NEEDED. Thought signatures are carried server-side via `previous_interaction_id` (the session driver in `gemini.py`), so echoing them back is redundant; the signature is still preserved verbatim in the journal via each entry's `raw`. Confirmed across many multi-step live runs.
