@@ -30,6 +30,16 @@ def test_scroll_derives_swipe_endpoints():
     assert 0 <= a.params["end_y"] <= 1000 and 0 <= a.params["start_y"] <= 1000
 
 
+def test_scroll_direction_is_case_insensitive():
+    # LLMs frequently capitalize ('Down'/'DOWN'); a case-sensitive lookup would give a
+    # zero-length no-op swipe that reports success and can loop. Normalize the direction.
+    for d in ("Down", "DOWN", " down "):
+        a = actions.adapt({"name": "scroll", "arguments": {"x": 500, "y": 500, "direction": d}})
+        assert a.params["end_y"] < a.params["start_y"], f"direction {d!r} should scroll down"
+    a = actions.adapt({"name": "scroll", "arguments": {"x": 500, "y": 500, "direction": "Right"}})
+    assert a.params["end_x"] < a.params["start_x"], "Right should produce a non-zero horizontal swipe"
+
+
 def test_type_passthrough():
     a = actions.adapt({"name": "type", "arguments": {"text": "hei"}})
     assert a.kind == "type" and a.params["text"] == "hei"

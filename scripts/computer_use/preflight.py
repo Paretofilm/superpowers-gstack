@@ -9,6 +9,7 @@ import time
 INSTALL_HINTS = {
     "idb": "brew install facebook/fb/idb-companion && pip install fb-idb",
     "cliclick": "brew install cliclick",
+    "sips": "preinstalled on macOS — check PATH",
 }
 
 
@@ -150,6 +151,8 @@ def preflight(udid, bundle_id, orientation):
     validate fullscreen via screenshot/scale (S6) -> capture baseline -> build SafeArea from table (S1)."""
     coords = _load_coords()
     resolve_tool("idb")
+    if orientation == "landscape":
+        resolve_tool("sips")  # landscape screenshots are rotated with sips; fail closed if absent
     _terminate(udid, bundle_id)
     _launch(udid, bundle_id)
     elems = _describe_all_settled(udid)
