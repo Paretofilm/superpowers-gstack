@@ -210,6 +210,55 @@ def test_start_retries_transient_failure():
     assert out["status"] == "completed"
 
 
+class RichActionExec(FakeExec):
+    def __init__(self):
+        super().__init__()
+        self.long_presses = []
+        self.go_backs = 0
+        self.keys = []
+    def long_press(self, p): self.long_presses.append(p)
+    def go_back(self, w, h): self.go_backs += 1
+    def press_key(self, k): self.keys.append(k)
+
+
+def _oneshot_client(action):
+    class C:
+        def start(self, mission, shot): return _turn(action, False)
+        def respond(self, kind, shot, reason): return _turn(None, True)
+    return C()
+
+
+def test_long_press_denormalized_and_safe_area_checked():
+    ex = RichActionExec()
+    cl = _oneshot_client({"name": "long_press", "arguments": {"x": 500, "y": 500}})
+    out = loop.run("x", ex, cl, max_steps=3, safe_area=_safe())
+    assert ex.long_presses, "long_press should reach the executor"
+    assert out["journal"][0]["result"] == "success"
+
+
+def test_long_press_outside_safe_area_rejected():
+    ex = RichActionExec()
+    cl = _oneshot_client({"name": "long_press", "arguments": {"x": 500, "y": 5}})
+    safe = load("coords").SafeArea(0, 60, 402, 800)
+    loop.run("x", ex, cl, max_steps=3, safe_area=safe)
+    assert not ex.long_presses, "out-of-safe-area long_press must not execute"
+
+
+def test_go_back_invokes_executor_without_safe_area():
+    ex = RichActionExec()
+    cl = _oneshot_client({"name": "go_back", "arguments": {}})
+    out = loop.run("x", ex, cl, max_steps=3, safe_area=load("coords").SafeArea(50, 50, 350, 800))
+    assert ex.go_backs == 1, "go_back should fire even though it starts at the edge (outside safe area)"
+    assert out["journal"][0]["result"] == "success"
+
+
+def test_press_key_invokes_executor():
+    ex = RichActionExec()
+    cl = _oneshot_client({"name": "press_key", "arguments": {"key": "Return"}})
+    loop.run("x", ex, cl, max_steps=3, safe_area=_safe())
+    assert ex.keys == ["Return"]
+
+
 class EmptyFirstTurnClient:
     """start() returns no action and not-done — an abnormal 'requires_action with no function_call'
     (empty/malformed API turn). Must be reported as 'error', not the misleading 'step_limit'."""

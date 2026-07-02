@@ -55,8 +55,27 @@ def test_unknown_is_unsupported():
     assert a.kind == "unsupported"
 
 
-def test_press_key_is_unsupported():
-    """F8: press_key is phase-2-deferred; must be rejected as unsupported, not silently no-op'd."""
+def test_press_key_maps_to_press_key():
     a = actions.adapt({"name": "press_key", "arguments": {"key": "Return"}})
-    assert a.kind == "unsupported", (
-        f"press_key should be 'unsupported', got {a.kind!r}")
+    assert a.kind == "press_key" and a.params["key"] == "Return"
+
+
+def test_press_key_accepts_keys_list_form():
+    # computer-use may send {"keys": [...]}; take the first
+    a = actions.adapt({"name": "press_key", "arguments": {"keys": ["Escape"]}})
+    assert a.kind == "press_key" and a.params["key"] == "Escape"
+
+
+def test_press_key_without_a_key_is_unsupported():
+    a = actions.adapt({"name": "press_key", "arguments": {}})
+    assert a.kind == "unsupported"
+
+
+def test_long_press_maps_to_long_press():
+    a = actions.adapt({"name": "long_press", "arguments": {"x": 400, "y": 600, "intent": "hold"}})
+    assert a.kind == "long_press" and a.params["x"] == 400 and a.params["y"] == 600
+
+
+def test_go_back_maps_to_go_back():
+    a = actions.adapt({"name": "go_back", "arguments": {}})
+    assert a.kind == "go_back"
