@@ -85,7 +85,7 @@ The skill writes **two artefacts** to the output directory and prints a **text-o
 | Artefakt | Beskrivelse |
 |----------|-------------|
 | `<out>/report.md` | Full Markdown report: mission, environment info, step journal, critic findings |
-| `<out>/screenshots/` | Retained screenshots from the run (every step is persisted; the critic input is selected by status + first/last endpoints via `should_retain`) |
+| `<out>/screenshots/` | Every step's screenshot is persisted. The vision critic inspects **every screen the run reached** (baseline + each step), so visual issues on successfully-navigated screens are caught, not just on endpoints and error steps. Perceptual near-duplicate suppression (e.g. successive scrolls) is a future `ahash` optimization. |
 
 **Stdout** contains only text: file paths and a structured summary of findings. It never includes inline images or base64 data. This keeps the Claude context clean when the summary is captured or pasted into a conversation.
 

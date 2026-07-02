@@ -38,6 +38,41 @@ def test_coordinate_space_reads_point_frame(monkeypatch):
     assert pw == 402.0 and ph == 874.0
 
 
+def test_coordinate_space_retries_on_degenerate_tree(monkeypatch):
+    # iPad describe-all can be degenerate (no Application) right after a transition; coordinate_space
+    # must settle-retry (SPIKE: applies to ALL describe-all calls) instead of crashing on the first.
+    app = [{"type": "Application", "frame": {"x": 0, "y": 0, "width": 402, "height": 874}},
+           {"type": "Button"}, {"type": "Cell"}, {"type": "StaticText"}, {"type": "Image"}]
+    degenerate = [{"type": "DockFolderViewService"}]
+    seq = [degenerate, degenerate, app]
+    calls = {"n": 0}
+
+    def fake_run(self, a):
+        if "describe-all" in a:
+            r = seq[min(calls["n"], len(seq) - 1)]
+            calls["n"] += 1
+            return json.dumps(r).encode()
+        return b""
+    monkeypatch.setattr(ex.IdbExecutor, "_run", fake_run)
+    monkeypatch.setattr(ex.time, "sleep", lambda s: None)
+    e = ex.IdbExecutor("UDID-1")
+    pw, ph = e.coordinate_space()
+    assert (pw, ph) == (402.0, 874.0)
+    assert calls["n"] == 3  # retried past the two degenerate trees
+
+
+def test_coordinate_space_raises_after_settle_budget(monkeypatch):
+    monkeypatch.setattr(ex.IdbExecutor, "_run",
+                        lambda self, a: json.dumps([{"type": "DockFolderViewService"}]).encode())
+    monkeypatch.setattr(ex.time, "sleep", lambda s: None)
+    e = ex.IdbExecutor("UDID-1")
+    try:
+        e.coordinate_space()
+        assert False, "should have raised"
+    except ValueError:
+        pass
+
+
 def test_screenshot_rotates_in_landscape(monkeypatch):
     # simctl captures the native-portrait buffer even in landscape UI; the executor must rotate
     # the PNG upright so the model sees the same orientation as the landscape Application frame.
