@@ -76,6 +76,7 @@ colour, dark mode, or "does it look right" → the visual-regression row.
 | Exploratory / live | iOS | `ios-simulator` MCP (`ui_find_element` / `ui_tap`) or `/ios-qa` |
 | Visual regression | iOS | screenshot/vision diff + `/ios-design-review` |
 | Visual regression | macOS | screenshot/vision diff + `/design-review` (generic designer's-eye QA — no macOS-specific reviewer exists) |
+| Visual exploration (Tier-2 escalation) | iOS/iPadOS | `/superpowers-gstack:ios-visual-explore` — Gemini computer-use drives the app visually. Route here when the accessibility tree is insufficient (visual landmarks, layout regressions XCUITest can't assert, open-ended "find visual issues" missions). Not a first resort; paid Gemini API per run. |
 
 ## Fallback
 
