@@ -46,6 +46,13 @@ chains_to:
 Apple-canon design system consultation for SwiftUI projects. Output:
 `DESIGN.md` + `DesignSystem/` Swift Package + `DESIGN.html` (via htmlify).
 
+**Locating this skill's files:** templates/, schema/ and bin/ live NEXT TO this
+SKILL.md, not in the user's project. Set `SKILL_DIR` to this skill's base
+directory (shown when the skill loads) and reference every asset as
+`$SKILL_DIR/templates/…`, `$SKILL_DIR/schema/…`, `$SKILL_DIR/bin/…`. This
+resolves both in the plugin repo and in a marketplace install — never assume
+cwd contains `skills/`.
+
 ## Phase 0 — Setup
 
 ### Step 0.0: Initialize gstack helpers (set $SLUG)
@@ -310,13 +317,13 @@ Each returns 3-5 corpus samples + HIG-page citations. Use these as
 grounding for proposing the design.
 
 Build the DesignProposal object as a **structured YAML document
-matching `skills/swiftui-design-consultation/schema/proposal.schema.yaml`**.
+matching `$SKILL_DIR/schema/proposal.schema.yaml`**.
 The schema defines every required field across all eight pillars
 (metadata, track, typography, color, materials, motion, spacing,
 accessibility, platforms, budget, decisions_log) with the exact
 types Phase 6 generators expect.
 
-See `skills/swiftui-design-consultation/schema/proposal.example.yaml`
+See `$SKILL_DIR/schema/proposal.example.yaml`
 for a fully populated canonical example. New proposals SHOULD start
 from that template and only modify fields where the actual design
 differs.
@@ -448,8 +455,7 @@ and validate it against the schema:
 
 ```bash
 PROPOSAL_YAML=~/.gstack/projects/"$SLUG"/swiftui-consultation-state.proposal.yaml
-SCHEMA=~/.claude/plugins/cache/paretofilm-plugins/superpowers-gstack/*/skills/swiftui-design-consultation/schema/proposal.schema.yaml
-# (Or the dev-repo path if running from source.)
+SCHEMA="$SKILL_DIR/schema/proposal.schema.yaml"
 
 [ -f "$PROPOSAL_YAML" ] || { echo "ERROR: no cached proposal — Phase 3 must complete first."; exit 1; }
 ```
@@ -492,7 +498,7 @@ This is the refresh-mode safety net: any prior DESIGN.md is preserved
 under a timestamp suffix before overwrite. Same pattern for the Swift
 Package in Step 6.2.
 
-Then read `skills/swiftui-design-consultation/templates/DESIGN.md.template`.
+Then read `$SKILL_DIR/templates/DESIGN.md.template`.
 Substitute all 15 tokens (`{{DATE}}`, `{{PRODUCT_CONTEXT}}`, etc.)
 **from the parsed proposal YAML object** loaded in Step 6.0 — NOT
 from the human-readable proposal MD. The MD is for human review; the
@@ -538,7 +544,7 @@ mkdir -p DesignSystem/Sources/DesignSystem/Resources
 mkdir -p DesignSystem/Tests/DesignSystemTests
 ```
 
-For each template in `skills/swiftui-design-consultation/templates/`:
+For each template in `$SKILL_DIR/templates/`:
 - Read it
 - Substitute tokens **from the parsed proposal YAML object loaded
   in Step 6.0** (NOT from the human-readable proposal MD)
@@ -584,14 +590,14 @@ Each brand color entry uses Xcode's color-set format with light, dark,
 and high-contrast variants.
 
 **WCAG contrast check (via Phase 2 helper):** for each brand hex
-provided, call `skills/swiftui-design-consultation/bin/contrast-check.sh`
+provided, call `$SKILL_DIR/bin/contrast-check.sh`
 once against the proposed light-mode background and once against the
 proposed dark-mode background. Parse the returned JSON:
 
 ```bash
 # Example call from inside the skill — handle exit code explicitly
 # so a missing `bc` or invalid hex doesn't silently pass the check.
-CONTRAST_BIN="./skills/swiftui-design-consultation/bin/contrast-check.sh"
+CONTRAST_BIN="$SKILL_DIR/bin/contrast-check.sh"
 
 if RESULT_LIGHT=$("$CONTRAST_BIN" "$BRAND_HEX" "$BG_LIGHT_HEX" 2>&1); then
   PASS_LIGHT=$(echo "$RESULT_LIGHT" | grep -o '"pass_aa_normal": [a-z]*' | awk '{print $2}')

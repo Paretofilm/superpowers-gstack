@@ -29,7 +29,12 @@ If the change is not high-stakes, **do not run this skill** — it burns money a
 
 - **Order matters.** Run *after* self-pitfall (max 2 rounds) and *after* Codex, on the **patched** artifact. A cleaner artifact maximizes house-diversity value and avoids paying a third house to re-find what lens 1–2 already fixed.
 - **OpenRouter key** in macOS Keychain (account `openrouter-api-key`), or env `OPENROUTER_API_KEY`. The script resolves it; never put the key on the command line.
-- **Balance check** before a run: `python3 scripts/third-lens-review.py --check-credits`.
+- **Locate the script self-relatively** — this skill usually runs in the USER's project, where `scripts/` does not exist. Derive it from this skill's base directory (shown when the skill loads):
+  ```bash
+  TLR="<this skill's base directory>/../../scripts/third-lens-review.py"
+  ```
+  This resolves both in the plugin repo and in a marketplace install (`~/.claude/plugins/cache/.../skills/third-lens-review/../../scripts/`). Never assume cwd contains `scripts/`.
+- **Balance check** before a run: `python3 "$TLR" --check-credits`.
 
 ## Model routing (which third lens, by artifact type)
 
@@ -54,9 +59,9 @@ The sensitive role and its fail-closed Western-infra guard were removed in 2.18.
 3. **Run the script** on the patched artifact:
    ```bash
    # by files/globs:
-   python3 scripts/third-lens-review.py --files "src/**/*.swift" --role architecture
+   python3 "$TLR" --files "src/**/*.swift" --role architecture
    # or on the diff:
-   python3 scripts/third-lens-review.py --diff --diff-base main --role architecture
+   python3 "$TLR" --diff --diff-base main --role architecture
    ```
    Tip: `--dry-run` first to see the cost estimate on a large artifact.
 4. **Adversarial synthesis (Claude, mandatory).** Never dump the raw output and stop. Run a synthesis over it — see below.

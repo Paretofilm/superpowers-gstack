@@ -25,8 +25,17 @@ Do **not** use as a first resort — prefer deterministic XCUITest flows when th
 
 ## How to invoke
 
+First locate the runner self-relatively — this skill runs in the USER's project,
+where `scripts/` does not exist. Derive it from this skill's base directory
+(shown when the skill loads); this resolves both in the plugin repo and in a
+marketplace install:
+
 ```bash
-scripts/ios-visual-explore \
+IVE="<this skill's base directory>/../../scripts/ios-visual-explore"
+```
+
+```bash
+"$IVE" \
   --udid <SIMULATOR_UDID> \
   --bundle <BUNDLE_ID> \
   "<mission description>" \
@@ -40,21 +49,21 @@ scripts/ios-visual-explore \
 
 ```bash
 # Full exploration run (up to 15 steps)
-scripts/ios-visual-explore \
+"$IVE" \
   --udid "A1B2C3D4-..." \
   --bundle "com.example.MyApp" \
   "trykk gjennom onboarding-flyten og rapporter visuelle problemer" \
   --max-steps 15
 
 # Dry run — shows the planned first action without executing anything
-scripts/ios-visual-explore \
+"$IVE" \
   --udid "A1B2C3D4-..." \
   --bundle "com.example.MyApp" \
   "utforsk innstillinger-skjermen" \
   --dry-run
 
 # iPad in landscape — rotate the simulator to landscape FIRST (see below)
-scripts/ios-visual-explore \
+"$IVE" \
   --udid "<iPad-UDID>" \
   --bundle "com.example.MyApp" \
   "utforsk delt-visning-layouten i landskap" \
