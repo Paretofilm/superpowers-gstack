@@ -8,6 +8,13 @@ CLAUDE_MD="CLAUDE.md"
 [ -f "$CLAUDE_MD" ] || exit 0
 grep -qiE "Skill routing|superpowers|gstack|/review|/ship|/adapt" "$CLAUDE_MD" || exit 0
 
+# The plugin's own dev repo IS the source of the routing — its CLAUDE.md is always
+# current by definition and carries no generated version marker. Without this
+# exemption the hook nags "run /adapt" at every session start in the plugin repo.
+if [ -f ".claude-plugin/plugin.json" ] && grep -q '"name": "superpowers-gstack"' ".claude-plugin/plugin.json" 2>/dev/null; then
+  exit 0
+fi
+
 # Find installed plugin version from cache
 plugin_json=$(find ~/.claude/plugins/cache -path "*/superpowers-gstack/*/plugin.json" 2>/dev/null | sort -V | tail -1)
 [ -n "$plugin_json" ] || exit 0

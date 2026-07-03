@@ -1,7 +1,6 @@
 ---
 name: e2e-route
 description: Pure-dispatcher that picks the right E2E executor for a Swift test request from context (platform × intent × verification kind) and hands off — without owning execution. Routes to /macos-e2e-scaffold, /ios-e2e-scaffold, MCP-live simulator automation, or /ios-qa / /ios-design-review. Manual + CLAUDE.md routing.
-version: 1.0.0
 ---
 
 # e2e-route
@@ -76,6 +75,7 @@ colour, dark mode, or "does it look right" → the visual-regression row.
 | Exploratory / live | iOS | `ios-simulator` MCP (`ui_find_element` / `ui_tap`) or `/ios-qa` |
 | Visual regression | iOS | screenshot/vision diff + `/ios-design-review` |
 | Visual regression | macOS | screenshot/vision diff + `/design-review` (generic designer's-eye QA — no macOS-specific reviewer exists) |
+| Visual exploration (Tier-2 escalation) | iOS/iPadOS | `/superpowers-gstack:ios-visual-explore` — Gemini computer-use drives the app visually. Route here when the accessibility tree is insufficient (visual landmarks, layout regressions XCUITest can't assert, open-ended "find visual issues" missions). Not a first resort; paid Gemini API per run. |
 
 ## Fallback
 

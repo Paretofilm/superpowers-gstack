@@ -358,7 +358,7 @@ For each review output, classify as one of:
 
 Reviews:
 
-**1. `/review`** — invoke the gstack `review` skill via the `Skill` tool. (There is no `superpowers-gstack:review`; the review skill lives in gstack proper.)
+**1. `/review`** — invoke the gstack `review` skill via the `Skill` tool. (The review skill lives in gstack proper, not in this plugin's namespace.)
 
   `/review` failures **always stop** regardless of `STOP_POLICY` — this skill is the primary correctness gate. If classified as `blocking` or `severe`, STOP and surface the finding citation.
 

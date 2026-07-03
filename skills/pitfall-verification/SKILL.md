@@ -129,7 +129,7 @@ Invoke `/codex review` on the patched artifact. Codex catches cross-file drift, 
 
 ### Stage 3 — third model house (high-stakes only)
 
-Invoke `/superpowers-gstack:third-lens-review` on the patched artifact. A different model house (different training distribution → different blind spots) finds architecture-level mistakes ("you never wired it together"), degraded-state bugs, and challenged assumptions the two Western houses both took for granted. It picks the model by artifact type (`--role architecture`/`sensitive`/`correctness`) and runs its own adversarial synthesis of the third-house output. Run it automatically for the high-stakes tier — do not ask first.
+Invoke `/superpowers-gstack:third-lens-review` on the patched artifact. A different model house (different training distribution → different blind spots) finds architecture-level mistakes ("you never wired it together"), degraded-state bugs, and challenged assumptions the two Western houses both took for granted. It picks the model by artifact type (`--role architecture`/`correctness`/`countersynthesis`; the third house runs on non-Western infra, so keep sensitive artifacts — auth/keys/health/finance — to the self + Codex lenses) and runs its own adversarial synthesis of the third-house output. Run it automatically for the high-stakes tier — do not ask first.
 
 ### Stage 4 — combined adversarial synthesis (mandatory whenever stage 2 or 3 ran)
 

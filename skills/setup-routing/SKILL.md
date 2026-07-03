@@ -379,7 +379,7 @@ If >5 distinct commits in a row without testing the cumulative state, STOP and v
 
 If multiple commits land in a single session without ANY commit being tested, the session is committing "progress without verification" — break that cycle by running the project's test suite, or document explicitly why testing is deferred.
 
-### Multi-lens review (ship-worthy changes) <!-- gstack-multi-lens-review-v3 -->
+### Multi-lens review (ship-worthy changes) <!-- gstack-multi-lens-review-v4 -->
 
 Substantive changes get multiple review lenses — different model houses, each catching what the others miss. **`pitfall-verification` orchestrates them automatically per tier — you do NOT invoke Codex or the third house by hand:**
 
@@ -427,7 +427,7 @@ Run lenses in order: self → pitfall → codex → (ship-worthy arch/RT/securit
 The first three lenses are all self/Anthropic or OpenAI (Codex). For the highest-stakes changes, add a *different model house* — its value is **training-distribution distance**, not raw IQ: it sees architecture-level mistakes ("you never wired it together"), degraded-state bugs, and challenged assumptions the others took for granted.
 
 - **Gate:** architecture, real-time, security, public contracts, or migration logic. Skip for trivial/standard changes.
-- **Routing by `--role`** (`scripts/third-lens-review.py`): `architecture`=GLM-5.2 (default, non-sensitive); `sensitive`=Gemini 3.1 Pro (Western infra — enforced via `--sensitive` for auth/keys/health/finance); `correctness`=DeepSeek V4-Pro; `countersynthesis`=GPT-5.5 (refutes the synthesis on the biggest changes).
+- **Routing by `--role`** (`scripts/third-lens-review.py`): `architecture`=GLM-5.2 (default, OpenRouter); `correctness`=DeepSeek V4-Pro (OpenRouter); `countersynthesis`=OpenAI via the `codex` CLI (refutes the synthesis on the biggest changes). GLM/DeepSeek run on non-Western infra — do NOT send sensitive artifacts (auth/keys/health/finance) to this lens; keep those to the self + Codex lenses.
 - **Cost:** ~$0.05/run (GLM), well under $1 even for a 4-house panel. Key in macOS Keychain `openrouter-api-key`.
 - **Synthesis is mandatory and adversarial:** a third-house finding is real until explicitly refuted; disagreement is the signal, not noise. Never dump raw output. See the skill for the synthesis format.
 

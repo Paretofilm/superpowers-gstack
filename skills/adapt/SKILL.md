@@ -356,15 +356,15 @@ If multiple commits land in a single session without ANY commit being tested, th
 
 **Insert or upgrade the Multi-lens review section.** This section applies to ALL projects (review hygiene is universal). Scan CLAUDE.md for heading `^#{2,3} Multi-lens review` and its version marker `<!-- gstack-multi-lens-review-vN -->`. Apply the same four-case logic:
 
-1. **Heading present + marker matches `v1`** → skip (idempotent).
+1. **Heading present + marker matches the current version (`v4`)** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. **If the existing root is H3** (nested under `## Skill routing`, as setup-routing emits), you MUST demote every subsection in the replacement block one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4 below. (The Multi-lens review block has H4 subsections; "next heading" alone would stop at the first one and leave old prose behind.)
-3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the v1 marker.
+3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
 
 The Multi-lens review block to insert (verbatim):
 
 ```markdown
-## Multi-lens review (ship-worthy changes) <!-- gstack-multi-lens-review-v3 -->
+## Multi-lens review (ship-worthy changes) <!-- gstack-multi-lens-review-v4 -->
 
 Substantive changes get multiple review lenses — different model houses, each catching what the others miss. **`pitfall-verification` orchestrates them automatically per tier — you do NOT invoke Codex or the third house by hand:**
 
@@ -412,7 +412,7 @@ Run lenses in order: self → pitfall → codex → (ship-worthy arch/RT/securit
 The first three lenses are all self/Anthropic or OpenAI (Codex). For the highest-stakes changes, add a *different model house* — its value is **training-distribution distance**, not raw IQ: it sees architecture-level mistakes ("you never wired it together"), degraded-state bugs, and challenged assumptions the others took for granted.
 
 - **Gate:** architecture, real-time, security, public contracts, or migration logic. Skip for trivial/standard changes.
-- **Routing by `--role`** (`scripts/third-lens-review.py`): `architecture`=GLM-5.2 (default, non-sensitive); `sensitive`=Gemini 3.1 Pro (Western infra — enforced via `--sensitive` for auth/keys/health/finance); `correctness`=DeepSeek V4-Pro; `countersynthesis`=GPT-5.5 (refutes the synthesis on the biggest changes).
+- **Routing by `--role`** (`scripts/third-lens-review.py`): `architecture`=GLM-5.2 (default, OpenRouter); `correctness`=DeepSeek V4-Pro (OpenRouter); `countersynthesis`=OpenAI via the `codex` CLI (refutes the synthesis on the biggest changes). GLM/DeepSeek run on non-Western infra — do NOT send sensitive artifacts (auth/keys/health/finance) to this lens; keep those to the self + Codex lenses.
 - **Cost:** ~$0.05/run (GLM), well under $1 even for a 4-house panel. Key in macOS Keychain `openrouter-api-key`.
 - **Synthesis is mandatory and adversarial:** a third-house finding is real until explicitly refuted; disagreement is the signal, not noise. Never dump raw output. See the skill for the synthesis format.
 ```

@@ -1,7 +1,6 @@
 ---
 name: macos-e2e-scaffold
 description: One-shot XCUITest scaffolding for macOS SwiftUI apps. Audits the project, generates ranked TIER-1/2/3 test stubs, suggests accessibility identifiers with batch confirmation, and emits a Claude-readable xcresult runner script. Manual invocation only — modifies project files.
-version: 1.10.0
 ---
 
 # macos-e2e-scaffold

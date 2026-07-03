@@ -19,41 +19,55 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate workflow YAML
-        run: python3 -c "import yaml; yaml.safe_load(open('.github/workflows/check-updates.yml')); print('Workflow YAML is valid')"
-
       - name: Read current versions
         id: current
         run: |
-          gstack_commit=$(grep 'GStack' VERSIONS.md | grep -oE '[a-f0-9]{7}' | head -1)
+          # VERSIONS.md stores gstack as a TAG (e.g. v1.34.1.0), not a commit hash. Extract the tag.
+          gstack_tag=$(grep 'GStack' VERSIONS.md | grep -oE 'v[0-9]+(\.[0-9]+)+' | head -1)
           superpowers_version=$(grep 'Superpowers' VERSIONS.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
           claude_version=$(grep 'Claude Code' VERSIONS.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          echo "gstack_commit=$gstack_commit" >> "$GITHUB_OUTPUT"
+          # FAIL LOUD on empty extraction: an empty baseline compares as "changed" and silently
+          # burns a full Claude API run + PR + issue EVERY week (this happened — the old 7-hex
+          # grep never matched the tag format, so GSTACK_CHANGED was always true).
+          for pair in "gstack_tag=$gstack_tag" "superpowers_version=$superpowers_version" "claude_version=$claude_version"; do
+            if [[ "${pair#*=}" == "" ]]; then
+              echo "::error::VERSIONS.md extraction failed for '${pair%%=*}' — refusing to run with an empty baseline (would always detect 'changed')."
+              exit 1
+            fi
+          done
+          echo "gstack_tag=$gstack_tag" >> "$GITHUB_OUTPUT"
           echo "superpowers_version=$superpowers_version" >> "$GITHUB_OUTPUT"
           echo "claude_version=$claude_version" >> "$GITHUB_OUTPUT"
 
       - name: Check GStack
         id: gstack
         run: |
-          git clone --depth 200 https://github.com/garrytan/gstack.git /tmp/gstack
+          # Full history needed: we diff against a TAG baseline, and tags need their commits present.
+          git clone --filter=blob:none https://github.com/garrytan/gstack.git /tmp/gstack
           cd /tmp/gstack
           latest_commit=$(git rev-parse --short HEAD)
           latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "unknown")
+          current_tag="${{ steps.current.outputs.gstack_tag }}"
 
-          if [[ "$latest_commit" != "${{ steps.current.outputs.gstack_commit }}" ]]; then
+          # Compare TAGS (VERSIONS.md stores tags). Unknown upstream tag -> fail loud, don't guess.
+          if [[ "$latest_tag" == "unknown" ]]; then
+            echo "::error::could not resolve latest gstack tag — aborting rather than mis-detecting change"
+            exit 1
+          fi
+          if [[ "$latest_tag" != "$current_tag" ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "latest_commit=$latest_commit" >> "$GITHUB_OUTPUT"
             echo "latest_commit_full=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
             echo "latest_tag=$latest_tag" >> "$GITHUB_OUTPUT"
 
-            # Get changelog since our known commit
-            changelog=$(git log --oneline ${{ steps.current.outputs.gstack_commit }}..HEAD 2>/dev/null | head -30 || echo "Could not diff — full clone needed")
+            # Changelog since our known tag (tags are valid git range endpoints)
+            changelog=$(git log --oneline "$current_tag"..HEAD 2>/dev/null | head -30 || echo "Could not diff against $current_tag")
             echo "changelog<<GSTACK_EOF" >> "$GITHUB_OUTPUT"
             echo "$changelog" >> "$GITHUB_OUTPUT"
             echo "GSTACK_EOF" >> "$GITHUB_OUTPUT"
 
             # Capture changed skill files
-            skill_changes=$(git diff --name-only ${{ steps.current.outputs.gstack_commit }}..HEAD -- '*/SKILL.md' 2>/dev/null | head -30 || echo "unknown")
+            skill_changes=$(git diff --name-only "$current_tag"..HEAD -- '*/SKILL.md' 2>/dev/null | head -30 || echo "unknown")
             echo "skill_changes<<GSTACK_SKILLS_EOF" >> "$GITHUB_OUTPUT"
             echo "$skill_changes" >> "$GITHUB_OUTPUT"
             echo "GSTACK_SKILLS_EOF" >> "$GITHUB_OUTPUT"
@@ -100,7 +114,13 @@ jobs:
         run: |
           latest_version=$(npm view @anthropic-ai/claude-code version 2>/dev/null || echo "unknown")
 
-          if [[ "$latest_version" != "${{ steps.current.outputs.claude_version }}" ]] && [[ "$latest_version" != "unknown" ]]; then
+          # Compare MAJOR.MINOR only: Claude Code ships patch releases near-weekly, and a patch
+          # bump doesn't change anything this manual documents — triggering a full API
+          # regeneration of README + both generator SKILL.mds for a version-number delta was
+          # the second weekly money leak.
+          latest_mm=$(echo "$latest_version" | cut -d. -f1,2)
+          current_mm=$(echo "${{ steps.current.outputs.claude_version }}" | cut -d. -f1,2)
+          if [[ "$latest_mm" != "$current_mm" ]] && [[ "$latest_version" != "unknown" ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "latest_version=$latest_version" >> "$GITHUB_OUTPUT"
           else

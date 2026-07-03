@@ -1,5 +1,127 @@
 # Changelog
 
+## [2.23.0] - 2026-07-03
+
+System-review remediation, Phase 0 (stop the bleeding) + Phase 1 (lock it down).
+Full review: `docs/superpowers/plans/2026-07-03-system-review-remediation.md`.
+
+### Fixed
+
+- **Weekly API burn in the update pipeline** — VERSIONS.md stores gstack as a
+  TAG but the workflow grepped for a 7-hex commit → empty baseline → "changed"
+  every Monday → full Claude API run + auto-PR + notification issue with zero
+  upstream change. Now: tag-based comparison, FAIL LOUD on empty extraction,
+  and Claude Code patch releases (near-weekly) no longer trigger regeneration
+  (major.minor comparison).
+- **htmlify PostToolUse hook was a no-op since birth** — heredoc/herestring
+  conflict made the JSON extraction always empty; the fail-silent design hid it.
+  Hook input now travels via env var; real errors log to
+  `~/.claude/htmlify-hook.log`. Empirically verified end to end.
+- **Removed `sensitive` third-lens role purged from generator templates** —
+  setup-routing/adapt shipped instructions for a role the script refuses (removed
+  2.18.0) into every generated CLAUDE.md; multi-lens marker bumped v3 → v4 so
+  `/adapt` repairs projects that already received the stale block.
+- **`ios-visual-explore` was unreachable** — wired into e2e-route's routing
+  table, CLAUDE.md routing, and README (which was three releases stale:
+  "twelve skills" → sixteen, three skills unlisted).
+- **iOS projects never got a native review of DESIGN.md** —
+  swiftui-design-consultation Step 6.5 now branches on `$TRACK`
+  (ios → ios-native-review, macos → macos-native-review, both → both).
+- **Marketplace-install path breakage** — third-lens-review, ios-visual-explore
+  and swiftui-design-consultation referenced repo-relative paths that only
+  resolve in the dev repo; all now self-locate from the skill's base directory
+  (htmlify's pattern).
+- CHANGELOG backfilled for 2.20.0–2.22.0 (shipped without entries).
+- SessionStart version-marker nag exempted in the plugin's own repo.
+
+### Added
+
+- **`scripts/lint-skills.py` + CI** (`.github/workflows/lint.yml`) — validates
+  the entire instruction surface on every push/PR: frontmatter, cross-reference
+  resolution, routing coverage, CHANGELOG↔version match, multi-lens marker
+  consistency, stale-pattern denylist. Warnings double as the Phase-3 economy
+  worklist (description budgets, body-size radar).
+- **Release gate** section in CLAUDE.md — lint green + version bump + CHANGELOG
+  entry + README sync before any plugin push.
+
+## [2.22.0] - 2026-07-02
+
+### Added
+
+- **`ios-visual-explore`: perceptual near-duplicate dedup WIRED** — `ahash_png`
+  decodes each retained screen via `sips` downscale → 8×8 BMP (stdlib parse, no
+  Pillow); `perceptual_dedup` collapses visually near-identical successive screens
+  before the vision critic runs. Verified live: 9 screens → 6 to critic, no
+  distinct screen lost. Decode failure → screen kept.
+- **Richer action coverage** — `long_press` (held zero-length swipe, safe-area-
+  checked), `go_back` (iOS interactive-pop edge-swipe from the left edge), and
+  `press_key` (idb `key` with HID mapping for Return/Escape/Backspace/Tab/Space;
+  numeric keycodes pass through; unknown names raise). Previously these returned
+  `unsupported` and wasted a step.
+
+### Changed
+
+- **Gemini-3 `signature` echo documented as NOT NEEDED** — `previous_interaction_id`
+  carries thought continuity server-side; the signature is preserved verbatim in
+  the journal `raw`. SKILL.md's stale "Deferred to Phase 2" section renamed to
+  "Capability notes" with correct status per item.
+
+## [2.21.1] - 2026-07-01
+
+### Fixed
+
+- **`ios-visual-explore` robustness sweep** (GLM-5.2 third-lens P2/P3 findings):
+  bounded API retry (3 tries, exponential backoff) around `client.start`/`respond`
+  so one transient blip no longer loses an unattended run; empty/malformed model
+  turn now reports honest `error` status instead of misleading `step_limit`;
+  post-action settle 0.3s → 0.5s so screenshots land after iOS push/modal
+  transitions, not mid-animation; scroll direction case-insensitive (capitalized
+  `"Down"` was a 0-delta no-op swipe); executor `_run` surfaces idb stderr for
+  model self-correction; landscape preflight resolves `sips`, fails closed if
+  absent.
+
+## [2.21.0] - 2026-07-01
+
+### Added
+
+- **Context-aware, batched vision critic** — the critic now receives the mission
+  and a per-screen caption (which action produced each screen), so it can judge
+  expected states (keyboard up, sheet presented) vs real bugs; screenshots are
+  batched (6 per vision call) instead of one unbounded call.
+
+### Fixed
+
+- **`coordinate_space()` settle-retry** (B1) — the SPIKE requires settle-retry on
+  ALL describe-all calls; this one was missed and, being hoisted once at loop
+  start, a single iPad degenerate tree killed the whole run.
+- **Critic saw only endpoints** (H1) — successful mid-run navigations (the screens
+  the run actually explored) were dropped from critic input; now every reached
+  screen is critiqued.
+- **`Bilde N` screenshot refs** — asking the critic to reference image numbers made
+  it return `"Bilde 3"` strings; `_resolve_screenshot` maps int / `"3"` /
+  `"Bilde 3"` / path passthrough batch-locally so reports cite real paths.
+
+## [2.20.0] - 2026-06-27
+
+### Added
+
+- **`ios-visual-explore` Fase 2: iPadOS support** — fullscreen, operator-chosen
+  orientation. `INSET_TABLE` safe-area per device-class × orientation (S1: iPad
+  exposes no inset elements to derive from), `device_class` detection with
+  fail-closed unmodeled-device handling, AXLabel self-reference foreground oracle
+  with settle-retry (S7: no bundleID on iPad Application elements), fullscreen
+  validation via screenshot-px / frame-pt uniform @2x/@3x scale (S6), `--orientation`
+  CLI flag (S5: operator rotates manually; the tool verifies and fails closed).
+- **Landscape screenshot rotation** — `simctl` captures the native-portrait
+  framebuffer even in landscape UI; the executor rotates the PNG upright via
+  `sips` so model-visible orientation matches the tap coordinate space (bug found
+  by live-smoke, invisible to all three static review lenses).
+
+### Notes
+
+- Final multi-lens review (Claude self-pitfall + Codex + GLM-5.2) fixed 4 findings
+  pre-merge; live-smoke verified iPad portrait + landscape + iPhone regression.
+
 ## [2.19.0] - 2026-06-27
 
 ### Added

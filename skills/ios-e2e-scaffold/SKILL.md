@@ -1,7 +1,6 @@
 ---
 name: ios-e2e-scaffold
 description: One-shot XCUITest scaffolding for iOS SwiftUI apps. Audits the Scene tree, generates ranked TIER-1/2/3 test stubs, suggests accessibility identifiers with batch confirmation, and emits a Claude-readable xcresult runner script targeting the iOS Simulator. Manual invocation only — modifies project files.
-version: 1.0.0
 ---
 
 # ios-e2e-scaffold
