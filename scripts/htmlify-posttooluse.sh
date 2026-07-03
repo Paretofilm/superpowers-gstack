@@ -37,11 +37,24 @@ fi
 INPUT=$(cat)
 
 # Extract tool_name and file_path. Use python for robust JSON parsing.
-DATA=$(python3 - <<'PYEOF' 2>/dev/null
-import json, sys
+#
+# BUG HISTORY (why the input travels via env var): the original form combined a
+# heredoc program (`python3 - <<'PYEOF'`) with a herestring (`<<<"$INPUT"`) on the
+# line after PYEOF. The herestring parsed as a separate null command, python consumed
+# the heredoc as its program, sys.stdin.read() returned empty -> json error ->
+# silent exit. The hook was a no-op from day one and, being fail-silent, was never
+# noticed. Env var + heredoc has no stdin conflict.
+#
+# Real errors are LOGGED (not discarded) so the next regression is visible;
+# intentional filter-skips stay silent. The hook still always exits 0.
+LOG="${HOME}/.claude/htmlify-hook.log"
+DATA=$(HOOK_INPUT="$INPUT" python3 - 2>>"$LOG" <<'PYEOF'
+import json, os, re, sys
+
 try:
-    data = json.loads(sys.stdin.read())
-except Exception:
+    data = json.loads(os.environ.get("HOOK_INPUT", ""))
+except Exception as e:
+    print(f"htmlify-hook: bad hook JSON: {e}", file=sys.stderr)
     sys.exit(0)
 
 tool = data.get("tool_name", "")
@@ -61,7 +74,6 @@ if "/.superpowers-html/" in fp or fp.startswith(".superpowers-html/"):
     sys.exit(0)
 
 # Filename filter: match known artifact patterns
-import os, re
 base = os.path.basename(fp)
 artifact = False
 if base == "handoff.md":
@@ -81,7 +93,7 @@ if not artifact:
 
 print(fp)
 PYEOF
-<<<"$INPUT")
+)
 
 if [ -z "$DATA" ]; then
   exit 0
