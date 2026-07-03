@@ -102,6 +102,7 @@ Key routing rules:
 - Multi-model verification → invoke /superpowers-gstack:pitfall-verification. It is a multi-model orchestrator: for ship-worthy changes it auto-chains `/codex review` (Stage 2), and for high-stakes changes (architecture / real-time / security / contracts / migration-logic) also `/superpowers-gstack:third-lens-review` (Stage 3, external model house via OpenRouter), ending in an adversarial synthesis (Stage 4). Stages fire automatically per tier with no confirmation prompt; trivial changes get only the free self-pitfall pass.
 - third-lens-review (normally auto-invoked by pitfall-verification Stage 3; invoke directly only for an ad-hoc third-house read) → runs an external model house on the PATCHED artifact (`scripts/third-lens-review.py`). Routing by `--role`: architecture=GLM-5.2 (default, OpenRouter), correctness=DeepSeek V4-Pro (OpenRouter), countersynthesis=OpenAI via the `codex` CLI (subscription). OpenRouter key in Keychain `openrouter-api-key`; the `sensitive` role was removed in 2.18.0.
 - After a PRD/spec/plan for a native Apple app, before implementation → invoke /superpowers-gstack:macos-native-review (macOS) or /superpowers-gstack:ios-native-review (iOS/iPadOS). HIG-citation-grounded conformance gate; complementary to pitfall-verification and quality-review.
+- After a PRD/spec/plan, before implementation — "will this feel good?", perceived quality, loading/empty states, error recovery → invoke /superpowers-gstack:quality-review. Complementary to pitfall-verification ("will this work?").
 - E2E test a Swift app, "test the app", "trykk gjennom flyten", "e2e", press buttons and verify result → invoke /superpowers-gstack:e2e-route. Pure dispatcher: reads platform (scheme/SUPPORTED_PLATFORMS/.gstack/track) × intent (CI-env/verbs; asks once if ambiguous; multiplatform → asks iOS/macOS/both) and routes to /macos-e2e-scaffold, /ios-e2e-scaffold, MCP-live simulator automation (XcodeBuildMCP / ios-simulator), or visual-regression review (/ios-design-review for iOS, /design-review for macOS). Does not execute itself — names the executor + next action, then hands off.
 - Scaffold committed XCUITest for an iOS SwiftUI app → invoke /superpowers-gstack:ios-e2e-scaffold (manual only; mirrors /macos-e2e-scaffold with iOS heuristics — TabView/NavigationStack scene-walk, sheet/tab/push/gesture TIERs, iOS-Simulator runner). Normally reached via /e2e-route.
 - Visual exploration of an iOS/iPadOS app when the accessibility tree is insufficient (layout regressions, visual landmarks, "find visual issues") → invoke /superpowers-gstack:ios-visual-explore. Tier-2 escalation after XCUITest, not first resort; paid Gemini computer-use per run. Normally reached via /e2e-route.
@@ -111,3 +112,14 @@ Key routing rules:
 - Resume previous session, restore state → invoke context-restore
 - Context long, before /clear, before /compact → invoke context-handoff
 - Code quality, health check → invoke health
+
+## Release gate (this repo)
+
+Before merging/pushing any plugin change (skills/, scripts/, CLAUDE.md, workflows):
+
+1. `python3 scripts/lint-skills.py` must be GREEN — it enforces frontmatter validity, cross-reference resolution, routing coverage, CHANGELOG↔plugin.json version match, multi-lens marker consistency, and the stale-pattern denylist. CI runs the same lint on every push/PR (`.github/workflows/lint.yml`).
+2. Ship-worthy change ⇒ bump `.claude-plugin/plugin.json` (or the marketplace cache never updates) **and** add the `## [X.Y.Z]` CHANGELOG entry (the lint refuses a version without one).
+3. New/removed/renamed skill ⇒ update README's skill list and the routing section above (the lint refuses unrouted skills).
+4. When purging a stale pattern, add it to `DENYLIST` in `scripts/lint-skills.py` so it stays purged.
+
+(Context: four releases, 2.20.0–2.22.0, shipped without CHANGELOG entries before this gate existed. The lint makes that class unrepeatable.)

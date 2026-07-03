@@ -1,5 +1,49 @@
 # Changelog
 
+## [2.23.0] - 2026-07-03
+
+System-review remediation, Phase 0 (stop the bleeding) + Phase 1 (lock it down).
+Full review: `docs/superpowers/plans/2026-07-03-system-review-remediation.md`.
+
+### Fixed
+
+- **Weekly API burn in the update pipeline** — VERSIONS.md stores gstack as a
+  TAG but the workflow grepped for a 7-hex commit → empty baseline → "changed"
+  every Monday → full Claude API run + auto-PR + notification issue with zero
+  upstream change. Now: tag-based comparison, FAIL LOUD on empty extraction,
+  and Claude Code patch releases (near-weekly) no longer trigger regeneration
+  (major.minor comparison).
+- **htmlify PostToolUse hook was a no-op since birth** — heredoc/herestring
+  conflict made the JSON extraction always empty; the fail-silent design hid it.
+  Hook input now travels via env var; real errors log to
+  `~/.claude/htmlify-hook.log`. Empirically verified end to end.
+- **Removed `sensitive` third-lens role purged from generator templates** —
+  setup-routing/adapt shipped instructions for a role the script refuses (removed
+  2.18.0) into every generated CLAUDE.md; multi-lens marker bumped v3 → v4 so
+  `/adapt` repairs projects that already received the stale block.
+- **`ios-visual-explore` was unreachable** — wired into e2e-route's routing
+  table, CLAUDE.md routing, and README (which was three releases stale:
+  "twelve skills" → sixteen, three skills unlisted).
+- **iOS projects never got a native review of DESIGN.md** —
+  swiftui-design-consultation Step 6.5 now branches on `$TRACK`
+  (ios → ios-native-review, macos → macos-native-review, both → both).
+- **Marketplace-install path breakage** — third-lens-review, ios-visual-explore
+  and swiftui-design-consultation referenced repo-relative paths that only
+  resolve in the dev repo; all now self-locate from the skill's base directory
+  (htmlify's pattern).
+- CHANGELOG backfilled for 2.20.0–2.22.0 (shipped without entries).
+- SessionStart version-marker nag exempted in the plugin's own repo.
+
+### Added
+
+- **`scripts/lint-skills.py` + CI** (`.github/workflows/lint.yml`) — validates
+  the entire instruction surface on every push/PR: frontmatter, cross-reference
+  resolution, routing coverage, CHANGELOG↔version match, multi-lens marker
+  consistency, stale-pattern denylist. Warnings double as the Phase-3 economy
+  worklist (description budgets, body-size radar).
+- **Release gate** section in CLAUDE.md — lint green + version bump + CHANGELOG
+  entry + README sync before any plugin push.
+
 ## [2.22.0] - 2026-07-02
 
 ### Added

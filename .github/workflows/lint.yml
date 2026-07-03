@@ -1,0 +1,24 @@
+name: Lint instruction surface
+
+# Validates skills/, CLAUDE.md and README.md on every push/PR — frontmatter,
+# cross-reference resolution, routing coverage, CHANGELOG<->version, marker
+# consistency, and the stale-pattern denylist. Free and fast (stdlib python,
+# no API calls). Added by the 2026-07-03 system review: 5 700 lines of
+# instruction surface previously had zero validation.
+
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint skills + routing + release hygiene
+        run: python3 scripts/lint-skills.py

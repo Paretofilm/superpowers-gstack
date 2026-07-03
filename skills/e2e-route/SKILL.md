@@ -1,7 +1,6 @@
 ---
 name: e2e-route
 description: Pure-dispatcher that picks the right E2E executor for a Swift test request from context (platform × intent × verification kind) and hands off — without owning execution. Routes to /macos-e2e-scaffold, /ios-e2e-scaffold, MCP-live simulator automation, or /ios-qa / /ios-design-review. Manual + CLAUDE.md routing.
-version: 1.0.0
 ---
 
 # e2e-route
