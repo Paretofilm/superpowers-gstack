@@ -7,8 +7,9 @@ description: |
   colors, SF Pro typography, Liquid Glass material discipline, named
   motion presets, and accessibility baseline. Orchestrates the
   swiftui-rag MCP surface for canonical patterns and HIG citations,
-  uses /htmlify for Phase 3 proposal preview, chains into
-  macos-native-review for HIG conformance gating.
+  uses /htmlify for Phase 3 proposal preview, chains into the
+  track-appropriate native review (macos-native-review /
+  ios-native-review) for HIG conformance gating.
   Use when starting a new SwiftUI project, when an existing SwiftUI
   project lacks a coherent design system, or when refreshing one.
   Phase 0 inlines the platform-question if .gstack/track is missing
@@ -35,7 +36,8 @@ allowed-tools:
 upstream_skills:
   - office-hours-track-aware (typical entry — sets marker before this skill runs)
 chains_to:
-  - macos-native-review
+  - macos-native-review (track=macos / both)
+  - ios-native-review (track=ios / both)
   - htmlify
 ---
 
@@ -432,7 +434,7 @@ source of truth. The MD is kept alongside for human inspection,
 debugging, and audit trails (e.g. "what did we approve last
 Tuesday?"). They must stay consistent.
 
-## Phase 6 — Write Artifacts (with macos-native-review chain)
+## Phase 6 — Write Artifacts (with native-review chain)
 
 Paired generation. DESIGN.md and DesignSystem/* are both written from
 the approved proposal YAML. Then run conformance review against the
@@ -666,33 +668,42 @@ The repo-root `DESIGN.html` is what Step 6.8 commits. The
 on every re-htmlify; remains gitignored). Both exist intentionally;
 they have different lifecycles.
 
-### Step 6.5: Chain to macos-native-review (on DESIGN.md)
+### Step 6.5: Chain to the native review for the project's track (on DESIGN.md)
 
-macos-native-review reads the artifact from context, not from a path
-argument. Two steps:
+The native-review skills read the artifact from context, not from a path
+argument. Pick the reviewer(s) by `$TRACK` — **an iOS project must get
+`ios-native-review`, not a guaranteed-N/A macOS pass**:
 
-1. **Read DESIGN.md into context** via the Read tool:
+| `$TRACK` | Invoke |
+|---|---|
+| `macos` | `superpowers-gstack:macos-native-review` |
+| `ios` | `superpowers-gstack:ios-native-review` |
+| `both` | both skills, sequentially (each reviews its own platform's surfaces) |
+
+For each reviewer to run:
+
+1. **Read DESIGN.md into context** via the Read tool (once is enough
+   even when both reviewers run):
    ```
    Read(file_path="<absolute path>/DESIGN.md")
    ```
 
-2. **Invoke macos-native-review** via the Skill tool. The just-loaded
+2. **Invoke the reviewer** via the Skill tool. The just-loaded
    DESIGN.md content is now in the model's context, so the skill's
-   Phase 0 (macOS signal detection) and the 12-category review can
+   Phase 0 (platform signal detection) and its category review can
    read it directly:
    ```
-   Skill(skill="superpowers-gstack:macos-native-review",
+   Skill(skill="superpowers-gstack:<track-appropriate>-native-review",
          args="Review the DESIGN.md just loaded into context. It is the design system spec for a SwiftUI project on track=$TRACK; budget is $BUDGET_CRITICAL/$BUDGET_SIGNIFICANT/$BUDGET_POLISH.")
    ```
 
-Capture the skill's verdict and findings list by severity (CRITICAL,
-SIGNIFICANT, POLISH). These feed into the budget check at Step 6.7.
+Capture each skill's verdict and findings list by severity (CRITICAL,
+SIGNIFICANT, POLISH). These feed into the budget check at Step 6.7 —
+for `both`, aggregate the two findings lists.
 
-If the project's `$TRACK` is `ios` only, macos-native-review's Phase 0
-will return `N/A — iOS-only project`. In that case, skip its findings
-in the aggregation (only the three review-* tool findings from Step
-6.6 count toward the budget). This is expected behavior —
-macos-native-review is macOS-specific by design.
+(History: before v2.23.0 this step invoked macos-native-review
+unconditionally and told iOS projects to treat its N/A as "expected
+behavior" — so iOS DESIGN.md never got a native review at all.)
 
 ### Step 6.6: Chain to review-* tools (on each .swift file)
 
@@ -728,7 +739,7 @@ upstream fix at `swiftui-rag-pipeline` issue tracker.
 
 Aggregate findings from **all three review-* tools** combined
 (`review_macos_hig` + `review_accessibility` + `review_liquid_glass`),
-deduplicated by `(rule_id, line)`, plus macos-native-review verdict:
+deduplicated by `(rule_id, line)`, plus the track-appropriate native-review verdict(s):
 - CRITICAL count
 - SIGNIFICANT count
 - POLISH count
@@ -771,8 +782,8 @@ findings of equal or higher severity. Specifically:
 Comparison procedure:
 
 1. Parse findings from iteration N (output of the three review-*
-   tools + macos-native-review, aggregated and deduplicated per
-   Step 6.7 as written).
+   tools + the track-appropriate native review(s), aggregated and
+   deduplicated per Step 6.7 as written).
 2. For each iteration-N finding, look it up by `(rule_id, file:line)`
    in iteration N-1. NEW findings are those not present in N-1.
 3. Count NEW CRITICAL and NEW SIGNIFICANT.
