@@ -42,32 +42,41 @@ jobs:
       - name: Check GStack
         id: gstack
         run: |
-          # Full history needed: we diff against a TAG baseline, and tags need their commits present.
-          git clone --filter=blob:none https://github.com/garrytan/gstack.git /tmp/gstack
+          # gstack has NO git tags (verified 2026-07-03 via the GitHub API — empty tag
+          # list). Its version identity is the VERSION file (e.g. 1.58.5.0), which is
+          # also where VERSIONS.md's "v1.X.Y.Z" values come from. So: shallow clone,
+          # compare VERSION-file strings, and derive "what changed" from gstack's own
+          # CHANGELOG.md sections above our baseline — git ranges are unusable without
+          # tags (the original design compared commit hashes VERSIONS.md never stored).
+          git clone --depth 1 https://github.com/garrytan/gstack.git /tmp/gstack
           cd /tmp/gstack
           latest_commit=$(git rev-parse --short HEAD)
-          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "unknown")
-          current_tag="${{ steps.current.outputs.gstack_tag }}"
+          latest_version=$(tr -d '[:space:]' < VERSION 2>/dev/null || echo "")
+          current_version="${{ steps.current.outputs.gstack_tag }}"
+          current_version="${current_version#v}"   # VERSIONS.md stores v-prefixed
 
-          # Compare TAGS (VERSIONS.md stores tags). Unknown upstream tag -> fail loud, don't guess.
-          if [[ "$latest_tag" == "unknown" ]]; then
-            echo "::error::could not resolve latest gstack tag — aborting rather than mis-detecting change"
+          # Fail loud on an unreadable upstream version — never guess "changed".
+          if [[ ! "$latest_version" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
+            echo "::error::could not read gstack VERSION file (got '$latest_version') — aborting rather than mis-detecting change"
             exit 1
           fi
-          if [[ "$latest_tag" != "$current_tag" ]]; then
+          if [[ "$latest_version" != "$current_version" ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "latest_commit=$latest_commit" >> "$GITHUB_OUTPUT"
             echo "latest_commit_full=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-            echo "latest_tag=$latest_tag" >> "$GITHUB_OUTPUT"
+            echo "latest_tag=v$latest_version" >> "$GITHUB_OUTPUT"
 
-            # Changelog since our known tag (tags are valid git range endpoints)
-            changelog=$(git log --oneline "$current_tag"..HEAD 2>/dev/null | head -30 || echo "Could not diff against $current_tag")
+            # Changelog = gstack's own CHANGELOG.md sections NEWER than our baseline:
+            # print until the heading matching our version appears (cap at 120 lines).
+            changelog=$(awk -v ver="$current_version" 'index($0, "## [" ver "]") {exit} {print}' CHANGELOG.md 2>/dev/null | head -120)
+            [ -n "$changelog" ] || changelog="Could not extract CHANGELOG sections above $current_version — review gstack CHANGELOG.md manually"
             echo "changelog<<GSTACK_EOF" >> "$GITHUB_OUTPUT"
             echo "$changelog" >> "$GITHUB_OUTPUT"
             echo "GSTACK_EOF" >> "$GITHUB_OUTPUT"
 
-            # Capture changed skill files
-            skill_changes=$(git diff --name-only "$current_tag"..HEAD -- '*/SKILL.md' 2>/dev/null | head -30 || echo "unknown")
+            # No tags -> no version-range git diff; skill changes are described in the
+            # CHANGELOG sections above.
+            skill_changes="(not derivable — gstack has no git tags; skill changes are described in the CHANGELOG excerpt)"
             echo "skill_changes<<GSTACK_SKILLS_EOF" >> "$GITHUB_OUTPUT"
             echo "$skill_changes" >> "$GITHUB_OUTPUT"
             echo "GSTACK_SKILLS_EOF" >> "$GITHUB_OUTPUT"
