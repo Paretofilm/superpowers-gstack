@@ -50,7 +50,7 @@ baseline is untouched). Layout:
 ~/.claude/cost-ledger/
   ledger.jsonl          # append-only: one ROI record per lens per review
   overrides.json        # the current learned adjustments (read by routing)
-  quarantine.json       # (domain, tier, lens) pairs barred from re-skip + until-sample
+  quarantine.json       # (domain,tier,lens) barred from re-skip: quarantined_at_ts + required_non_shadow_count
   baseline.json         # the human baseline the overrides layer on top of; reset target
   .lock                 # flock target serializing the propose→write→commit section
   .git/                 # each auto-adjustment is a commit here (informed + reversible)
@@ -70,6 +70,21 @@ timeout skips tuning for that review (it still appended its record; the next rev
 tunes on the fuller history). This makes the write path atomic and prevents lost
 overrides and Git index-lock failures. Fable must implement this lock, not assume
 single-writer.
+
+**Atomic writes for unlocked readers (fixed).** Routing reads `overrides.json` on the
+hot dispatch path and MUST NOT block on the lock. So every write to `overrides.json`
+and `quarantine.json` is **write-to-temp + `os.rename()`** (atomic on POSIX) inside the
+locked section. An unlocked reader therefore always sees either the whole old file or
+the whole new file, never a truncated/partial one — no torn read, no mid-dispatch parse
+crash. (A missing/at-most unreadable file still falls through to baseline, the safe
+direction.) The `.lock` serializes *writers*; the atomic rename protects *readers*.
+
+**All commands take the lock (fixed).** Every `/cost-ledger` command that mutates state
+(`reset`, `pause`) acquires the same exclusive `.lock` as the auto-tune cycle before
+touching `overrides.json` / `quarantine.json` / git — otherwise a `reset` mid-tune
+collides on `.git/index.lock` or silently loses an override. Read-only `status` /
+`explain` use the same timeout-skip fallback (show possibly-stale state rather than
+block).
 
 ### 3.1 Ledger record (minimum tuple — the ROI signal)
 
@@ -140,7 +155,12 @@ it converged on.
    non-shadow — reviews of that triple). Ship-worthy evidence never unlocks a
    high-stakes skip. Below the sample, run everything.
 3. **One-step moves.** An adjustment may only drop ONE lens per (domain, tier) per
-   run — never collapse straight to self-pitfall-only in one step.
+   cycle — never collapse straight to self-pitfall-only in one step. The guard is
+   evaluated against the **currently committed overrides read at lock-acquisition
+   time**, so two parallel sessions can't each drop a different lens for the same
+   (domain, tier) in rapid succession: session B, acquiring the lock after A committed,
+   sees A's drop and is blocked from a second drop until the next human-visible
+   SessionStart notification (which defines the "cycle" boundary).
 4. **Bounded blast.** Overrides only ever change lens *selection*. They can never edit
    `model-routing.md`, the coder tier, or disable a guardrail.
 
@@ -173,17 +193,29 @@ that is the honest price of knowing the true miss rate rather than guessing it.
 **Escape trigger.** Auto-revert a `(domain, tier, lens)` skip when EITHER:
 - (primary) a **shadow run** of that lens produces a surviving P1/P2 — direct proof; or
 - (secondary, conservative) a real surviving P1/P2 appears in that domain — a weaker
-  correlational signal, kept only as a fail-safe and logged as such (it may over-revert;
-  over-reverting toward more thorough routing is safe).
+  correlational signal, kept only as a fail-safe and logged as such. **Bounded (fixed):**
+  the secondary trigger has a per-(domain, tier, lens) cooldown — at most one
+  correlational revert per that triple within a window, and it only fires while NO
+  shadow data yet exists for the triple (once shadow measurement is accruing, the sound
+  primary signal governs). Without this bound a domain that emits an occasional P2 from
+  *running* lenses would revert every skip forever and no saving could ever accrue. The
+  revert source (shadow vs correlational) is recorded so `/cost-ledger` surfaces the
+  over-reversion rate.
 
 Response (**auto-revert, not alert-only — fail-safe**):
 1. `git revert` the offending adjustment commit + regenerate `overrides.json` (restore
    the fuller lens set).
-2. Write the `(domain, tier, lens)` to `quarantine.json` with an `until_sample` count:
-   no further `skip` proposal for that triple until a much larger NON-shadow sample
-   accrues (Fable picks the multiplier; spec floor: 3× cold-start). `propose` receives
-   `quarantine.json` (§4) and MUST honour it — this is what stops the
-   skip→escape→revert→skip oscillation.
+2. Write the `(domain, tier, lens)` to `quarantine.json` with `quarantined_at_ts` and
+   `required_non_shadow_count` (Fable picks the multiplier; spec floor: 3× cold-start).
+   **Lifecycle (fixed — `propose` is pure, so it can only READ quarantine, never clear
+   it):** `propose` counts only non-shadow records with `ts > quarantined_at_ts` for
+   that triple (NOT all-time, or stale pre-skip data would satisfy it instantly) and
+   MUST NOT propose a skip while the entry exists. The **tune cycle** (§6, under the
+   lock) is the entry's owner: once the post-quarantine non-shadow count reaches
+   `required_non_shadow_count`, the tune cycle removes the entry from `quarantine.json`
+   in the same locked section — reopening the triple to normal cold-start evaluation.
+   Without a named mutator the quarantine would be a one-way ratchet, not a controller;
+   this closes that loop and stops the skip→escape→revert→skip oscillation.
 3. Raise a `cost-ledger-alert` (reuse the model-review issue/hook mechanism): which
    triple, whether the trigger was a shadow hit (primary) or a correlational fail-safe
    (secondary), and the evidence.
