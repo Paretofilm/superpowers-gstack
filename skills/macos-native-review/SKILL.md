@@ -38,7 +38,7 @@ Recommended flow on a fresh artifact for a macOS app:
 3. `macos-native-review` → fix native-conformance gaps
 4. Hand off to `writing-plans` / implementation
 
-`macos-native-review` does *not* replace `quality-review`. The latter has 13 platform-independent categories (silent failures, empty states, multi-tenancy, AI output, sort order, etc.) that are still worth running on macOS projects. Modest overlap on two categories (quality-review's keyboard / animations) is acceptable: that skill checks generic conventions, this skill checks Apple-specific values.
+`macos-native-review` does *not* replace `quality-review`. The latter has 15 platform-independent categories (silent failures, empty states, multi-tenancy, AI output, sort order, etc.) that are still worth running on macOS projects. Modest overlap on two categories (quality-review's keyboard / animations) is acceptable: that skill checks generic conventions, this skill checks Apple-specific values.
 
 ### Relationship to swiftui-design-consultation
 

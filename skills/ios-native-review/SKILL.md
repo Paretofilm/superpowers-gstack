@@ -38,7 +38,7 @@ Recommended flow on a fresh artifact for an iOS app:
 3. `ios-native-review` → fix native-conformance gaps
 4. Hand off to `writing-plans` / implementation
 
-`ios-native-review` does *not* replace `quality-review`. The latter has 13 platform-independent categories (silent failures, empty states, multi-tenancy, AI output, sort order, etc.) that are still worth running on iOS projects. Modest overlap on two categories (quality-review's keyboard / animations) is acceptable: that skill checks generic conventions, this skill checks Apple-iOS-specific values.
+`ios-native-review` does *not* replace `quality-review`. The latter has 15 platform-independent categories (silent failures, empty states, multi-tenancy, AI output, sort order, etc.) that are still worth running on iOS projects. Modest overlap on two categories (quality-review's keyboard / animations) is acceptable: that skill checks generic conventions, this skill checks Apple-iOS-specific values.
 
 ### Relationship to macos-native-review and swiftui-design-consultation
 
