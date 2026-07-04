@@ -17,7 +17,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Hardening (2026-07 system review): a persistently failing weekly run used to
+      # accumulate one repair PR + one API call per failure. Skip when a repair is
+      # already open — merge/close it first, then the next failure may retry.
+      - name: Skip if an auto-repair PR is already open
+        id: guard
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          open_repairs=$(gh pr list --state open --label auto-repair --json number --jq 'length' 2>/dev/null || echo 0)
+          if [ "$open_repairs" != "0" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "An auto-repair PR is already open ($open_repairs) — skipping to avoid duplicate PRs and API spend."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Get failed workflow logs
+        if: steps.guard.outputs.skip != 'true'
         id: logs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -74,18 +91,31 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Attempt repair with Claude
+        if: steps.guard.outputs.skip != 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ERROR_LOGS: ${{ steps.logs.outputs.error_logs }}
         run: |
           python3 << 'PYTHON_EOF'
-          import json, os, subprocess, sys
+          import json, os, re, subprocess, sys
           from pathlib import Path
 
           error_logs = os.environ.get("ERROR_LOGS", "")
 
           if not error_logs.strip():
               print("No error logs found, skipping repair")
+              sys.exit(0)
+
+          # Hardening: transient failures (API blips, rate limits, empty billing) are not
+          # repairable by editing files — attempting "repair" wastes an API call and can
+          # produce a nonsense PR. Skip them; the weekly schedule simply retries.
+          TRANSIENT = re.compile(
+              r"credit balance is too low|rate.?limit|overloaded_error|429|(?:HTTP )?5\d\d"
+              r"|timed? ?out|ETIMEDOUT|ECONNRESET|Connection reset|Service Unavailable",
+              re.IGNORECASE,
+          )
+          if TRANSIENT.search(error_logs):
+              print("Failure looks transient (network/rate-limit/billing) — not file-repairable, skipping.")
               sys.exit(0)
 
           # Read the workflow file that likely needs fixing
@@ -137,12 +167,16 @@ jobs:
 
           Path("/tmp/repair-request.json").write_text(json.dumps(request))
 
+          # Key via curl config file, not argv (argv is visible in the runner's process list)
+          Path("/tmp/curl-headers").write_text(
+              f'header = "x-api-key: {os.environ["ANTHROPIC_API_KEY"]}"\n'
+              'header = "anthropic-version: 2023-06-01"\n'
+              'header = "content-type: application/json"\n'
+          )
           result = subprocess.run(
               ["curl", "-s", "-w", "\n%{http_code}",
                "https://api.anthropic.com/v1/messages",
-               "-H", f"x-api-key: {os.environ['ANTHROPIC_API_KEY']}",
-               "-H", "anthropic-version: 2023-06-01",
-               "-H", "content-type: application/json",
+               "-K", "/tmp/curl-headers",
                "-d", "@/tmp/repair-request.json"],
               capture_output=True, text=True, timeout=120
           )
@@ -172,6 +206,18 @@ jobs:
           # empty or a stray newline, but sometimes preamble Claude added
           # despite "no commentary" rule). Skip parts that don't contain the
           # closing "===" marker — they're not real file blocks.
+          # Hardening: the model chooses file paths, and the error logs it read can embed
+          # upstream-controlled text (failed check-updates runs echo upstream changelogs) —
+          # a prompt-injection → file-write funnel. Only allow the files this workflow is
+          # designed to repair; reject absolute paths and traversal outright.
+          ALLOWED_REPAIR_PATHS = {
+              ".github/workflows/check-updates.yml",
+              "skills/setup-routing/SKILL.md",
+              "skills/adapt/SKILL.md",
+              "VERSIONS.md",
+              "README.md",
+          }
+
           parts = content.split("===FILE: ")
           files_written = []
           for part in parts:
@@ -180,6 +226,15 @@ jobs:
               marker_end = part.index("===")
               file_path = part[:marker_end].strip()
               file_content = part[marker_end + 3:].strip()
+
+              if file_path.startswith(("/", "~")) or ".." in file_path.split("/"):
+                  print(f"REFUSED: absolute/traversal path {file_path!r}", file=sys.stderr)
+                  sys.exit(1)
+              if file_path not in ALLOWED_REPAIR_PATHS:
+                  print(f"REFUSED: {file_path!r} is not in the self-repair allowlist "
+                        f"({sorted(ALLOWED_REPAIR_PATHS)}) — manual intervention needed.",
+                        file=sys.stderr)
+                  sys.exit(1)
 
               # Remove markdown fences if present
               if file_content.startswith("```"):
@@ -209,16 +264,19 @@ jobs:
           PYTHON_EOF
 
       - name: Check for changes
+        if: steps.guard.outputs.skip != 'true'
         id: diff
         run: |
-          if git diff --quiet; then
+          # git status --porcelain, not diff --quiet: a repair that CREATES a file is
+          # invisible to diff --quiet (untracked), which silently dropped such fixes.
+          if [ -z "$(git status --porcelain)" ]; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create repair PR
-        if: steps.diff.outputs.has_changes == 'true'
+        if: steps.guard.outputs.skip != 'true' && steps.diff.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

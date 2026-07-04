@@ -52,13 +52,16 @@ platform), the platform is NOT uniquely determined. Resolve in order:
 - (b) Else ask the user once: "This app targets both iOS and macOS — route this test
   to iOS, macOS, or both?"
 - (c) `both` → emit **two** decision blocks (one iOS, one macOS), each routing to its
-  platform's executor. **Run them SEQUENTIALLY with distinct per-platform target
-  directories** — `<App>iOSUITests/` for iOS, `<App>macOSUITests/` for macOS. This is
-  required because both scaffolds' "already scaffolded" Phase-0 check globs `*UITests/`
-  generically: if both wrote to the same `<App>UITests/`, the first scaffold's files
-  would make the second refuse with "already scaffolded", and they would also collide
-  on the same `xcodegen.yml`/`project.pbxproj` UI-test target. Each decision block's
-  "Next action" must name its platform-specific target dir so the two coexist.
+  platform's executor. **Run them SEQUENTIALLY.** The scaffolds handle coexistence via
+  their shared TARGET_DIR convention: on a multiplatform target each uses a
+  platform-suffixed test directory — `<App>iOSUITests/` for /ios-e2e-scaffold,
+  `<App>macOSUITests/` for /macos-e2e-scaffold — and each scaffold's "already
+  scaffolded" Phase-0 check globs `*UITests/` name-agnostically but EXCLUDES the
+  sibling platform's suffixed directory (`*macOSUITests/` ignored by ios,
+  `*iOSUITests/` ignored by macos). So whichever runs second is not blocked by the
+  first's files, and the two never collide on the same directory or the same
+  `xcodegen.yml`/`project.pbxproj` UI-test target. Each decision block's "Next action"
+  must name its platform-specific target dir.
 
 ### 3. Verification kind (optional refinement)
 
@@ -83,15 +86,18 @@ Degrade to the MCP-live row for the platform **only when the chosen scaffold's P
 actually refuses** — i.e. one of the scaffold's three refuse-conditions fires:
 
 1. not a Swift project, or
-2. no SwiftUI scene detected (e.g. a UIKit-/AppKit-only app), or
+2. no SwiftUI app for the routed platform detected — no SwiftUI scene (e.g. a
+   UIKit-/AppKit-only app) or no platform-discriminating signal (e.g. a pure-iOS app
+   routed to /macos-e2e-scaffold, or vice versa), or
 3. a UI-test target already exists.
 
 Emit an explicit note naming the unmet precondition. No false promise; always a way
 forward.
 
 **SPM-only is NOT a fallback trigger.** The scaffold skills accept `Package.swift`
-projects and proceed — they generate files under `Tests/<App>UITests/` with a "SwiftPM
-can't host a UI-test bundle; add an .xcodeproj" warning. So for SPM-only iOS/macOS apps
+projects and proceed — they generate files under `Tests/<TARGET_DIR>/` (`<App>UITests`,
+platform-suffixed on multiplatform targets) with a "SwiftPM can't host a UI-test
+bundle; add an .xcodeproj" warning. So for SPM-only iOS/macOS apps
 the dispatcher still routes to the scaffold skill; it does NOT degrade to MCP-live.
 
 ## Output — routing-decision block

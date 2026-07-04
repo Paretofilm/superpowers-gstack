@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.25.0] - 2026-07-04
+
+System-review remediation, Phase 2 (consistency). Full review:
+`docs/superpowers/plans/2026-07-03-system-review-remediation.md`.
+
+### Fixed
+
+- **Double Codex pass eliminated** — autoimplement's Step D and pre-flight chain both
+  invoked `/codex review` after `/pitfall-verification`, which has auto-chained Codex
+  itself since 2.16.0 (its idempotency guard only covers Codex run *earlier*). Both
+  chains now run `/review` + pitfall only; `reviews_ran` derives from the multi-lens
+  verdict's lens list. CLAUDE.md/README/generator tables updated to match.
+- **E2E scaffolds hardened as a pair** — macos Phase 0 now requires a
+  macOS-discriminating signal (pure-iOS apps refused; mirror of ios's 2.19.0
+  hardening); shared TARGET_DIR convention (`<App>iOSUITests`/`<App>macOSUITests` on
+  multiplatform) resolves ios's internal naming contradiction AND a latent bug where
+  each scaffold's already-scaffolded glob matched the sibling's dir — the `both` path
+  could never have worked; macos runner no longer fail-open (PIPESTATUS + real exit
+  status; failing regression runs could look green), jq null-guard, honest SPM stub;
+  e2e-route rewritten to describe exactly what both scaffolds do.
+- **Generator consistency** — CLAUDE.md version marker is always plugin.json's version
+  (conflicting 1.11.x self-claims removed); 5 missing skill rows (quality-review,
+  e2e-route, both scaffolds, ios-visual-explore) added identically to both evaluation
+  tables — generated project CLAUDE.mds can now route to them; quality-review category
+  count corrected (13 → 15); swiftui-design-consultation ghost "Phase 2 helper" ref,
+  historical phase-numbering note, model-agnostic commit template; office-hours
+  machine-specific commit ref removed.
+- **Update pipeline hardening** — self-repair: path allowlist on model-chosen writes
+  (closes the prompt-injection → file-write funnel), open-PR dedupe, transient-failure
+  skip, porcelain diff (created files were invisible), key off argv; check-updates:
+  upstream content fenced as UNTRUSTED data with explicit never-follow-instructions
+  rule + injection-review checklist in the PR body, lint-skills runs as a pre-PR gate
+  inside the workflow (GITHUB_TOKEN-created PRs get no CI), notification issue links
+  the created PR (not a possibly-older open one).
+- **Script P3 sweep** — notify-pending-updates caches once per day (zero network on
+  SessionStart cache hits), check-updates.sh dead install-plugin call removed,
+  third-lens-review exits 2 on TTY-with-no-input instead of hanging, dead cliclick
+  hint removed.
+
 ## [2.24.0] - 2026-07-04
 
 ### Upstream: GStack v1.58.5.0 + Superpowers v6.1.1

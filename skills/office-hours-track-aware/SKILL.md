@@ -87,10 +87,10 @@ write design doc).
 Skill(skill="office-hours", args="")
 ```
 
-Note: gstack's office-hours writes the design doc somewhere. Per recent
-global CLAUDE.md update (commit f8e6acb and later), the default is
-`docs/` under the project root. Older sessions may still write to
-`~/super-me/brain/ideas/seeds/` if their CLAUDE.md snapshot is stale.
+Note: gstack's office-hours writes the design doc somewhere. The expected
+default is `docs/` under the project root, but the actual location depends
+on the user's own CLAUDE.md conventions — some setups write to a personal
+ideas/notes directory instead. Do not assume; search (next step).
 
 After the wrapped call completes, locate the just-written design doc:
 

@@ -16,7 +16,7 @@ Before any other action, run three refuse-conditions. Any failure → return ear
 |---|---|---|
 | Swift project | `*.xcodeproj` directory or `Package.swift` in cwd | "Not a Swift project. /ios-e2e-scaffold requires .xcodeproj or Package.swift in project root." |
 | iOS SwiftUI app | **iOS-discriminating signal** (see below) AND SwiftUI scene (`@main` + `App`/`WindowGroup`/`TabView`/`NavigationStack`) | "No iOS SwiftUI app target detected. Skill is iOS-only — for macOS use /macos-e2e-scaffold, for AppKit use /appkit-e2e-scaffold (deferred)." |
-| Not already scaffolded | **any** directory matching `*UITests/` at cwd contains > 1 `*.swift` (`find . -type d -name '*UITests' -maxdepth 2` then count) — do NOT assume the `<App>`-prefixed name, since the scheme is not detected until Step 2 | "UI test target already exists (`<found-dir>/`, N test files). Skill won't overwrite — extend manually instead." |
+| Not already scaffolded | **any** directory matching `*UITests/` at cwd — EXCLUDING the macOS sibling's `*macOSUITests/` (which must not block iOS scaffolding on multiplatform projects) — contains > 1 `*.swift` (`find . -maxdepth 2 -type d -name '*UITests' ! -name '*macOSUITests'` then count) — do NOT assume the `<App>`-prefixed name, since the scheme is not detected until Step 2 | "UI test target already exists (`<found-dir>/`, N test files). Skill won't overwrite — extend manually instead." |
 
 ### iOS-discriminating signal — REQUIRED
 
@@ -27,7 +27,14 @@ Before any other action, run three refuse-conditions. Any failure → return ear
 3. **plain `.xcodeproj`:** `project.pbxproj` contains `SDKROOT = iphoneos` or `SUPPORTED_PLATFORMS = "?iphoneos` for the app target's build config.
 4. **Corroborating (necessary-not-sufficient):** `grep -rl 'import UIKit' --include='*.swift'` present AND macOS-only scenes absent (`MenuBarExtra(`, `Settings {`, `Window(`).
 
-**Multiplatform targets** (`.iOS(` AND `.macOS(` in `Package.swift`, or `SUPPORTED_PLATFORMS` lists both `iphoneos` and `macosx`): Phase 0 **passes** (iOS is among the platforms) and emits a note — "Multiplatform target detected; scaffolding iOS-Simulator tests. Run /macos-e2e-scaffold separately for the macOS surface." Treat `iphoneos`/`.iOS(` presence as sufficient; do not refuse just because macOS is also supported. **Use a platform-suffixed test directory `<App>iOSUITests/`** (not the bare `<App>UITests/`) so the iOS and macOS UI-test targets coexist — otherwise `/macos-e2e-scaffold` would hit the generic `*UITests/` "already scaffolded" refuse, and the two would collide on the same `xcodegen.yml`/`project.pbxproj` target. (For single-platform iOS apps, keep the plain `<App>UITests/`.)
+**Multiplatform targets** (`.iOS(` AND `.macOS(` in `Package.swift`, or `SUPPORTED_PLATFORMS` lists both `iphoneos` and `macosx`): Phase 0 **passes** (iOS is among the platforms) and emits a note — "Multiplatform target detected; scaffolding iOS-Simulator tests. Run /macos-e2e-scaffold separately for the macOS surface." Treat `iphoneos`/`.iOS(` presence as sufficient; do not refuse just because macOS is also supported. Set `TARGET_DIR = <App>iOSUITests` (see below) so the iOS and macOS UI-test targets coexist — `/macos-e2e-scaffold` uses `<App>macOSUITests` in the same situation, each scaffold's "already scaffolded" glob ignores the sibling's suffixed directory, and without the suffix the two would collide on the same directory and the same `xcodegen.yml`/`project.pbxproj` target.
+
+### TARGET_DIR convention
+
+Set once in Phase 0 and used everywhere below (Step 10 file naming, the xcodegen/Xcode UI-test target name, and the runner's `-only-testing:` argument):
+
+- Single-platform iOS target → `TARGET_DIR = <App>UITests`
+- Multiplatform target → `TARGET_DIR = <App>iOSUITests`
 
 Always emit Phase 0 result on success:
 
@@ -41,7 +48,7 @@ Project type: <xcodegen-managed | SPM-based | plain .xcodeproj>
 Scheme: <SchemeName>
 Source root: <path>
 Total .swift files in source root: <N>
-[Multiplatform note, if applicable]
+[Multiplatform note, if applicable — TARGET_DIR = <App>iOSUITests]
 
 Proceeding with audit + scaffold.
 ```
@@ -137,17 +144,17 @@ Use Edit tool, one identifier per Edit call. On uniqueness conflict (same ID wou
 ### Step 10: Generate test files
 Per TIER, write one `.swift` file with `XCTFail("not implemented — fyll inn assertion")` placeholder + TODO-comment pointing to source-file:line + suggested assertions in comments.
 
-File naming:
-- `<App>UITests/SmokeTest.swift` (TIER-1 #1)
-- `<App>UITests/HappyPathTests.swift` (TIER-1 #2)
-- `<App>UITests/ErrorRecoveryTests.swift` (TIER-1 #3)
-- `<App>UITests/ModalAndSheetTests.swift` (TIER-2 modal, if any)
-- `<App>UITests/TabNavigationTests.swift` (TIER-2 tab, if any)
-- `<App>UITests/PushNavigationTests.swift` (TIER-3 push, if any)
-- `<App>UITests/GestureAndRotationTests.swift` (TIER-3 gesture/rotation, if any)
+File naming (all paths use the Phase 0 `TARGET_DIR` — `<App>UITests` single-platform, `<App>iOSUITests` multiplatform):
+- `<TARGET_DIR>/SmokeTest.swift` (TIER-1 #1)
+- `<TARGET_DIR>/HappyPathTests.swift` (TIER-1 #2)
+- `<TARGET_DIR>/ErrorRecoveryTests.swift` (TIER-1 #3)
+- `<TARGET_DIR>/ModalAndSheetTests.swift` (TIER-2 modal, if any)
+- `<TARGET_DIR>/TabNavigationTests.swift` (TIER-2 tab, if any)
+- `<TARGET_DIR>/PushNavigationTests.swift` (TIER-3 push, if any)
+- `<TARGET_DIR>/GestureAndRotationTests.swift` (TIER-3 gesture/rotation, if any)
 
 ### Step 11: Generate runner script
-Write `scripts/run-uitests.sh` per template in §Runner-script-template (substitute `<APP>` with detected scheme name). Make executable: `chmod +x scripts/run-uitests.sh`.
+Write `scripts/run-uitests.sh` per template in §Runner-script-template (substitute `<APP>` with detected scheme name and `<TARGET_DIR>` with the Phase 0 TARGET_DIR). Make executable: `chmod +x scripts/run-uitests.sh`.
 
 ### Step 12: Generate identifier convention doc
 Write `docs/accessibility-identifiers.md` with the convention, examples, rationale, and a table listing all applied identifiers with their source-file:line.
@@ -227,7 +234,7 @@ After Phase 0 emission and identifier-application, the final report (single mess
 - Gestures/rotation: <generated | not generated (no swipe/refresh/orientation usage)>
 
 ### Runner script
-- `scripts/run-uitests.sh` — `xcodebuild test -only-testing:<App>UITests` against `platform=iOS Simulator`, parses xcresult to Claude-readable JSON (Xcode 16+ format; falls back to plaintext on older Xcode)
+- `scripts/run-uitests.sh` — `xcodebuild test -only-testing:<TARGET_DIR>` against `platform=iOS Simulator`, parses xcresult to Claude-readable JSON (Xcode 16+ format; falls back to plaintext on older Xcode)
 
 ### Convention doc
 - `docs/accessibility-identifiers.md` — `<ViewName>_<ControlType>_<Purpose>`, snake_case, examples, full identifier table
@@ -248,11 +255,11 @@ Modify `xcodegen.yml` (or `project.yml`) to add new target:
 
 ```yaml
 targets:
-  <App>UITests:
+  <TARGET_DIR>:
     type: bundle.ui-testing
     platform: iOS
     sources:
-      - <App>UITests
+      - <TARGET_DIR>
     dependencies:
       - target: <App>
 ```
@@ -263,7 +270,7 @@ Skill writes the diff. User runs `xcodegen generate` to regenerate `.xcodeproj`.
 SwiftPM does NOT support UI Test bundles natively (only `.testTarget` for unit tests). UI Tests require `.xcodeproj`.
 
 Skill detects this case:
-- Generate test files in `Tests/<App>UITests/` directory
+- Generate test files in `Tests/<TARGET_DIR>/` directory
 - Print warning: "SPM doesn't support UI Test bundles. Generated files exist but require .xcodeproj. Recommend: switch to xcodegen-managed project, or add .xcodeproj manually."
 - Refuse to attempt project-modification
 
@@ -284,21 +291,21 @@ So a CI consumer that follows `/e2e-route`'s "Next action: ./scripts/run-uitests
 ### plain .xcodeproj (no xcodegen)
 Skill cannot reliably modify `project.pbxproj` programmatically (one wrong line corrupts the project).
 
-- Generate files in `<App>UITests/` directory
+- Generate files in `<TARGET_DIR>/` directory
 - Emit step-by-step manual instructions:
   ```
   1. Open <App>.xcodeproj in Xcode
   2. File > New > Target > iOS > UI Testing Bundle
-  3. Name: <App>UITests  ← MUST equal "<scheme>UITests" EXACTLY. The generated
-     scripts/run-uitests.sh hardcodes `-only-testing:"${SCHEME}UITests"`; if you
-     accept a different Xcode-suggested name the runner reports "no tests / target
-     not found". (Alternatively, edit the runner to read the real target from
-     `xcodebuild -list -json`.)
+  3. Name: <TARGET_DIR>  ← MUST equal the Phase 0 TARGET_DIR EXACTLY. The generated
+     scripts/run-uitests.sh hardcodes `-only-testing:"${UITEST_TARGET}"` with this
+     name baked in; if you accept a different Xcode-suggested name the runner
+     reports "no tests / target not found". (Alternatively, edit the runner to read
+     the real target from `xcodebuild -list -json`.)
   4. Drag generated .swift files into target
   5. Set Target to be Tested: <App>
   6. Build target once to verify
   ```
-- Report says: "Generated files exist; manual Xcode steps required for target setup. Name the UI-test target exactly `<scheme>UITests` to match the runner."
+- Report says: "Generated files exist; manual Xcode steps required for target setup. Name the UI-test target exactly `<TARGET_DIR>` to match the runner."
 
 ## Failure modes
 
@@ -306,10 +313,10 @@ Skill cannot reliably modify `project.pbxproj` programmatically (one wrong line 
 |---|---|---|
 | Project doesn't build | `xcodebuild build` fails before scaffold | Skill stops; user fixes build first |
 | Identifier uniqueness conflict | Same ID for 2+ controls | Skip both; flag for manual review |
-| Existing UI test target | Phase 0 globs `*UITests/` (any dir) `*.swift` count > 1 — name-agnostic, before scheme detection | Refuse; suggest manual extension |
+| Existing UI test target | Phase 0 globs `*UITests/` (any dir, excluding `*macOSUITests/`) `*.swift` count > 1 — name-agnostic, before scheme detection | Refuse; suggest manual extension |
 | Phase 0 fails | Refuse-condition triggered | Return early; never modify files |
 | Platform ambiguous (WindowGroup only) | No iOS-discriminating signal found | Refuse "No iOS SwiftUI app target detected" — do NOT assume iOS from WindowGroup |
-| Multiplatform target | `.iOS(` AND `.macOS(`, or both platforms in SUPPORTED_PLATFORMS | Pass; scaffold iOS tests; note macOS surface needs /macos-e2e-scaffold |
+| Multiplatform target | `.iOS(` AND `.macOS(`, or both platforms in SUPPORTED_PLATFORMS | Pass; scaffold iOS tests into `<App>iOSUITests/`; note macOS surface needs /macos-e2e-scaffold |
 | User declines identifier-application | `[s]kip` answer | Skip Step 9; generate test files with placeholder comments |
 | Cherry-pick rejected per-suggestion | User says `[n]` | Apply only confirmed subset |
 | xcodegen not in PATH | `xcodegen` not found | Emit instruction: `brew install xcodegen` |
@@ -350,6 +357,7 @@ Skill cannot reliably modify `project.pbxproj` programmatically (one wrong line 
 set -uo pipefail
 
 SCHEME="<APP>"
+UITEST_TARGET="<TARGET_DIR>"   # <App>UITests, or <App>iOSUITests on multiplatform
 RESULT_BUNDLE="$(mktemp -d)/uitests.xcresult"
 
 # Pick a simulator: prefer an EXACT "iPhone 15"; else the first available iPhone by
@@ -372,7 +380,7 @@ fi
 xcodebuild test \
   -scheme "$SCHEME" \
   -destination "$DEST" \
-  -only-testing:"${SCHEME}UITests" \
+  -only-testing:"${UITEST_TARGET}" \
   -resultBundlePath "$RESULT_BUNDLE" \
   -quiet 2>&1 | tail -50
 TEST_STATUS=${PIPESTATUS[0]}

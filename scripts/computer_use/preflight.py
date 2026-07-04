@@ -8,7 +8,6 @@ import time
 
 INSTALL_HINTS = {
     "idb": "brew install facebook/fb/idb-companion && pip install fb-idb",
-    "cliclick": "brew install cliclick",
     "sips": "preinstalled on macOS — check PATH",
 }
 

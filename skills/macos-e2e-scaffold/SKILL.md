@@ -14,21 +14,42 @@ Before any other action, run three refuse-conditions. Any failure → return ear
 | Check | Detect via | Refuse-message |
 |---|---|---|
 | Swift project | `*.xcodeproj` directory or `Package.swift` in cwd | "Not a Swift project. /macos-e2e-scaffold requires .xcodeproj or Package.swift in project root." |
-| SwiftUI macOS app | grep `WindowGroup\|Window(\|Settings {\|MenuBarExtra(` in `*.swift` under source root | "No SwiftUI macOS app target detected. Skill is macOS-only — for iOS use /ios-e2e-scaffold, for AppKit use /appkit-e2e-scaffold (deferred)." |
-| Not already scaffolded | `<App>UITests/` exists with `find ... -name '*.swift' \| wc -l` > 1 | "UI test target already exists with N test files. Skill won't overwrite — extend manually instead." |
+| SwiftUI macOS app | **macOS-discriminating signal** (see below) AND SwiftUI scene (grep `WindowGroup\|Window(\|Settings {\|MenuBarExtra(` in `*.swift` under source root) | "No SwiftUI macOS app target detected. Skill is macOS-only — for iOS use /ios-e2e-scaffold, for AppKit use /appkit-e2e-scaffold (deferred)." |
+| Not already scaffolded | **any** directory matching `*UITests/` at cwd — EXCLUDING the iOS sibling's `*iOSUITests/` (which must not block macOS scaffolding on multiplatform projects) — contains > 1 `*.swift` (`find . -maxdepth 2 -type d -name '*UITests' ! -name '*iOSUITests'` then count) — do NOT assume the `<App>`-prefixed name, since the scheme is not detected until Step 2 | "UI test target already exists (`<found-dir>/`, N test files). Skill won't overwrite — extend manually instead." |
+
+### macOS-discriminating signal — REQUIRED
+
+`WindowGroup` is **cross-platform** (shared with iOS) and does NOT identify macOS on its own. Detect macOS via the FIRST that matches:
+
+1. **SPM:** `Package.swift` contains `.macOS(` in a `platforms:` clause (and the target is an app, not a library).
+2. **xcodegen:** `project.yml`/`xcodegen.yml` target has `platform: macOS`.
+3. **plain `.xcodeproj`:** `project.pbxproj` contains `SDKROOT = macosx` or `SUPPORTED_PLATFORMS` includes `macosx` for the app target's build config.
+4. **Corroborating (necessary-not-sufficient):** a macOS-only scene type present (`MenuBarExtra(`, `Settings {`, `Window(`) AND iOS-only signals absent (`SDKROOT = iphoneos`, `platform: iOS`, `import UIKit`, `.fullScreenCover(`).
+
+A project with ONLY iOS signals must be refused with the row's refuse-message pointing to `/ios-e2e-scaffold` — do NOT scaffold macOS tests from a bare `WindowGroup`.
+
+**Multiplatform targets** (`.iOS(` AND `.macOS(` in `Package.swift`, or `SUPPORTED_PLATFORMS` lists both `iphoneos` and `macosx`): Phase 0 **passes** (macOS is among the platforms) and emits a note — "Multiplatform target detected; scaffolding macOS tests. Run /ios-e2e-scaffold separately for the iOS surface." Treat `macosx`/`.macOS(` presence as sufficient; do not refuse just because iOS is also supported.
+
+### TARGET_DIR convention
+
+Set once in Phase 0 and used everywhere below (Step 10 file naming, the xcodegen/Xcode UI-test target name, and the runner's `-only-testing:` argument):
+
+- Single-platform macOS target → `TARGET_DIR = <App>UITests`
+- Multiplatform target → `TARGET_DIR = <App>macOSUITests` — so the macOS and iOS UI-test targets coexist. `/ios-e2e-scaffold` uses `<App>iOSUITests` in the same situation, and each scaffold's "already scaffolded" glob ignores the sibling's suffixed directory; without the suffix the two would collide on the same directory and the same `xcodegen.yml`/`project.pbxproj` UI-test target.
 
 Always emit Phase 0 result on success:
 
 ```
 ## /macos-e2e-scaffold Phase 0
 ✅ Swift project detected (<project>.xcodeproj | Package.swift)
-✅ SwiftUI macOS app (WindowGroup found in <File.swift>:<line>)
+✅ SwiftUI macOS app (macOS signal: <SDKROOT=macosx | .macOS( | platform: macOS | macOS-only scene>; scene <Type> in <File.swift>:<line>)
 ✅ No existing UI test target
 
 Project type: <xcodegen-managed | SPM-based | plain .xcodeproj>
 Scheme: <SchemeName>
 Source root: <path>
 Total .swift files in source root: <N>
+[Multiplatform note, if applicable — TARGET_DIR = <App>macOSUITests]
 
 Proceeding with audit + scaffold.
 ```
@@ -46,7 +67,7 @@ Proceeding with audit + scaffold.
 - **Not iOS-aware.** Use `/ios-e2e-scaffold`.
 - **Not AppKit-aware.** Use `/appkit-e2e-scaffold` (deferred).
 - **Not snapshot-aware.** Use `/swiftui-snapshot-scaffold` (deferred).
-- **Not auto-invoked.** Manual `/macos-e2e-scaffold` only — same model as `setup-routing`.
+- **Not auto-invoked.** Manual `/macos-e2e-scaffold` only — same model as `setup-routing`. Normally reached via `/e2e-route`.
 
 ## Heuristic process (deterministic, Read+Grep based)
 
@@ -117,15 +138,15 @@ Use Edit tool, one identifier per Edit call. On uniqueness conflict (same ID wou
 ### Step 10: Generate test files
 Per TIER, write one `.swift` file with `XCTFail("not implemented — fyll inn assertion")` placeholder + TODO-comment pointing to source-file:line + suggested assertions in comments.
 
-File naming:
-- `<App>UITests/SmokeTest.swift` (TIER-1 #1)
-- `<App>UITests/HappyPathTests.swift` (TIER-1 #2)
-- `<App>UITests/ErrorRecoveryTests.swift` (TIER-1 #3)
-- `<App>UITests/ModalAndMenuTests.swift` (TIER-2 if any)
-- `<App>UITests/MultiWindowAndToolbarTests.swift` (TIER-3 if any)
+File naming (all paths use the Phase 0 `TARGET_DIR` — `<App>UITests` single-platform, `<App>macOSUITests` multiplatform):
+- `<TARGET_DIR>/SmokeTest.swift` (TIER-1 #1)
+- `<TARGET_DIR>/HappyPathTests.swift` (TIER-1 #2)
+- `<TARGET_DIR>/ErrorRecoveryTests.swift` (TIER-1 #3)
+- `<TARGET_DIR>/ModalAndMenuTests.swift` (TIER-2 if any)
+- `<TARGET_DIR>/MultiWindowAndToolbarTests.swift` (TIER-3 if any)
 
 ### Step 11: Generate runner script
-Write `scripts/run-uitests.sh` per template in §Runner-script-template (substitute `<APP>` with detected scheme name). Make executable: `chmod +x scripts/run-uitests.sh`.
+Write `scripts/run-uitests.sh` per template in §Runner-script-template (substitute `<APP>` with detected scheme name and `<TARGET_DIR>` with the Phase 0 TARGET_DIR). Make executable: `chmod +x scripts/run-uitests.sh`.
 
 ### Step 12: Generate identifier convention doc
 Write `docs/accessibility-identifiers.md` with the convention, examples, rationale, and a table listing all applied identifiers with their source-file:line.
@@ -174,7 +195,7 @@ After Phase 0 emission and identifier-application, the final report (single mess
 
 ### Phase 0
 ✅ Swift project (<project-type>)
-✅ SwiftUI macOS app (<N> Scenes detected)
+✅ SwiftUI macOS app (<N> Scenes detected, macOS signal: <signal>)
 ✅ No existing UI test target
 
 ### Project context
@@ -202,7 +223,7 @@ After Phase 0 emission and identifier-application, the final report (single mess
 - Toolbar: <generated | not generated (only N ToolbarItem)>
 
 ### Runner script
-- `scripts/run-uitests.sh` — `xcodebuild test -only-testing:<App>UITests`, parses xcresult to Claude-readable JSON (Xcode 16+ format; falls back to plaintext on older Xcode)
+- `scripts/run-uitests.sh` — `xcodebuild test -only-testing:<TARGET_DIR>`, parses xcresult to Claude-readable JSON (Xcode 16+ format; falls back to plaintext on older Xcode)
 
 ### Convention doc
 - `docs/accessibility-identifiers.md` — `<ViewName>_<ControlType>_<Purpose>`, snake_case, examples, full identifier table
@@ -223,11 +244,11 @@ Modify `xcodegen.yml` (or `project.yml`) to add new target:
 
 ```yaml
 targets:
-  <App>UITests:
+  <TARGET_DIR>:
     type: bundle.ui-testing
     platform: macOS
     sources:
-      - <App>UITests
+      - <TARGET_DIR>
     dependencies:
       - target: <App>
 ```
@@ -238,26 +259,41 @@ Skill writes the diff. User runs `xcodegen generate` to regenerate `.xcodeproj`.
 SwiftPM does NOT support UI Test bundles natively (only `.testTarget` for unit tests). UI Tests require `.xcodeproj`.
 
 Skill detects this case:
-- Generate test files in `Tests/<App>UITests/` directory
+- Generate test files in `Tests/<TARGET_DIR>/` directory
 - Print warning: "SPM doesn't support UI Test bundles. Generated files exist but require .xcodeproj. Recommend: switch to xcodegen-managed project, or add .xcodeproj manually."
 - Refuse to attempt project-modification
 
-This is an honest limitation, not a skill failure.
+This is an honest limitation, not a skill failure. (Note: SPM-only is still a valid input — the skill proceeds and generates files; it does not refuse in Phase 0.)
+
+**Runner for SPM-only:** do NOT emit the normal Step 11 runner — without an `.xcodeproj` there is no scheme, so `xcodebuild test -scheme "$SCHEME"` fails at scheme resolution, not at test execution. Instead write a stub `scripts/run-uitests.sh` that is honest about the precondition:
+
+```bash
+#!/usr/bin/env bash
+# Auto-generated by /macos-e2e-scaffold (SPM-only project).
+echo "SPM-only project: no .xcodeproj → no scheme for 'xcodebuild test'." >&2
+echo "Convert to an xcodegen-managed project or add an .xcodeproj, then re-run /macos-e2e-scaffold." >&2
+exit 1
+```
+
+So a CI consumer that follows `/e2e-route`'s "Next action: ./scripts/run-uitests.sh" fails fast with a clear reason instead of an opaque scheme-resolution error.
 
 ### plain .xcodeproj (no xcodegen)
 Skill cannot reliably modify `project.pbxproj` programmatically (one wrong line corrupts the project).
 
-- Generate files in `<App>UITests/` directory
+- Generate files in `<TARGET_DIR>/` directory
 - Emit step-by-step manual instructions:
   ```
   1. Open <App>.xcodeproj in Xcode
   2. File > New > Target > macOS > UI Testing Bundle
-  3. Name: <App>UITests
+  3. Name: <TARGET_DIR>  ← MUST equal the Phase 0 TARGET_DIR EXACTLY. The generated
+     scripts/run-uitests.sh hardcodes `-only-testing:"${UITEST_TARGET}"` with this
+     name baked in; a different Xcode-suggested name makes the runner report
+     "no tests / target not found".
   4. Drag generated .swift files into target
   5. Set Host Application: <App>
   6. Build target once to verify
   ```
-- Report says: "Generated files exist; manual Xcode steps required for target setup."
+- Report says: "Generated files exist; manual Xcode steps required for target setup. Name the UI-test target exactly `<TARGET_DIR>` to match the runner."
 
 ## Failure modes
 
@@ -265,8 +301,10 @@ Skill cannot reliably modify `project.pbxproj` programmatically (one wrong line 
 |---|---|---|
 | Project doesn't build | `xcodebuild build` fails before scaffold | Skill stops; user fixes build first |
 | Identifier uniqueness conflict | Same ID for 2+ controls | Skip both; flag for manual review |
-| Existing UI test target | Phase 0 detects `<App>UITests/*.swift` count > 1 | Refuse; suggest manual extension |
+| Existing UI test target | Phase 0 globs `*UITests/` (any dir, excluding `*iOSUITests/`) `*.swift` count > 1 — name-agnostic, before scheme detection | Refuse; suggest manual extension |
 | Phase 0 fails | Refuse-condition triggered | Return early; never modify files |
+| Platform ambiguous (WindowGroup only) | No macOS-discriminating signal found | Refuse "No SwiftUI macOS app target detected" — do NOT assume macOS from WindowGroup |
+| Multiplatform target | `.iOS(` AND `.macOS(`, or both platforms in SUPPORTED_PLATFORMS | Pass; scaffold macOS tests into `<App>macOSUITests/`; note iOS surface needs /ios-e2e-scaffold |
 | User declines identifier-application | `[s]kip` answer | Skip Step 9; generate test files with placeholder comments |
 | Cherry-pick rejected per-suggestion | User says `[n]` | Apply only confirmed subset |
 | xcodegen not in PATH | `xcodegen` not found | Emit instruction: `brew install xcodegen` |
@@ -291,7 +329,7 @@ Skill cannot reliably modify `project.pbxproj` programmatically (one wrong line 
 | `swift-concurrency-expert` (Antoine) | code | Is async/await usage correct? |
 | `core-data-expert` (Antoine) | code | Is the persistence layer well-designed? |
 
-`macos-e2e-scaffold` is the only skill in the ecosystem that *creates* test infrastructure rather than *reviewing* artefacts. This warrants the manual-only invocation pattern (no auto-trigger) — skill should run with full user awareness, not as a pipeline step.
+`macos-e2e-scaffold` is one of the two scaffold skills (with `/ios-e2e-scaffold`) that *create* test infrastructure rather than *reviewing* artefacts. This warrants the manual-only invocation pattern (no auto-trigger) — skill should run with full user awareness, not as a pipeline step.
 
 ## Runner script template
 
@@ -303,25 +341,31 @@ Skill cannot reliably modify `project.pbxproj` programmatically (one wrong line 
 # Runs UI tests and emits Claude-readable JSON summary.
 # Requires Xcode 16+ for JSON xcresulttool format; falls back to plaintext on older.
 
-set -e
+set -uo pipefail
 
 SCHEME="<APP>"
+UITEST_TARGET="<TARGET_DIR>"   # <App>UITests, or <App>macOSUITests on multiplatform
 RESULT_BUNDLE="$(mktemp -d)/uitests.xcresult"
 
+# Run the tests. Capture xcodebuild's OWN exit status via PIPESTATUS — piping into
+# `tail` would otherwise mask a non-zero status (tail returns 0), making a failing
+# committed-regression run look green in CI.
 xcodebuild test \
   -scheme "$SCHEME" \
   -destination 'platform=macOS' \
-  -only-testing:"${SCHEME}UITests" \
+  -only-testing:"${UITEST_TARGET}" \
   -resultBundlePath "$RESULT_BUNDLE" \
   -quiet 2>&1 | tail -50
+TEST_STATUS=${PIPESTATUS[0]}
 
-# Parse xcresult to JSON summary (Xcode 16+)
-if xcrun xcresulttool get test-results summary --path "$RESULT_BUNDLE" --format json 2>/dev/null \
-   | jq '{total: .totalTestCount, passed: .passedTests, failed: .failedTests, results: [.testFailures[] | {test: .testIdentifier, file: .sourceCodeContext.location.filePath, line: .sourceCodeContext.location.lineNumber, message: .failureText}]}' 2>/dev/null; then
-  exit 0
-fi
+# Parse xcresult to JSON summary (Xcode 16+); fall back to plaintext on older Xcode.
+xcrun xcresulttool get test-results summary --path "$RESULT_BUNDLE" --format json 2>/dev/null \
+  | jq '{total: .totalTestCount, passed: .passedTests, failed: .failedTests, results: [((.testFailures // [])[]) | {test: .testIdentifier, file: .sourceCodeContext.location.filePath, line: .sourceCodeContext.location.lineNumber, message: .failureText}]}' 2>/dev/null \
+  || { echo "(Xcode 16+ JSON format unavailable — falling back to plaintext)"; \
+       xcrun xcresulttool get --path "$RESULT_BUNDLE" 2>/dev/null | tail -100 || true; }
+# NOTE: `.testFailures` is null/absent on an all-green run; `(.testFailures // [])`
+# guards `null | .[]` so passing runs still emit clean JSON instead of falling back.
 
-# Fallback for older Xcode: plain xcresulttool dump
-echo "(Xcode 16+ JSON format unavailable — falling back to plaintext)"
-xcrun xcresulttool get --path "$RESULT_BUNDLE" 2>/dev/null | tail -100 || true
+# Exit with the REAL test status so CI / committed-regression runs fail when tests fail.
+exit "$TEST_STATUS"
 ```

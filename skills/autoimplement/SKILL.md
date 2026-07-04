@@ -2,8 +2,8 @@
 name: autoimplement
 description: |
   Auto-advance through a multi-phase implementation plan by dispatching a
-  subagent per phase, then chaining /review, /pitfall-verification, and
-  /codex review at the phase boundary. Skips the y/n prompts a user would
+  subagent per phase, then chaining /review and /pitfall-verification (which
+  auto-chains /codex review and the third-lens house per tier) at the phase boundary. Skips the y/n prompts a user would
   always answer "yes" to when reviews pass; stops by default when /review or
   any review flags actionable issues; severe findings (security/data-loss/correctness)
   always stop regardless of policy; pitfall/codex findings can be treated as
@@ -169,29 +169,32 @@ This semantics is strict by design: any post-review edit invalidates the marker 
 
 **Step 6b: Pre-flight chain (when no pre-flight marker exists)**
 
-Run these two reviews in sequence ON THE PLAN FILE ITSELF (not on any code diff yet — there is no code diff at this point):
+Run ONE review chain ON THE PLAN FILE ITSELF (not on any code diff yet — there is no code diff at this point):
 
 1. **`/superpowers-gstack:pitfall-verification`** on the plan
-   - Invoke via the `Skill` tool with the plan file path as argument
-   - Wait for verdict, classify per the 4-tier semantics in § Per-phase procedure Step D
+   - Invoke via the `Skill` tool with the plan file path as argument, and include this
+     focus in the args so its Codex stage reviews the plan as a plan:
+     *"Review this implementation plan for: ambiguous contracts, hidden coupling between phases, failure modes the plan does not handle, anything that would block successful autonomous execution. Cite section headings or task numbers."*
+   - pitfall-verification is a MULTI-MODEL ORCHESTRATOR (since 2.16.0): for substantive
+     artifacts it auto-chains `/codex review` (and, for high-stakes artifacts, the
+     third-lens house), ending in an adversarial synthesis. Do NOT invoke `/codex review`
+     separately here — that produces a double Codex pass on the same artifact.
+   - Wait for the combined multi-lens verdict, classify per the 4-tier semantics in
+     § Per-phase procedure Step D
    - `severe`/`blocking` → STOP with citation. Pre-flight is **NEVER advisory** — the plan is the foundation; a flawed plan means everything that follows is wrong by construction.
    - `clean`/`advisory` → echo verdict, continue.
+   - `CODEX_AVAILABLE=false` (from Check 5): pitfall's Codex stage will skip via the codex
+     skill's own binary probe — expect the lens list to say self-pitfall only.
 
-2. **`/codex review` on the plan** (only if `CODEX_AVAILABLE=true` from Check 5)
-   - Invoke the gstack `codex` skill in consult mode with a plan-review prompt:
-     *"Review this implementation plan for: ambiguous contracts, hidden coupling between phases, failure modes the plan does not handle, anything that would block successful autonomous execution. Be specific. Cite section headings or task numbers. Plan path: `<plan_path>`."*
-   - Wait for verdict, classify per the 4-tier semantics
-   - `severe`/`blocking` → STOP with citation
-   - `clean`/`advisory` → echo, continue
-   - If `CODEX_AVAILABLE=false` → skip with logged note "pre-flight codex skipped (CLI unavailable)"
-
-3. **Track what actually ran.** Maintain an internal flag `reviews_ran` listing the reviewers that produced verdicts:
+2. **Track what actually ran.** Derive `reviews_ran` from the multi-lens verdict's
+   "Lenses run:" line (e.g. `self-pitfall + Codex`):
    - Always: `pitfall`
-   - Conditionally (only if `CODEX_AVAILABLE=true`): `codex`
+   - Add `codex` only if the verdict says the Codex lens actually ran
+   - Add `third-lens` if the third house ran
 
    This list goes into the marker commit so the audit trail is honest. If codex was skipped because the CLI was unavailable, the marker says `pitfall only` — never claims codex ran when it didn't.
 
-4. **Record the pre-flight pass with a real commit that touches the plan path.**
+3. **Record the pre-flight pass with a real commit that touches the plan path.**
 
    `git log -- "$plan_path"` only shows commits that actually modified the path. An empty `--allow-empty` commit would be **invisible** to Step 6a (this was the bug codex caught in v2.14.0's first review pass — fixed before ship). So the marker must touch the path.
 
@@ -271,7 +274,7 @@ Invoke `AskUserQuestion` with:
 **Header:** "Stop policy"
 **Options (2):**
 - "Stop on any review issue (recommended)" — pause if `/review`, `/pitfall-verification`, OR `/codex review` flags anything actionable. Matches the manual workflow this skill is replacing.
-- "Treat pitfall/codex as advisory (risky)" — `/pitfall-verification` and `/codex review` findings are surfaced but do not pause execution. Use only when you trust them to over-flag and accept the risk that a real correctness/security/data-loss finding will slip through. `/review` failures still always stop. Severe findings (security, data loss, correctness bugs in test assertions) ALWAYS block regardless of this setting — see § Per-phase procedure Step D.
+- "Treat pitfall/codex as advisory (risky)" — `/pitfall-verification` findings (including the Codex/third-lens findings its chain produces) are surfaced but do not pause execution. Use only when you trust them to over-flag and accept the risk that a real correctness/security/data-loss finding will slip through. `/review` failures still always stop. Severe findings (security, data loss, correctness bugs in test assertions) ALWAYS block regardless of this setting — see § Per-phase procedure Step D.
 
 Store the answer as `STOP_POLICY` (string: `any-issue` or `advisory`).
 
@@ -345,9 +348,14 @@ Match by **prefix** (`startswith`), not substring — this avoids false matches 
 - Line starts with `FAILED ` (with reason after) → STOP. Surface the reason and the subagent's last 30 lines of output. Exit. (Do NOT retry — the user said they always fix manually when something fails.)
 - Anything else → treat as `FAILED` with reason "subagent terminator line did not start with DONE/BLOCKED/FAILED".
 
-### D. Chain the three reviews
+### D. Chain the reviews
 
-Run these three skills in sequence. After each, classify the output by **semantic judgment** — not by parsing for fixed labels. Cite the specific finding that drove your decision so the user can audit.
+Run these two skills in sequence. (Two, not three: `/pitfall-verification` has been a
+multi-model orchestrator since 2.16.0 — it auto-chains `/codex review` for ship-worthy
+changes and the third-lens house for high-stakes ones, ending in an adversarial
+synthesis. Invoking `/codex review` separately after it produces a DOUBLE Codex pass
+on the same diff; its idempotency guard only covers Codex having run *earlier*.)
+After each, classify the output by **semantic judgment** — not by parsing for fixed labels. Cite the specific finding that drove your decision so the user can audit.
 
 For each review output, classify as one of:
 
@@ -363,6 +371,12 @@ Reviews:
   `/review` failures **always stop** regardless of `STOP_POLICY` — this skill is the primary correctness gate. If classified as `blocking` or `severe`, STOP and surface the finding citation.
 
 **2. `/superpowers-gstack:pitfall-verification`** — invoke via the `Skill` tool.
+This runs the full multi-lens chain per its tier gate (self-pitfall → Codex for
+ship-worthy → third-lens for high-stakes → adversarial synthesis). Classify the
+COMBINED multi-lens verdict — Codex/third-lens findings arrive inside it. Note which
+lenses its "Lenses run:" line reports, for the Step E announce and final summary.
+If `CODEX_AVAILABLE=false` (startup checks), the Codex stage self-skips via the codex
+skill's binary probe — record `codex-skipped`; never claim it ran.
 
   After classification:
   - `severe` → STOP regardless of `STOP_POLICY`.
@@ -370,19 +384,11 @@ Reviews:
   - `blocking` + `STOP_POLICY=advisory` → echo the cited finding, continue (user accepted risk).
   - `advisory` or `clean` → echo and continue.
 
-**3. `/codex review`** — invoke via the gstack `codex` skill. **If `CODEX_AVAILABLE=false` (set in startup checks), skip this review and record `codex-skipped` in the final summary.**
-
-  After classification (same matrix as pitfall above):
-  - `severe` → STOP.
-  - `blocking` + `STOP_POLICY=any-issue` → STOP.
-  - `blocking` + `STOP_POLICY=advisory` → echo, continue.
-  - `advisory` or `clean` → continue.
-
 **Fallback for nested Skill invocation:** If the `Skill` tool fails when invoked
 from inside another skill's execution (some harness configurations do not support
 nested invocation), dispatch the review skill as a subagent via the `Agent` tool
 with `subagent_type: "general-purpose"` and a prompt asking the subagent to
-invoke the review skill and return its output verbatim. Applies to all three
+invoke the review skill and return its output verbatim. Applies to both
 reviews above.
 
 **Citation requirement:** Whenever a review causes a STOP, echo:
@@ -394,7 +400,7 @@ This makes the decision auditable.
 
 If we reached this step (no review STOPped — either all clean, or advisory findings surfaced but not blocking under `advisory` policy):
 
-> Phase <N> complete. Reviews: review=<clean|advisory>, pitfall=<clean|advisory>, codex=<clean|advisory|skipped>. Starting Phase <N+1>.
+> Phase <N> complete. Reviews: review=<clean|advisory>, pitfall=<clean|advisory> (lenses: self[+codex][+third-lens] | codex-skipped). Starting Phase <N+1>.
 
 Move to the next phase. **No `AskUserQuestion` between phases — that's the friction we are removing.** The user already answered the policy question upfront.
 

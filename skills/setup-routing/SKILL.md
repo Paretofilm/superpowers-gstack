@@ -39,7 +39,7 @@ Do NOT proceed until both frameworks are present.
 
 **Important:** If the project already has a `CLAUDE.md` file with existing content, STOP and suggest the user runs `/superpowers-gstack:adapt` instead — it preserves existing content while adding routing.
 
-**Version:** This skill writes version **1.11.0** into the CLAUDE.md version marker.
+**Version:** The CLAUDE.md version marker is ALWAYS the installed plugin version read from `plugin.json` (see Step 6) — never a number stated in this file. (Historical feature labels like "v1.11.0 Model Routing" below refer to old marker generations, not to the value to write.)
 
 ## Process
 
@@ -159,11 +159,16 @@ Think through each GStack skill, organized by phase:
 | `/benchmark` | Projects with performance monitoring needs |
 | `/benchmark-models` | Projects comparing AI model performance |
 | `/codex` | Projects needing second opinions or adversarial code review |
-| `/superpowers-gstack:autoimplement` | Multi-phase plans where the user always confirms phase boundaries — chains `/review` + `/pitfall-verification` + `/codex review` automatically. v2.14.0+ adds active pre-flight that reviews the plan body itself before Phase 1 unless the latest plan commit matches the marker regex `^(chore\|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]\|$)` (closes the gap between writing-plans and autoimplement). Refuses on <2 phases, missing per-phase commit steps, dirty tree, main/master branch, or plans touching migrations/secrets/credentials/.env/.ssh. |
+| `/superpowers-gstack:autoimplement` | Multi-phase plans where the user always confirms phase boundaries — chains `/review` + `/pitfall-verification` automatically (pitfall auto-chains `/codex review` + the third lens per tier — no separate codex step). v2.14.0+ adds active pre-flight that reviews the plan body itself before Phase 1 unless the latest plan commit matches the marker regex `^(chore\|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]\|$)` (closes the gap between writing-plans and autoimplement). Refuses on <2 phases, missing per-phase commit steps, dirty tree, main/master branch, or plans touching migrations/secrets/credentials/.env/.ssh. |
 | `/superpowers-gstack:office-hours-track-aware` | All new-project brainstorming — wraps `/office-hours` with track inference (web vs native), inline platform question, design-doc relocation, htmlify --open, and approve-before-render gate. **Intercepts `/office-hours`** — see routing-intercept rules below. |
 | `/superpowers-gstack:swiftui-design-consultation` | Native SwiftUI projects — produces DESIGN.md + Swift Package starter; equivalent to /design-consultation for web. Inlines the platform question (iOS/macOS/both) on first run if `.gstack/track` is missing. |
 | `/superpowers-gstack:macos-native-review` | macOS apps — pre-implementation HIG-citation-grounded review (vocabulary, controls, keyboard shortcuts, semantic colors, sheets, menu bar, dock, App menu). Run on PRDs/specs/plans before implementation. Phase 0 detects macOS signals; auto-N/A for non-macOS projects. |
 | `/superpowers-gstack:ios-native-review` | iOS / iPadOS apps — pre-implementation HIG-citation-grounded review (vocabulary, touch targets, navigation paradigm, modal presentation, gestures, system surfaces, keyboard, haptics, semantic colors, animation, privileged operations, accessibility, lifecycle). Run on PRDs/specs/plans before implementation. Phase 0 detects iOS signals; auto-N/A for non-iOS projects. |
+| `/superpowers-gstack:quality-review` | After any PRD/spec/plan, before implementation — hunts perceived-quality pitfalls (silent failures, loading/empty states, error recovery, state drift). Complementary to pitfall-verification ("will it work?" vs "will it feel good?"). |
+| `/superpowers-gstack:e2e-route` | Swift projects — pure dispatcher for E2E test requests: reads platform × intent and routes to the right executor (scaffold skills, MCP-live simulator automation, visual review, ios-visual-explore). |
+| `/superpowers-gstack:ios-e2e-scaffold` | iOS SwiftUI apps — one-shot XCUITest scaffolding (TabView/NavigationStack scene-walk, TIER-ranked stubs, iOS-Simulator xcresult runner). Normally reached via /e2e-route. |
+| `/superpowers-gstack:macos-e2e-scaffold` | macOS SwiftUI apps — one-shot XCUITest scaffolding (Scene-walk, TIER-ranked stubs, xcresult runner). Normally reached via /e2e-route. |
+| `/superpowers-gstack:ios-visual-explore` | iOS/iPadOS apps — Tier-2 visual exploration via Gemini computer-use when the accessibility tree is insufficient (layout regressions, visual landmarks). Paid API per run; normally reached via /e2e-route. |
 
 ### Step 5: Present the routing plan
 
