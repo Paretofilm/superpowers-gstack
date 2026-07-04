@@ -151,6 +151,9 @@ def gather_content(args):
             seen.add(p)
             files.append(p)
     if not files and not args.files:  # no --files given → read stdin
+        if sys.stdin.isatty():  # interactive terminal → would block forever with no prompt
+            eprint("ERROR: no --files/--diff given and stdin is a TTY — pass input or pipe content.")
+            sys.exit(2)
         stdin = sys.stdin.read()
         return f"# Artifact (stdin)\n\n```\n{stdin}\n```\n" if stdin.strip() else ""
     if not files:
