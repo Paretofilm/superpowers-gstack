@@ -55,7 +55,9 @@ Kjernen er sterk: skill-skjelettet (Phase 0-selvsjekk, fail-closed-defaults, STO
 
 ## Plan
 
-> **Status 2026-07-03:** Fase 0 ✅ KOMPLETT (7 commits, alle P1 fikset; htmlify-hook + update-pipeline-extraction empirisk verifisert). Fase 1 ✅ KOMPLETT (`scripts/lint-skills.py` + CI + release-gate i CLAUDE.md; gate-selvtest bestått — versjonsbump uten CHANGELOG-entry gir rød lint; hookens own-repo-nag fjernet). Lint: 0 errors, 10 warnings (= fase 3-arbeidslisten). Gjenstår: fase 2 (konsistens), fase 3 (økonomi), fase 4 (kost-ledger + digest-modus, trenger bruker-beslutninger), + bruker-beslutning om åpne update-PR-er/issues #32/#34/#36.
+> **Status 2026-07-03:** Fase 0 ✅ KOMPLETT (7 commits, alle P1 fikset; htmlify-hook + update-pipeline-extraction empirisk verifisert). Fase 1 ✅ KOMPLETT (`scripts/lint-skills.py` + CI + release-gate; gate-selvtest bestått). Backlogg (10 PR/issues) lukket 2026-07-04; fikset pipeline produserte og landet PR #39 (2.24.0, upstream-drift à jour).
+>
+> **Status 2026-07-04:** Fase 2 ✅ KOMPLETT (2.25.0): dobbel-Codex eliminert (Step D + pre-flight), e2e-scaffold-paret herdet (macos-plattform-guard, TARGET_DIR-konvensjon, latent glob-bug som gjorde `both`-stien umulig, fail-open macos-runner tettet), generator-konsistens (versjonsidentitet=plugin.json, 5 manglende skill-rader i BEGGE tabeller, kategoritall, spøkelses-refs), pipeline-herding (self-repair path-allowlist/dedupe/transient-skip/porcelain, upstream-fencing, lint-før-PR i workflowen, PR-link-fangst), script-P3-sveip (notify-cache, isatty-guard m.m.). ÅPEN BESLUTNING (bruker): plugin-`hooks.json` — å shippe SessionStart/PostToolUse-hooks plugin-vidt endrer atferd for alle marketplace-brukere (notify-hooken er maintainer-rettet); setup-scriptenes absolutt-sti-problem består til det avgjøres. Gjenstår: fase 3 (økonomi — lint-warnings er arbeidslisten), fase 4 (kost-ledger + digest-modus), + skill-tabellsync-sjekk av PR #39-løftet.
 
 **Fase 0 — Stopp blødningen (P1, én økt).** Rekkefølge etter kost:
 0.1 Fiks check-updates-extraction (commit-hash i VERSIONS.md eller tag-aware grep) + fail-loud ved tom → stopper ukentlig API-brenning. Behandle åpne issues/PR-er.

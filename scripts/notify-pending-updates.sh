@@ -9,6 +9,8 @@
 
 CACHE_FILE="$HOME/.claude/.superpowers-gstack-notify-cache"
 
+mkdir -p "$(dirname "$CACHE_FILE")" 2>/dev/null || true
+
 # Cache hit: fresher than 24h → print cached output (empty = no notifications)
 if [ -f "$CACHE_FILE" ] && [ -n "$(find "$CACHE_FILE" -mtime -1 2>/dev/null)" ]; then
   cat "$CACHE_FILE" 2>/dev/null
