@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.26.0] - 2026-07-04
+
+### Added
+
+- **Plugin-shipped version-check hook** (`hooks/hooks.json`) — `check-plugin-version.sh`
+  now fires as a plugin SessionStart hook via `${CLAUDE_PLUGIN_ROOT}`, so every
+  marketplace user gets the "run /adapt, your CLAUDE.md lags the plugin version" nudge
+  automatically (and it survives plugin updates). Previously it only ran for users who
+  had cloned the repo and run `setup-hooks.sh` — marketplace installs never got it, so
+  generated CLAUDE.mds silently rotted. Resolves the system review's plugin-hooks gap.
+
+### Changed
+
+- **`setup-hooks.sh` scoped to the maintainer hook only** — no longer installs the
+  version-check hook (the plugin ships it now); a settings.json copy would double-nag.
+  The script warns if it detects a leftover version-check entry. The notify-pending-
+  updates hook stays opt-in here because it is maintainer-facing (surfaces auto-update
+  PRs only the repo owner can act on) and does network I/O — not something to ship to
+  every plugin user. The htmlify PostToolUse hook likewise stays opt-in (it auto-opens
+  a browser).
+
 ## [2.25.0] - 2026-07-04
 
 System-review remediation, Phase 2 (consistency). Full review:

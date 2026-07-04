@@ -24,7 +24,7 @@ A GitHub Action (`.github/workflows/check-updates.yml`) runs weekly and:
 3. Creates a PR with the changes
 4. Creates a GitHub issue with `notification` label
 
-A SessionStart hook (`scripts/notify-pending-updates.sh`) notifies the user of pending updates when starting Claude Code.
+The plugin ships a SessionStart hook (`hooks/hooks.json` → `scripts/check-plugin-version.sh`) that nudges `/adapt` when a project's generated CLAUDE.md lags the installed plugin version — every plugin user gets it automatically, and it exempts this repo. A second, maintainer-only hook (`scripts/notify-pending-updates.sh`, surfaces pending auto-update PRs) is opt-in via `./scripts/setup-hooks.sh`.
 
 The update pipeline also keeps `skills/setup-routing/SKILL.md` and `skills/adapt/SKILL.md` in sync — if upstream adds, removes, or renames skills, the skill evaluation tables in both skills are updated automatically.
 
@@ -59,10 +59,14 @@ Install via marketplace (in Claude Code):
 /plugin install superpowers-gstack@paretofilm-plugins
 ```
 
-For the update notification hook (optional, after cloning the repo):
+The version-check hook is shipped by the plugin — no setup needed. For the
+maintainer-only update-notification hook (optional, after cloning the repo):
 ```bash
-./scripts/setup-hooks.sh      # Add SessionStart hook for update notifications
+./scripts/setup-hooks.sh      # Add the notify-pending-updates SessionStart hook
 ```
+If you previously ran an older `setup-hooks.sh` that installed the version-check
+hook into `~/.claude/settings.json`, remove that entry — the plugin now ships it,
+so the settings.json copy causes a double nag. (`setup-hooks.sh` warns if it sees one.)
 
 ## Upstream sources
 
