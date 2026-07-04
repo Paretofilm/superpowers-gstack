@@ -17,6 +17,8 @@ ERRORS (exit 1, CI-blocking):
   E6  no `version:` field in skill frontmatter (plugin.json is the version)
   E7  denylist: patterns that must never reappear in instruction files
       (e.g. the third-lens `sensitive` role removed in 2.18.0)
+  E8  the emitted `## Model Routing` block is byte-identical between the two
+      generators (setup-routing, adapt) — they must write the same routing
 
 WARNINGS (reported, exit 0):
   W1  frontmatter description over budget (target <=30 words; hard cap comes
@@ -164,6 +166,41 @@ def main() -> int:
             for i, line in enumerate(text.splitlines(), 1):
                 if pattern.search(line):
                     errors.append(f"E7 {path.relative_to(REPO)}:{i}: denylisted pattern ({why})")
+
+    # E8 emitted-block drift guard: the `## Model Routing` block that BOTH
+    # generators write into a project's CLAUDE.md must stay byte-identical, or a
+    # freshly-generated project and a re-adapted one get different routing. This
+    # is exactly the drift caught in the 2.27.0 pre-merge review — one generator
+    # H2-promoted and misplaced the block while the other did not. One guard here
+    # turns the whole "two hand-maintained copies silently diverge" class into a
+    # CI failure instead of a latent bug. When blocks/ single-sourcing lands, this
+    # guard becomes redundant (one source can't drift from itself) and can go.
+    def _emitted_model_routing(skill: str) -> str | None:
+        f = SKILLS / skill / "SKILL.md"
+        if not f.is_file():
+            return None
+        t = f.read_text()
+        anchor = "## Model Routing\n\nWhen dispatching a subagent"
+        i = t.find(anchor)
+        if i < 0:
+            return None
+        rest = t[i + len(anchor):]
+        m = re.search(r"\n(#{2,3} |```)", rest)
+        end = i + len(anchor) + m.start() if m else len(t)
+        return t[i:end].strip()
+
+    _sr_block = _emitted_model_routing("setup-routing")
+    _ad_block = _emitted_model_routing("adapt")
+    if _sr_block is None or _ad_block is None:
+        errors.append(
+            "E8 emitted `## Model Routing` block not found in setup-routing and/or "
+            "adapt (anchor moved — update the E8 extractor)"
+        )
+    elif _sr_block != _ad_block:
+        errors.append(
+            "E8 emitted `## Model Routing` block differs between setup-routing and "
+            "adapt — the two generators would write different routing into CLAUDE.md"
+        )
 
     for w in warnings:
         print(f"WARN  {w}")
