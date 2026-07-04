@@ -24,6 +24,8 @@ A GitHub Action (`.github/workflows/check-updates.yml`) runs weekly and:
 3. Creates a PR with the changes
 4. Creates a GitHub issue with `notification` label
 
+A **separate, independent** `check-models` job (`scripts/check-new-models.py`) queries the Anthropic `/v1/models` API and compares it, per tier, against the model IDs `skills/setup-routing/model-routing.md` references. When a newer model ships (e.g. Sonnet 5 on 2026-06-30), it opens a `model-review` issue — it never edits model IDs or feeds the auto-edit job, because model IDs are pinned snapshots with behaviour differences and adopting one is a human review call, not an auto-merge. Detection is stateless (version-tuple compare, unparseable/preview IDs skipped) and idempotent (won't re-open an issue already covering the model). The job self-tests its detection logic in CI before the live query.
+
 The plugin ships a SessionStart hook (`hooks/hooks.json` → `scripts/check-plugin-version.sh`) that nudges `/adapt` when a project's generated CLAUDE.md lags the installed plugin version — every plugin user gets it automatically, and it exempts this repo. A second, maintainer-only hook (`scripts/notify-pending-updates.sh`, surfaces pending auto-update PRs) is opt-in via `./scripts/setup-hooks.sh`.
 
 The update pipeline also keeps `skills/setup-routing/SKILL.md` and `skills/adapt/SKILL.md` in sync — if upstream adds, removes, or renames skills, the skill evaluation tables in both skills are updated automatically.
