@@ -1,5 +1,49 @@
 # Changelog
 
+## [2.24.0] - 2026-07-04
+
+### Upstream: GStack v1.58.5.0 + Superpowers v6.1.1
+
+#### GStack v1.58.5.0 — First-run experience overhaul
+
+- **`gstack` is now a pure router.** The top-level `gstack` skill no longer duplicates the browse docs body; it routes any request to the right skill. Browse content lives exclusively in `/browse`. Users who typed bare `gstack` and landed in browser-QA docs will now be routed to the appropriate skill instead.
+- **Project-aware first-run scaffold.** On the first skill run, gstack detects your repo state (empty, code with a detected language, branch-ahead, dirty working tree, or clean default) and shows one short, specific suggestion — e.g. "there's code here, try `/qa`" or "unshipped work, `/review` then `/ship`" — then continues with whatever you asked. Nothing fires in headless/eval runs; the nudge never interrupts an explicit command.
+- **Returning-session loop tip.** Once past the first run, the preamble nudges the `plan → review → ship` loop a single time.
+- **`./setup` first-move nudge.** The setup script now prints an intent-routed starting point: idea → `/office-hours`/`/spec`; existing code → `/qa`/`/investigate`.
+- **`office-hours` handoff.** The closing step now offers to launch the next review (defaulting to `/plan-eng-review`) via the Skill tool instead of listing options you'd have to retype.
+
+#### GStack v1.58.4.0 — Community bug-fix wave + plan-mode test gate
+
+- **gbrain writes on transaction-mode poolers fixed.** Forced `GBRAIN_PREPARE=true` on port-6543 poolers is removed; all gbrain writes work again on Supabase transaction-mode poolers.
+- **gbrain probe timeout.** A slow-but-healthy probe now classifies as `timeout` and lets sync proceed with a warning instead of silently skipping brain features.
+- **Six new credential patterns in the redaction engine:** GitLab tokens, HuggingFace, npm, DigitalOcean, `Bearer` (entropy-gated), and GCP service-account JSON.
+- **Security + community dashboards no longer show a fake `0`** on backend errors; success responses now carry a `status:"ok"` marker.
+- **Telemetry `error_message` is redacted before leaving the machine.**
+- **Windows git-bash import resolution fixed** for `gstack-learnings-log` and `gstack-question-log`.
+- **`/ship` pre-push guard** fails closed on git errors and now catches the six new credential types.
+- **`/plan-eng-review` and `/plan-design-review`** now confirm the review target (branch diff / pasted plan / specific path) before any repo exploration.
+- **PTY plan-mode smokes** (office-hours, plan-eng, plan-design) no longer time out on already-rendered questions; the harness detects collapsed option-line forms.
+
+#### GStack v1.58.3.0 — GBrowser Layer C stealth always on
+
+- **Layer C anti-detection is now the default** for all GBrowser headless and headed Chromium sessions. Masks seven categories of automation tell (webdriver, `window.chrome.*`, Notification, per-install hardware identity, `toString` native-code proxy, automation-global sweep, cdc/Permissions) on all four context-creation paths. Previously only `navigator.webdriver` was masked.
+- **`GSTACK_STEALTH=extended`** (WebGL spoof, faked plugins, mediaDevices) now layers on top of Layer C rather than replacing it.
+- No opt-in flag required; stealth applies automatically on `useragent` changes, `viewport --scale`, and headless-to-headed handoffs.
+
+#### Superpowers v6.1.1 — Codex hook fix + packaging
+
+- **Codex no longer re-registers the Claude SessionStart hook.** The Codex manifest now declares an explicit empty `hooks: {}` object, preventing auto-discovery fallback to the repo-root hooks file and its install-time trust prompt.
+- **Orphaned `hooks/session-start-codex` dead code removed.** The worked shell-hook example in `docs/porting-to-a-new-harness.md` moves from Codex to Cursor (a live shell-hook harness).
+- **New `package-codex-plugin.sh`** maintainer script produces a deterministic Codex portal archive (`.zip` or `tar.gz`) with normalized timestamps, verified skill OpenAI metadata, and the `hooks: {}` object preserved so portal-installed plugins avoid the same SessionStart issue.
+
+#### Superpowers v6.1.0 — Lower per-session token cost + Codex marketplace
+
+- **`using-superpowers` bootstrap compressed.** Graphviz skill-flow diagram replaced with prose, standalone Instruction-Priority section folded in, per-platform "How to Access Skills" walkthrough removed, Platform Adaptation pointer trimmed. Full Red Flags table and user-instruction precedence rules unchanged.
+- **Per-harness tool-mapping references pruned.** Verbose action-to-tool tables removed; `claude-code-tools.md` and `copilot-tools.md` deleted (nothing harness-specific remained).
+- **Codex can now install from the marketplace.** A repo-local Codex marketplace manifest (`agents/plugins/marketplace.json`) points at the repository root so the plugin is installable from Codex.
+- **Codex SessionStart hook removed** (v6.1.0 precursor; finalized in v6.1.1).
+- **Gemini CLI support removed.** Google EOLed the Gemini CLI on 2026-06-18. Gemini is gone from install docs, subagent-capable platform lists, and the eval-harness description.
+
 ## [2.23.0] - 2026-07-03
 
 System-review remediation, Phase 0 (stop the bleeding) + Phase 1 (lock it down).
