@@ -59,7 +59,9 @@ Kjernen er sterk: skill-skjelettet (Phase 0-selvsjekk, fail-closed-defaults, STO
 >
 > **Status 2026-07-04:** Fase 2 ✅ KOMPLETT (2.25.0): dobbel-Codex eliminert (Step D + pre-flight), e2e-scaffold-paret herdet (macos-plattform-guard, TARGET_DIR-konvensjon, latent glob-bug som gjorde `both`-stien umulig, fail-open macos-runner tettet), generator-konsistens (versjonsidentitet=plugin.json, 5 manglende skill-rader i BEGGE tabeller, kategoritall, spøkelses-refs), pipeline-herding (self-repair path-allowlist/dedupe/transient-skip/porcelain, upstream-fencing, lint-før-PR i workflowen, PR-link-fangst), script-P3-sveip (notify-cache, isatty-guard m.m.). Plugin-`hooks.json`-beslutning ✅ LØST (2.26.0): version-check shippes plugin-vidt via `${CLAUDE_PLUGIN_ROOT}`; notify-hooken forblir maintainer-opt-in; settings.json-duplikatet fjernet.
 >
-> **Status 2026-07-04 (Fase 3):** ✅ KOMPLETT. **3a** (2.27.0): model-routing v0.2 — to-akse (base tier × domain sensitivity), Claude-only, Fable-tier; lokale modeller (Pi/MLX) ikke lenger rutbare; codex fant 5 (blokk-plassering, adapt stale-block, Swift-overklassifisering, denylist-scope, design-doc-status) — alle fikset. **3c** (2.28.0): alle 16 descriptions ≤30 ord + hard-cap innført (`DESCRIPTION_WARN_WORDS` 60→30) + lint block-scalar-tellebug fikset. **3b** (2.29.0): `blocks/*.md`-full-ekstraksjon nedskalert til en **E8 drift-guard** (håndhever byte-identitet av emittert `## Model Routing`-blokk mellom setup-routing og adapt) — treffer #1/#2-drift-klassen ved CI-tid billig; full blocks/-ekstraksjon utsatt (gjenværende gevinst = sjelden runtime-dedup). Gjenstår: fase 4 (kost-ledger + digest-modus, trenger bruker-beslutninger), + skill-tabellsync-sjekk av PR #39-løftet.
+> **Status 2026-07-04 (Fase 3):** ✅ KOMPLETT. **3a** (2.27.0): model-routing v0.2 — to-akse (base tier × domain sensitivity), Claude-only, Fable-tier; lokale modeller (Pi/MLX) ikke lenger rutbare; codex fant 5 (blokk-plassering, adapt stale-block, Swift-overklassifisering, denylist-scope, design-doc-status) — alle fikset. **3c** (2.28.0): alle 16 descriptions ≤30 ord + hard-cap innført (`DESCRIPTION_WARN_WORDS` 60→30) + lint block-scalar-tellebug fikset. **3b** (2.29.0): `blocks/*.md`-full-ekstraksjon nedskalert til en **E8 drift-guard** (håndhever byte-identitet av emittert `## Model Routing`-blokk mellom setup-routing og adapt) — treffer #1/#2-drift-klassen ved CI-tid billig; full blocks/-ekstraksjon utsatt (gjenværende gevinst = sjelden runtime-dedup). Etter Fase 3 wire-t også Sonnet 5 inn (2.30.0, `claude-sonnet-5`) og lagt til en ukentlig modell-tilgjengelighets-sjekk (2.31.0, `check-models`-jobb + `scripts/check-new-models.py`, codex-verifisert, live-røyktestet). Gjenstår: fase 4.
+>
+> **Status 2026-07-04 (Fase 4 — besluttet, ikke startet):** Kost-ledger-scope = **AMBISIØS** (selv-optimaliserende verifikasjons-router, ikke bare logging) → klarer Fable-baren, spawnes med `model: fable`. Modell-rute-plan for hele Fase 4 skrevet inn under (Fable-gate + per-oppgave-tabell). Neste steg: design-beslutninger for den ambisiøse kost-ledgeren (lagring, ROI-signal, tilbakeføring til `model-routing.md`) før Opus-spec → Fable-spawn.
 
 **Fase 0 — Stopp blødningen (P1, én økt).** Rekkefølge etter kost:
 0.1 Fiks check-updates-extraction (commit-hash i VERSIONS.md eller tag-aware grep) + fail-loud ved tom → stopper ukentlig API-brenning. Behandle åpne issues/PR-er.
@@ -76,7 +78,43 @@ Kjernen er sterk: skill-skjelettet (Phase 0-selvsjekk, fail-closed-defaults, STO
 
 **Fase 3 — Økonomi.** Description-omskrivinger (≤30 ord, linthåndhevet), `blocks/*.md`-ekstraksjon for setup-routing/adapt, autoimplement-changelog-flytt, CLAUDE.md routing-slanking, tier-tabell single source. (e2e-scaffold-merge: utsett — reell gevinst men størst regresjonsrisiko; ta den når linten + testene står.)
 
-**Fase 4 — Nivå-løft.** Kost-ledger, update-pipeline digest-modus, deretter re-kjør fler-lens-review på det ferdige systemet.
+**Fase 4 — Nivå-løft.** Kost-ledger (ambisiøs scope — se rute-plan), update-pipeline digest-modus, skill-tabellsync-lint (PR #39-løftet), deretter re-kjør fler-lens-review på det ferdige systemet.
+
+### Fase 4 — modell-rute-plan (besluttet 2026-07-04)
+
+Anvender v0.2-routeren (base tier × domain-sensitivity) + Fable-gaten. **Default:
+Opus skriver spec → Sonnet-subagenter implementerer chunkene → multi-lens
+verifiserer** (verifikasjon er den billige korrekthets-spaken, ortogonal til
+coder-tier). Fable spawnes KUN når problemet nekter presis forhånds-spesifisering.
+
+**Fable-spawn-gaten (alle fire må holde):** (1) novel — approach må oppfinnes, ikke
+kartlegges; (2) long-horizon / ikke chunkbar — motstår presis forhånds-spec; (3)
+high blast-radius — subtil feil forplanter seg stille; (4) ikke sec/bio/chem (Fable
+faller tilbake til Opus der → aldri betal 2× premium).
+
+| Oppgave | Domain-sens. | Design | Impl | Verify | Fable? |
+|---|---|---|---|---|---|
+| **Kost-ledger — ambisiøs** (selv-optimaliserende verifikasjons-router: lærer per (kost × funn × domene) hvilke lenser som lønner seg, mater tilbake i routing) | **høy** (mis-ruter alle fremtidige reviews) | Opus | **Fable** (kjernen) + Opus-orkestrering | codex + GLM (high-stakes) | **JA** — novel + ikke chunkbar + high-blast + ikke sec/bio/chem |
+| Update-pipeline digest-modus | medium (rører pipeline + secret) | Opus | Sonnet/Opus | codex (pipeline har reelle failure modes) | Nei — modifikasjon av kjent kode |
+| Skill-tabellsync-lint (E-klasse, E8-tvilling) | lav | Opus | Sonnet | self-pitfall | Nei — mekanisk konsistens-guard |
+| Re-kjør fler-lens på ferdig system | — | — | — | codex + GLM | Nei — verifikasjon, ikke koding |
+
+**Kost-ledger-scope besluttet: AMBISIØS.** Ikke bare «logg kostnad» — en adaptiv
+lens-router. Modellen for «verifikasjons-ROI per lens per domene» må oppdages
+empirisk, ikke spesifiseres på forhånd → klarer Fable-baren. Basic-scopen (logg +
+`/cost`-rapport) ville vært ren Sonnet; den er forkastet til fordel for ambisiøs.
+
+**Fable-spawn-mekanikk & scope-disiplin:** dispatch via `Agent` med `model: fable`.
+Åpen-på-approach, bundet-på-deliverable. Én Fable-enhet ≈ 150k tokens / ~20 min.
+Subagent-selvrapport er en påstand, ikke verifikasjon — Opus-orkestratoren
+verifiserer output uansett. Fable-fallback for sec/bio/chem er identisk med Opus →
+hvis ledger-arbeidet berører credential-/secret-håndtering, rut den biten til Opus,
+ikke Fable (ingen gevinst).
+
+**Rekkefølge:** design-beslutninger først (ambisiøs kost-ledger trenger: hvor lagres
+ledger-dataene, hvilket ROI-signal, hvordan mates tilbake i model-routing.md) →
+Opus-spec → Fable-spawn for router-kjernen → multi-lens → digest-modus → skill-sync-lint
+→ avsluttende fler-lens-review på hele systemet.
 
 **Verifisering per fase:** lint grønn + berørte skills røyk-testes (setup-routing/adapt mot et scratch-prosjekt; e2e-kjedene har allerede live-smoke-mønsteret).
 
