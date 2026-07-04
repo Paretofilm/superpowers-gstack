@@ -37,7 +37,7 @@ Do NOT proceed until both frameworks are present.
 > ```
 > Then run `/superpowers-gstack:adapt` again.
 
-**Version check:** The current version is ALWAYS the installed plugin version read from `plugin.json` (see the marker step) — never a number stated in this file. If the project's CLAUDE.md contains a version marker (`<!-- superpowers-gstack: X.Y.Z -->`) with an older version, inform the user that routing and session rules will be updated to the current version as part of this adaptation. Projects on version `1.10.0` or earlier will gain a `### Model Routing` section in their CLAUDE.md unless they opt out — surface this clearly so it's not a silent addition. Projects on `1.11.1` or earlier will gain three new gstack skill rows (`/sync-gbrain`, `/scrape`, `/skillify`) in the evaluation tables.
+**Version check:** The current version is ALWAYS the installed plugin version read from `plugin.json` (see the marker step) — never a number stated in this file. If the project's CLAUDE.md contains a version marker (`<!-- superpowers-gstack: X.Y.Z -->`) with an older version, inform the user that routing and session rules will be updated to the current version as part of this adaptation. Projects with an older Model Routing block (v0.1 `### Model Routing` with Pi/MLX columns) will have it **replaced** by the new top-level `## Model Routing` (v0.2, Claude-only, domain-aware); projects with none will gain one unless they opt out — surface this clearly so it's not a silent change. Projects on `1.11.1` or earlier will gain three new gstack skill rows (`/sync-gbrain`, `/scrape`, `/skillify`) in the evaluation tables.
 
 ## Process
 
@@ -67,13 +67,11 @@ Based on Step 1, determine:
 - QA URL (if browser-testable)
 - Whether it's a team or solo project
 
-Present this to the user for confirmation, and ask one additional question about harnesses (needed for model routing in Step 5):
+Present this to the user for confirmation:
 
-> Based on my analysis, this is a **[type]** using **[stack]**. Tests run with `[command]`. [Deployed to X / Local-only]. [Has browser UI at X / No browser UI].
+> Based on my analysis, this is a **[type]** using **[stack]**. Tests run with `[command]`. [Deployed to X / not deployed]. [Has browser UI at X / No browser UI].
 >
 > Is this correct? Anything to add?
->
-> Also: which harnesses do you run this project under? Pick all that apply: **Claude Code**, **Pi (local-only — no network)**, **Pi (hybrid — local + cloud fallback)**, or **None — skip model routing entirely**. Determines which model-routing columns the CLAUDE.md gets. Pick "None" to opt out of the v1.11.0 Model Routing feature for this project (existing CLAUDE.md content stays untouched; only routing updates happen).
 
 **STOP HERE.** Do not continue to the next step until the user responds. Do not add "Next steps", suggestions, or any other content after the question. End your message with the question.
 
@@ -183,7 +181,7 @@ Compare the current project state against what Superpowers + GStack needs. Check
 - [ ] Does `## Skill routing` section exist?
 - [ ] Does it include the correct skills for this project?
 - [ ] Does it have Routing Logic, Rules, and Session Management?
-- [ ] Does it have a `### Model Routing` section (v1.11.0+)? If not, this adaptation will add one.
+- [ ] Does it have a `## Model Routing` section (v0.2+)? If not, this adaptation will add one.
 - [ ] Is there existing content that must be preserved?
 
 **Project structure:**
@@ -222,12 +220,35 @@ Apply the changes identified in Step 4. Follow these rules strictly:
 - If a `## Skill routing` section already exists: **UPDATE its plugin-managed subsections per the per-section case-logic below (cases 1-4 for each marker-section).** Do NOT wholesale-replace the entire Skill routing block — that would destroy any user-authored subsections nested inside (e.g. a hand-written `### Code reuse discipline` markerless heading). The per-section logic handles every plugin-managed subsection individually; anything inside Skill routing that the per-section logic does NOT match must be PRESERVED verbatim, including its position and surrounding whitespace.
 - If no `## Skill routing` section exists: ADD it after the first heading (or at the top if no heading)
 - The routing section follows the same template as `setup-routing` Step 6, adapted to this project
-- **Model Routing (v1.11.0+):** read the canonical routing table from `~/.claude/plugins/cache/*/superpowers-gstack/*/skills/setup-routing/model-routing.md` (sibling skill file). Build the tailored sub-table containing:
-  - Only skills relevant to this project (filtered from Step 3 evaluation)
-  - Only harness columns the user confirmed in Step 2 (Claude Code / Pi local-only / Pi hybrid)
-  - For multi-phase skills selected, include the phase sub-tables inline
-  - Insert this as a `### Model Routing` subsection of `## Skill routing`, placed after `### Rules` and before `### Session Continuity`
-  - **Fallbacks:** If `model-routing.md` is missing (older cached plugin), warn the user and skip the section entirely. If the user picked an unlisted harness ("Other": Cursor, opencode, etc.), emit only the Claude Code column with a note that harness-native model selection should be used instead. If the harness answer was empty/skipped, default to Claude Code column only.
+- **Model Routing (v0.2):** read the canonical routing table from `~/.claude/plugins/cache/*/superpowers-gstack/*/skills/setup-routing/model-routing.md`. Infer this project's domain sensitivity from the project analysis and Step 3 evaluation:
+    - Real-time audio / DSP / signal processing, or any lock-free concurrency (incl. Swift audio engines, game-audio) → **very high** — NB: a plain Swift/SwiftUI CRUD or UI app with none of these signals is **medium**, not very high
+    - Database migrations / ETL / data-transform, OR security concerns (auth/payments/PII/external APIs) → **high**
+    - Web/mobile app UI feature work → **medium**
+    - CLI tools / libraries / format-plumbing / serialization → **low**
+    - If ambiguous, ask the user one line: "How silently could a subtle bug here compound — very high / high / medium / low?"
+  - **First, replace any stale Model Routing block.** If the project's existing CLAUDE.md already has a Model Routing section from a prior plugin version — whether a v0.1 `### Model Routing` subsection (the one with Pi/MLX/local-model columns) or an older top-level `## Model Routing` — DELETE that entire section (from its heading through the line before the next heading of equal-or-higher level) before emitting the new one. This is an explicit exception to the "never delete existing sections" rule above: Model Routing is fully plugin-managed, so a stale copy must be **replaced**, not preserved alongside the new block — otherwise the generated CLAUDE.md carries two contradictory routing tables (old Pi/MLX + new Claude-only).
+  - Then emit a top-level `## Model Routing` section (placed after `## Skill routing` and all its subsections) with the emitted block below, substituting `{{DOMAIN_SENSITIVITY}}` with the inferred value:
+
+```markdown
+## Model Routing
+
+When dispatching a subagent (Claude Code `Agent` tool, `model:` parameter), pick its tier in two steps: (1) the skill's **base tier** below; (2) apply this project's **domain-sensitivity** modifier. On correctness-sensitive work the modifier wins — a "cheap coding" phase in a high-blast-radius domain is a false economy; the cheap correctness lever is multi-lens verification (`/pitfall-verification`), not a cheaper coder.
+
+**This project's domain sensitivity: {{DOMAIN_SENSITIVITY}}** (how silently a subtle bug compounds).
+
+**Tiers:** `fable` = claude-fable-5 (novel + long-horizon + not chunkable; ~2× Opus, safety-fallbacks to Opus for sec/bio/chem — never pay the premium there); `opus` = claude-opus-4-8 (heavy reasoning, high-blast-radius coding); `sonnet` = claude-sonnet-4-6 (structured engineering, contained-blast-radius coding with tests as the net); `haiku` = claude-haiku-4-5 (mechanical/deterministic).
+
+**Modifier by sensitivity:**
+- **very high / high** — floor coding at `opus` + mandatory `/pitfall-verification`; use `fable` only when the technique is *also* genuinely novel and not cleanly chunkable (scope it open-on-approach, bounded-on-deliverable).
+- **medium** — base tier as-is (usually `sonnet`); tests catch most.
+- **low** — base tier or one tier cheaper.
+
+**Per-skill base tiers:** see the plugin's `model-routing.md` for the full table; the common ones — planning/review/engineering → `sonnet`, `/plan-ceo-review` → `opus`, mechanical/util/verification → `haiku`. `see phases` skills route per phase.
+
+**Do NOT reach for `fable`** on planning, coding against a pinned spec, or verification — a precise `opus` spec turns long+ambiguous work into short+well-scoped chunks that Opus does cheaper. Verification ROI is orthogonal to coder tier: budget multi-lens on every ship-worthy change regardless of who wrote the code.
+```
+
+  - **Fallback:** If `model-routing.md` is missing (older cached plugin), warn the user and skip the section entirely.
   - If the user opts out, skip this section entirely and note the choice in the final report
 **Insert or upgrade the Autonomy and user interruption section.** This section applies to ALL projects (web and native equally — agents over-asking is platform-agnostic). Scan CLAUDE.md for the heading `^#{2,3} Autonomy and user interruption` and its version marker `<!-- gstack-autonomy-vN -->`. Apply the same four-case logic:
 

@@ -55,10 +55,10 @@ Ask the user ONE question:
 
 ### Step 2: Ask follow-up questions
 
-Based on the project type, ask 3-5 focused follow-up questions. Always include questions 1-3 and 10. Add 4-9 based on relevance:
+Based on the project type, ask 3-5 focused follow-up questions. Always include questions 1-3. Add 4-9 based on relevance:
 
 1. What test framework will you use? (or "no tests yet")
-2. Will this be deployed? Where? (or local-only)
+2. Will this be deployed? Where? (or not deployed)
 3. Any security concerns? (auth, user data, payments, external APIs — helps evaluate `/cso`)
 4. Will this have a UI testable in a browser? What URL? (skip for CLI tools, libraries, pipelines)
 5. Is there a design component? (UI mockups, design system — skip for backend-only)
@@ -66,7 +66,6 @@ Based on the project type, ask 3-5 focused follow-up questions. Always include q
 7. Is this a long-running project or a one-off? (helps evaluate `/learn`)
 8. Do you have existing linting, type checking, or test suites? (helps evaluate `/health`)
 9. Is this a monorepo? Which directory will you work in? (helps evaluate `/freeze`)
-10. Which harnesses will you run this project under? Pick all that apply: **Claude Code**, **Pi (local-only — no network calls)**, **Pi (hybrid — local + cloud fallback)**, or **None — skip model routing entirely**. Determines which model-routing columns get emitted in CLAUDE.md. Pick "None" to opt out of the new v1.11.0 Model Routing section completely; setup-routing falls back to its v1.10.0 behavior for this project.
 
 Ask all follow-up questions in a single message. **STOP HERE.** Do not continue to the next step until the user responds. Do not add suggestions or any other content after the questions. End your message with the questions.
 
@@ -193,43 +192,28 @@ If the user wants changes, update your selection and re-present. Repeat until co
 
 ### Step 5.5: Present model routing recommendations
 
-Read `skills/setup-routing/model-routing.md` (sibling file in this skill's directory) — it holds the canonical per-skill model recommendations for Claude Code and the two Pi modes.
+Read `skills/setup-routing/model-routing.md` (sibling file in this skill's directory) — it holds the canonical per-skill base-tier recommendations and the domain-sensitivity axis (v0.2).
 
-**If `model-routing.md` does not exist** (older cached plugin version, file deletion, etc.): tell the user "Model routing reference is unavailable — likely an older plugin cache. Run `/plugin update superpowers-gstack` and re-run this skill, or proceed without model routing." Then skip directly to Step 6 with the `### Model Routing` section omitted.
+**If `model-routing.md` does not exist** (older cached plugin version, file deletion, etc.): tell the user "Model routing reference is unavailable — likely an older plugin cache. Run `/plugin update superpowers-gstack` and re-run this skill, or proceed without model routing." Then skip directly to Step 6 with the `## Model Routing` section omitted.
 
-**If the user's harness answer to Step 2 Q10 was "None — skip model routing entirely"**: skip directly to Step 6 with the entire `### Model Routing` section omitted. Tell the user: "Skipping Model Routing per your request. Re-run `/superpowers-gstack:adapt` later if you change your mind." Do not present a preview.
+**Present the base-tier routing for this project:**
 
-**If the user's harness answer to Step 2 Q10 was "Other" or named an unlisted harness** (Cursor, opencode, Codex CLI, etc.): include only the **Claude Code** column in the preview, and emit a note at the **top of the `### Model Routing` section in the generated CLAUDE.md** (immediately after the section header, before the "Identify your runtime" paragraph). The note must say:
+Build a routing preview containing only the skills selected in Step 5 (skip everything excluded). Present as:
 
-> **Note:** Your harness (`<name>`) is not in this routing table. Claude Code defaults are shown as a starting point — override per task with your harness's native model-selection mechanism (e.g. opencode's agent-types, Cursor's model picker, Codex CLI's `--model` flag).
+**Model routing — base tiers:**
 
-**If Q10 was skipped or returned an empty/unparseable answer**: default to the **Claude Code** column only and proceed.
-
-**If user selected only Pi columns (no Claude Code)**: emit a note at the top of the `### Model Routing` section saying:
-
-> **Note:** Claude Code column is not present because you didn't select it. If you open this project in Claude Code anyway, use the Pi (hybrid) column as a rough approximation — its Anthropic-leaning recommendations (sonnet for most, haiku for mechanical) are the closest stand-in.
-
-Build a routing preview containing only:
-- The skills selected in Step 5 (skip everything excluded)
-- The harness columns selected in Step 2 question 10 (skip columns the user isn't using)
-
-Present it as:
-
-**Model routing for [list selected harnesses]:**
-
-| Skill | [Selected harness columns] |
+| Skill | Base tier |
 |---|---|
-| [Skills from Step 5 confirmation, one per row] | [Recommendation from model-routing.md] |
+| [Skills from Step 5 confirmation, one per row] | [Base tier from model-routing.md] |
 
 For skills marked `see phases` in `model-routing.md`, include a sub-table for that skill showing the per-phase recommendations.
 
-**For Pi columns specifically:** the table in `model-routing.md` references concrete model IDs (e.g. `qwen3.6-mlx-8bit`, `qwen3.6-27b-optiQ-SFT`). If the user is unsure which Pi models they have loaded, ask them to run:
-
-```bash
-cat ~/.pi/agent/models.json 2>/dev/null | grep '"id"'
-```
-
-…and confirm coverage. If a recommended Pi model is not listed, mark that row with `(verify availability)` in the generated CLAUDE.md.
+**Infer this project's domain sensitivity** from the Step-2 answers and project type, using the domain table in `model-routing.md`:
+- Real-time audio / DSP / signal processing, or any lock-free concurrency (incl. Swift audio engines, game-audio) → **very high** — NB: a plain Swift/SwiftUI CRUD or UI app with none of these signals is **medium**, not very high
+- Database migrations / ETL / data-transform, OR security concerns named in Q3 (auth/payments/PII/external APIs) → **high**
+- Web/mobile app UI feature work → **medium**
+- CLI tools / libraries / format-plumbing / serialization → **low**
+- If ambiguous, ask the user one line: "How silently could a subtle bug here compound — very high / high / medium / low?"
 
 After presenting, ask:
 
@@ -654,33 +638,6 @@ Recommended flow on a new SwiftUI feature:
 
 These skills are NOT bundled with superpowers-gstack — install separately, they live in their own marketplace.
 
-### Model Routing (v0.1, advisory)
-
-**Identify your runtime:**
-- **Claude Code** — your system prompt names you "Claude Code". Use the **Claude Code** column.
-- **Pi (local-only)** — `~/.pi/agent/AGENTS.md` confirms Pi runtime; no network calls allowed. Use **Pi (local-only)**.
-- **Pi (hybrid)** — Pi runtime with cloud calls permitted. Use **Pi (hybrid)**.
-
-If your runtime doesn't match a listed column, default to **Claude Code**.
-
-**How to apply the recommendations** (differs by harness):
-- **In Claude Code:** dispatch subagents (via `Agent` tool, parallel agents, or SDD workers) with `model:` set to the column entry for the task. Multi-phase skills become per-phase subagent calls.
-- **In Pi:** no subagent dispatch is available (Pi runs a single process per session). Use the column entry as a guide for *which Pi provider/model to start the session with* for tasks of this type. For multi-phase skills with phase-varying recommendations:
-  - **Preferred:** end the current Pi session (`/new`) between phases and restart with the model matched to the next phase. Acceptable for long-running implementation work.
-  - **Pragmatic:** if restarting is friction, pick the model matched to the **most cognitively-demanding phase** in your session (bias toward the larger/stronger model so weaker phases still get adequate capability).
-  - Pi aliases (e.g. `qwen3.6-27b-optiQ-SFT`) map to actual `--provider` / `--model` flags — see the alias table in `model-routing.md`.
-
-[Insert routing table here — only the skills confirmed in Step 5, only the harness columns selected in Step 2 Q10. For skills marked "see phases" in `model-routing.md`, include the phase sub-table inline. For Pi rows, use the friendly aliases for readability; orchestrator should map back to actual `id` from the alias table in `model-routing.md` when invoking.]
-
-For multi-phase skills (`/superpowers:test-driven-development`, `/superpowers:subagent-driven-development`, `/superpowers:systematic-debugging`, `/qa`, `/ship`), route per phase — see the sub-tables above.
-
-**Caveats:**
-- Advisory only. Override per task when you have evidence.
-- Pi rows assume the named models/providers are loaded (`cat ~/.pi/agent/models.json` to verify, and `scripts/start-mlx-server.sh` for the SFT model).
-- Swift-implementation rows route to `qwen3.6-27b-optiQ-SFT` (mlx-sft provider, port 8081) only if that provider is running. Otherwise fall back to the row's non-Swift recommendation.
-- **Drift warning:** this table is inlined from `model-routing.md` at the time `/setup-routing` was last run. If the plugin updates its routing recommendations, this inline copy stays frozen — re-run `/superpowers-gstack:adapt` to pull the latest. The plugin version that produced this section is stamped in the top-of-file `<!-- superpowers-gstack: X.Y.Z -->` marker.
-- Full canonical table with all skills (not just this project's selected subset) lives at `~/.claude/plugins/cache/.../superpowers-gstack/skills/setup-routing/model-routing.md`.
-
 ### Session Continuity
 
 On session start or after /compact: if `docs/superpowers/handoff.md` exists and contains content, read it and present a one-line summary of where you left off. Then proceed normally — do not ask "ready to continue?". Clear the file (write empty string) immediately after presenting the summary.
@@ -692,6 +649,23 @@ After /compact: if handoff.md does not contain `## Mode: auto`, ask the user onc
 - Save architecture decisions to `docs/` before clearing after Phase 1
 - Reference key changes when starting Phase 3 review
 - Skip `/clear` for small projects (< 5 tasks, < 30 min)
+
+## Model Routing
+
+When dispatching a subagent (Claude Code `Agent` tool, `model:` parameter), pick its tier in two steps: (1) the skill's **base tier** below; (2) apply this project's **domain-sensitivity** modifier. On correctness-sensitive work the modifier wins — a "cheap coding" phase in a high-blast-radius domain is a false economy; the cheap correctness lever is multi-lens verification (`/pitfall-verification`), not a cheaper coder.
+
+**This project's domain sensitivity: {{DOMAIN_SENSITIVITY}}** (how silently a subtle bug compounds).
+
+**Tiers:** `fable` = claude-fable-5 (novel + long-horizon + not chunkable; ~2× Opus, safety-fallbacks to Opus for sec/bio/chem — never pay the premium there); `opus` = claude-opus-4-8 (heavy reasoning, high-blast-radius coding); `sonnet` = claude-sonnet-4-6 (structured engineering, contained-blast-radius coding with tests as the net); `haiku` = claude-haiku-4-5 (mechanical/deterministic).
+
+**Modifier by sensitivity:**
+- **very high / high** — floor coding at `opus` + mandatory `/pitfall-verification`; use `fable` only when the technique is *also* genuinely novel and not cleanly chunkable (scope it open-on-approach, bounded-on-deliverable).
+- **medium** — base tier as-is (usually `sonnet`); tests catch most.
+- **low** — base tier or one tier cheaper.
+
+**Per-skill base tiers:** see the plugin's `model-routing.md` for the full table; the common ones — planning/review/engineering → `sonnet`, `/plan-ceo-review` → `opus`, mechanical/util/verification → `haiku`. `see phases` skills route per phase.
+
+**Do NOT reach for `fable`** on planning, coding against a pinned spec, or verification — a precise `opus` spec turns long+ambiguous work into short+well-scoped chunks that Opus does cheaper. Verification ROI is orthogonal to coder tier: budget multi-lens on every ship-worthy change regardless of who wrote the code.
 
 ## Project
 
@@ -705,7 +679,7 @@ After /compact: if handoff.md does not contain `## Mode: auto`, ask the user onc
 [QA URL if applicable — omit this section if no browser UI]
 
 ### Deployment
-[Deployment target — omit if local-only]
+[Deployment target — omit if not deployed]
 ```
 
 **Routing Logic examples** — adapt to the project, don't copy verbatim:
@@ -750,9 +724,9 @@ Ready to ship        → /ship
 - DO include the default QA URL if the user provided one
 - DO include test commands if known
 - Omit entire sections that don't apply (no empty "QA: N/A" sections)
-- **Model Routing section:** include only the harness columns selected in Step 2 Q10 and only the rows for skills selected in Step 5. If the user opted out of model routing in Step 5.5, omit the entire `### Model Routing` section.
+- **Model Routing section:** emit the `## Model Routing` block verbatim (from Step 5.5) with `{{DOMAIN_SENSITIVITY}}` replaced by the inferred value. If the user opted out of model routing in Step 5.5, omit the entire `## Model Routing` section.
 - **Phase sub-tables:** include inline only for multi-phase skills selected in Step 5 (e.g. skip the TDD sub-table if `/superpowers:test-driven-development` is not in the selected set).
-- Target 100-180 lines total (was 60-100 in v1.10.0 — Model Routing adds ~20-50 lines depending on selected skills, harness count, and how many multi-phase skills are included). Projects that select all three harnesses + many multi-phase skills can legitimately reach 200 lines; that is acceptable when the routing is being used. The 150-line "compliance budget" from v1.10.0 is officially relaxed to 200 lines starting v1.11.0 when Model Routing is present. To stay tight: omit any column not selected, omit phase sub-tables for skills not selected.
+- Target 100-180 lines total (was 60-100 in v1.10.0 — Model Routing adds ~20 lines). Projects with many multi-phase skills can legitimately reach 200 lines. The 150-line "compliance budget" from v1.10.0 is officially relaxed to 200 lines starting v1.11.0 when Model Routing is present. To stay tight: omit phase sub-tables for skills not selected.
 
 ### Step 7: Confirm
 

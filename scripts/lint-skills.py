@@ -44,6 +44,9 @@ DENYLIST = [
     (re.compile(r"`sensitive`\s*="), "third-lens 'sensitive' role was removed in 2.18.0"),
     (re.compile(r"--role\s+sensitive|--sensitive\b"), "third-lens --sensitive flag was removed in 2.18.0"),
     (re.compile(r"gstack-multi-lens-review-v[0-3]\b"), "stale multi-lens marker (current: v4+)"),
+    (re.compile(r"Pi \(local|Pi \(hybrid"), "local-model (Pi) routing columns removed in v0.2 (2.27.0)"),
+    (re.compile(r"start-mlx"), "MLX local-server routing removed in v0.2 (2.27.0)"),
+    (re.compile(r"models\.json"), "Pi models.json runtime detection removed in v0.2 (2.27.0)"),
 ]
 
 errors: list[str] = []
@@ -147,6 +150,11 @@ def main() -> int:
     # E7 denylist
     targets = [(REPO / "CLAUDE.md", claude_md), (REPO / "README.md", readme)]
     targets += [(d / "SKILL.md", (d / "SKILL.md").read_text()) for d in skill_dirs if (d / "SKILL.md").is_file()]
+    # Also scan the canonical routing table — the file most likely to regress a
+    # purged local-model (Pi/MLX) pattern, yet it is not a SKILL.md.
+    _mr = REPO / "skills" / "setup-routing" / "model-routing.md"
+    if _mr.is_file():
+        targets.append((_mr, _mr.read_text()))
     for path, text in targets:
         for pattern, why in DENYLIST:
             for i, line in enumerate(text.splitlines(), 1):

@@ -1,197 +1,266 @@
-# Model Routing Table — v0.1 (advisory)
+# Model Routing Table — v0.2 (advisory)
 
-> **Status:** v0.1, advisory only. Recommendations below are sensible defaults derived from each skill's dominant cognitive demand, not empirically benchmarked across this exact skill set. Treat them as guidance — override per project when you have evidence.
+> **Status:** v0.2, advisory. Two axes: a per-skill **base tier** (the skill's
+> dominant cognitive demand) modulated by a **domain-sensitivity** axis (how
+> silently a subtle error compounds). Recommendations are sensible defaults, not
+> a benchmarked skill×model matrix — override per project when you have evidence.
 >
-> **Audience:** This file is read by `setup-routing` and `adapt` skills. It is also rendered (or referenced) in generated `CLAUDE.md` files so orchestrator-Claude can consult it when dispatching subagents.
+> **Audience:** read by `setup-routing` and `adapt`; folded into generated
+> `CLAUDE.md` files so orchestrator-Claude consults it when dispatching subagents.
 >
-> **Last updated:** plugin v1.11.0
+> **v0.2 changes (2026-07-04):** added Claude Fable 5 as a top tier; added the
+> domain-sensitivity axis; removed the local-model (Pi/MLX) columns — routing is
+> Claude-tier only now.
 
-## How orchestrator-Claude should use this
+## How orchestrator-Claude uses this
 
-You may be running under different harnesses. Identify your runtime, then use the matching column:
+In Claude Code you have an `Agent` tool and dispatch subagents with a `model:`
+parameter. When you dispatch a subagent to execute one of the skills below, pass
+the tier from the **base table** — then apply the **domain modifier** below,
+which can shift it up or down. Multi-phase entries (e.g.
+`/superpowers:test-driven-development`) become per-phase subagent calls.
 
-- **Claude Code** — your system prompt names you "Claude Code". Use the **Claude Code** column.
-- **Pi (local-only)** — `~/.pi/agent/AGENTS.md` says "You are running in pi coding agent". No network calls allowed (offline, or by policy). Use the **Pi (local-only)** column.
-- **Pi (hybrid)** — same Pi harness, but cloud calls are permitted for tasks where local quality is insufficient. Use the **Pi (hybrid)** column.
+Other harnesses (Cursor, opencode, Codex CLI, custom) support multi-model
+dispatch via their own mechanisms — treat the tier names as advisory and map
+them to your harness's model picker.
 
-**Important distinction by harness:**
-
-- **In Claude Code**, you have an `Agent` tool and can dispatch subagents with `model:` parameter. When you dispatch a subagent to execute one of the skills below, pass the recommended model from the **Claude Code** column. Multi-phase entries (e.g. `/superpowers:test-driven-development`) become per-phase subagent calls.
-- **In Pi (either mode)**, there is no subagent dispatch — Pi runs a single process per session (see `~/.pi/agent/AGENTS.md`: "No `TodoWrite` tool... No web fetch/search, no MCP"). The Pi columns therefore guide *which Pi provider/model the user should start the session with* for a given task. Switching mid-session requires `/new` and restarting Pi with a different `--provider` / `--model`. For multi-phase skills in Pi, pick the model best matched to the *dominant phase* you expect to spend most time in.
-
-If your runtime doesn't match any column (e.g. Cursor, opencode, Codex CLI, custom harness), default to the **Claude Code** column and treat the recommendations as advisory — these harnesses typically support multi-model dispatch via their own mechanisms (opencode's agent-types, Cursor's model picker, etc.).
+**Choosing a tier is a two-step lookup:** (1) find the skill's base tier below;
+(2) apply the domain-sensitivity modifier for the code the subagent will touch.
+The modifier wins on correctness-sensitive work — a "cheap coding" phase in a
+high-blast-radius domain is a false economy (see below).
 
 ## Model identifiers used
 
-**Claude Code column:**
-- `opus` — `claude-opus-4-7` (heavy reasoning, novel synthesis, strategic challenge)
-- `sonnet` — `claude-sonnet-4-6` (structured engineering, code review, planning)
-- `haiku` — `claude-haiku-4-5` (mechanical, templated, deterministic)
+- `fable` — `claude-fable-5` — top tier. Novel, long-horizon, autonomous work
+  where the approach must be *invented*, not mapped. ~2× Opus price ($10/$50 vs
+  $5/$25 per Mtok); its lead grows with task length. On short well-scoped tasks
+  it's close to Opus — don't pay the premium there. Safety note: Fable routes
+  cybersecurity/bio/chem to an Opus fallback, so in those domains it is literally
+  identical to Opus — never pay the Fable premium there.
+- `opus` — `claude-opus-4-8` — heavy reasoning, novel synthesis, strategic
+  challenge, and the default for high-blast-radius coding.
+- `sonnet` — `claude-sonnet-4-6` — structured engineering, code review, planning,
+  contained-blast-radius coding with tests as the net.
+- `haiku` — `claude-haiku-4-5` — mechanical, templated, deterministic.
 
-**Pi columns** — friendly aliases mapped to actual provider+id from `~/.pi/agent/models.json`. When invoking Pi, use the `--provider` and `--model` flags that match the alias:
+## The domain-sensitivity axis
 
-| Alias used in tables below      | Provider in models.json | `id` field (use with `--model`)                       | Notes |
-|----------------------------------|-------------------------|--------------------------------------------------------|-------|
-| `qwen3.6-mlx-8bit`               | `mlx-local`             | `qwen3.6-mlx-8bit`                                     | Daily driver. MoE 35B-A3B (~3B active), 8-bit. Tier 1 default in `project_vibe_coding_config.md`. |
-| `qwen3.6-35b-a3b-4bit-dwq`       | `mlx-local`             | `qwen3.6-35b-a3b-4bit-dwq`                             | Stronger reasoning. 4-bit DWQ, +28% tok/s vs 8-bit per 2026-04-30 benchmark. |
-| `qwen3.6-27b-optiQ-SFT`          | `mlx-sft`               | `/Users/kjetilge/models/qwen3.6-27b-optiQ-4bit`        | **Swift specialist.** Base = Qwen3.6-27B-OptiQ-4bit + Stage 12.4 SFT LoRA adapter. Served on port 8081, distinct provider — must start `scripts/start-mlx-server.sh` first. **Use for Swift implementation tasks specifically.** |
-| `gemma-4-26b-a4b-it-8bit`        | `mlx-local`             | `gemma-4-26b-a4b-it-8bit`                              | opencode driver, Tier 2 architecture. **Note:** degenerates in Pi (repetitive template loop) — do NOT route Pi skills to it. Listed only for completeness. |
+Difficulty is **not** concentrated in "thinking" phases with a clean handoff to
+cheap "coding". In correctness-sensitive domains (real-time audio, DSP, lock-free
+concurrency, migration logic, money, auth), the risk is smeared into the *coding
+itself* — subtle one-line traps a *less* capable coder produces *more* of, not
+fewer. So "plan it, then route coding to the cheapest model" is a false economy
+there. The cheap correctness lever is **verification** (multi-lens: self-pitfall +
+Codex + third house), not a pricier coder — verification ROI is *orthogonal to
+coder tier*. Budget multi-lens on every ship-worthy change regardless of who
+wrote the code.
 
-The path-form `id` for the SFT model is intentional (mlx-lm.server loads the local model directory). When passing `model:` to a Pi API call, use the exact `id` from the table above, not the alias.
+### Routing matrix — base tier × domain
 
-## Routing table
+|                       | **Known technique**                         | **Novel technique**                                                    |
+|-----------------------|---------------------------------------------|------------------------------------------------------------------------|
+| **High blast-radius** | **opus** + mandatory multi-lens verify      | **fable** — research + architecture + first impl as one long autonomous run |
+| **Contained**         | **sonnet** (or opus), green tests as the net| **opus**                                                               |
+
+### Domain-sensitivity table (starter — extend per project)
+
+| Domain                                      | Sensitivity | Coding-tier floor | Notes |
+|---------------------------------------------|-------------|-------------------|-------|
+| RT audio / DSP / lock-free concurrency      | very high   | opus + verify     | silent corruption; no "safe cheap coding" |
+| Migration / data-transform logic            | high        | opus + verify     | irreversibility |
+| Auth / payments / security                  | high        | opus (Fable→Opus fallback anyway) | |
+| App / UI feature wiring                     | medium      | sonnet            | tests catch most |
+| Format plumbing / serialization             | low         | sonnet / haiku    | round-trip tests are a strong net |
+| Templated scaffolding / mechanical refactor | low         | haiku             | deterministic |
+
+## When Fable earns its 2× (and when it does NOT)
+
+**Use `fable` only when ALL hold:**
+- Technique is genuinely novel (invent the approach, not map a known one)
+- Task is long-horizon / autonomous (its lead grows with length)
+- Not cleanly chunkable into short well-scoped pieces (chunking → opus wins on cost)
+- Domain is not in the Fable→Opus safety-fallback set (sec/bio/chem)
+
+**Do NOT use `fable` for:** planning well-understood work, coding against a
+fully-pinned spec, verification (that's the multi-lens job), or anything a tight
+opus spec turns into short well-scoped chunks. Second-order effect: **a precise
+opus spec converts "long+ambiguous" into "short+well-scoped," removing the very
+condition that justifies Fable** — so opus spec-writing is itself a Fable-cost
+lever.
+
+### Dispatching a Fable subagent (field-tested 2026-07-04)
+
+1. **Scope open on approach, bounded on deliverable.** Over-specifying the
+   *approach* destroys the exploration you're paying 2× for; leaving the
+   *deliverable* unbounded burns tokens on integration opus does cheaper. Let
+   Fable choose the *how*; you choose *where it stops* (e.g. "research +
+   architecture + prototype + tests — do NOT integrate into the RT path").
+2. **Don't use `isolation: worktree` for untracked targets.** Worktree checkout
+   only includes tracked files; new/untracked package dirs won't exist there.
+   Isolate only when mutating *tracked* files in parallel.
+3. **A subagent's self-report is a claim, not verification.** Re-read the new
+   files, re-run the suite, run Codex — regardless of tier. The dispatcher owns
+   verification.
+4. **Cost calibration:** one "novel-technique discovery + design doc + prototype
+   + tests" unit ≈ **150k Fable tokens, ~20 min**. Reserve it for work whose
+   novelty/blast-radius clearly clears the 2× premium; expect one focused unit,
+   not an open-ended session.
+
+## Base routing table (Claude tiers; apply the domain modifier above)
 
 ### Superpowers skills
 
-| Skill                                          | Claude Code | Pi (local-only)          | Pi (hybrid)              |
-|------------------------------------------------|-------------|--------------------------|--------------------------|
-| `/superpowers:brainstorming`                   | sonnet      | qwen3.6-35b-a3b-4bit-dwq | sonnet                   |
-| `/superpowers:writing-plans`                   | sonnet      | qwen3.6-35b-a3b-4bit-dwq | sonnet                   |
-| `/superpowers:writing-skills`                  | sonnet      | qwen3.6-35b-a3b-4bit-dwq | sonnet                   |
-| `/superpowers:executing-plans`                 | sonnet      | qwen3.6-mlx-8bit         | sonnet                   |
-| `/superpowers:subagent-driven-development`     | see phases  | see phases               | see phases               |
-| `/superpowers:dispatching-parallel-agents`     | see phases  | see phases               | see phases               |
-| `/superpowers:test-driven-development`         | see phases  | see phases               | see phases               |
-| `/superpowers:systematic-debugging`            | see phases  | see phases               | see phases               |
-| `/superpowers:verification-before-completion`  | haiku       | qwen3.6-mlx-8bit         | haiku                    |
-| `/superpowers:requesting-code-review`          | sonnet      | qwen3.6-mlx-8bit         | sonnet                   |
-| `/superpowers:receiving-code-review`           | sonnet      | qwen3.6-mlx-8bit         | sonnet                   |
-| `/superpowers:finishing-a-development-branch`  | sonnet      | qwen3.6-mlx-8bit         | sonnet                   |
-| `/superpowers:using-git-worktrees`             | haiku       | qwen3.6-mlx-8bit         | haiku                    |
-| `/superpowers:using-superpowers`               | haiku       | qwen3.6-mlx-8bit         | haiku                    |
+| Skill                                          | Base tier   |
+|------------------------------------------------|-------------|
+| `/superpowers:brainstorming`                   | sonnet      |
+| `/superpowers:writing-plans`                   | sonnet      |
+| `/superpowers:writing-skills`                  | sonnet      |
+| `/superpowers:executing-plans`                 | sonnet      |
+| `/superpowers:subagent-driven-development`     | see phases  |
+| `/superpowers:dispatching-parallel-agents`     | see phases  |
+| `/superpowers:test-driven-development`         | see phases  |
+| `/superpowers:systematic-debugging`            | see phases  |
+| `/superpowers:verification-before-completion`  | haiku       |
+| `/superpowers:requesting-code-review`          | sonnet      |
+| `/superpowers:receiving-code-review`           | sonnet      |
+| `/superpowers:finishing-a-development-branch`  | sonnet      |
+| `/superpowers:using-git-worktrees`             | haiku       |
+| `/superpowers:using-superpowers`               | haiku       |
 
 ### GStack skills — Phase 1 (Planning)
 
-| Skill                  | Claude Code | Pi (local-only)          | Pi (hybrid)              |
-|------------------------|-------------|--------------------------|--------------------------|
-| `/office-hours`        | sonnet      | qwen3.6-35b-a3b-4bit-dwq | sonnet                   |
-| `/plan-ceo-review`     | **opus**    | qwen3.6-35b-a3b-4bit-dwq | **opus**                 |
-| `/plan-eng-review`     | sonnet      | qwen3.6-35b-a3b-4bit-dwq | sonnet                   |
-| `/plan-design-review`  | sonnet      | qwen3.6-35b-a3b-4bit-dwq | sonnet                   |
-| `/plan-devex-review`   | sonnet      | qwen3.6-35b-a3b-4bit-dwq | sonnet                   |
-| `/design-consultation` | sonnet      | qwen3.6-35b-a3b-4bit-dwq | sonnet                   |
-| `/design-shotgun`      | sonnet      | qwen3.6-35b-a3b-4bit-dwq | sonnet                   |
-| `/autoplan`            | (chained)   | (chained)                | (chained)                |
-| `/plan-tune`           | haiku       | qwen3.6-mlx-8bit         | haiku                    |
+| Skill                  | Base tier |
+|------------------------|-----------|
+| `/office-hours`        | sonnet    |
+| `/plan-ceo-review`     | **opus**  |
+| `/plan-eng-review`     | sonnet    |
+| `/plan-design-review`  | sonnet    |
+| `/plan-devex-review`   | sonnet    |
+| `/design-consultation` | sonnet    |
+| `/design-shotgun`      | sonnet    |
+| `/autoplan`            | (chained) |
+| `/plan-tune`           | haiku     |
 
 ### GStack skills — Phase 3 (Review & QA)
 
-| Skill            | Claude Code | Pi (local-only)          | Pi (hybrid)              |
-|------------------|-------------|--------------------------|--------------------------|
-| `/review`        | sonnet      | qwen3.6-mlx-8bit         | sonnet                   |
-| `/qa`            | see phases  | see phases               | see phases               |
-| `/qa-only`       | sonnet      | sonnet (req. browser)    | sonnet                   |
-| `/cso`           | sonnet      | qwen3.6-35b-a3b-4bit-dwq | sonnet                   |
-| `/design-review` | sonnet      | qwen3.6-mlx-8bit         | sonnet                   |
-| `/design-html`   | sonnet      | qwen3.6-35b-a3b-4bit-dwq | sonnet                   |
-| `/devex-review`  | sonnet      | sonnet (req. live test)  | sonnet                   |
-| `/investigate`   | sonnet      | qwen3.6-35b-a3b-4bit-dwq | sonnet                   |
+| Skill            | Base tier   |
+|------------------|-------------|
+| `/review`        | sonnet      |
+| `/qa`            | see phases  |
+| `/qa-only`       | sonnet      |
+| `/cso`           | sonnet      |
+| `/design-review` | sonnet      |
+| `/design-html`   | sonnet      |
+| `/devex-review`  | sonnet      |
+| `/investigate`   | sonnet      |
 
 ### GStack skills — Phase 4 (Ship & Monitor)
 
-| Skill                | Claude Code | Pi (local-only)  | Pi (hybrid) |
-|----------------------|-------------|------------------|-------------|
-| `/ship`              | see phases  | see phases       | see phases  |
-| `/land-and-deploy`   | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/canary`            | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/landing-report`    | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/setup-deploy`      | sonnet      | qwen3.6-mlx-8bit | sonnet      |
-| `/document-release`  | sonnet      | qwen3.6-mlx-8bit | sonnet      |
-| `/retro`             | sonnet      | qwen3.6-mlx-8bit | sonnet      |
-| `/learn`             | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/setup-gbrain`      | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/health`            | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/make-pdf`          | haiku       | qwen3.6-mlx-8bit | haiku       |
+| Skill                | Base tier  |
+|----------------------|------------|
+| `/ship`              | see phases |
+| `/land-and-deploy`   | haiku      |
+| `/canary`            | haiku      |
+| `/landing-report`    | haiku      |
+| `/setup-deploy`      | sonnet     |
+| `/document-release`  | sonnet     |
+| `/retro`             | sonnet     |
+| `/learn`             | haiku      |
+| `/setup-gbrain`      | haiku      |
+| `/health`            | haiku      |
+| `/make-pdf`          | haiku      |
 
 ### GStack skills — Utility
 
-| Skill                      | Claude Code | Pi (local-only)  | Pi (hybrid) |
-|----------------------------|-------------|------------------|-------------|
-| `/careful`                 | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/freeze`                  | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/unfreeze`                | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/guard`                   | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/browse`                  | haiku       | (no Pi support)  | haiku       |
-| `/open-gstack-browser`     | haiku       | (no Pi support)  | haiku       |
-| `/pair-agent`              | haiku       | (no Pi support)  | haiku       |
-| `/setup-browser-cookies`   | haiku       | (no Pi support)  | haiku       |
-| `/context-handoff`         | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/context-save`            | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/context-restore`         | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/benchmark`               | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/benchmark-models`        | haiku       | qwen3.6-mlx-8bit | haiku       |
-| `/codex`                   | (delegated) | (delegated)      | (delegated) |
+| Skill                      | Base tier   |
+|----------------------------|-------------|
+| `/careful`                 | haiku       |
+| `/freeze`                  | haiku       |
+| `/unfreeze`                | haiku       |
+| `/guard`                   | haiku       |
+| `/browse`                  | haiku       |
+| `/open-gstack-browser`     | haiku       |
+| `/pair-agent`              | haiku       |
+| `/setup-browser-cookies`   | haiku       |
+| `/context-handoff`         | haiku       |
+| `/context-save`            | haiku       |
+| `/context-restore`         | haiku       |
+| `/benchmark`               | haiku       |
+| `/benchmark-models`        | haiku       |
+| `/codex`                   | (delegated) |
 
 ### Plugin-internal skills (superpowers-gstack)
 
-| Skill                          | Claude Code | Pi (local-only)          | Pi (hybrid) |
-|--------------------------------|-------------|--------------------------|-------------|
-| `/superpowers-gstack:setup-routing` | sonnet | qwen3.6-35b-a3b-4bit-dwq | sonnet      |
-| `/superpowers-gstack:adapt`         | sonnet | qwen3.6-35b-a3b-4bit-dwq | sonnet      |
-| `/superpowers-gstack:pitfall-verification` | sonnet | qwen3.6-mlx-8bit | sonnet |
-| `/superpowers-gstack:quality-review`       | sonnet | qwen3.6-mlx-8bit | sonnet |
-| `/superpowers-gstack:macos-native-review`  | sonnet | sonnet (req. web) | sonnet |
-| `/superpowers-gstack:ios-native-review`    | sonnet | sonnet (req. web) | sonnet |
-| `/superpowers-gstack:macos-e2e-scaffold`   | haiku  | qwen3.6-mlx-8bit | haiku  |
-| `/superpowers-gstack:context-handoff`      | haiku  | qwen3.6-mlx-8bit | haiku  |
-| `/superpowers-gstack:htmlify`              | haiku  | qwen3.6-mlx-8bit | haiku  |
+| Skill                                        | Base tier |
+|----------------------------------------------|-----------|
+| `/superpowers-gstack:setup-routing`          | sonnet    |
+| `/superpowers-gstack:adapt`                  | sonnet    |
+| `/superpowers-gstack:pitfall-verification`   | sonnet    |
+| `/superpowers-gstack:quality-review`         | sonnet    |
+| `/superpowers-gstack:macos-native-review`    | sonnet    |
+| `/superpowers-gstack:ios-native-review`      | sonnet    |
+| `/superpowers-gstack:macos-e2e-scaffold`     | haiku     |
+| `/superpowers-gstack:ios-e2e-scaffold`       | haiku     |
+| `/superpowers-gstack:ios-visual-explore`     | sonnet    |
+| `/superpowers-gstack:e2e-route`              | haiku     |
+| `/superpowers-gstack:context-handoff`        | haiku     |
+| `/superpowers-gstack:htmlify`                | haiku     |
 
-## Phase-level routing (for "see phases" entries above)
+## Phase-level routing (for "see phases" entries)
 
 ### `/superpowers:test-driven-development`
 
-| Phase                                   | Claude Code | Pi (local-only)          | Pi (hybrid)              |
-|-----------------------------------------|-------------|--------------------------|--------------------------|
-| Write failing test                      | sonnet      | qwen3.6-mlx-8bit         | sonnet                   |
-| Implement minimum (**Swift/SwiftUI**)   | sonnet      | **qwen3.6-27b-optiQ-SFT**| **qwen3.6-27b-optiQ-SFT**|
-| Implement minimum (non-Swift)           | sonnet      | qwen3.6-mlx-8bit         | sonnet                   |
-| Refactor                                | sonnet      | qwen3.6-mlx-8bit         | sonnet                   |
-| Run tests + parse failures              | haiku       | qwen3.6-mlx-8bit         | haiku                    |
+| Phase                              | Base tier | Domain override |
+|------------------------------------|-----------|-----------------|
+| Write failing test                 | sonnet    | — |
+| Implement minimum                  | sonnet    | **opus** if high-blast-radius (RT audio, concurrency, DSP, migration, money, auth); **fable** if also a novel technique |
+| Refactor                           | sonnet    | opus if high-blast-radius |
+| Run tests + parse failures         | haiku     | — |
 
 ### `/superpowers:subagent-driven-development` & `/superpowers:dispatching-parallel-agents`
 
-| Phase                       | Claude Code | Pi (local-only)  | Pi (hybrid) |
-|-----------------------------|-------------|------------------|-------------|
-| Orchestrator (this session) | (current)   | (current)        | (current)   |
-| Per-task subagent           | per-task    | per-task         | per-task    |
-
-Subagent model is determined by the *task type* the subagent is performing. Look up the appropriate row above for that task. The orchestrator stays on whichever model the session was started with.
+The orchestrator stays on the session's model. Each per-task subagent's tier is
+the *task-type* row above, with the domain modifier applied for the code it
+touches. A novel + high-blast-radius task is a Fable candidate — scope it per the
+"Dispatching a Fable subagent" rules.
 
 ### `/superpowers:systematic-debugging`
 
-| Phase                          | Claude Code | Pi (local-only)          | Pi (hybrid)              |
-|--------------------------------|-------------|--------------------------|--------------------------|
-| Investigate (gather evidence)  | sonnet      | qwen3.6-mlx-8bit         | sonnet                   |
-| Hypothesize (novel/ambiguous)  | opus        | qwen3.6-35b-a3b-4bit-dwq | opus                     |
-| Hypothesize (well-scoped)      | sonnet      | qwen3.6-mlx-8bit         | sonnet                   |
-| Verify hypothesis              | haiku       | qwen3.6-mlx-8bit         | haiku                    |
-| Implement fix                  | (use TDD row)| (use TDD row)           | (use TDD row)            |
+| Phase                          | Base tier | Domain override |
+|--------------------------------|-----------|-----------------|
+| Investigate (gather evidence)  | sonnet    | — |
+| Hypothesize (novel/ambiguous)  | opus      | fable if the failure mode is genuinely novel + high-blast-radius |
+| Hypothesize (well-scoped)      | sonnet    | — |
+| Verify hypothesis              | haiku     | — |
+| Implement fix                  | (use TDD row) | (use TDD row) |
 
 ### `/qa`
 
-| Phase                          | Claude Code | Pi (local-only)       | Pi (hybrid)              |
-|--------------------------------|-------------|------------------------|--------------------------|
-| Navigate + screenshot          | haiku       | (no Pi browser support)| haiku                    |
-| Triage bugs (severity, repro)  | sonnet      | (no Pi browser support)| sonnet                   |
-| Write fix (Swift)              | sonnet      | qwen3.6-27b-optiQ-SFT  | qwen3.6-27b-optiQ-SFT    |
-| Write fix (non-Swift)          | sonnet      | qwen3.6-mlx-8bit       | sonnet                   |
+| Phase                          | Base tier | Domain override |
+|--------------------------------|-----------|-----------------|
+| Navigate + screenshot          | haiku     | — |
+| Triage bugs (severity, repro)  | sonnet    | — |
+| Write fix                      | sonnet    | opus if high-blast-radius |
 
 ### `/ship`
 
-| Phase                       | Claude Code | Pi (local-only)  | Pi (hybrid) |
-|-----------------------------|-------------|------------------|-------------|
-| Detect base branch          | haiku       | qwen3.6-mlx-8bit | haiku       |
-| Run tests                   | haiku       | qwen3.6-mlx-8bit | haiku       |
-| Review diff vs base         | sonnet      | qwen3.6-mlx-8bit | sonnet      |
-| Bump VERSION + CHANGELOG    | haiku       | qwen3.6-mlx-8bit | haiku       |
-| Write commit message        | sonnet      | qwen3.6-mlx-8bit | sonnet      |
-| Push + create PR            | haiku       | qwen3.6-mlx-8bit | haiku       |
-| Write PR description        | sonnet      | qwen3.6-mlx-8bit | sonnet      |
+| Phase                       | Base tier |
+|-----------------------------|-----------|
+| Detect base branch          | haiku     |
+| Run tests                   | haiku     |
+| Review diff vs base         | sonnet    |
+| Bump VERSION + CHANGELOG    | haiku     |
+| Write commit message        | sonnet    |
+| Push + create PR            | haiku     |
+| Write PR description        | sonnet    |
 
 ## Caveats
 
-1. **Advisory, not enforced.** Orchestrator-Claude may ignore these recommendations. A future v1.12.0 hook could enforce per-phase routing at subagent-dispatch time.
-2. **Empirically untested for this exact skill × model matrix.** The Pi-column recommendations lean on empirical evidence in `~/.claude/projects/-Users-kjetilge/memory/project_vibe_coding_config.md` (for the daily-driver tiers) and `~/Developer/modeltesting/quern/RECOMMENDATION.md` (for benchmark data). The Anthropic-column recommendations are sensible defaults based on each skill's cognitive demand profile, not benchmarked.
-3. **Pi-column assumes models are running.** If the recommended Pi model is not loaded, fall back to: (a) any running Pi model with similar reasoning capacity, or (b) the Claude Code column (hybrid mode only).
-4. **Swift specialist routing assumes the SFT adapter is loaded.** If `mlx-sft` provider is not running, the Swift rows fall back to `qwen3.6-mlx-8bit` for local-only or `sonnet` for hybrid.
-5. **Cost vs latency tradeoff:** these recommendations optimize for capability-per-cost, not latency. Local models on Apple Silicon can be slower than cloud calls — if you're in Pi (hybrid) and want max speed for a phase, the hybrid column already biases toward cloud for non-trivial reasoning.
+1. **Advisory, not enforced.** Orchestrator-Claude may override — cite evidence when you do.
+2. **Empirically calibrated, not benchmarked per skill.** The base tiers come from
+   each skill's cognitive-demand profile; the domain axis and Fable calibration come
+   from a real 2026-07 dispatch (novel HPSS/SMS DSP synthesis: Fable clean under
+   independent Opus + Codex; Codex found 0 bugs in Fable's novel code but 2 in
+   adjacent Opus-authored code — confirming verification, not coder tier, is the lever).
+3. **Optimizes for capability-per-cost, not latency.** Fable's long autonomous runs
+   trade wall-clock for correctness on the hardest, novelest work — reserve accordingly.
