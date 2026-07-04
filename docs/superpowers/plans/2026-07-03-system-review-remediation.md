@@ -99,6 +99,49 @@ faller tilbake til Opus der → aldri betal 2× premium).
 | Skill-tabellsync-lint (E-klasse, E8-tvilling) | lav | Opus | Sonnet | self-pitfall | Nei — mekanisk konsistens-guard |
 | Re-kjør fler-lens på ferdig system | — | — | — | codex + GLM | Nei — verifikasjon, ikke koding |
 
+#### Kost-ledger — tilbakeførings-modell (besluttet 2026-07-04)
+
+**Beslutning: auto-juster routeren, med menneske-supervisjon (guardrails).** Ikke
+ren rapport — ledgeren justerer faktisk tier-terskler i `model-routing.md`. Men fire
+sikkerhets-lag gjør autonomien trygg:
+
+1. **Bundet autonomi.** Auto-tuning flytter terskler kun innenfor et fast intervall;
+   kan ALDRI slå av en lens helt eller falle under gulvet (aldri fjerne multi-lens på
+   high-blast-domener). Det menneske-satte baseline ER gulvet.
+2. **Informert.** Hver justering = én diskret git-commit til `model-routing.md` med
+   begrunnelse (domene, lens, evidens: «0/12 reelle funn siste N reviews»). Valgfritt
+   løftet ved sesjonsstart via hook.
+3. **Reversibel.** Én endring = én commit → `git revert`. En `/cost-ledger reset`
+   gjenoppretter baseline i én handling (baseline lagres separat fra auto-deltaer).
+4. **Overvåket + auto-reversert (fail-safe).** En vakthund sporer *escaped defects* —
+   et reelt funn en senere lens/review fanget som en nedgradert lens ville tatt. Ved
+   oppdaget escape: **gjenopprett den grundigere routingen automatisk OG varsle** (en
+   `cost-ledger-alert`-issue/hook). Default-tilstanden er alltid trygg; systemet
+   venter aldri på mennesket for å være trygt. Skjerping av «bare varsle» — lukker
+   vinduet mellom escape og menneske-reaksjon.
+
+Dette er **lukket-sløyfe adaptiv kontroll med supervisorisk sikkerhetslag** — det som
+gjør delsystemet genuint novel (ikke logging, men et system som vet når dets egen
+optimalisering skader). Føyer seg inn i pluginens drift-vern-etos: E8 vokter
+routing-drift, `check-models` vokter modell-foreldelse, kost-ledger-monitoren vokter
+auto-tuningens drift — tre lag, samme fail-safe-for-review-prinsipp.
+
+**Design-beslutninger (besluttet 2026-07-04 — gate for Opus-spec → Fable-spawn):**
+- **Lagring: bruker-globalt override-lag.** Auto-tuning skriver til `~/.claude/cost-ledger/`
+  (ikke plugin-referansen). Routing-logikken leser override-laget som en modifikator
+  *oppå* plugin-defaultene. Konsekvenser: (a) `model-routing.md` forblir ren shipped
+  kode → E8 gyldig, delt baseline urørt; (b) lærer på tvers av alle brukerens prosjekter
+  → raskere konvergens; (c) `/cost-ledger reset` = slett override-fila; (d) hver
+  justering er fortsatt én commit *i override-laget* (informert + reversibel intakt).
+- **ROI-signal: minimum-tuppel.** Per review: (lens, domene, kost, #funn, alvorlighet,
+  overlevde-adversariell-synthese?). Survived-synthesis er en sterk «reelt funn»-proxy.
+  «Ble funnet fikset» er forkastet for v1 (krever eget utfall-sporings-delsystem) → v2-berikelse.
+
+**Design komplett.** Neste: Opus skriver spec (fastsetter override-lag-format, tuning-
+intervall/gulv-grenser, escape-defekt-deteksjonen, `/cost-ledger`-kommandoene) → Fable-spawn
+for router-kjernen (ROI-modellen som må oppdages empirisk) → multi-lens (codex + GLM,
+high-stakes) → digest-modus → skill-sync-lint → avsluttende fler-lens på hele systemet.
+
 **Kost-ledger-scope besluttet: AMBISIØS.** Ikke bare «logg kostnad» — en adaptiv
 lens-router. Modellen for «verifikasjons-ROI per lens per domene» må oppdages
 empirisk, ikke spesifiseres på forhånd → klarer Fable-baren. Basic-scopen (logg +
