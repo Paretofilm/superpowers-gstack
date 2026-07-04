@@ -1,6 +1,30 @@
 # Changelog
 
-## [2.27.0] - 2026-07-04
+## [2.28.0] - 2026-07-04
+
+### Changed
+
+- **All 16 skill descriptions compressed to ≤30 words** (was up to 114). The
+  frontmatter `description` loads into context every session for every installed
+  skill, so an over-long one is a per-session token tax in every project. Routing
+  triggers live in CLAUDE.md's `## Skill routing` section (lint E3 enforces
+  coverage), so the description only needs to be a crisp identity, not carry every
+  keyword. Eight skills were over budget: e2e-route (42→28), ios-visual-explore
+  (60→29), quality-review (48→28), ios-e2e-scaffold (40→28), macos-e2e-scaffold
+  (35→27), third-lens-review (36→29), pitfall-verification (33→29), htmlify
+  (32→25).
+- **Description budget is now a real ≤30-word cap** (`DESCRIPTION_WARN_WORDS`
+  60→30 in `scripts/lint-skills.py`). The comment always promised the hard cap
+  would land "with the Phase-3 description rewrites" — it now has.
+
+### Fixed
+
+- **Lint over-counted block-scalar descriptions by one word.** The frontmatter
+  reader treated a bare `|` / `>` (with optional chomping) block-scalar indicator
+  as content, so every `description: |` skill counted its `|` as a word. Fixed:
+  a bare block indicator is now read as empty, and the value comes from the
+  indented lines. Verified against block, chomped, inline, inline-with-colon, and
+  literal-mid-value-pipe cases.
 
 ### Changed
 

@@ -1,6 +1,9 @@
 ---
 name: pitfall-verification
-description: Use after completing any PRD, spec, plan, or code implementation — verifies that artifact-specific pitfalls (security, idempotency, integration contracts, edge cases, LLM output) do not apply before declaring work done. For substantive/ship-worthy changes this skill is a MULTI-MODEL orchestrator — it automatically chains Codex + a third model house + an adversarial synthesis after the self-pitfall rounds, with no separate invocation to remember.
+description: |
+  After any PRD, spec, plan, or code change: verify artifact-specific pitfalls
+  don't apply before declaring done. For ship-worthy changes, auto-chains Codex
+  + a third model house + adversarial synthesis.
 ---
 
 # Pitfall verification

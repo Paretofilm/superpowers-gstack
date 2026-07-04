@@ -1,6 +1,9 @@
 ---
 name: htmlify
-description: Generate beautiful, pedagogical HTML companions for superpowers-gstack MD artifacts (design docs, handoffs, plans). Auto-opens via --open flag. Generates per-directory dashboards. Triggered manually or via PostToolUse hook on Write/Edit of artifact-pattern MD files.
+description: |
+  Generate beautiful, pedagogical HTML companions for superpowers-gstack MD
+  artifacts (design docs, handoffs, plans). Auto-opens via --open; generates
+  per-directory dashboards. Triggered manually or via PostToolUse hook.
 ---
 
 # /htmlify

@@ -1,6 +1,9 @@
 ---
 name: ios-visual-explore
-description: Tier-2 visual exploration of an iOS app via Gemini computer-use. Invoke when accessibility-based end-to-end testing (XCTest/XCUITest) does not surface enough — e.g. layout regressions, visual glitches, missing UI elements not reachable via the accessibility tree, or when a mission requires following visual cues across screens. Produces a text-only Markdown report (file paths, never inline images) to keep agent context clean.
+description: |
+  Tier-2 visual exploration of an iOS app via Gemini computer-use. Invoke when
+  accessibility-based XCUITest doesn't surface enough — layout regressions,
+  glitches, elements off the accessibility tree. Text-only Markdown report.
 ---
 
 # iOS Visual Explore
