@@ -1,18 +1,9 @@
 ---
 name: office-hours-track-aware
 description: |
-  Track-aware wrapper around gstack's /office-hours skill. Runs the
-  upstream office-hours session (six forcing questions / builder mode),
-  detects native vs web intent from the resulting design doc, asks the
-  platform question (iOS / macOS / both) if native, writes .gstack/track,
-  renders DESIGN.html via htmlify and OPENS it in Safari BEFORE the
-  approval gate, then asks "Approve / Revise / Restart" — fixing the
-  upstream "approve-then-read" UX bug. On approval for native projects,
-  suggests /superpowers-gstack:swiftui-design-consultation as next step.
-  Replaces standalone swiftui-track skill (removed in v2.3.0).
-  Use when starting a new product idea, brainstorming, or whenever
-  upstream /office-hours would have fired. Set up via CLAUDE.md routing
-  to intercept bare /office-hours invocations.
+  Track-aware wrapper for gstack /office-hours: runs the session, detects native
+  vs web, renders + opens DESIGN.html before the approval gate. Use when starting
+  a new product idea or brainstorming.
 allowed-tools:
   - Bash
   - Read

@@ -1,6 +1,9 @@
 ---
 name: third-lens-review
-description: Use after Claude self-pitfall + Codex have reviewed a SHIP-WORTHY / architecture / real-time / security / contract change — runs a third (and optionally fourth) external model lens (OpenRouter for distant houses, the codex CLI for OpenAI) on the PATCHED artifact, then an adversarial synthesis. The third lens is a different model house (different training distribution → different blind spots) that finds what the first two took for granted. Not for trivial or standard changes.
+description: |
+  After Claude self-pitfall + Codex on a ship-worthy/architecture/RT/security/contract
+  change: run a third external model house (distant training distribution →
+  different blind spots) on the patched artifact, then adversarial synthesis.
 ---
 
 # Third-lens review

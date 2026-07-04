@@ -1,6 +1,9 @@
 ---
 name: quality-review
-description: Use after completing any PRD, spec, or implementation plan — before implementation begins. Hunts perceived-quality pitfalls (silent failures, missing loading states, empty states, error recovery, state drift, animations, AI output, sudo flows) that make a product feel cheap or broken even when it technically works. Complementary to pitfall-verification.
+description: |
+  After a PRD, spec, or plan, before implementation: hunt perceived-quality
+  pitfalls (silent failures, missing loading/empty states, error recovery, state
+  drift) that make a product feel cheap. Complements pitfall-verification.
 ---
 
 # Quality review

@@ -34,7 +34,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SKILLS = REPO / "skills"
-DESCRIPTION_WARN_WORDS = 60
+DESCRIPTION_WARN_WORDS = 30
 BODY_WARN_LINES = 500
 
 # Patterns that must never reappear in instruction files (skills/, CLAUDE.md,
@@ -65,7 +65,11 @@ def frontmatter(text: str) -> dict | None:
         km = re.match(r"^([A-Za-z_-]+):\s*(.*)$", line)
         if km:
             key = km.group(1)
-            fm[key] = km.group(2).strip()
+            val = km.group(2).strip()
+            # A bare block-scalar indicator (|, >, with optional chomping) is not
+            # content — the value is on the following indented lines. Counting the
+            # `|` as a word would over-count every block-scalar description by one.
+            fm[key] = "" if val in ("|", ">", "|-", "|+", ">-", ">+") else val
         elif key and (line.startswith("  ") or line.startswith("\t")):
             fm[key] = (fm[key] + " " + line.strip()).strip()
     return fm

@@ -1,20 +1,9 @@
 ---
 name: swiftui-design-consultation
 description: |
-  Apple-canon design system consultation for SwiftUI projects. Produces
-  DESIGN.md (human source of truth) + a Swift Package starter
-  (DesignSystem.swift + Package.swift + Tests) wired with semantic
-  colors, SF Pro typography, Liquid Glass material discipline, named
-  motion presets, and accessibility baseline. Orchestrates the
-  swiftui-rag MCP surface for canonical patterns and HIG citations,
-  uses /htmlify for Phase 3 proposal preview, chains into the
-  track-appropriate native review (macos-native-review /
-  ios-native-review) for HIG conformance gating.
-  Use when starting a new SwiftUI project, when an existing SwiftUI
-  project lacks a coherent design system, or when refreshing one.
-  Phase 0 inlines the platform-question if .gstack/track is missing
-  (since v2.3.0 — previously delegated to standalone swiftui-track
-  skill, which was removed).
+  Apple-canon design system for SwiftUI projects: produces DESIGN.md + a Swift
+  Package starter (semantic colors, SF Pro, Liquid Glass, motion, accessibility).
+  Use when starting or refreshing a SwiftUI design system.
 allowed-tools:
   - Bash
   - Read

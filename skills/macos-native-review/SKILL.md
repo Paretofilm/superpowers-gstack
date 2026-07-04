@@ -1,6 +1,9 @@
 ---
 name: macos-native-review
-description: Use after a PRD, spec, or implementation plan for a macOS app or feature — before implementation begins. Validates the artifact against Apple Human Interface Guidelines via WebFetch citations: vocabulary, control choices, keyboard shortcuts, semantic colors, sheets/popovers/alerts, animations, privileged operations, accessibility, menu bar, app lifecycle, dock behavior, App menu. Complementary to pitfall-verification ("will this work?") and quality-review ("will this feel good?") — this asks "is this Apple-native?".
+description: |
+  After a PRD/spec/plan for a macOS app, before implementation: validate the
+  artifact against Apple HIG via WebFetch citations. Asks "is this Apple-native?"
+  — complements pitfall-verification and quality-review.
 ---
 
 # macOS native review

@@ -1,6 +1,9 @@
 ---
 name: ios-native-review
-description: Use after a PRD, spec, or implementation plan for an iOS app or feature — before implementation begins. Validates the artifact against Apple Human Interface Guidelines (iOS) via WebFetch citations: vocabulary, controls/touch targets, navigation paradigm, modal presentation, gestures, system surfaces, keyboard handling, haptics, semantic colors, animation timing, privileged operations, accessibility, app lifecycle. Complementary to pitfall-verification ("will this work?") and quality-review ("will this feel good?") — this asks "is this iOS-native?".
+description: |
+  After a PRD/spec/plan for an iOS app, before implementation: validate the
+  artifact against Apple HIG (iOS) via WebFetch citations. Asks "is this
+  iOS-native?" — complements pitfall-verification and quality-review.
 ---
 
 # iOS native review
