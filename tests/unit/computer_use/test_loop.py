@@ -307,3 +307,43 @@ def test_malformed_action_coord_is_failed_not_crash():
         f"bad-coord step should be 'failed', got {out['journal'][0]['result']!r}")
     # Run must complete normally (not raise)
     assert out["status"] in ("completed", "step_limit", "error")
+
+
+# --- scroll-ruting (macOS live-swiftui vs iOS/idb-fallback) -------------------
+
+class ScrollExec:
+    """Executor MED en scroll()-metode (som LiveSwiftUIExecutor på macOS)."""
+    def __init__(self):
+        self.scrolls = []
+        self.swipes = []
+    def screenshot(self): return b"PNG"
+    def coordinate_space(self): return (402.0, 874.0)
+    def tap(self, p): pass
+    def swipe(self, start, end): self.swipes.append((start, end))
+    def scroll(self, p, dx, dy): self.scrolls.append((p, dx, dy))
+    def type_text(self, t): pass
+
+
+def test_scroll_routes_to_executor_scroll_when_available():
+    # macOS: har executor.scroll → loopen skal kalle den (ikke utlede en swipe).
+    ex = ScrollExec()
+    cl = _oneshot_client({"name": "scroll", "arguments": {"x": 500, "y": 500, "direction": "down"}})
+    out = loop.run("x", ex, cl, max_steps=3, safe_area=_safe())
+    assert ex.scrolls, "scroll skulle rutet til executor.scroll()"
+    assert not ex.swipes, "scroll skal IKKE bli en swipe når executor.scroll finnes"
+    p, dx, dy = ex.scrolls[0]
+    assert dy < 0, "'down' avdekker lavere innhold → negativ deltaY (scroll-wheel)"
+    assert out["journal"][0]["result"] == "success"
+
+
+def test_scroll_falls_back_to_swipe_without_executor_scroll():
+    # iOS/idb: FakeExec har INGEN scroll → loopen skal falle tilbake til finger-drag-swipe,
+    # byte-for-byte som før (regresjonsvakt for at macOS-endringen ikke rørte iOS).
+    ex = FakeExec()
+    assert not hasattr(ex, "scroll")
+    cl = _oneshot_client({"name": "scroll", "arguments": {"x": 500, "y": 500, "direction": "down"}})
+    out = loop.run("x", ex, cl, max_steps=3, safe_area=_safe())
+    assert ex.swipes, "uten executor.scroll skal scroll bli en swipe (iOS-fallback)"
+    start, end = ex.swipes[0]
+    assert end.y < start.y, "'down' → finger swiper opp → end_y < start_y"
+    assert out["journal"][0]["result"] == "success"

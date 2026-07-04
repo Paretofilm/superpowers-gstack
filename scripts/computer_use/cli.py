@@ -48,15 +48,45 @@ def journal_to_action_log(journal):
 
 
 def parse_args(argv):
-    p = argparse.ArgumentParser(prog="ios-visual-explore")
-    p.add_argument("--udid", required=True)
-    p.add_argument("--bundle", required=True)
+    p = argparse.ArgumentParser(prog="visual-explore")
+    p.add_argument("--platform", choices=["ios", "macos"], default="ios",
+                   help="ios (idb-simulator, default) or macos (live-swiftui #Preview executor)")
+    # iOS-args (kreves for --platform ios):
+    p.add_argument("--udid", default=None)
+    p.add_argument("--bundle", default=None)
+    p.add_argument("--orientation", choices=["portrait", "landscape"], default="portrait")
+    # macOS-args (kreves for --platform macos): driver live-swiftui-MCP mot et SwiftPM-#Preview.
+    p.add_argument("--package", default=None, help="[macos] sti til SwiftPM-pakka med #Preview")
+    p.add_argument("--preview", default=None, help="[macos] preview-id (default: første)")
+    p.add_argument("--binary", default=None, help="[macos] sti til LiveSwiftUI-binæren (--mcp-stdio)")
     p.add_argument("mission")
     p.add_argument("--max-steps", type=int, default=25, dest="max_steps")
     p.add_argument("--out", default=None, help="output directory (default: computer-use-runs/run-<ts>)")
     p.add_argument("--dry-run", action="store_true", dest="dry_run")
-    p.add_argument("--orientation", choices=["portrait", "landscape"], default="portrait")
-    return p.parse_args(argv)
+    args = p.parse_args(argv)
+    # Plattform-avhengig arg-validering (erstatter required=True som var iOS-only).
+    if args.platform == "ios":
+        missing = [f for f, v in (("--udid", args.udid), ("--bundle", args.bundle)) if not v]
+        if missing:
+            p.error(f"--platform ios krever {', '.join(missing)}")
+    else:
+        missing = [f for f, v in (("--package", args.package), ("--binary", args.binary)) if not v]
+        if missing:
+            p.error(f"--platform macos krever {', '.join(missing)}")
+    return args
+
+
+def _build_macos(args):
+    """macOS-oppsett: live-swiftui-executor + env + full-view safe-area (ingen system-chrome).
+    Speiler iOS-preflight sin (executor, env, safe_area)-kontrakt uten idb/simulator-antakelser."""
+    executor_ls, coords = _load("executor_liveswiftui"), _load("coords")
+    executor = executor_ls.LiveSwiftUIExecutor(args.binary, args.package, args.preview)
+    point_w, point_h = executor.coordinate_space()
+    safe = coords.SafeArea(0.0, 0.0, point_w, point_h)  # hele viewet ER innholdet (§3.3)
+    env = {"platform": "macos", "package": args.package, "preview": args.preview or "(first)",
+           "binary": args.binary, "orientation": "n/a", "device_class": "macos",
+           "safe_area": safe, "safe_area_source": "full-view (no system chrome)"}
+    return executor, env, safe
 
 
 def main(argv=None):
@@ -67,8 +97,11 @@ def main(argv=None):
 
     if args.dry_run:
         # single-turn planning probe (no actions executed)
-        env = preflight.preflight(args.udid, args.bundle, args.orientation)
-        executor = executor_idb.IdbExecutor(args.udid, orientation=args.orientation)
+        if args.platform == "macos":
+            executor, _env, _safe = _build_macos(args)
+        else:
+            preflight.preflight(args.udid, args.bundle, args.orientation)
+            executor = executor_idb.IdbExecutor(args.udid, orientation=args.orientation)
         client = gemini.ComputerUseClient()
         turn = client.start(args.mission, executor.screenshot())
         print(json.dumps({"dry_run": True, "planned": turn.action, "done": turn.done},
@@ -76,9 +109,14 @@ def main(argv=None):
         return
 
     # F1: default env and result before setup so report can always be written
-    env = {"platform": "ios", "udid": args.udid, "bundle_id": args.bundle,
-           "orientation": args.orientation, "device_class": "unknown", "safe_area_source": "n/a"}
+    if args.platform == "macos":
+        env = {"platform": "macos", "package": args.package, "preview": args.preview or "(first)",
+               "orientation": "n/a", "device_class": "macos", "safe_area_source": "full-view"}
+    else:
+        env = {"platform": "ios", "udid": args.udid, "bundle_id": args.bundle,
+               "orientation": args.orientation, "device_class": "unknown", "safe_area_source": "n/a"}
     result = {"journal": [], "status": "error", "baseline_screenshot": None}
+    executor = None
 
     # F10: nanosecond timestamp avoids same-second run-dir collisions
     out = pathlib.Path(args.out or f"computer-use-runs/run-{time.time_ns()}")
@@ -88,16 +126,28 @@ def main(argv=None):
 
     # F1: wrap setup AND loop.run in one guard so any failure still produces a report
     try:
-        env = preflight.preflight(args.udid, args.bundle, args.orientation)
-        executor = executor_idb.IdbExecutor(args.udid, orientation=args.orientation)
-        safe = env["safe_area"]
+        if args.platform == "macos":
+            executor, env, safe = _build_macos(args)
+            foreground_check = None   # macOS-worker eier eget vindu; ingen app-foreground-begrep
+        else:
+            env = preflight.preflight(args.udid, args.bundle, args.orientation)
+            executor = executor_idb.IdbExecutor(args.udid, orientation=args.orientation)
+            safe = env["safe_area"]
+            foreground_check = lambda: preflight.is_app_foreground(
+                args.udid, env["baseline_app_label"], env["baseline_full_width"])
         client = gemini.ComputerUseClient()
         result = loop.run(args.mission, executor, client, max_steps=args.max_steps,
                           safe_area=safe, screenshot_dir=str(shots),
-                          foreground_check=lambda: preflight.is_app_foreground(
-                              args.udid, env["baseline_app_label"], env["baseline_full_width"]))
+                          foreground_check=foreground_check)
     except Exception as exc:
         print(f"setup/loop failed: {exc}", file=sys.stderr)
+    finally:
+        # macOS-executoren eier en subprocess (live-swiftui-server) — lukk den rent.
+        if executor is not None and hasattr(executor, "close"):
+            try:
+                executor.close()
+            except Exception:
+                pass
 
     # Always build and write the report, even on abnormal failure
     try:

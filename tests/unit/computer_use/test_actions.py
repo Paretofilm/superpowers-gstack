@@ -20,24 +20,32 @@ def test_drag_and_drop_maps_to_swipe_two_points():
     assert a.params["end_x"] == 500 and a.params["end_y"] == 200
 
 
-def test_scroll_derives_swipe_endpoints():
-    # 'scroll down' => innhold nedover => finger opp => end_y < start_y
+def test_scroll_is_first_class_action():
+    # scroll er nå en egen 'scroll'-action (loopen ruter til executor.scroll() på macOS, ELLER
+    # faller tilbake til finger-drag-swipe via swipe_from_scroll() på iOS — se test under).
     a = actions.adapt({"name": "scroll",
                        "arguments": {"x": 500, "y": 500, "direction": "down"}})
-    assert a.kind == "swipe"
-    assert a.params["end_y"] < a.params["start_y"]
-    # klampet til [0,1000]
-    assert 0 <= a.params["end_y"] <= 1000 and 0 <= a.params["start_y"] <= 1000
+    assert a.kind == "scroll"
+    assert a.params == {"x": 500, "y": 500, "direction": "down"}
 
 
 def test_scroll_direction_is_case_insensitive():
     # LLMs frequently capitalize ('Down'/'DOWN'); a case-sensitive lookup would give a
-    # zero-length no-op swipe that reports success and can loop. Normalize the direction.
+    # zero-length no-op that reports success and can loop. Normalize the direction.
     for d in ("Down", "DOWN", " down "):
         a = actions.adapt({"name": "scroll", "arguments": {"x": 500, "y": 500, "direction": d}})
-        assert a.params["end_y"] < a.params["start_y"], f"direction {d!r} should scroll down"
-    a = actions.adapt({"name": "scroll", "arguments": {"x": 500, "y": 500, "direction": "Right"}})
-    assert a.params["end_x"] < a.params["start_x"], "Right should produce a non-zero horizontal swipe"
+        assert a.params["direction"] == "down", f"direction {d!r} should normalize to 'down'"
+
+
+def test_swipe_from_scroll_ios_fallback_parity():
+    # iOS/idb-fallback: swipe_from_scroll() må reprodusere den gamle scroll→swipe-atferden
+    # byte-for-byte (loopen bruker denne når executoren IKKE har en scroll()-metode).
+    # 'scroll down' => innhold nedover => finger opp => end_y < start_y.
+    sp = actions.swipe_from_scroll(500, 500, "down")
+    assert sp["end_y"] < sp["start_y"]
+    assert 0 <= sp["end_y"] <= 1000 and 0 <= sp["start_y"] <= 1000
+    right = actions.swipe_from_scroll(500, 500, "right")
+    assert right["end_x"] < right["start_x"], "Right should produce a non-zero horizontal swipe"
 
 
 def test_type_passthrough():

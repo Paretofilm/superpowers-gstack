@@ -83,6 +83,31 @@ def run(mission, executor, client, *, max_steps=25, safe_area, settle=0.5,
                     kind, reason = "rejected", "outside safe area"
                 else:
                     entry["state"] = "validated"; executor.swipe(start, end); entry["state"] = "executed"
+            elif ea.kind == "scroll":
+                x, y, d = ea.params["x"], ea.params["y"], ea.params["direction"]
+                if hasattr(executor, "scroll"):
+                    # macOS/live-swiftui: ekte scroll-wheel-primitiv (drag scroller ikke en ScrollView).
+                    p = coords.denormalize(x, y, point_w, point_h)
+                    if not coords.in_safe_area(p, safe_area):
+                        kind, reason = "rejected", "outside safe area"
+                    else:
+                        # scroll-wheel-delta i points; 'down' avdekker lavere innhold (negativ deltaY).
+                        # Romslig magnitude: synteske scrollWheel-events er magnitude-følsomme
+                        # (live-swiftui kontrakt §7.2 — små deltas svelges).
+                        mag_y = max(point_h * 0.8, 500.0)
+                        mag_x = max(point_w * 0.8, 500.0)
+                        dy = {"down": -mag_y, "up": mag_y}.get(d, 0.0)
+                        dx = {"left": mag_x, "right": -mag_x}.get(d, 0.0)
+                        entry["state"] = "validated"; executor.scroll(p, dx, dy); entry["state"] = "executed"
+                else:
+                    # iOS/idb-fallback: reproduser finger-drag-swipe byte-for-byte som før.
+                    sp = actions.swipe_from_scroll(x, y, d)
+                    start = coords.denormalize(sp["start_x"], sp["start_y"], point_w, point_h)
+                    end = coords.denormalize(sp["end_x"], sp["end_y"], point_w, point_h)
+                    if not (coords.in_safe_area(start, safe_area) and coords.in_safe_area(end, safe_area)):
+                        kind, reason = "rejected", "outside safe area"
+                    else:
+                        entry["state"] = "validated"; executor.swipe(start, end); entry["state"] = "executed"
             elif ea.kind == "long_press":
                 p = coords.denormalize(ea.params["x"], ea.params["y"], point_w, point_h)
                 if not coords.in_safe_area(p, safe_area):
