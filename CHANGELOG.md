@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.30.0] - 2026-07-04
+
+### Changed
+
+- **`sonnet` tier now routes to `claude-sonnet-5`** (was `claude-sonnet-4-6`).
+  Sonnet 5 shipped 2026-06-30 as a drop-in replacement for 4.6 — near-Opus
+  intelligence (63.2% SWE-bench Pro) at Sonnet cost, 1M context, xhigh effort.
+  Updated in `model-routing.md` and the emitted `## Model Routing` block in both
+  generators (E8 confirms the two stay byte-identical). Opus (`claude-opus-4-8`)
+  and Haiku (`claude-haiku-4-5`) are unchanged — still the current tier heads.
+- Added a note to the routing rationale: with Sonnet 5 near-Opus at Sonnet cost,
+  the sonnet→opus split is now about **blast-radius and verification cost**, not a
+  raw capability gap — but `opus` stays the floor for high-blast-radius work
+  (the domain-sensitivity modifier is unchanged).
+
+### Note
+
+- The weekly update pipeline checks GStack / Superpowers / Claude Code versions,
+  **not** the Anthropic model list — so model-ID currency in `model-routing.md` is
+  a manual step. A pipeline model-availability check (flag-for-review, never
+  auto-merge) is a Phase-4 candidate.
+
 ## [2.29.0] - 2026-07-04
 
 ### Added
