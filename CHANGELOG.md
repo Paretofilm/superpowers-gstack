@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.27.0] - 2026-07-04
+
+### Changed
+
+- **Model routing v0.2 — two-axis, Claude-only** (`skills/setup-routing/model-routing.md`
+  + both generators). Replaces v0.1's one-dimensional per-skill routing. Two axes now
+  compose: a skill's **base tier** × this project's **domain-sensitivity** modifier
+  (how silently a subtle bug compounds). On correctness-sensitive work the modifier
+  wins — a "cheap coding" phase in a high-blast-radius domain is a false economy; the
+  cheap correctness lever is multi-lens verification, not a pricier coder.
+- **Local models (Pi/MLX) are no longer routable.** Removed the harness picker (Q10),
+  the Pi/MLX model table, `models.json` runtime detection, the `start-mlx-server.sh`
+  reference, and both Pi columns from every routing table. `setup-routing` and `adapt`
+  no longer ask which harness a project runs under. Routing targets Claude tiers only.
+- **Fable 5 tier added** (`fable` = `claude-fable-5`) with an explicit gate: use only
+  when the technique is *novel* AND *long-horizon/autonomous* AND *not cleanly
+  chunkable* AND *not* in the sec/bio/chem safety-fallback set (Fable falls back to
+  Opus there — never pay the ~2× premium for an identical result). Do not reach for
+  `fable` on planning, coding against a pinned spec, or verification.
+- **Model IDs refreshed:** `opus` = `claude-opus-4-8`, `sonnet` = `claude-sonnet-4-6`,
+  `haiku` = `claude-haiku-4-5` (was `opus-4-7`/etc.).
+- The emitted `## Model Routing` block is now byte-identical between `setup-routing`
+  and `adapt` (verified in lint + a byte-diff checkpoint), with a
+  `{{DOMAIN_SENSITIVITY}}` placeholder substituted per project at generation time.
+
 ## [2.26.0] - 2026-07-04
 
 ### Added

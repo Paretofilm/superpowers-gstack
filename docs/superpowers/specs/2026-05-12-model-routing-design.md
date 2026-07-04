@@ -1,5 +1,11 @@
 # Per-skill model routing — design rationale (v0.1 / plugin v1.11.0)
 
+> **⚠️ SUPERSEDED (2.27.0).** This documents the v0.1 one-dimensional, local-model-inclusive
+> routing. It is a historical record only. Routing v0.2 (see
+> `2026-07-04-model-routing-domain-axis-design.md`) replaced it: two-axis (base tier ×
+> domain sensitivity), Claude-only. **Local-model (Pi/MLX) routing was removed** — do not
+> reintroduce the Pi columns, `models.json` detection, or MLX server references described below.
+
 **Status:** Shipped as v1.11.0 advisory routing. Empirically untested across the exact skill × model matrix. Future iterations may add empirical validation, hook enforcement, and online/offline auto-detection.
 
 **Audience:** Maintainers extending the routing logic. Marketplace users wanting to understand or disable the feature. Future-me debugging why a routing decision was made.
