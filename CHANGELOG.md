@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.29.0] - 2026-07-04
+
+### Added
+
+- **Lint E8 — emitted-block drift guard.** `scripts/lint-skills.py` now fails CI
+  if the `## Model Routing` block that both generators (`setup-routing`, `adapt`)
+  write into a project's CLAUDE.md is not byte-identical between them. This is the
+  exact drift class the 2.27.0 pre-merge review caught by hand — one generator
+  H2-promoted and misplaced the block while the other did not, so a freshly
+  generated project and a re-adapted one would get different routing. Verified
+  with a negative test (inject a one-word diff → E8 fires; restore → green).
+- Scoped down from the planned full `blocks/*.md` single-sourcing: the drift half
+  (the sharp pain — it caused a real bug) is now a cheap CI check; the duplication
+  half (runtime token dedup at project-setup time — rare) is deferred. When
+  single-sourcing lands, E8 becomes redundant (one source can't drift) and can go.
+
 ## [2.28.0] - 2026-07-04
 
 ### Changed

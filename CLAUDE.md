@@ -121,7 +121,7 @@ Key routing rules:
 
 Before merging/pushing any plugin change (skills/, scripts/, CLAUDE.md, workflows):
 
-1. `python3 scripts/lint-skills.py` must be GREEN — it enforces frontmatter validity, cross-reference resolution, routing coverage, CHANGELOG↔plugin.json version match, multi-lens marker consistency, and the stale-pattern denylist. CI runs the same lint on every push/PR (`.github/workflows/lint.yml`).
+1. `python3 scripts/lint-skills.py` must be GREEN — it enforces frontmatter validity, cross-reference resolution, routing coverage, CHANGELOG↔plugin.json version match, multi-lens marker consistency, the stale-pattern denylist, a ≤30-word description budget, and byte-identity of the emitted `## Model Routing` block across the two generators (E8, so setup-routing and adapt can't silently write different routing). CI runs the same lint on every push/PR (`.github/workflows/lint.yml`).
 2. Ship-worthy change ⇒ bump `.claude-plugin/plugin.json` (or the marketplace cache never updates) **and** add the `## [X.Y.Z]` CHANGELOG entry (the lint refuses a version without one).
 3. New/removed/renamed skill ⇒ update README's skill list and the routing section above (the lint refuses unrouted skills).
 4. When purging a stale pattern, add it to `DENYLIST` in `scripts/lint-skills.py` so it stays purged.
