@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.31.0] - 2026-07-04
+
+### Added
+
+- **Weekly model-availability check** (`scripts/check-new-models.py` + a new
+  `check-models` job in `check-updates.yml`). Queries the Anthropic `/v1/models`
+  API and compares it, per tier, against the model IDs `model-routing.md`
+  references; opens a `model-review` GitHub issue when a newer model ships. Closes
+  the gap that left Sonnet 5 unwired for days after 2026-06-30 — the pipeline had
+  no eyes on the model list, only on GStack / Superpowers / Claude Code versions.
+- **Flag-for-review, never auto-merge.** The job is independent of the auto-update
+  PR flow: it never edits a model ID and never feeds the Claude-API auto-edit job.
+  Model IDs are pinned snapshots with behaviour differences, so adopting one is a
+  human call — a human wires it in (updating both generators, E8-guarded, per the
+  release gate). Detection is stateless (version-tuple compare; preview / dated /
+  unparseable IDs skipped) and idempotent (won't re-open an issue already covering
+  the model). The detection logic self-tests in CI before each live query.
+
 ## [2.30.0] - 2026-07-04
 
 ### Changed

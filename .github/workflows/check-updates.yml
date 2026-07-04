@@ -5,6 +5,13 @@ on:
     - cron: '23 7 * * 1'  # Mondays at 07:23 UTC
   workflow_dispatch: {}
 
+# Serialize runs so an overlapping schedule + manual dispatch can't both evaluate
+# check-models' idempotency guard and open duplicate model-review issues. Queue,
+# don't cancel — never kill an in-flight auto-update mid-PR.
+concurrency:
+  group: check-updates
+  cancel-in-progress: false
+
 permissions:
   contents: write
   pull-requests: write
@@ -203,6 +210,30 @@ jobs:
           name: upstream-context
           path: /tmp/upstream-context.tar.gz
           retention-days: 1
+
+  # Model-availability check. Runs INDEPENDENTLY of the auto-update flow above:
+  # it never edits model-routing.md and never feeds the Claude-API auto-edit job —
+  # it only opens a `model-review` issue when Anthropic ships a model newer than the
+  # router points to. A human wires the ID in by hand (model IDs are pinned snapshots
+  # with behaviour differences; auto-merging a "drop-in replacement" is the wrong
+  # default). Closes the gap that left Sonnet 5 unwired for days after 2026-06-30.
+  check-models:
+    runs-on: ubuntu-latest
+    # continue-on-error: a failure here (missing key, API/schema drift, gh error)
+    # must NOT fail the workflow run — self-repair.yml triggers on this workflow's
+    # `conclusion == failure` and would open an auto-edit PR, reconnecting this
+    # deliberately-review-only job to the auto-merge path. The failed job still
+    # shows red in the Actions UI (+ ::error:: annotations) for visibility.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Self-test detection logic
+        run: python3 scripts/check-new-models.py --self-test
+      - name: Flag newer Claude models
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/check-new-models.py
 
   update-manual:
     needs: check
