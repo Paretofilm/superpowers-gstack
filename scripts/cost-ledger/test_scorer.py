@@ -325,6 +325,25 @@ def property_sweep(iterations=300):
           "guardrail sweep produced zero skip proposals — vacuous test")
 
 
+def test_tied_ts_determinism():
+    # codex P2: two records for one triple share a ts on the recent-window
+    # boundary, one a survivor. Under an input-index tiebreak, reversing history
+    # moves the survivor across the window edge and flips skip eligibility. The
+    # content-derived sort key must make the outcome order-independent.
+    base = clean_run(9, start=0)               # 9 clean, ts .0..8
+    a = rec(9, survived=1, sev="P2")           # survivor at ts=9 (review-000009)
+    b = rec(9, survived=0)                      # clean, same ts, distinct review_id
+    b["review_id"] = "review-zzzzzz"           # sorts after a by review_id
+    tail = clean_run(9, start=10)              # 9 clean, ts 10..18 -> 20 real total
+    history = base + [a, b] + tail
+    fwd = propose(history, [])
+    rev = propose(list(reversed(history)), [])
+    check(fwd == rev,
+          "tied-ts survivor on the window boundary: proposals must be order-independent")
+    check(len(skips(fwd)) == 1,
+          "content tiebreak puts the tied survivor outside the recent window -> skip stands")
+
+
 def main():
     test_cold_start()
     test_clear_skip_and_evidence()
@@ -335,6 +354,7 @@ def main():
     test_evidence_decay()
     test_floor_lens_never_proposed()
     test_determinism()
+    test_tied_ts_determinism()
     property_sweep()
     print("PASS (%d assertions)" % ASSERTIONS)
 
