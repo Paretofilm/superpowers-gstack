@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.33.0] - 2026-07-05
+
+Fixes for the four findings of the 2026-07-05 external audit (Codex).
+
+### Changed
+
+- **Emitted CLAUDE.md blocks are single-sourced** in
+  `skills/setup-routing/blocks/` — the seven marker-managed sections
+  (autonomy, git-hygiene, multi-lens-review, code-reuse, track-routing,
+  xcode-tools, companion-skills) plus the Model Routing section. Both
+  generators (`setup-routing`, `adapt`) now read the block files instead of
+  carrying hand-maintained inline copies (~330 duplicated lines removed;
+  SKILL.md bodies 739→361 and 794→395 lines). Lint E8 rewritten from
+  byte-identity drift guard to single-source guards (block files exist,
+  marker on the H2 heading, referenced by both generators, no inline copies).
+- **Hardcoded Apple Team ID removed** (`WXNUGGYB2B` — one team's ID was wrong
+  as a marketplace default and broke signing for every external user). The
+  xcode-tools block now uses a `{{DEVELOPMENT_TEAM}}` placeholder; resolution
+  procedure (existing project setting → `security find-identity` → ask the
+  user) lives in `blocks/PLACEHOLDERS.md`. Marker bumped v3→v4 so `/adapt`
+  upgrades downstream projects. The ID is denylisted (E7) so it can't return.
+- **CI now runs the test suites** — `lint.yml` adds
+  `pytest tests/unit scripts/cost-ledger` (153 tests, stdlib-only) after the
+  lint; `tests/run.sh --unit` picks up the cost-ledger tests too. Previously
+  CI ran only the instruction-surface lint and every test was manual.
+
+### Fixed
+
+- **`/cost-ledger` slash-command references corrected** — the 2.32.0 notes and
+  `pitfall-verification` promised a `/cost-ledger` command that was never
+  shipped; both now point at the real surface,
+  `scripts/cost-ledger/cli.py status|reset|pause|explain`.
+- **Cost-ledger session notices are actually surfaced** — tune/monitor wrote
+  skip/auto-revert notices to `~/.claude/cost-ledger/session_notices.txt`, but
+  no hook read the file. The SessionStart hook (`check-plugin-version.sh`) now
+  prints and clears pending notices before its early exits.
+
 ## [2.32.0] - 2026-07-05
 
 ### Added
