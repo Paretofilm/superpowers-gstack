@@ -122,7 +122,7 @@ In practice most substantive work is at least ship-worthy, so Codex runs by defa
 
 ## Cost-ledger — adaptive lens routing (when enabled)
 
-The plugin ships an optional adaptive lens-router (`scripts/cost-ledger/`) that learns, per (domain, tier), which external lenses have stopped producing findings that survive synthesis, and safely skips them to save cost. It is **safe by construction**: it skips nothing until a domain has ≥10 clean reviews (cold-start), never touches the `self-pitfall` floor or high-blast domains (RT-audio / DSP / concurrency / migration / auth / security), and auto-reverts + quarantines any skip a shadow run shows was premature. Disable anytime with `/cost-ledger pause`.
+The plugin ships an optional adaptive lens-router (`scripts/cost-ledger/`) that learns, per (domain, tier), which external lenses have stopped producing findings that survive synthesis, and safely skips them to save cost. It is **safe by construction**: it skips nothing until a domain has ≥10 clean reviews (cold-start), never touches the `self-pitfall` floor or high-blast domains (RT-audio / DSP / concurrency / migration / auth / security), and auto-reverts + quarantines any skip a shadow run shows was premature. Disable anytime by running `python3 "$LEDGER" pause` (the `LEDGER` path is defined below; `status`, `reset`, and `explain <domain>` work the same way — there is no `/cost-ledger` slash command).
 
 Wire it at three moments. `LEDGER=<this skill's base directory>/../../scripts/cost-ledger/cli.py`. **The ledger is advisory, never a blocker** — if any call errors or `cli.py` is absent, log it and proceed with the FULL lens set (it only ever *removes* work, so absence/failure fails safe toward more verification).
 

@@ -17,6 +17,8 @@ after calling ledger.append_record() for each lens that ran.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from ledger import (
     _ledger_dir,
     _now,
@@ -262,7 +264,7 @@ def _emit_session_notice(new_skip_triples: list[tuple], sha: str, ld) -> None:
             msg = (
                 f"[{now}] cost-ledger: downgraded {lens} for "
                 f"{domain}/{tier} ({evidence}); "
-                f"revert: /cost-ledger reset {domain}\n"
+                f"revert: python3 {Path(__file__).resolve().parent / 'cli.py'} reset {domain}\n"
             )
             fh.write(msg)
 
