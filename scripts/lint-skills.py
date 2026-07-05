@@ -54,9 +54,10 @@ DENYLIST = [
     (re.compile(r"start-mlx"), "MLX local-server routing removed in v0.2 (2.27.0)"),
     (re.compile(r"models\.json"), "Pi models.json runtime detection removed in v0.2 (2.27.0)"),
     (re.compile(r"WXNUGGYB2B"), "hardcoded Apple Team ID removed in 2.33.0 — use the {{DEVELOPMENT_TEAM}} placeholder"),
-    # Usage form only (with a subcommand) — prose explaining that no such slash
-    # command exists ("there is no `/cost-ledger` slash command") must pass.
-    (re.compile(r"(?<![\w.~])/cost-ledger\s+(pause|status|reset|explain|gate|record|tune)"),
+    # Matches the usage form (with or without a subcommand). The lookahead
+    # exempts prose that says the command does NOT exist ("there is no
+    # `/cost-ledger` slash command").
+    (re.compile(r"(?<![\w.~])/cost-ledger\b(?!`? slash command)"),
      "no /cost-ledger slash command exists — use python3 scripts/cost-ledger/cli.py <subcommand> (2.34.1)"),
 ]
 

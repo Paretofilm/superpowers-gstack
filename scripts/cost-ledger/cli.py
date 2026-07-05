@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import random
 import sys
+import shlex
 from pathlib import Path
 
 from ledger import (
@@ -186,7 +187,7 @@ def cmd_pause() -> int:
         atomic_write(state_path, state)
         if state["paused"]:
             print("Auto-tuning PAUSED. Ledger still measures; adjustments frozen.")
-            print(f"Run `python3 {Path(__file__).resolve()} pause` again to resume.")
+            print(f"Run `python3 {shlex.quote(str(Path(__file__).resolve()))} pause` again to resume.")
         else:
             print("Auto-tuning RESUMED.")
     return 0
