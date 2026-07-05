@@ -26,6 +26,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Lint skills + routing + release hygiene
         run: python3 scripts/lint-skills.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Install pytest
         run: python3 -m pip install --quiet pytest
       - name: Unit tests (tests/unit + cost-ledger)

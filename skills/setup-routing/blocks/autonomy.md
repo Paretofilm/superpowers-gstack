@@ -21,7 +21,7 @@ If the next step is clearly within scope, DO IT. Report after it's done.
 
 ### Forbidden phrases
 
-If one of these appears without a category-1-to-5 reason, you have failed the autonomy default: "Ping me when you want me to continue", "Let me know when you're ready for the next round", "Ready when you are", "Awaiting your go-ahead", "Si fra når jeg skal fortsette". About to write one? If there is no real category-1-to-5 reason, delete the sentence and do the next thing instead.
+If one of these appears without a category-1-to-5 reason, you have failed the autonomy default: "Ping me when you want me to continue", "Let me know when you're ready for the next round", "Ready when you are", "Awaiting your go-ahead", "Si fra når jeg skal fortsette", "Bash-prompten din er fortsatt aktiv — si bare 'fortsett'". About to write one? If there is no real category-1-to-5 reason, delete the sentence and do the next thing instead.
 
 ### Status updates DURING work, not AS wait-states
 
