@@ -230,7 +230,7 @@ def _apply_proposals(
 
     # Back-fill adjustment_commit with the real SHA (in-memory + atomic_write).
     # This write is NOT followed by another commit; the SHA is informational
-    # for the /cost-ledger explain command — it is NOT used for git-revert in
+    # for the `cli.py explain` subcommand — it is NOT used for git-revert in
     # apply_revert (which uses a forward commit for clean audit trail).
     for entry in new_override_list:
         if entry.get("adjustment_commit") == "":

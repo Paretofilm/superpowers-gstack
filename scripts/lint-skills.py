@@ -54,6 +54,10 @@ DENYLIST = [
     (re.compile(r"start-mlx"), "MLX local-server routing removed in v0.2 (2.27.0)"),
     (re.compile(r"models\.json"), "Pi models.json runtime detection removed in v0.2 (2.27.0)"),
     (re.compile(r"WXNUGGYB2B"), "hardcoded Apple Team ID removed in 2.33.0 — use the {{DEVELOPMENT_TEAM}} placeholder"),
+    # Usage form only (with a subcommand) — prose explaining that no such slash
+    # command exists ("there is no `/cost-ledger` slash command") must pass.
+    (re.compile(r"(?<![\w.~])/cost-ledger\s+(pause|status|reset|explain|gate|record|tune)"),
+     "no /cost-ledger slash command exists — use python3 scripts/cost-ledger/cli.py <subcommand> (2.34.1)"),
 ]
 
 # Shared emitted blocks (skills/setup-routing/blocks/): single source for the
@@ -186,6 +190,13 @@ def main() -> int:
     # ... and the shared emitted blocks — they ARE the generated-CLAUDE.md content.
     if (REPO / BLOCKS_DIR_REL).is_dir():
         targets += [(f, f.read_text()) for f in sorted((REPO / BLOCKS_DIR_REL).glob("*.md"))]
+    # ... and the scripts themselves — user-facing messages/docstrings drift the
+    # same way instruction files do (the 2.34.1 audit found `/cost-ledger pause`
+    # in cli.py output after the .md sweep missed it). lint-skills.py itself is
+    # exempt: it carries the patterns by definition.
+    targets += [(f, f.read_text()) for pat in ("*.py", "*.sh")
+                for f in sorted((REPO / "scripts").rglob(pat))
+                if f.name != "lint-skills.py" and "__pycache__" not in f.parts]
     for path, text in targets:
         for pattern, why in DENYLIST:
             for i, line in enumerate(text.splitlines(), 1):
