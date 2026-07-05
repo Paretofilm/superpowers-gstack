@@ -177,6 +177,11 @@ def _apply_proposals(
                 "evidence": prop["evidence"],
                 "adjustment_commit": "",  # back-filled below after commit
                 "generated_ts": now,
+                # The scorer only proposes a skip once the triple has cleared the
+                # cold-start sample, so a tune-written skip is cold-start-met by
+                # construction. gate honors ONLY overrides carrying this flag, so a
+                # hand-edited overrides.json (no flag) can't bypass cold-start (GLM P2).
+                "cold_start_met": True,
             })
             skips_per_dt[dt_key] = skips_per_dt.get(dt_key, 0) + 1
             new_skip_triples.append((domain, tier, lens, prop["evidence"]))

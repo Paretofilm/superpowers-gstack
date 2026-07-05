@@ -18,6 +18,7 @@ import fcntl
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -137,6 +138,7 @@ def read_history() -> list[dict]:
         except json.JSONDecodeError as exc:
             print(
                 f"::warning::ledger.jsonl line {i} skipped (bad JSON: {exc})",
+                file=sys.stderr,
                 flush=True,
             )
     return records
@@ -152,6 +154,7 @@ def read_quarantine() -> list[dict]:
     except json.JSONDecodeError as exc:
         print(
             f"::warning::quarantine.json corrupt ({exc}); treating as empty",
+            file=sys.stderr,
             flush=True,
         )
         return []
@@ -171,6 +174,7 @@ def read_overrides() -> dict:
     except json.JSONDecodeError as exc:
         print(
             f"::warning::overrides.json corrupt ({exc}); falling back to empty",
+            file=sys.stderr,
             flush=True,
         )
         return {"version": 1, "generated_ts": "", "overrides": []}
@@ -186,6 +190,7 @@ def read_state() -> dict:
     except json.JSONDecodeError as exc:
         print(
             f"::warning::state.json corrupt ({exc}); treating as default",
+            file=sys.stderr,
             flush=True,
         )
         return {"paused": False}
@@ -201,6 +206,7 @@ def read_baseline() -> dict:
     except json.JSONDecodeError as exc:
         print(
             f"::warning::baseline.json corrupt ({exc}); returning empty baseline",
+            file=sys.stderr,
             flush=True,
         )
         return {"version": 1, "generated_ts": "", "overrides": []}

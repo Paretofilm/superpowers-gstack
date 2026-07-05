@@ -16,6 +16,7 @@ possibly-stale state rather than blocking (spec §3).
 from __future__ import annotations
 
 import json
+import random
 import sys
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from ledger import (
     atomic_write,
     commit,
     ensure_repo,
+    append_record,
     read_history,
     read_quarantine,
     read_overrides,
@@ -34,6 +36,8 @@ from ledger import (
     git_log,
     LOCK_TIMEOUT_S,
 )
+from scorer import SHADOW_RATE, FLOOR_LENS, NO_SKIP_LEVELS, sensitivity_level
+from tune import run_tune_cycle
 
 _READ_TIMEOUT = 2.0  # seconds; read-only commands skip-on-timeout (stale-ok)
 
@@ -264,6 +268,84 @@ def cmd_explain(domain: str) -> int:
 # Entry point.
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Integration commands (§10) — invoked by pitfall-verification via subprocess.
+# The internal modules use flat imports (`from ledger import ...`), which resolve
+# because running `python3 scripts/cost-ledger/cli.py` puts the script dir on
+# sys.path[0]. (The dir name has a hyphen, so `import scripts.cost_ledger.*`
+# could never work — subprocess is the only viable integration path.)
+# ---------------------------------------------------------------------------
+
+def cmd_gate(domain: str, tier: str) -> int:
+    """§10 point 1: emit which external lenses to skip for (domain, tier), plus
+    which of those to run anyway this time as a non-gating SHADOW sample. Reads
+    overrides only (never blocks the hot dispatch path). Output is JSON on stdout."""
+    # Re-enforce the safety floors HERE, at the hot dispatch path, against whatever
+    # is persisted — activation makes existing/manual/stale overrides authoritative,
+    # so a stray skip must never be emitted even if it somehow reached overrides.json.
+    # The scorer/tune path already prevents generating these; this is defense-in-depth
+    # at the point of consumption.
+    empty = {"domain": domain, "tier": tier, "skip": [], "shadow": []}
+    # High-blast domains never skip anything (codex P1).
+    if sensitivity_level(domain) in NO_SKIP_LEVELS:
+        print(json.dumps(empty))
+        return 0
+    # Pause is the manual safety valve — when paused, emit no skips so a user who
+    # paused to force full verification actually gets it (GLM P1).
+    if read_state().get("paused"):
+        print(json.dumps(empty))
+        return 0
+    overrides = read_overrides()
+    skip = sorted(
+        o["lens"] for o in overrides.get("overrides", [])
+        if o.get("action") == "skip"
+        and o.get("domain") == domain and o.get("tier") == tier
+        and o.get("lens") != FLOOR_LENS         # never skip the floor lens (codex P1)
+        and o.get("cold_start_met")             # honor only tune-written, post-cold-start skips (GLM P2)
+    )
+    shadow = [lens for lens in skip if random.random() < SHADOW_RATE]
+    print(json.dumps({"domain": domain, "tier": tier, "skip": skip, "shadow": shadow}))
+    return 0
+
+
+_RECORD_REQUIRED_KEYS = {"lens", "domain", "tier"}
+
+
+def cmd_record(payload: str) -> int:
+    """§10 point 2: append one ledger record (JSON). Lock-free O_APPEND."""
+    try:
+        record = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        print(f"::error::cost-ledger record: invalid JSON ({exc})", file=sys.stderr)
+        return 1
+    # Structural guard (GLM P3): a record missing lens/domain/tier would poison the
+    # tune cycle (grouping by a None key). Reject at ingestion rather than append it.
+    if not isinstance(record, dict):
+        print("::error::cost-ledger record: expected a JSON object", file=sys.stderr)
+        return 1
+    missing = _RECORD_REQUIRED_KEYS - set(record)
+    if missing:
+        print(f"::error::cost-ledger record: missing keys {sorted(missing)}", file=sys.stderr)
+        return 1
+    append_record(record)
+    return 0
+
+
+def cmd_tune(payload: str) -> int:
+    """§10 point 3: run the tune + escape cycle over this review's records (JSON
+    array). Acquires the flock internally; a lock timeout is a clean skip."""
+    try:
+        review_records = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        print(f"::error::cost-ledger tune: invalid JSON ({exc})", file=sys.stderr)
+        return 1
+    if not isinstance(review_records, list):
+        print("::error::cost-ledger tune: expected a JSON array of records", file=sys.stderr)
+        return 1
+    run_tune_cycle(review_records)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
     if not args or args[0] == "status":
@@ -278,8 +360,29 @@ def main(argv: list[str] | None = None) -> int:
             print("usage: cli.py explain <domain>", file=sys.stderr)
             return 1
         return cmd_explain(args[1])
+    if args[0] == "gate":
+        if len(args) < 3:
+            print("usage: cli.py gate <domain> <tier>", file=sys.stderr)
+            return 1
+        return cmd_gate(args[1], args[2])
+    if args[0] == "record":
+        if len(args) < 2:
+            print("usage: cli.py record '<json>' | cli.py record -  (stdin)", file=sys.stderr)
+            return 1
+        # Read from stdin on `-` so a large payload can't be silently truncated at
+        # ARG_MAX (~256 KB on macOS) — a truncated JSON would fail to parse and the
+        # record/tune would be skipped exactly for the big, verbose reviews (GLM P2).
+        payload = sys.stdin.read() if args[1] == "-" else args[1]
+        return cmd_record(payload)
+    if args[0] == "tune":
+        if len(args) < 2:
+            print("usage: cli.py tune '<json-array>' | cli.py tune -  (stdin)", file=sys.stderr)
+            return 1
+        payload = sys.stdin.read() if args[1] == "-" else args[1]
+        return cmd_tune(payload)
     print(f"unknown command: {args[0]}", file=sys.stderr)
-    print("commands: status, reset [domain], pause, explain <domain>", file=sys.stderr)
+    print("commands: status, reset [domain], pause, explain <domain>, "
+          "gate <domain> <tier>, record '<json>', tune '<json-array>'", file=sys.stderr)
     return 1
 
 

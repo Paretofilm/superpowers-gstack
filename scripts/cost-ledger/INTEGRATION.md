@@ -1,7 +1,27 @@
 # Cost-ledger integration points for `pitfall-verification`
 
 Spec §10 defines three precise moments where `pitfall-verification` touches
-the cost-ledger.  This file names the exact functions to call at each moment.
+the cost-ledger.
+
+**Invoke via the CLI (subprocess), NOT Python imports.** The directory name
+`cost-ledger` contains a hyphen, so `import scripts.cost_ledger.*` can never
+resolve; and the internal modules use flat imports (`from ledger import ...`)
+that only work when the script dir is on `sys.path[0]` — which running
+`python3 scripts/cost-ledger/cli.py` does automatically. So the canonical
+integration is the three `cli.py` subcommands:
+
+| §10 point | CLI call |
+|-----------|----------|
+| 1 — tier-gate read (before dispatch) | `python3 cli.py gate <domain> <tier>` → `{"skip":[...],"shadow":[...]}` |
+| 2 — ledger write (after synthesis)   | `echo '<json record>' \| python3 cli.py record -` (once per lens that ran) |
+| 3 — tune + escape (after writes)      | `echo '<json array>' \| python3 cli.py tune -` |
+
+Pipe the record/tune JSON on **stdin** (the `-` arg), never as an argv string — a
+large `findings` payload could exceed ARG_MAX and be silently truncated.
+
+`pitfall-verification`'s SKILL.md wires exactly these three calls. The Python
+signatures below are the semantic contract behind each subcommand (for reference
+and unit testing); do not import them across the package boundary.
 
 ---
 
