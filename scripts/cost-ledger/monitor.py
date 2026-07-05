@@ -268,7 +268,7 @@ def _raise_alert(
     msg = (
         f"[{now}] cost-ledger-alert: REVERTED skip of {lens} for "
         f"{domain}/{tier} ({trigger_source} escape). {evidence}. "
-        f"Revert: python3 <plugin>/scripts/cost-ledger/cli.py reset {domain}\n"
+        f"Revert: python3 {Path(__file__).resolve().parent / 'cli.py'} reset {domain}\n"
     )
     with open(str(notices_path), "a", encoding="utf-8") as fh:
         fh.write(msg)

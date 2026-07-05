@@ -221,10 +221,21 @@ def main() -> int:
     if (blocks_dir / "model-routing-section.md").is_file():
         if "## Model Routing" not in (blocks_dir / "model-routing-section.md").read_text():
             errors.append("E8 blocks/model-routing-section.md lost its `## Model Routing` anchor")
+    # Inline copies are forbidden WITH or WITHOUT the marker — a markerless
+    # re-paste of a block heading would reopen the drift class E8 exists to
+    # prevent (Codex P2 on the 2.33.0 branch caught exactly this hole).
+    block_headings = set()
+    for fname in MARKER_BLOCKS + ["model-routing-section.md"]:
+        f = blocks_dir / fname
+        if f.is_file():
+            first = f.read_text().split("\n", 1)[0]
+            block_headings.add(re.sub(r"\s*<!-- gstack-[a-z-]+-v\d+ -->\s*$", "", first).lstrip("#").strip())
     for gen, text in gen_texts.items():
         for i, line in enumerate(text.splitlines(), 1):
             if line.startswith("#") and re.search(r"<!-- gstack-[a-z-]+-v\d+ -->", line):
                 errors.append(f"E8 {gen}/SKILL.md:{i}: inline emitted-block copy (marker heading) — blocks/ is the single source")
+            elif line.startswith("#") and line.lstrip("#").strip() in block_headings:
+                errors.append(f"E8 {gen}/SKILL.md:{i}: inline emitted-block copy (markerless heading '{line.lstrip('#').strip()}') — blocks/ is the single source")
         for ref in set(re.findall(r"blocks/([A-Za-z0-9_.-]+\.md)", text)):
             if not (blocks_dir / ref).is_file():
                 errors.append(f"E8 {gen}/SKILL.md references nonexistent blocks/{ref}")

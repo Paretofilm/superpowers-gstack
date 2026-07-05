@@ -238,7 +238,7 @@ Apply the changes identified in Step 4. Follow these rules strictly:
 
 1. **Heading present + marker matches `v2`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. **If the existing root is H3** (nested under `## Skill routing`, as setup-routing emits), you MUST demote every subsection in the replacement block one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4 below.
-3. **Heading present + marker absent** (legacy pre-v2.8.0) → REPLACE the same way; one-time silent upgrade adds the v1 marker.
+3. **Heading present + marker absent** (legacy pre-v2.8.0) → REPLACE the same way; one-time silent upgrade adds the current marker.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
 
 The block to insert: read `blocks/autonomy.md` (see **Shared block files** above) and insert its content verbatim.
@@ -247,7 +247,7 @@ The block to insert: read `blocks/autonomy.md` (see **Shared block files** above
 
 1. **Heading present + marker matches `v3`** → skip (idempotent).
 2. **Heading present + marker `v1` or `v2` (older emitters — universalist convention rule, autonomy cross-ref missing, stash advice without WIP-branch caveat) OR different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. (The Git hygiene block has H4 subsections; "next heading" alone would stop at the first one and leave old v1 prose behind.) **If the existing root is H3** (nested under `## Skill routing`, as setup-routing emits), you MUST demote every subsection in the replacement block one level so subsections do not sit at the same level as the root — same demote requirement as case 4 below.
-3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the v2 marker.
+3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
 
 The block to insert: read `blocks/git-hygiene.md` (see **Shared block files** above) and insert its content verbatim.
@@ -306,7 +306,7 @@ The block to insert: read `blocks/track-routing.md` (see **Shared block files** 
 
 1. **Heading present + marker matches `v4`** → skip (idempotent).
 2. **Heading present + marker `v1`, `v2`, or `v3`** (v1 assumed XcodeBuildMCP universally; v2 added CLI fallback but missed capabilities; v3 hardcoded one team's `DEVELOPMENT_TEAM` as default/signing/portal split) → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. (The Native Apple tools block has H4 subsections; "next heading" alone would stop at the first one and leave old prose behind.) **If the existing root is H3** (nested under `## Skill routing`, as setup-routing emits), you MUST demote every subsection in the replacement block one level so subsections do not sit at the same level as the root — same demote requirement as case 4 below. Auto-upgrade is what the marker pattern is for.
-3. **Heading present + marker absent** (pre-v2.7.0) → REPLACE the same way; one-time silent upgrade adds the v3 marker.
+3. **Heading present + marker absent** (pre-v2.7.0) → REPLACE the same way; one-time silent upgrade adds the current marker.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
 
 The block to insert: read `blocks/xcode-tools.md` (see **Shared block files** above) and insert its content verbatim.
@@ -315,7 +315,7 @@ The block to insert: read `blocks/xcode-tools.md` (see **Shared block files** ab
 
 1. **Heading present + marker matches `v1`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. **If the existing root is H3** (nested under `## Skill routing`, as setup-routing emits), you MUST demote every subsection in the replacement block one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4 below.
-3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the v1 marker.
+3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
 
 The block to insert: read `blocks/companion-skills.md` (see **Shared block files** above) and insert its content verbatim.
