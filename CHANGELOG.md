@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.32.0] - 2026-07-05
+
+### Added
+
+- **Adaptive lens-router (cost-ledger), activated.** A closed-loop controller that
+  learns, per (domain, tier), which external verification lenses (Codex / third
+  house) have stopped producing findings that survive adversarial synthesis, and
+  safely skips them to save cost. `pitfall-verification` now wires it at the three
+  §10 points (gate before dispatch, record after synthesis, tune after) via the
+  `scripts/cost-ledger/cli.py` subcommands. Safe by construction: skips nothing
+  until a domain has ≥10 clean reviews (cold-start), never skips the `self-pitfall`
+  floor or high-blast domains (RT-audio / DSP / concurrency / migration / auth /
+  security), runs shadow samples (1-in-8) of skipped lenses to measure their true
+  miss rate, and auto-reverts + quarantines any skip a shadow hit shows was
+  premature. User-global learning in `~/.claude/cost-ledger/` (a git repo — every
+  adjustment is an auditable commit); `/cost-ledger status|reset|pause|explain`.
+  The pure scorer + machinery went through self-pitfall + Codex + GLM (11 design
+  gaps + 7 code findings fixed before activation).
+- **Stable-signing default for new SwiftUI projects** (`setup-routing`, `adapt`).
+  Every new XcodeGen `project.yml` with a macOS target now mandates stable code
+  signing (`CODE_SIGN_STYLE: Manual` + `DEVELOPMENT_TEAM` + `CODE_SIGN_IDENTITY:
+  "Developer ID Application"`) and forbids the old ad-hoc default
+  (`CODE_SIGN_IDENTITY: "-"` / `CODE_SIGNING_REQUIRED: NO`). Ad-hoc signing changes
+  the app's cdhash on every rebuild, so macOS TCC re-prompts for
+  Desktop/Documents/Downloads access forever; Developer ID (manual) gives a stable
+  designated requirement that survives rebuilds without a Developer Portal
+  round-trip. iOS keeps `Apple Development` + a provisioning profile. Includes the
+  `codesign -dvvv` verification one-liner. (Root-caused on LiveSetPro.)
+- **macOS computer-use executor via live-swiftui** (`scripts/computer_use/`) — a
+  clean alternative to cliclick for the macOS executor path.
+
 ## [2.31.0] - 2026-07-04
 
 ### Added

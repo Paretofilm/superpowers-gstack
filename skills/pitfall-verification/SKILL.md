@@ -120,6 +120,16 @@ After the self-pitfall rounds, classify the change and run the rest of the chain
 
 In practice most substantive work is at least ship-worthy, so Codex runs by default — you no longer invoke it by hand. The third house adds itself on the high-stakes subset. Both fire **without a confirmation prompt**; cost is reported after each call, not gated before it.
 
+## Cost-ledger — adaptive lens routing (when enabled)
+
+The plugin ships an optional adaptive lens-router (`scripts/cost-ledger/`) that learns, per (domain, tier), which external lenses have stopped producing findings that survive synthesis, and safely skips them to save cost. It is **safe by construction**: it skips nothing until a domain has ≥10 clean reviews (cold-start), never touches the `self-pitfall` floor or high-blast domains (RT-audio / DSP / concurrency / migration / auth / security), and auto-reverts + quarantines any skip a shadow run shows was premature. Disable anytime with `/cost-ledger pause`.
+
+Wire it at three moments. `LEDGER=<this skill's base directory>/../../scripts/cost-ledger/cli.py`. **The ledger is advisory, never a blocker** — if any call errors or `cli.py` is absent, log it and proceed with the FULL lens set (it only ever *removes* work, so absence/failure fails safe toward more verification).
+
+1. **Before dispatching external lenses (point 1).** Classify the change's domain (the v0.2 classifier label) and tier, then `python3 "$LEDGER" gate <domain> <tier>` → JSON `{"skip":[...],"shadow":[...]}`. For each lens in `skip`, do NOT gate on it (treat as passed) UNLESS it is also in `shadow` — then run it this review but mark its result **non-gating** (a measurement, not a gate). `self-pitfall` is never in `skip`.
+2. **After Stage-4 synthesis (point 2).** For each lens that ran (real or shadow): `echo '<json>' | python3 "$LEDGER" record -` with `{ts, review_id, lens, domain, tier, cost_usd, findings, max_severity, survived_synthesis, shadow}`. `survived_synthesis` = that lens's findings that survived the adversarial synthesis. (Pipe the JSON on stdin via `-`; do not pass it as an argv string — a large `findings` payload could hit ARG_MAX.)
+3. **Immediately after the records (point 3).** `echo '<json-array>' | python3 "$LEDGER" tune -` with the same records — updates routing under a lock, auto-reverts escaped skips, and is a clean no-op if it can't get the lock.
+
 ## Stages 2–4 — external lenses + synthesis (automatic per tier)
 
 Run on the **patched** artifact, in order — each later lens reads a cleaner surface.
