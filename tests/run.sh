@@ -5,7 +5,7 @@
 # Usage:
 #   bash tests/run.sh                # run all tests (currently only integration)
 #   bash tests/run.sh --integration  # run integration tests only (slow, costs API)
-#   bash tests/run.sh --unit         # run unit tests only (none yet)
+#   bash tests/run.sh --unit         # run unit tests only (tests/unit + scripts/cost-ledger)
 #
 # Integration tests shell out to `claude --print` and cost ~1 minute
 # and a few cents per case. They require ANTHROPIC_API_KEY or an
@@ -44,7 +44,7 @@ if [ "${RUN_UNIT:-false}" = "true" ]; then
   echo "=========================================="
   echo "Unit tests (pytest, fast, no API)"
   echo "=========================================="
-  if pytest "$REPO_ROOT/tests/unit" -q; then
+  if pytest "$REPO_ROOT/tests/unit" "$REPO_ROOT/scripts/cost-ledger" -q; then
     echo ">>> unit: PASS"
   else
     echo ">>> unit: FAIL"

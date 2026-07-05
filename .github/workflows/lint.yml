@@ -1,10 +1,14 @@
-name: Lint instruction surface
+name: Lint + unit tests
 
 # Validates skills/, CLAUDE.md and README.md on every push/PR — frontmatter,
 # cross-reference resolution, routing coverage, CHANGELOG<->version, marker
 # consistency, and the stale-pattern denylist. Free and fast (stdlib python,
 # no API calls). Added by the 2026-07-03 system review: 5 700 lines of
 # instruction surface previously had zero validation.
+#
+# Also runs the pytest suites (tests/unit + scripts/cost-ledger) — stdlib-only,
+# no API calls. Added by the 2026-07-05 audit: 153 tests previously ran only
+# when someone remembered to run them locally.
 
 on:
   push:
@@ -22,3 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Lint skills + routing + release hygiene
         run: python3 scripts/lint-skills.py
+      - name: Install pytest
+        run: python3 -m pip install --quiet pytest
+      - name: Unit tests (tests/unit + cost-ledger)
+        run: pytest tests/unit scripts/cost-ledger -q
