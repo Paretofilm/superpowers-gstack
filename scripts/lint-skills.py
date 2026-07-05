@@ -17,8 +17,12 @@ ERRORS (exit 1, CI-blocking):
   E6  no `version:` field in skill frontmatter (plugin.json is the version)
   E7  denylist: patterns that must never reappear in instruction files
       (e.g. the third-lens `sensitive` role removed in 2.18.0)
-  E8  the emitted `## Model Routing` block is byte-identical between the two
-      generators (setup-routing, adapt) — they must write the same routing
+  E8  emitted blocks are single-sourced: every shared block file in
+      skills/setup-routing/blocks/ exists, carries its version marker on the
+      H2 heading line, and is referenced by BOTH generators (setup-routing,
+      adapt); neither generator carries an inline copy (no marker heading in
+      a SKILL.md). Replaced the old byte-identity drift guard in 2.33.0 —
+      one source can't drift from itself.
 
 WARNINGS (reported, exit 0):
   W1  frontmatter description over budget (target <=30 words; hard cap comes
@@ -49,7 +53,23 @@ DENYLIST = [
     (re.compile(r"Pi \(local|Pi \(hybrid"), "local-model (Pi) routing columns removed in v0.2 (2.27.0)"),
     (re.compile(r"start-mlx"), "MLX local-server routing removed in v0.2 (2.27.0)"),
     (re.compile(r"models\.json"), "Pi models.json runtime detection removed in v0.2 (2.27.0)"),
+    (re.compile(r"WXNUGGYB2B"), "hardcoded Apple Team ID removed in 2.33.0 — use the {{DEVELOPMENT_TEAM}} placeholder"),
 ]
+
+# Shared emitted blocks (skills/setup-routing/blocks/): single source for the
+# sections both generators write into a project's CLAUDE.md. Marker-carrying
+# blocks must have their `<!-- gstack-<name>-vN -->` marker on the H2 heading.
+BLOCKS_DIR_REL = Path("skills") / "setup-routing" / "blocks"
+MARKER_BLOCKS = [
+    "autonomy.md",
+    "git-hygiene.md",
+    "multi-lens-review.md",
+    "code-reuse.md",
+    "track-routing.md",
+    "xcode-tools.md",
+    "companion-skills.md",
+]
+PLAIN_BLOCKS = ["model-routing-section.md", "PLACEHOLDERS.md"]
 
 errors: list[str] = []
 warnings: list[str] = []
@@ -145,10 +165,12 @@ def main() -> int:
     if f"## [{version}]" not in (REPO / "CHANGELOG.md").read_text():
         errors.append(f"E4 CHANGELOG.md: no entry for plugin.json version {version} — ship-worthy releases require a CHANGELOG entry")
 
-    # E5 multi-lens marker consistency
+    # E5 multi-lens marker consistency (SKILL.md files + shared block files)
     marker_versions = set()
-    for d in skill_dirs:
-        for m in re.finditer(r"gstack-multi-lens-review-v(\d+)", (d / "SKILL.md").read_text()):
+    marker_files = [d / "SKILL.md" for d in skill_dirs]
+    marker_files += sorted((REPO / BLOCKS_DIR_REL).glob("*.md")) if (REPO / BLOCKS_DIR_REL).is_dir() else []
+    for f in marker_files:
+        for m in re.finditer(r"gstack-multi-lens-review-v(\d+)", f.read_text()):
             marker_versions.add(m.group(1))
     if len(marker_versions) > 1:
         errors.append(f"E5 multi-lens markers disagree across skills: v{sorted(marker_versions)}")
@@ -161,46 +183,51 @@ def main() -> int:
     _mr = REPO / "skills" / "setup-routing" / "model-routing.md"
     if _mr.is_file():
         targets.append((_mr, _mr.read_text()))
+    # ... and the shared emitted blocks — they ARE the generated-CLAUDE.md content.
+    if (REPO / BLOCKS_DIR_REL).is_dir():
+        targets += [(f, f.read_text()) for f in sorted((REPO / BLOCKS_DIR_REL).glob("*.md"))]
     for path, text in targets:
         for pattern, why in DENYLIST:
             for i, line in enumerate(text.splitlines(), 1):
                 if pattern.search(line):
                     errors.append(f"E7 {path.relative_to(REPO)}:{i}: denylisted pattern ({why})")
 
-    # E8 emitted-block drift guard: the `## Model Routing` block that BOTH
-    # generators write into a project's CLAUDE.md must stay byte-identical, or a
-    # freshly-generated project and a re-adapted one get different routing. This
-    # is exactly the drift caught in the 2.27.0 pre-merge review — one generator
-    # H2-promoted and misplaced the block while the other did not. One guard here
-    # turns the whole "two hand-maintained copies silently diverge" class into a
-    # CI failure instead of a latent bug. When blocks/ single-sourcing lands, this
-    # guard becomes redundant (one source can't drift from itself) and can go.
-    def _emitted_model_routing(skill: str) -> str | None:
-        f = SKILLS / skill / "SKILL.md"
+    # E8 single-source guard for emitted blocks (2.33.0, replaces the old
+    # byte-identity drift check — one source can't drift from itself):
+    #   (a) every shared block file exists;
+    #   (b) marker blocks carry `<!-- gstack-<x>-vN -->` on their H2 heading line;
+    #   (c) BOTH generators reference every block filename (no orphaned block,
+    #       no generator that forgot to emit one);
+    #   (d) NEITHER generator has an inline copy — a heading line carrying a
+    #       gstack marker inside a SKILL.md is a regression to hand-maintained
+    #       duplication (the class the 2.27.0 pre-merge review caught).
+    blocks_dir = REPO / BLOCKS_DIR_REL
+    gen_texts = {name: (SKILLS / name / "SKILL.md").read_text()
+                 for name in ("setup-routing", "adapt")
+                 if (SKILLS / name / "SKILL.md").is_file()}
+    for fname in MARKER_BLOCKS + PLAIN_BLOCKS:
+        f = blocks_dir / fname
         if not f.is_file():
-            return None
-        t = f.read_text()
-        anchor = "## Model Routing\n\nWhen dispatching a subagent"
-        i = t.find(anchor)
-        if i < 0:
-            return None
-        rest = t[i + len(anchor):]
-        m = re.search(r"\n(#{2,3} |```)", rest)
-        end = i + len(anchor) + m.start() if m else len(t)
-        return t[i:end].strip()
-
-    _sr_block = _emitted_model_routing("setup-routing")
-    _ad_block = _emitted_model_routing("adapt")
-    if _sr_block is None or _ad_block is None:
-        errors.append(
-            "E8 emitted `## Model Routing` block not found in setup-routing and/or "
-            "adapt (anchor moved — update the E8 extractor)"
-        )
-    elif _sr_block != _ad_block:
-        errors.append(
-            "E8 emitted `## Model Routing` block differs between setup-routing and "
-            "adapt — the two generators would write different routing into CLAUDE.md"
-        )
+            errors.append(f"E8 missing shared block file {BLOCKS_DIR_REL}/{fname}")
+            continue
+        if fname in MARKER_BLOCKS:
+            first = f.read_text().split("\n", 1)[0]
+            if not re.match(r"^## .*<!-- gstack-[a-z-]+-v\d+ -->$", first):
+                errors.append(f"E8 {BLOCKS_DIR_REL}/{fname}: first line must be an H2 heading with a gstack version marker")
+        if fname != "PLACEHOLDERS.md":
+            for gen, text in gen_texts.items():
+                if fname not in text:
+                    errors.append(f"E8 {gen}/SKILL.md never references blocks/{fname} — generator would not emit it")
+    if (blocks_dir / "model-routing-section.md").is_file():
+        if "## Model Routing" not in (blocks_dir / "model-routing-section.md").read_text():
+            errors.append("E8 blocks/model-routing-section.md lost its `## Model Routing` anchor")
+    for gen, text in gen_texts.items():
+        for i, line in enumerate(text.splitlines(), 1):
+            if line.startswith("#") and re.search(r"<!-- gstack-[a-z-]+-v\d+ -->", line):
+                errors.append(f"E8 {gen}/SKILL.md:{i}: inline emitted-block copy (marker heading) — blocks/ is the single source")
+        for ref in set(re.findall(r"blocks/([A-Za-z0-9_.-]+\.md)", text)):
+            if not (blocks_dir / ref).is_file():
+                errors.append(f"E8 {gen}/SKILL.md references nonexistent blocks/{ref}")
 
     for w in warnings:
         print(f"WARN  {w}")
