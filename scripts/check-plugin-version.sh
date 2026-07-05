@@ -2,6 +2,18 @@
 # Check if the project's CLAUDE.md was generated with an older plugin version
 # Used as a SessionStart hook — runs in the project directory
 
+# Surface pending cost-ledger notices (lens skips / auto-reverts written by
+# tune.py/monitor.py) BEFORE the early exits below — the notices file is
+# user-global and must be shown regardless of which project the session
+# starts in. Read-and-clear, mirroring the handoff.md pattern.
+NOTICES="$HOME/.claude/cost-ledger/session_notices.txt"
+if [ -s "$NOTICES" ]; then
+  echo "📒 cost-ledger notices since last session:"
+  cat "$NOTICES"
+  echo ""
+  : > "$NOTICES"
+fi
+
 CLAUDE_MD="CLAUDE.md"
 
 # Only run if CLAUDE.md exists and uses superpowers-gstack

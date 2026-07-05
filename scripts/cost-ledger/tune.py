@@ -262,7 +262,7 @@ def _emit_session_notice(new_skip_triples: list[tuple], sha: str, ld) -> None:
             msg = (
                 f"[{now}] cost-ledger: downgraded {lens} for "
                 f"{domain}/{tier} ({evidence}); "
-                f"revert: /cost-ledger reset {domain}\n"
+                f"revert: python3 <plugin>/scripts/cost-ledger/cli.py reset {domain}\n"
             )
             fh.write(msg)
 
