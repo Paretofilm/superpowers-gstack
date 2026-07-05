@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.34.0] - 2026-07-05
+
+### Changed
+
+- **Slimmed the emitted CLAUDE.md blocks** — every word a generator emits is a
+  per-session context tax on every downstream project, and instruction-following
+  degrades with length. The four heaviest shared blocks lost their rationale
+  prose and anecdotes while keeping every rule, table, and procedure:
+  autonomy 591→407 words (marker v1→v2), git-hygiene 501→320 (v2→v3),
+  multi-lens-review 585→343 (v4→v5), code-reuse 809→450 (v1→v2),
+  xcode-tools 1067→828 (stays v4 — unshipped since the 2.33.0 bump; tool-routing
+  and signing tables kept verbatim). Blocks total 4462→3257 words (−27%);
+  a typical downstream CLAUDE.md drops ~1200 words. `/adapt` propagates via the
+  marker bumps.
+- **Output budget for generated sections** — both generators now instruct:
+  routing-table row descriptions ≤ 15 words, decision-tree lines ≤ 10 words,
+  no rationale prose in generated sections.
+
 ## [2.33.0] - 2026-07-05
 
 Fixes for the four findings of the 2026-07-05 external audit (Codex).

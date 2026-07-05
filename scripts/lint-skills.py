@@ -49,7 +49,7 @@ BODY_WARN_LINES = 500
 DENYLIST = [
     (re.compile(r"`sensitive`\s*="), "third-lens 'sensitive' role was removed in 2.18.0"),
     (re.compile(r"--role\s+sensitive|--sensitive\b"), "third-lens --sensitive flag was removed in 2.18.0"),
-    (re.compile(r"gstack-multi-lens-review-v[0-3]\b"), "stale multi-lens marker (current: v4+)"),
+    (re.compile(r"gstack-multi-lens-review-v[0-4]\b"), "stale multi-lens marker (current: v5+)"),
     (re.compile(r"Pi \(local|Pi \(hybrid"), "local-model (Pi) routing columns removed in v0.2 (2.27.0)"),
     (re.compile(r"start-mlx"), "MLX local-server routing removed in v0.2 (2.27.0)"),
     (re.compile(r"models\.json"), "Pi models.json runtime detection removed in v0.2 (2.27.0)"),

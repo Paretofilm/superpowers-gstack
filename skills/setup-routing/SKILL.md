@@ -225,6 +225,8 @@ After presenting, ask:
 
 Generate the `CLAUDE.md` file in the project root. Adapt the structure below based on what's relevant — omit entire sections that don't apply.
 
+Keep the generated content tight — every word is a per-session context tax on the project: routing-table row descriptions ≤ 15 words; decision-tree lines ≤ 10 words; no rationale prose in generated sections (the rules carry the behavior; the *why* lives in this plugin's docs).
+
 Before writing the file, read the plugin version from `.claude-plugin/plugin.json` in the superpowers-gstack plugin directory (check `~/.claude/plugins/cache/*/superpowers-gstack/*/plugin.json`, use the latest). Include this version as an HTML comment at the top of the generated CLAUDE.md:
 
 ```markdown
