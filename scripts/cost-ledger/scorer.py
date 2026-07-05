@@ -94,6 +94,24 @@ def _is_shadow(record):
     return bool(record.get("shadow"))
 
 
+def _sort_key(record):
+    """Order-independent sort key derived ONLY from record content (never input
+    position). Two records for the same triple that tie on `ts` must still order
+    deterministically, or reordering `history` could move a survivor across the
+    recent-window boundary and flip skip eligibility (codex P2). review_id is the
+    primary tiebreak; the rest disambiguate a shadow-vs-real pair recorded in the
+    same review. Any records still equal after this are byte-identical, hence
+    interchangeable — window membership is deterministic in effect."""
+    return (
+        record.get("ts", ""),
+        record.get("review_id", ""),
+        int(_is_shadow(record)),
+        _survived(record),
+        record.get("cost_usd") or 0,
+        record.get("findings") or 0,
+    )
+
+
 def propose(history, quarantine):
     """Pure scoring function: ledger history + quarantine -> proposals.
 
@@ -111,18 +129,19 @@ def propose(history, quarantine):
     """
     quarantined = {(q["domain"], q["tier"], q["lens"]) for q in quarantine}
 
-    # Group records by exact triple; order within a triple by ts (stable on
-    # input order for identical timestamps). Tiers are never merged (§5.2).
+    # Group records by exact triple; order within a triple by a content-derived
+    # key (never input position) so the result is order-independent even when
+    # timestamps tie. Tiers are never merged (§5.2).
     triples = {}
-    for idx, record in enumerate(history):
+    for record in history:
         key = (record["domain"], record["tier"], record["lens"])
-        triples.setdefault(key, []).append((record.get("ts", ""), idx, record))
+        triples.setdefault(key, []).append(record)
 
     proposals = []
     skip_candidates = {}  # (domain, tier) -> [candidate, ...]  (one-step guard)
 
-    for (domain, tier, lens), tagged in sorted(triples.items()):
-        records = [r for _ts, _idx, r in sorted(tagged, key=lambda t: (t[0], t[1]))]
+    for (domain, tier, lens), recs in sorted(triples.items()):
+        records = sorted(recs, key=_sort_key)
         if lens == FLOOR_LENS:
             continue  # the free floor is never routed; not even a "run" row
 
