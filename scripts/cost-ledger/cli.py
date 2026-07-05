@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Cost-ledger CLI — /cost-ledger commands (spec §8).
+"""Cost-ledger CLI — control-surface subcommands (spec §8). There is no slash
+command for this; invoke via python3 as below.
 
 Usage:
     python3 cli.py              # status
@@ -18,6 +19,7 @@ from __future__ import annotations
 import json
 import random
 import sys
+import shlex
 from pathlib import Path
 
 from ledger import (
@@ -185,7 +187,7 @@ def cmd_pause() -> int:
         atomic_write(state_path, state)
         if state["paused"]:
             print("Auto-tuning PAUSED. Ledger still measures; adjustments frozen.")
-            print("Run `/cost-ledger pause` again to resume.")
+            print(f"Run `python3 {shlex.quote(str(Path(__file__).resolve()))} pause` again to resume.")
         else:
             print("Auto-tuning RESUMED.")
     return 0

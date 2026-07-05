@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.34.1] - 2026-07-05
+
+Fixes for the three findings of the second external audit round (Codex).
+
+### Fixed
+
+- **cost-ledger CLI no longer tells users to run a nonexistent slash command** —
+  `cli.py pause` printed ``Run `/cost-ledger pause` again to resume``; it now
+  prints the resolved runnable path (`python3 <path>/cli.py pause`). Docstring
+  and a tune.py comment corrected the same way. Class fix: the E7 denylist now
+  refuses the `/cost-ledger <subcommand>` usage form, and E7 scans
+  `scripts/**/*.py`/`*.sh` too (the previous sweep only covered .md files,
+  which is exactly how cli.py's message survived the 2.33.0 correction).
+- **tests/README.md caught up with 2.33.0** — it claimed no unit tests exist
+  and no CI integration; both sections now describe the pytest suites and the
+  lint.yml gate.
+- **README no longer hardcodes the htmlify test count** (said 138, suite has
+  139) — replaced with a count-free reference so it can't go stale again.
+
 ## [2.34.0] - 2026-07-05
 
 ### Changed

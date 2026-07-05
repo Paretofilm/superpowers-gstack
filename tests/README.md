@@ -8,17 +8,21 @@ End-to-end tests for `superpowers-gstack` plugin behaviors.
 tests/
 ├── README.md                  ← this file
 ├── run.sh                     ← entry point: bash tests/run.sh [--integration|--unit]
+├── unit/                      ← pytest suite (fast, no API)
 └── integration/
     └── test_track_aware_dispatch.sh   ← verifies track-aware routing dispatches correctly
 ```
 
-Unit tests would live in `tests/unit/` when added. None exist yet — the plugin is mostly Markdown skill definitions, not executable code (htmlify has its own `skills/htmlify/tests/` Bun suite).
+Unit tests live in `tests/unit/` and run together with the cost-ledger suite in `scripts/cost-ledger/` (`test_scorer.py`, `test_machinery.py`) — all stdlib-only pytest, no API calls. htmlify has its own `skills/htmlify/tests/` Bun suite.
 
 ## Running
 
 ```bash
 # All tests
 bash tests/run.sh
+
+# Unit only (pytest: tests/unit + scripts/cost-ledger)
+bash tests/run.sh --unit
 
 # Integration only
 bash tests/run.sh --integration
@@ -62,4 +66,6 @@ These would be additional `tests/integration/test_*.sh` files following the same
 
 ## CI
 
-No CI integration yet. Running integration tests in CI requires `ANTHROPIC_API_KEY` as a repo secret and a willingness to spend on every PR. If/when that's set up, the natural entry is `bash tests/run.sh --integration` in a GitHub Actions workflow.
+The pytest suites run on every push/PR (`.github/workflows/lint.yml` runs `pytest tests/unit scripts/cost-ledger -q` after the instruction-surface lint — free, stdlib-only).
+
+The `claude --print` integration tests do NOT run in CI. That would require `ANTHROPIC_API_KEY` as a repo secret and a willingness to spend on every PR. If/when that's set up, the natural entry is `bash tests/run.sh --integration` in a GitHub Actions workflow.
