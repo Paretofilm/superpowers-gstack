@@ -11,7 +11,9 @@
   autonomy 591→407 words (marker v1→v2), git-hygiene 501→320 (v2→v3),
   multi-lens-review 585→343 (v4→v5), code-reuse 809→450 (v1→v2),
   xcode-tools 1067→828 (stays v4 — unshipped since the 2.33.0 bump; tool-routing
-  and signing tables kept verbatim). Blocks total 4462→3257 words (−27%);
+  and signing tables kept verbatim). companion-skills bumped v1→v2 so projects
+  generated from the old inline variant converge on the canonical block.
+  Blocks total 4462→3257 words (−27%);
   a typical downstream CLAUDE.md drops ~1200 words. `/adapt` propagates via the
   marker bumps.
 - **Output budget for generated sections** — both generators now instruct:

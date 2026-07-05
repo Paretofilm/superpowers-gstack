@@ -214,13 +214,20 @@ def main() -> int:
             first = f.read_text().split("\n", 1)[0]
             if not re.match(r"^## .*<!-- gstack-[a-z-]+-v\d+ -->$", first):
                 errors.append(f"E8 {BLOCKS_DIR_REL}/{fname}: first line must be an H2 heading with a gstack version marker")
-        if fname != "PLACEHOLDERS.md":
-            for gen, text in gen_texts.items():
-                if fname not in text:
-                    errors.append(f"E8 {gen}/SKILL.md never references blocks/{fname} — generator would not emit it")
+        # PLACEHOLDERS.md included: a generator that stops referencing it could
+        # emit raw {{...}} tokens into a project's CLAUDE.md.
+        for gen, text in gen_texts.items():
+            if fname not in text:
+                errors.append(f"E8 {gen}/SKILL.md never references blocks/{fname} — generator would not emit/resolve it")
     if (blocks_dir / "model-routing-section.md").is_file():
         if "## Model Routing" not in (blocks_dir / "model-routing-section.md").read_text():
             errors.append("E8 blocks/model-routing-section.md lost its `## Model Routing` anchor")
+    # Orphan guard: a blocks/*.md not in the known lists has no emitter — it
+    # would silently never reach any generated CLAUDE.md.
+    if blocks_dir.is_dir():
+        for f in sorted(blocks_dir.glob("*.md")):
+            if f.name not in MARKER_BLOCKS + PLAIN_BLOCKS:
+                errors.append(f"E8 orphaned block file {BLOCKS_DIR_REL}/{f.name} — not in MARKER_BLOCKS/PLAIN_BLOCKS, no generator emits it")
     # Inline copies are forbidden WITH or WITHOUT the marker — a markerless
     # re-paste of a block heading would reopen the drift class E8 exists to
     # prevent (Codex P2 on the 2.33.0 branch caught exactly this hole).

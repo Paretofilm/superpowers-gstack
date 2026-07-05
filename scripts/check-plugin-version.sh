@@ -8,10 +8,16 @@
 # starts in. Read-and-clear, mirroring the handoff.md pattern.
 NOTICES="$HOME/.claude/cost-ledger/session_notices.txt"
 if [ -s "$NOTICES" ]; then
-  echo "📒 cost-ledger notices since last session:"
-  cat "$NOTICES"
-  echo ""
-  : > "$NOTICES"
+  # mv is atomic on the same filesystem — an append landing after the mv goes
+  # to a fresh file and survives for the next session (no read-then-clear race)
+  _NTMP=$(mktemp "${NOTICES}.XXXXXX" 2>/dev/null) && mv "$NOTICES" "$_NTMP" 2>/dev/null && {
+    # read + delete BEFORE printing — if the consumer closes the pipe early
+    # (SIGPIPE), the tmp file must not leak
+    _NOTICE_CONTENT=$(cat "$_NTMP")
+    rm -f "$_NTMP"
+    echo "📒 cost-ledger notices since last session:"
+    printf '%s\n\n' "$_NOTICE_CONTENT"
+  }
 fi
 
 CLAUDE_MD="CLAUDE.md"

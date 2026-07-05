@@ -1,4 +1,4 @@
-## Companion skills (discovery — not routing) <!-- gstack-companion-skills-v1 -->
+## Companion skills (discovery — not routing) <!-- gstack-companion-skills-v2 -->
 
 The two-framework story (Superpowers + GStack) is what this plugin routes. But other ecosystem-specific expert skills exist that complement the workflow. They are NOT auto-invoked; the plugin doesn't depend on them; they are listed here so any agent reading this CLAUDE.md knows they exist and how to install them when relevant.
 
