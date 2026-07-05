@@ -15,7 +15,9 @@
   security), runs shadow samples (1-in-8) of skipped lenses to measure their true
   miss rate, and auto-reverts + quarantines any skip a shadow hit shows was
   premature. User-global learning in `~/.claude/cost-ledger/` (a git repo — every
-  adjustment is an auditable commit); `/cost-ledger status|reset|pause|explain`.
+  adjustment is an auditable commit); control via `scripts/cost-ledger/cli.py
+  status|reset|pause|explain`. (This entry originally promised a `/cost-ledger`
+  slash command that was never shipped — corrected in 2.33.0.)
   The pure scorer + machinery went through self-pitfall + Codex + GLM (11 design
   gaps + 7 code findings fixed before activation).
 - **Stable-signing default for new SwiftUI projects** (`setup-routing`, `adapt`).
