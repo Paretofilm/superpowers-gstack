@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.34.2] - 2026-07-13
+
+Upstream GStack updated to v1.60.1.0 (7c9df1c).
+
+### Changed
+
+- **GStack v1.60.1.0** — internal eval and test-harness fixes only; no skill additions, removals, or behavioral changes visible to users of this plugin.
+  - The `/autoplan` dual-voice eval (Claude review subagent + Codex outside voice) is restored and now registers skills at project level (`.claude/skills/`) to match real Claude Code 2.x slash-command resolution, fixing an "Unknown command" failure that caused 0 turns instead of the expected 43+ tool calls.
+  - The eval session runner gains a hard timeout guarantee: when a spawned `claude -p` session hits its timeout, the runner cancels the stdout reader and races stderr drain against child exit + a 5 s grace window, so orphaned grandchildren no longer hold `runSkillTest` past bun's per-test timeout. A regression test (`test/session-runner-timeout.test.ts`) locks this behavior — the fix resolves hangs of 1431 s down to timeout + 5 s.
+  - `bun run test:evals` timeouts now fail fast with a real transcript instead of silently eating 10+ extra minutes per hung test.
+  - No routing rules, skill tables, or CLAUDE.md blocks are affected.
+
 ## [2.34.1] - 2026-07-05
 
 Fixes for the three findings of the second external audit round (Codex).
