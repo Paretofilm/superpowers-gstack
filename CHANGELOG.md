@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.34.2] - 2026-07-20
+
+Upstream GStack updated to v1.60.1.0 (a325940).
+
+### Changed
+
+- **GStack v1.60.1.0** — internal eval and test-harness fixes; no skill additions, removals, or renames. User-facing skill behavior is unchanged.
+  - `/autoplan` dual-voice eval restored: sandbox now installs skills at project level (`.claude/skills/`) matching real Claude Code 2.x slash-command resolution, so the eval exercises the same path users hit. The transcript filter was corrected to read raw stream-json shapes (the old filter matched nothing, causing assertions to see only final result text). Budget raised to 10 min / 40 turns.
+  - Eval harness timeout fix: when a spawned `claude -p` session hits its timeout, the runner now cancels the stdout reader and races stderr drain against child exit with a 5s grace window — orphaned grandchildren can no longer hold `runSkillTest` past bun's per-test deadline. `bun run test:evals` timeouts now fail fast with a transcript instead of silently eating 10+ extra minutes per hung test.
+
 ## [2.34.1] - 2026-07-05
 
 Fixes for the three findings of the second external audit round (Codex).

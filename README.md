@@ -282,7 +282,7 @@ Spec or plan written? (after writing-specs / writing-plans / plan-eng-review)
   → /superpowers:writing-plans (or /superpowers:subagent-driven-development)
 
 Code written?  → /clear → /review
-Review feedback needs changes? → /superpowers:receiving-code-review → fix → /review
+Review feedback needs changes? → /superpowers:receiving-code-review → fix → /review again
 Review passed? → /qa → /cso → /ship
 ```
 
