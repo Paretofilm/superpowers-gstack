@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.35.0] - 2026-07-27
+
+Upstream sync: Superpowers 6.2.0, GStack v1.60.1.0.
+
+### Changed
+
+- **`testing-anti-patterns` renamed to `writing-good-tests`** (Superpowers 6.2.0) — the TDD reference doc is rebuilt as a positive catalog with falsifiability discipline; all references updated across README and skill evaluation tables.
+- **Superpowers `finishing-a-development-branch`** no longer offers to discard work by default — "Discard this work" is now an explicit-request-only path. PR creation is now forge-agnostic.
+- **Superpowers `subagent-driven-development` workspace is now plan-scoped** — `.superpowers/sdd/` resolves a per-plan directory `.superpowers/sdd/<plan-basename>/`; workspace is deleted once the final review is clean.
+- **Superpowers SDD review-fix loop** now resumes the implementer instead of fresh dispatches; adds a scoped re-review prompt and a five-round circuit breaker with controller adjudication.
+- **Windows SessionStart hook now dispatches via Git Bash** (`shell: "bash"`) — fixes PowerShell parser errors (#1751) and cmd.exe quote-stripping truncation (#1918) when the profile path contains metacharacters like `(`.
+- **Gemini CLI support restored** — the v6.1.0 removal was premature; install docs and `gemini-tools.md` tool-mapping reference are back pending a proper evaluation (#1959).
+- **`find-polluter.sh` now correctly finds test files** — fixed `./`-prefixed path mismatch, double-prefix on caller-supplied patterns, and collapsed `**/` handling (#2008, #2011).
+- **GStack `/autoplan` dual-voice eval restored** (v1.60.1.0) — eval sandbox now installs skills at project level matching real Claude Code 2.x slash-command resolution; transcript filter reads raw stream-json shapes; budget raised to 10 min / 40 turns.
+- **GStack eval runner timeout fixed** — on spawn timeout, runner cancels the stdout reader and races stderr drain against child exit with a 5s grace window, preventing orphaned grandchildren from blocking the suite past bun's per-test timeout.
+- **Recap and persuasion prose removed** across multiple Superpowers skills (`brainstorming`, `systematic-debugging`, `dispatching-parallel-agents`, `verification-before-completion`, `executing-plans`, `subagent-driven-development`, `requesting-code-review`, `receiving-code-review`, `using-git-worktrees`, `writing-plans`, `writing-skills`).
+
 ## [2.34.1] - 2026-07-05
 
 Fixes for the three findings of the second external audit round (Codex).

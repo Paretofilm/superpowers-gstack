@@ -348,6 +348,7 @@ Review passed? → /qa → /cso → /ship
 | `/superpowers:verification-before-completion` | Verify before claiming done |
 | `/superpowers:requesting-code-review` | Dispatch review subagent (uses `general-purpose` agent with self-contained template) |
 | `/superpowers:receiving-code-review` | Handle review feedback |
+| `/superpowers:writing-good-tests` | Writing falsifiable, behavior-testing tests; replaces `testing-anti-patterns` |
 | `/superpowers:writing-skills` | Plugin/skill projects only |
 
 ### Model Routing (v0.2)
