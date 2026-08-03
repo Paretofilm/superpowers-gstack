@@ -87,6 +87,7 @@ Based on the project type and answers, evaluate which Superpowers skills are rel
 | `/superpowers:verification-before-completion` | Complex projects where correctness is critical |
 | `/superpowers:requesting-code-review` | Multi-file changes (runs automatically during SDD, but can be invoked manually) |
 | `/superpowers:receiving-code-review` | After `/review` or PR feedback requires code changes — structures the response with TDD |
+| `/superpowers:writing-good-tests` | Projects where test quality and falsifiability discipline matter; replaces testing-anti-patterns |
 | `/superpowers:writing-skills` | Only for Claude Code plugin/skill projects |
 
 ### Step 4: Evaluate relevant GStack skills

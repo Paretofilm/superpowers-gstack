@@ -282,7 +282,7 @@ Spec or plan written? (after writing-specs / writing-plans / plan-eng-review)
   → /superpowers:writing-plans (or /superpowers:subagent-driven-development)
 
 Code written?  → /clear → /review
-Review feedback needs changes? → /superpowers:receiving-code-review → fix → /review
+Review feedback needs changes? → /superpowers:receiving-code-review → fix → /review again
 Review passed? → /qa → /cso → /ship
 ```
 
@@ -343,11 +343,12 @@ Review passed? → /qa → /cso → /ship
 | `/superpowers:dispatching-parallel-agents` | Independent parallel tasks |
 | `/superpowers:systematic-debugging` | Finding root cause of bugs |
 | `/superpowers:using-git-worktrees` | Feature branch isolation — asks for consent before creating; detects if already in a worktree |
-| `/superpowers:finishing-a-development-branch` | Merge/PR/discard — only cleans up worktrees it created (inside `.worktrees/`) |
+| `/superpowers:finishing-a-development-branch` | Merge/PR/discard — only cleans up worktrees it created (inside `.worktrees/`); discard is explicit-request-only |
 | `/superpowers:test-driven-development` | Manual TDD enforcement |
 | `/superpowers:verification-before-completion` | Verify before claiming done |
 | `/superpowers:requesting-code-review` | Dispatch review subagent (uses `general-purpose` agent with self-contained template) |
 | `/superpowers:receiving-code-review` | Handle review feedback |
+| `/superpowers:writing-good-tests` | Writing effective, non-brittle tests (positive catalog with falsifiability discipline) |
 | `/superpowers:writing-skills` | Plugin/skill projects only |
 
 ### Model Routing (v0.2)

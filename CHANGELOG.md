@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.35.0] - 2026-08-03
+
+Upstream sync: Superpowers 6.2.0 and GStack v1.60.1.0.
+
+### Changed
+
+- **`testing-anti-patterns` renamed to `writing-good-tests`** — Superpowers rebuilt the TDD reference doc as a positive catalog. Updated all references in README and both skill evaluation tables (setup-routing/SKILL.md and adapt/SKILL.md). The skill now leads with six positive rules, adds a falsifiability discipline (name the production change that would fail the test, derive expectations independently), closes the string-presence trap and change-detector trap by name, and broadens the test-writing trigger from "adding mocks" to any test writing.
+- **`finishing-a-development-branch` discard path is now explicit-request-only** — the "Discard this work" menu option is removed from the default completion menu; discard survives only when explicitly requested, with a typed-confirmation ritual. Updated description in README Superpowers Commands table. PR creation is now forge-agnostic.
+- **SDD workspace is now plan-scoped** — `.superpowers/sdd/` resolves to a per-plan directory `.superpowers/sdd/<plan-basename>/`; the workspace is deleted once the final review is clean.
+- **SDD review-fix loop resumes the implementer** — fix rounds now use resume-the-implementer semantics instead of fresh dispatches, with a scoped re-review prompt and a five-round circuit breaker.
+- **Gemini CLI support restored** — reinstated in install docs and subagent-capable platform lists after the v6.1.0 removal was found to be premature (Google has not completed EOL; permanent removal pending evaluation). (#1959)
+- **Windows SessionStart hook now dispatches via Git Bash** — the hook declares `shell: "bash"`, resolving to Git for Windows on Claude Code ≥ 2.1.81 and surfacing an actionable install prompt when Git Bash is missing. Fixes PowerShell parser error (#1751) and cmd.exe quote-stripping truncation (#1918).
+- **GStack `/autoplan` dual-voice eval restored** — the eval now registers skills at project level (`.claude/skills/`) matching real slash-command resolution on Claude Code 2.x; the transcript filter reads raw stream-json shapes. Eval harness gained hard timeout protection: orphaned grandchildren can no longer block `runSkillTest` past bun's per-test timeout. (GStack v1.60.1.0)
+
+### Fixed
+
+- **`find-polluter.sh` actually finds test files** — fixed `./`-prefixed path mismatch, double-prefix on caller-supplied patterns, and collapsed `**/` so tests directly under the base directory are not silently skipped. (#2008, #2011)
+- **Codex package script works beyond macOS** — GNU tar now gets equivalent deterministic-metadata flags, file modes are pinned canonical, and the timestamp assertion is timezone-agnostic.
+- **SDD skill test no longer flakes** — per-file ceiling raised to 900s, assert helpers now match case-insensitively, and `assert_order` dumps output on failure.
+
 ## [2.34.1] - 2026-07-05
 
 Fixes for the three findings of the second external audit round (Codex).

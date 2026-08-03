@@ -95,6 +95,7 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | `/superpowers:verification-before-completion` | Complex projects where correctness is critical |
 | `/superpowers:requesting-code-review` | Multi-file changes (runs automatically during SDD, but can be invoked manually) |
 | `/superpowers:receiving-code-review` | After `/review` or PR feedback requires code changes — structures the response with TDD |
+| `/superpowers:writing-good-tests` | Projects where test quality and falsifiability discipline matter; replaces testing-anti-patterns |
 | `/superpowers:writing-skills` | Only for Claude Code plugin/skill projects |
 
 **GStack skills — Phase 1 (Planning):**
