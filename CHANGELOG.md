@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.35.0] - 2026-08-10
+
+Upstream sync: GStack v1.61.0.0 and Superpowers v6.2.0.
+
+### Changed
+
+- **`/superpowers:writing-plans` renamed to `/superpowers:writing-good-tests`** — Superpowers rebuilt the TDD reference doc as a positive catalog of six rules (leading with the GOOD example each time) and renamed the skill accordingly. All README workflow diagrams, scenario examples, the Quick Reference table, and the skill evaluation tables in both SKILL.md files updated.
+- **GStack v1.61.0.0 — nine guard bugs fixed.** Key user-facing fixes:
+  - **Interactive skills ask questions again on Claude Code 2.1.89+** — `AskUserQuestion` was orphaned on current Claude Code builds (`permissionDecision:'defer'` semantics changed in CC v2.1.89); the question-card primitive now renders correctly. Run `/gstack-upgrade` to pick up the hook fix.
+  - **`/careful` now catches chained, substituted, and capital-flag deletes** — `rm -R /`, `rm -rf $(cmd)/node_modules`, and chained commands whose last token was a safe target were previously waved through silently; all now reach a human.
+  - **`/context-restore` prefers the current branch's checkpoint** over newer sibling-worktree saves.
+  - **`/sync-gbrain` drift re-register works on gbrain 0.42+** — passes `--confirm-destructive`, guards against data-loss during autopilot, and symlink aliases of the same directory are no longer misdetected as drift.
+  - **`/office-hours` session count corrected** — developer-profile `mode:"resources"` rows no longer inflate SESSION_COUNT or tier.
+  - **One-way-door credential guard now matches plurals** ("reset my secrets", "rotate the credentials") and is wired into the runtime for the first time.
+  - **`design` CLI (`--count`, `--retry`, `--timeout`) fails loudly on bad flags** instead of silently producing zero variants or dying at boot.
+  - **Thin-client team brains** (`/sync-gbrain`, brain-aware planning) no longer misclassify as broken; sync stages skip with an accurate reason.
+- **Superpowers v6.2.0 — SDD workspace is now plan-scoped.** `.superpowers/sdd/` now resolves a per-plan directory (`.superpowers/sdd/<plan-basename>/`); `task-brief` and `review-package` write into their plan's directory; the workspace is deleted once the final review is clean. Prevents cross-plan ledger contamination observed in multi-plan working trees.
+- **SDD review-fix loop resumes the implementer** instead of dispatching fresh, with a scoped re-review prompt and a five-round circuit breaker.
+- **`finishing-a-development-branch` no longer offers to discard your work** as a default menu option — discard survives as an explicit-request-only path with typed confirmation. PR creation is now forge-agnostic.
+- **Superpowers v6.2.0 — Gemini CLI support restored** (the v6.1.0 removal was premature; install docs and `gemini-tools.md` are back).
+- **`find-polluter.sh` fixed** — `./`-prefixed paths from `find .` no longer cause the pattern to match nothing; caller-supplied `./`-prefixed patterns and `**/`-collapsed paths also handled correctly.
+- **SessionStart hook dispatches via Git Bash on Windows** — the hook now declares `shell: "bash"`, resolving both the PowerShell parser error and the cmd.exe quote-stripping truncation on hostile paths.
+
 ## [2.34.1] - 2026-07-05
 
 Fixes for the three findings of the second external audit round (Codex).

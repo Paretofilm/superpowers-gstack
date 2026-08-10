@@ -145,7 +145,7 @@ This generates a CLAUDE.md with routing rules tailored to your project type, tec
 │  PHASE 2: IMPLEMENTATION (Superpowers)           │
 │                                                  │
 │  /superpowers:brainstorming           → Refine   │
-│  /superpowers:writing-plans           → TDD tasks│
+│  /superpowers:writing-good-tests      → TDD tasks│
 │  /superpowers:subagent-driven-development → Build│
 │  /superpowers:systematic-debugging    → Fix bugs │
 ├─────────────────────────────────────────────────┤
@@ -209,8 +209,8 @@ No hooks, no orchestration overhead, no nesting. Just save and restore.
 [iOS only]
 /ios-native-review     → Spec-level: "is this iOS-native?"
 /superpowers:brainstorming         → Adopt design, refine technical approach
-/superpowers:writing-plans         → Break into TDD tasks
-/pitfall-verification  → Plan-level: re-check after writing-plans
+/superpowers:writing-good-tests    → Break into TDD tasks
+/pitfall-verification  → Plan-level: re-check after writing-good-tests
 /superpowers:subagent-driven-development → Build it
 /clear
 /review                → Code review
@@ -232,7 +232,7 @@ No hooks, no orchestration overhead, no nesting. Just save and restore.
 
 ```
 /superpowers:brainstorming         → Quick technical refinement
-/superpowers:writing-plans         → TDD tasks
+/superpowers:writing-good-tests    → TDD tasks
 /superpowers:subagent-driven-development → Build it
 /clear
 /review → /ship
@@ -242,7 +242,7 @@ No hooks, no orchestration overhead, no nesting. Just save and restore.
 
 ```
 /superpowers:brainstorming         → Adopt quickly
-/superpowers:writing-plans         → TDD breakdown
+/superpowers:writing-good-tests    → TDD breakdown
 /superpowers:executing-plans       → Inline execution (no subagents)
 /review → /ship
 ```
@@ -254,7 +254,7 @@ Skip Phase 1, skip `/clear` between phases, skip subagents, skip review speciali
 ```
 /office-hours → /plan-eng-review (security focus)
 /clear
-/superpowers:brainstorming → /superpowers:writing-plans → SDD
+/superpowers:brainstorming → /superpowers:writing-good-tests → SDD
 /clear
 /cso                   → Security audit FIRST
 /review → /qa → /ship → /canary
@@ -275,14 +275,14 @@ New idea or feature?
       YES → /superpowers:brainstorming
       NO  → /office-hours
 
-Spec or plan written? (after writing-specs / writing-plans / plan-eng-review)
+Spec or plan written? (after writing-specs / writing-good-tests / plan-eng-review)
   → /pitfall-verification → /quality-review
   → [macOS] /macos-native-review
   → [iOS] /ios-native-review
-  → /superpowers:writing-plans (or /superpowers:subagent-driven-development)
+  → /superpowers:writing-good-tests (or /superpowers:subagent-driven-development)
 
 Code written?  → /clear → /review
-Review feedback needs changes? → /superpowers:receiving-code-review → fix → /review
+Review feedback needs changes? → /superpowers:receiving-code-review → fix → /review again
 Review passed? → /qa → /cso → /ship
 ```
 
@@ -337,7 +337,7 @@ Review passed? → /qa → /cso → /ship
 | Command | When to Use |
 |---------|------------|
 | `/superpowers:brainstorming` | Refining technical approach |
-| `/superpowers:writing-plans` | Creating TDD task breakdown |
+| `/superpowers:writing-good-tests` | Creating TDD task breakdown |
 | `/superpowers:subagent-driven-development` | Executing with subagents + TDD |
 | `/superpowers:executing-plans` | Inline execution (small projects) |
 | `/superpowers:dispatching-parallel-agents` | Independent parallel tasks |
