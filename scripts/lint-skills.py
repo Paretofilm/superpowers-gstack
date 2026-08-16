@@ -70,6 +70,7 @@ MARKER_BLOCKS = [
     "git-hygiene.md",
     "multi-lens-review.md",
     "code-reuse.md",
+    "plan-fidelity.md",
     "track-routing.md",
     "xcode-tools.md",
     "companion-skills.md",
