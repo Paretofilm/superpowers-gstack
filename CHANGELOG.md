@@ -1,6 +1,31 @@
 # Changelog
 
-## [2.34.1] - 2026-07-05
+## [2.35.0] - 2026-08-16
+
+New emitted block: **Keep the plan true to the code**. Closes a gap found while
+executing a plan in a real project — the plan described a design that was
+deliberately abandoned mid-work, and nothing in either framework asked for it to
+be corrected.
+
+### Added
+- `skills/setup-routing/blocks/plan-fidelity.md` (`gstack-plan-fidelity-v1`),
+  emitted by both generators for all tracks. The rule: when implementation
+  diverges from the plan, fix the plan **in the same commit as the divergence** —
+  replacing the superseded section rather than appending a correction under it,
+  and keeping the *reason* the draft was dropped, which is the part a future
+  reader cannot reconstruct. Names the three ways plans go stale (better approach
+  found, task done out of order, a measurement kills a premise) and states
+  explicitly that deleting an invalidated phase is allowed.
+
+### Why not leave this to `/ship`
+GStack's `/ship` already audits plan completion and has a `CHANGED` class for
+"implemented differently, same goal achieved". That is real detection — but it
+runs at merge time, writes its findings to the PR body rather than back into the
+plan, and never runs at all on a branch that is not shipped. The failure this
+block addresses happened hours before any ship gate, on a branch still in
+progress, while the plan was actively being read as instructions. The block says
+so, so nobody re-litigates the overlap.
+
 
 Fixes for the three findings of the second external audit round (Codex).
 

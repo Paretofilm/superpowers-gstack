@@ -270,6 +270,15 @@ The block to insert: read `blocks/multi-lens-review.md` (see **Shared block file
 
 The block to insert: read `blocks/code-reuse.md` (see **Shared block files** above) and insert its content verbatim.
 
+**Insert or upgrade the Keep the plan true to the code section.** This section applies to ALL projects (plan drift is not track-specific). Scan CLAUDE.md for heading `^#{2,3} Keep the plan true to the code` and its version marker `<!-- gstack-plan-fidelity-vN -->`. Apply the same four-case logic:
+
+1. **Heading present + marker matches `v1`** → skip (idempotent).
+2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. (The block has H3 subsections; "next heading" alone would stop at the first one and leave old prose behind.) **If the existing root is H3**, demote every subsection in the replacement one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4.
+3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker. (Unlike Code reuse, this heading is specific enough that a user-authored collision is implausible.)
+4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root). If you instead insert it under `## Skill routing` as H3, you MUST demote every H3 subsection to H4 — otherwise the next marker upgrade stops at the first subsection and leaves stale content behind.
+
+The block to insert: read `blocks/plan-fidelity.md` (see **Shared block files** above) and insert its content verbatim.
+
 **Preserve or upgrade existing Track-aware routing.** Before
 inserting the Track-aware routing section, scan the project's
 CLAUDE.md. Check two things independently: (a) does any heading

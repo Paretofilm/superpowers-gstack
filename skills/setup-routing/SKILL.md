@@ -281,9 +281,10 @@ verbatim, in this order:
   2. `blocks/git-hygiene.md`
   3. `blocks/multi-lens-review.md`
   4. `blocks/code-reuse.md`
-  5. `blocks/track-routing.md`
-  6. `blocks/xcode-tools.md` — ONLY when `.gstack/track` is `ios`, `macos`, or `both`; skip for web
-  7. `blocks/companion-skills.md` — same native-track condition as xcode-tools.md
+  5. `blocks/plan-fidelity.md`
+  6. `blocks/track-routing.md`
+  7. `blocks/xcode-tools.md` — ONLY when `.gstack/track` is `ios`, `macos`, or `both`; skip for web
+  8. `blocks/companion-skills.md` — same native-track condition as xcode-tools.md
 Resolve `{{...}}` placeholders per `blocks/PLACEHOLDERS.md` before writing — never
 let a raw `{{...}}` token reach the generated CLAUDE.md. If the `blocks/` directory
 is missing (older plugin cache), warn the user to run `/plugin update
