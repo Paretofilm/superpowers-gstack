@@ -32,6 +32,33 @@ generated project.
 - **Wording drift between the generators.** `adapt` emitted "auto context
   **guard**" where `setup-routing` emitted "auto context **handoff**" — the same
   block, two different texts, for as long as both have existed.
+- **Read-and-clear destroyed the setting it was about to check.** Session
+  Continuity told the agent to clear handoff.md right after presenting the
+  summary, then check `mode:` in that same file one paragraph later — so the
+  value was always gone by the time it was read, and the project re-asked
+  forever. Exactly the bug this release set out to fix, reproduced one paragraph
+  further down. The order is now explicit (read `mode` first), and a continuous
+  handoff is never blanked: "clear" rewrites it carrying `type: handoff` +
+  `mode: continuous` so the setting survives the next compact.
+- **Legacy precedence was ambiguous for mixed files.** A handoff with YAML
+  `mode: manual` beside a stale `## Mode: auto` marker read as continuous under
+  the block's "any of these" wording, and as manual under `context-handoff`'s
+  "YAML takes precedence". Now stated one way in both: the Markdown marker counts
+  only when the YAML `mode:` key is absent entirely.
+
+### Fixed — `/adapt` upgrade path
+- **The H2 block would have been pasted over an H3 root.** `setup-routing` before
+  2.36.0 emitted `### Session Continuity` nested under `## Skill routing`.
+  Replacing that with the H2 block verbatim promotes the heading and silently
+  reparents every following H3 sibling underneath it. `adapt` now requires
+  rewriting the block's first line to H3 when the section it replaces is H3.
+- **A markerless section is no longer assumed to be ours.** "Session Continuity"
+  is generic enough that a project could have written its own — unlike
+  `Git hygiene & commit cadence` or `Autonomy and user interruption`. Case 3 now
+  auto-replaces only when the section body mentions `docs/superpowers/handoff.md`;
+  otherwise it leaves the user's section alone, inserts ours separately, and says
+  so. `/adapt` promises to preserve what exists, and a generic heading is where
+  that promise was thinnest.
 
 ### Added
 - `skills/setup-routing/blocks/session-continuity.md`
@@ -43,12 +70,14 @@ generated project.
   not apply to it.
 
 ### Release-gate hardening
-- **E8's inline-copy guard now strips leading whitespace before testing for a
-  heading.** It tested `line.startswith("#")`, so an indented re-paste inside a
-  fenced example was invisible to it — which is precisely the form the Session
+- **E8's inline-copy guard now normalizes headings before comparing.** It tested
+  `line.startswith("#")` against an exact-case string, so an indented re-paste
+  inside a fenced example was invisible to it — precisely the form the Session
   Continuity duplication took, and why it survived four releases of a lint that
-  exists to prevent exactly that. Verified by negative test: re-introducing the
-  copy in either form now fails the lint.
+  exists to prevent exactly that. A new `heading_text()` helper tolerates leading
+  whitespace, blockquote/list prefixes, ATX closing hashes, the version marker,
+  and letter case. Verified by negative test: a probe wearing all three disguises
+  at once (`> ## SESSION CONTINUITY ##`) now fails the lint.
 - Two `DENYLIST` entries keep the purge: `auto context (guard|handoff)` and the
   marker-only sensor phrasing `does not contain ## Mode: auto`. Legacy *read*
   support for `mode: auto` is deliberate prose and stays legal.

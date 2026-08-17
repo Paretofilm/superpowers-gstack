@@ -282,13 +282,13 @@ The block to insert: read `blocks/plan-fidelity.md` (see **Shared block files** 
 **Insert or upgrade the Session Continuity section.** This section applies to ALL projects (context handoff is platform-agnostic). Scan CLAUDE.md for heading `^#{2,3} Session [Cc]ontinuity` and its version marker `<!-- gstack-session-continuity-vN -->`. Apply the same four-case logic:
 
 1. **Heading present + marker matches `v1`** → skip (idempotent).
-2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level.
-3. **Heading present + marker absent** (every pre-2.36.0 emitter, both generators) → REPLACE the same way. This is the upgrade that matters: those emitters wrote a sensor that looks ONLY for the `## Mode: auto` Markdown marker, which `/superpowers-gstack:context-handoff` deletes as soon as it writes YAML — so the project re-asks the opt-in question after every single compact. Replacing the section fixes that.
+2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level (see the heading-level rule below).
+3. **Heading present + marker absent** → the section is either a pre-2.36.0 emitted block or one the user wrote themselves, and unlike `Git hygiene & commit cadence` or `Autonomy and user interruption`, "Session Continuity" is a heading a project could plausibly own. Tell them apart before touching it: treat it as emitted ONLY if the section body mentions `docs/superpowers/handoff.md`. **If it does** → REPLACE as in case 2. This is the upgrade that matters, because every pre-2.36.0 emitter wrote a sensor keyed only to the `## Mode: auto` Markdown marker, which `/superpowers-gstack:context-handoff` deletes the moment it writes YAML — so those projects re-ask the opt-in question after every single compact. **If it does not** → leave the user's section untouched, insert the block as a separate H2 section, and tell the user both now exist so they can merge by hand. Never silently overwrite a section you cannot attribute to a past emitter.
 4. **Heading absent** → APPEND the block as H2.
 
-Unlike the other marker-managed sections, this block has NO subsections — everything under the heading is prose or a flat list. The H3→H4 demote rule therefore does not apply, and the block may be inserted at H2 or H3 unchanged.
+**Heading-level rule.** The block ships with an H2 root and has NO subsections, so it is exempt from the H3→H4 subsection demote that complicates the other marker-managed sections. It is NOT exempt from matching the existing root level. `setup-routing` before 2.36.0 emitted this section as `### Session Continuity` nested under `## Skill routing`; pasting the H2 block verbatim over an H3 root promotes it to H2 and silently reparents every following H3 sibling underneath it. So when the section being replaced is H3, change the block's FIRST LINE to `### Session Continuity <!-- gstack-session-continuity-v1 -->` and paste the remaining lines unchanged.
 
-The block to insert: read `blocks/session-continuity.md` (see **Shared block files** above) and insert its content verbatim.
+The block to insert: read `blocks/session-continuity.md` (see **Shared block files** above) and insert its content verbatim, subject to the heading-level rule above.
 
 **Preserve or upgrade existing Track-aware routing.** Before
 inserting the Track-aware routing section, scan the project's

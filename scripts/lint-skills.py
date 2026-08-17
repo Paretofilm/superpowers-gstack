@@ -90,6 +90,26 @@ errors: list[str] = []
 warnings: list[str] = []
 
 
+def heading_text(line: str) -> str | None:
+    """Normalized heading text for E8's inline-copy guard, or None if `line` is
+    not a heading at all.
+
+    A re-paste of an emitted block can wear several disguises, and each one that
+    slips through reopens the drift class E8 exists to close. This tolerates:
+    leading whitespace (the pre-2.36.0 Session Continuity copy hid indented
+    inside a fenced example and sailed past a bare startswith("#") for four
+    releases), blockquote/list prefixes, ATX closing hashes, the gstack version
+    marker, and letter case. Body-only copies with no heading remain out of
+    reach — a heading-keyed check cannot see them, and the CHANGELOG says so.
+    """
+    s = re.sub(r"^[\s>*+-]*", "", line)
+    if not s.startswith("#"):
+        return None
+    s = s.lstrip("#").strip()
+    s = re.sub(r"\s*<!-- gstack-[a-z-]+-v\d+ -->\s*$", "", s)
+    return re.sub(r"\s*#+$", "", s).strip().lower()
+
+
 def frontmatter(text: str) -> dict | None:
     """Minimal YAML-ish frontmatter reader: top-level `key:` lines between --- markers.
     Values are not fully parsed (multi-line descriptions concatenate); enough for linting."""
@@ -257,19 +277,18 @@ def main() -> int:
     for fname in MARKER_BLOCKS + ["model-routing-section.md"]:
         f = blocks_dir / fname
         if f.is_file():
-            first = f.read_text().split("\n", 1)[0]
-            block_headings.add(re.sub(r"\s*<!-- gstack-[a-z-]+-v\d+ -->\s*$", "", first).lstrip("#").strip())
+            h = heading_text(f.read_text().split("\n", 1)[0])
+            if h:
+                block_headings.add(h)
     for gen, text in gen_texts.items():
         for i, line in enumerate(text.splitlines(), 1):
-            # Strip leading whitespace BEFORE the `#` test: an indented heading
-            # inside a fenced example is still a re-paste. The pre-2.36.0
-            # Session Continuity duplication hid in exactly that form and sailed
-            # past a bare startswith("#") check for four releases.
-            bare = line.strip()
-            if bare.startswith("#") and re.search(r"<!-- gstack-[a-z-]+-v\d+ -->", bare):
+            h = heading_text(line)
+            if h is None:
+                continue
+            if re.search(r"<!-- gstack-[a-z-]+-v\d+ -->", line):
                 errors.append(f"E8 {gen}/SKILL.md:{i}: inline emitted-block copy (marker heading) — blocks/ is the single source")
-            elif bare.startswith("#") and bare.lstrip("#").strip() in block_headings:
-                errors.append(f"E8 {gen}/SKILL.md:{i}: inline emitted-block copy (markerless heading '{bare.lstrip('#').strip()}') — blocks/ is the single source")
+            elif h in block_headings:
+                errors.append(f"E8 {gen}/SKILL.md:{i}: inline emitted-block copy (markerless heading '{h}') — blocks/ is the single source")
         for ref in set(re.findall(r"blocks/([A-Za-z0-9_.-]+\.md)", text)):
             if not (blocks_dir / ref).is_file():
                 errors.append(f"E8 {gen}/SKILL.md references nonexistent blocks/{ref}")
