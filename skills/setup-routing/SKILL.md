@@ -262,12 +262,6 @@ This project uses Superpowers + GStack. Each owns a distinct phase:
 - Superpowers specs go in `docs/superpowers/`
 - GStack state lives in `~/.gstack/projects/`
 
-### Session Continuity
-
-On session start or after /compact: if `docs/superpowers/handoff.md` exists and contains content, read it and present a one-line summary of where you left off. Then proceed normally — do not ask "ready to continue?". Clear the file (write empty string) immediately after presenting the summary.
-
-After /compact: if handoff.md does not contain `## Mode: auto`, ask the user once: "Context was compressed. Want me to activate auto context handoff for this session? I'll keep handoff.md updated and suggest /clear when context gets heavy." If yes, invoke the context-handoff skill.
-
 ### Session Management
 - `/clear` when transitioning between GStack and Superpowers phases
 - Save architecture decisions to `docs/` before clearing after Phase 1
@@ -282,9 +276,10 @@ verbatim, in this order:
   3. `blocks/multi-lens-review.md`
   4. `blocks/code-reuse.md`
   5. `blocks/plan-fidelity.md`
-  6. `blocks/track-routing.md`
-  7. `blocks/xcode-tools.md` — ONLY when `.gstack/track` is `ios`, `macos`, or `both`; skip for web
-  8. `blocks/companion-skills.md` — same native-track condition as xcode-tools.md
+  6. `blocks/session-continuity.md`
+  7. `blocks/track-routing.md`
+  8. `blocks/xcode-tools.md` — ONLY when `.gstack/track` is `ios`, `macos`, or `both`; skip for web
+  9. `blocks/companion-skills.md` — same native-track condition as xcode-tools.md
 Resolve `{{...}}` placeholders per `blocks/PLACEHOLDERS.md` before writing — never
 let a raw `{{...}}` token reach the generated CLAUDE.md. If the `blocks/` directory
 is missing (older plugin cache), warn the user to run `/plugin update

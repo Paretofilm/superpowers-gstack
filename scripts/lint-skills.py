@@ -59,6 +59,14 @@ DENYLIST = [
     # `/cost-ledger` slash command").
     (re.compile(r"(?<![\w.~])/cost-ledger\b(?!`? slash command)"),
      "no /cost-ledger slash command exists — use python3 scripts/cost-ledger/cli.py <subcommand> (2.34.1)"),
+    # 2.36.0: the handoff persistence mode was renamed auto -> continuous so it
+    # stops colliding with Claude Code's `auto` PERMISSION mode (default for
+    # Pro/Max/Team since 2026-08-14). Reading the legacy `mode: auto` value is
+    # deliberate and stays legal — only these two purged forms are denied.
+    (re.compile(r"auto context (guard|handoff)"),
+     "renamed to 'continuous handoff' in 2.36.0 ('auto context guard' was also drifted wording in adapt)"),
+    (re.compile(r"does not contain\s+`?##\s*Mode:\s*auto"),
+     "marker-only compact sensor is stale — check YAML `mode:` (continuous, then legacy auto) first (2.36.0)"),
 ]
 
 # Shared emitted blocks (skills/setup-routing/blocks/): single source for the
@@ -71,6 +79,7 @@ MARKER_BLOCKS = [
     "multi-lens-review.md",
     "code-reuse.md",
     "plan-fidelity.md",
+    "session-continuity.md",
     "track-routing.md",
     "xcode-tools.md",
     "companion-skills.md",
@@ -79,6 +88,32 @@ PLAIN_BLOCKS = ["model-routing-section.md", "PLACEHOLDERS.md"]
 
 errors: list[str] = []
 warnings: list[str] = []
+
+
+def heading_text(line: str) -> str | None:
+    """Normalized heading text for E8's inline-copy guard, or None if `line` is
+    not a heading at all.
+
+    A re-paste of an emitted block can wear several disguises, and each one that
+    slips through reopens the drift class E8 exists to close. This tolerates:
+    leading whitespace (the pre-2.36.0 Session Continuity copy hid indented
+    inside a fenced example and sailed past a bare startswith("#") for four
+    releases), blockquote/list prefixes, ATX closing hashes, the gstack version
+    marker, and letter case. Body-only copies with no heading remain out of
+    reach — a heading-keyed check cannot see them, and the CHANGELOG says so.
+    """
+    # Blockquote markers and whitespace strip unconditionally. A list marker
+    # strips only in its real form (`- `, `* `, `+ ` with trailing space) — a
+    # blanket [-*+]* class would also eat a `---` rule or a hyphenated token and
+    # expose a following `#`, inventing a false-positive class that the older
+    # startswith("#") check did not have (third-lens P3, 2.36.0).
+    s = re.sub(r"^[\s>]*", "", line)
+    s = re.sub(r"^[-*+][ \t]+", "", s)
+    if not s.startswith("#"):
+        return None
+    s = s.lstrip("#").strip()
+    s = re.sub(r"\s*<!-- gstack-[a-z-]+-v\d+ -->\s*$", "", s)
+    return re.sub(r"\s*#+$", "", s).strip().lower()
 
 
 def frontmatter(text: str) -> dict | None:
@@ -248,14 +283,18 @@ def main() -> int:
     for fname in MARKER_BLOCKS + ["model-routing-section.md"]:
         f = blocks_dir / fname
         if f.is_file():
-            first = f.read_text().split("\n", 1)[0]
-            block_headings.add(re.sub(r"\s*<!-- gstack-[a-z-]+-v\d+ -->\s*$", "", first).lstrip("#").strip())
+            h = heading_text(f.read_text().split("\n", 1)[0])
+            if h:
+                block_headings.add(h)
     for gen, text in gen_texts.items():
         for i, line in enumerate(text.splitlines(), 1):
-            if line.startswith("#") and re.search(r"<!-- gstack-[a-z-]+-v\d+ -->", line):
+            h = heading_text(line)
+            if h is None:
+                continue
+            if re.search(r"<!-- gstack-[a-z-]+-v\d+ -->", line):
                 errors.append(f"E8 {gen}/SKILL.md:{i}: inline emitted-block copy (marker heading) — blocks/ is the single source")
-            elif line.startswith("#") and line.lstrip("#").strip() in block_headings:
-                errors.append(f"E8 {gen}/SKILL.md:{i}: inline emitted-block copy (markerless heading '{line.lstrip('#').strip()}') — blocks/ is the single source")
+            elif h in block_headings:
+                errors.append(f"E8 {gen}/SKILL.md:{i}: inline emitted-block copy (markerless heading '{h}') — blocks/ is the single source")
         for ref in set(re.findall(r"blocks/([A-Za-z0-9_.-]+\.md)", text)):
             if not (blocks_dir / ref).is_file():
                 errors.append(f"E8 {gen}/SKILL.md references nonexistent blocks/{ref}")
