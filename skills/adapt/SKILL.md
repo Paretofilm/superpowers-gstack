@@ -279,6 +279,17 @@ The block to insert: read `blocks/code-reuse.md` (see **Shared block files** abo
 
 The block to insert: read `blocks/plan-fidelity.md` (see **Shared block files** above) and insert its content verbatim.
 
+**Insert or upgrade the Session Continuity section.** This section applies to ALL projects (context handoff is platform-agnostic). Scan CLAUDE.md for heading `^#{2,3} Session [Cc]ontinuity` and its version marker `<!-- gstack-session-continuity-vN -->`. Apply the same four-case logic:
+
+1. **Heading present + marker matches `v1`** → skip (idempotent).
+2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level.
+3. **Heading present + marker absent** (every pre-2.36.0 emitter, both generators) → REPLACE the same way. This is the upgrade that matters: those emitters wrote a sensor that looks ONLY for the `## Mode: auto` Markdown marker, which `/superpowers-gstack:context-handoff` deletes as soon as it writes YAML — so the project re-asks the opt-in question after every single compact. Replacing the section fixes that.
+4. **Heading absent** → APPEND the block as H2.
+
+Unlike the other marker-managed sections, this block has NO subsections — everything under the heading is prose or a flat list. The H3→H4 demote rule therefore does not apply, and the block may be inserted at H2 or H3 unchanged.
+
+The block to insert: read `blocks/session-continuity.md` (see **Shared block files** above) and insert its content verbatim.
+
 **Preserve or upgrade existing Track-aware routing.** Before
 inserting the Track-aware routing section, scan the project's
 CLAUDE.md. Check two things independently: (a) does any heading
@@ -328,13 +339,6 @@ The block to insert: read `blocks/xcode-tools.md` (see **Shared block files** ab
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
 
 The block to insert: read `blocks/companion-skills.md` (see **Shared block files** above) and insert its content verbatim.
-
-- If no `## Session Continuity` section exists in CLAUDE.md: ADD the following block. If it already exists, REPLACE it with the current version:
-  ```
-  ## Session Continuity
-  On session start or after /compact: if `docs/superpowers/handoff.md` exists and contains content, read it and present a one-line summary of where you left off. Then proceed normally — do not ask "ready to continue?". Clear the file (write empty string) immediately after presenting the summary.
-  After /compact: if handoff.md does not contain `## Mode: auto`, ask the user once: "Context was compressed. Want me to activate auto context guard for this session? I'll keep handoff.md updated and suggest /clear when context gets heavy." If yes, invoke the context-handoff skill.
-  ```
 
 **Structure setup:**
 - Create `docs/superpowers/specs/` and `docs/superpowers/plans/` if they don't exist

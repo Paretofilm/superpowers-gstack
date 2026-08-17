@@ -1,5 +1,65 @@
 # Changelog
 
+## [2.36.0] - 2026-08-17
+
+Renames the handoff persistence mode `auto` → `continuous`, and extracts Session
+Continuity into a shared block — which fixes a sensor that had been dead in every
+generated project.
+
+### Changed
+- **`mode: auto` → `mode: continuous`** in `docs/superpowers/handoff.md`. Claude
+  Code's own **auto mode** is a *permission* mode (a classifier approving or
+  blocking tool calls) and became the default for Pro/Max/Team on 2026-08-14. A
+  handoff field literally named `mode` with the value `auto` collided with it on
+  both key and value, in the same session, read by the same agent. The two settings
+  are unrelated, so the name had to give way.
+  Reading is backwards compatible: YAML `mode: continuous` → YAML `mode: auto`
+  (pre-2.36.0) → `## Mode: auto` Markdown marker (pre-2.1.1), in that precedence.
+  Writes always emit `continuous`. No user action needed; existing handoff files
+  keep working and are rewritten on their next update.
+  `continuous` follows gstack's existing `checkpoint_mode continuous` vocabulary
+  rather than inventing a new word.
+
+### Fixed
+- **The post-compact sensor in generated projects never fired.** Both generators
+  emitted `if handoff.md does not contain "## Mode: auto"` — but `/context-handoff`
+  deletes that Markdown marker as soon as it writes YAML (behaviour introduced in
+  2.1.1). The sensor therefore never saw the opt-in it had just recorded, and
+  re-asked "want me to activate auto context handoff?" after **every** compact,
+  forever. The block now checks YAML first and treats both legacy spellings as
+  opt-in. Existing projects pick the fix up via `/superpowers-gstack:adapt`
+  (marker-absent → REPLACE).
+- **Wording drift between the generators.** `adapt` emitted "auto context
+  **guard**" where `setup-routing` emitted "auto context **handoff**" — the same
+  block, two different texts, for as long as both have existed.
+
+### Added
+- `skills/setup-routing/blocks/session-continuity.md`
+  (`gstack-session-continuity-v1`), emitted by both generators for all tracks.
+  Session Continuity was the last CLAUDE.md section still hand-duplicated inline
+  in both SKILL.md files; it is now single-sourced like every other block, so E8
+  covers it and the drift above cannot recur. The block has no subsections, so
+  the H3→H4 demote rule that complicates the other marker-managed sections does
+  not apply to it.
+
+### Release-gate hardening
+- **E8's inline-copy guard now strips leading whitespace before testing for a
+  heading.** It tested `line.startswith("#")`, so an indented re-paste inside a
+  fenced example was invisible to it — which is precisely the form the Session
+  Continuity duplication took, and why it survived four releases of a lint that
+  exists to prevent exactly that. Verified by negative test: re-introducing the
+  copy in either form now fails the lint.
+- Two `DENYLIST` entries keep the purge: `auto context (guard|handoff)` and the
+  marker-only sensor phrasing `does not contain ## Mode: auto`. Legacy *read*
+  support for `mode: auto` is deliberate prose and stays legal.
+
+### Note on scope
+A lint that iterates over `blocks/` can only verify the blocks somebody
+remembered to extract; it is structurally blind to a duplication that never
+became a block. That is how this one hid. The complementary check — iterating
+over generator *output* to find text emitted by both generators with no block
+file behind it — is not implemented here.
+
 ## [2.35.0] - 2026-08-16
 
 New emitted block: **Keep the plan true to the code**. Closes a gap found while

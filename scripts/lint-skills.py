@@ -59,6 +59,14 @@ DENYLIST = [
     # `/cost-ledger` slash command").
     (re.compile(r"(?<![\w.~])/cost-ledger\b(?!`? slash command)"),
      "no /cost-ledger slash command exists — use python3 scripts/cost-ledger/cli.py <subcommand> (2.34.1)"),
+    # 2.36.0: the handoff persistence mode was renamed auto -> continuous so it
+    # stops colliding with Claude Code's `auto` PERMISSION mode (default for
+    # Pro/Max/Team since 2026-08-14). Reading the legacy `mode: auto` value is
+    # deliberate and stays legal — only these two purged forms are denied.
+    (re.compile(r"auto context (guard|handoff)"),
+     "renamed to 'continuous handoff' in 2.36.0 ('auto context guard' was also drifted wording in adapt)"),
+    (re.compile(r"does not contain\s+`?##\s*Mode:\s*auto"),
+     "marker-only compact sensor is stale — check YAML `mode:` (continuous, then legacy auto) first (2.36.0)"),
 ]
 
 # Shared emitted blocks (skills/setup-routing/blocks/): single source for the
@@ -71,6 +79,7 @@ MARKER_BLOCKS = [
     "multi-lens-review.md",
     "code-reuse.md",
     "plan-fidelity.md",
+    "session-continuity.md",
     "track-routing.md",
     "xcode-tools.md",
     "companion-skills.md",
@@ -252,10 +261,15 @@ def main() -> int:
             block_headings.add(re.sub(r"\s*<!-- gstack-[a-z-]+-v\d+ -->\s*$", "", first).lstrip("#").strip())
     for gen, text in gen_texts.items():
         for i, line in enumerate(text.splitlines(), 1):
-            if line.startswith("#") and re.search(r"<!-- gstack-[a-z-]+-v\d+ -->", line):
+            # Strip leading whitespace BEFORE the `#` test: an indented heading
+            # inside a fenced example is still a re-paste. The pre-2.36.0
+            # Session Continuity duplication hid in exactly that form and sailed
+            # past a bare startswith("#") check for four releases.
+            bare = line.strip()
+            if bare.startswith("#") and re.search(r"<!-- gstack-[a-z-]+-v\d+ -->", bare):
                 errors.append(f"E8 {gen}/SKILL.md:{i}: inline emitted-block copy (marker heading) — blocks/ is the single source")
-            elif line.startswith("#") and line.lstrip("#").strip() in block_headings:
-                errors.append(f"E8 {gen}/SKILL.md:{i}: inline emitted-block copy (markerless heading '{line.lstrip('#').strip()}') — blocks/ is the single source")
+            elif bare.startswith("#") and bare.lstrip("#").strip() in block_headings:
+                errors.append(f"E8 {gen}/SKILL.md:{i}: inline emitted-block copy (markerless heading '{bare.lstrip('#').strip()}') — blocks/ is the single source")
         for ref in set(re.findall(r"blocks/([A-Za-z0-9_.-]+\.md)", text)):
             if not (blocks_dir / ref).is_file():
                 errors.append(f"E8 {gen}/SKILL.md references nonexistent blocks/{ref}")

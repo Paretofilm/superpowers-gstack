@@ -183,7 +183,7 @@ If review feedback needs code changes: `/superpowers:receiving-code-review` → 
 Long sessions degrade Claude's output quality — a problem known as context rot. [GSD](https://github.com/gsd-build/get-shit-done) solves this with a full orchestration layer, but that creates nesting issues when combined with Superpowers' subagent-driven development (three layers of orchestration). This plugin takes a lighter approach:
 
 **How it works:**
-1. After `/compact`, Claude asks if you want to activate auto context handoff for the session
+1. After `/compact`, Claude asks if you want continuous handoff for the session (unrelated to Claude Code's `auto` permission mode — this only governs how often `handoff.md` is rewritten)
 2. If yes, it keeps `docs/superpowers/handoff.md` updated as a living document — current task, decisions, next step
 3. When context gets heavy again, Claude suggests `/clear`
 4. After `/clear`, Claude automatically reads the handoff file, presents where you left off, and clears it — no "resume" command needed
