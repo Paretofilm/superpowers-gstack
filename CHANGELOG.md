@@ -1,5 +1,84 @@
 # Changelog
 
+## [2.36.0] - 2026-08-17
+
+Upstream sync: GStack v1.67.0.0 and Superpowers v6.3.0.
+
+### GStack v1.67.0.0 — the tracker wave
+
+Three P0s resolved and ~35 issues closed.
+
+- **Browse self-heals on macOS XProtect kills.** Playwright is pinned to
+  1.62.1; an XProtect kill-signature classifier detects the failure,
+  clears the quarantine flag, reinstalls the pinned Chromium revision
+  (~120s bounded), and retries — all logged. `setup` also clears
+  already-poisoned caches on upgrade. The `/browse` entry in Quick
+  Reference notes the self-heal behavior.
+- **Fresh installs now link every runtime asset** a skill references
+  (explicit exclusion list: node_modules, dist, *.tmpl, test, hidden),
+  so `/review` and friends work on a clean machine from day one.
+- **Brain-sync (gbrain) no longer loses records under flaky networks.**
+  Queue records are classified at drain time: privacy-held records are
+  retained and labeled, unparseable lines preserved, and the rewrite
+  subtracts only the staged set from a live re-read so a record enqueued
+  mid-drain survives. A failed push keeps its commit and re-delivers it
+  on the next run; the detector fires only when every unpushed commit is
+  its own (interleaved manual commits in ~/.gstack are never
+  auto-published). The sync lock releases on every exit path including
+  interrupts.
+- **Daemon lifecycle hardened:** a healthy daemon is never killed by
+  `browse start`; `browse stop` on a dead daemon short-circuits to
+  success; `/gstack-upgrade` defers to a busy daemon.
+- **Chromium survives terminal close:** signal handling moved off
+  Playwright's defaults at all three launch sites.
+- **Install correctness:** root-alias skills install as rewritten copies
+  (not symlinks); `--host cursor` gets the full install slice; uninstall
+  deletes only directories passing both the inventory match and the
+  generated-banner provenance gate.
+- **Office-hours** installs into codex/factory/opencode runtime roots.
+- The dead security-shield surface removed (−272 net lines).
+- Gate evals: 43/43 (was 41/43); free suite ~7,000 tests green at HEAD.
+
+### Superpowers v6.3.0
+
+- **New harness support:** Devin CLI (`devin plugins install
+  obra/superpowers`) and Hermes Agent (git-clone install, native loader).
+  Grok Build CLI added to install docs.
+- **`brainstorming` scales ceremony to task size.** Requests are
+  classified as spike, bounded, or architectural; small tasks skip the
+  two-document ritual. Every path still stops for approval before
+  implementation.
+- **SDD controllers no longer stall on non-catastrophic conflicts.**
+  Ambiguities get a recorded ruling and work continues; only
+  destructive/irreversible actions still stop for a human. Pre-dispatch
+  conflict scan records its checks in the ledger. Small same-shape tasks
+  batch into one dispatch. Implementers and reviewers may not spawn their
+  own subagents. Plans carry a `Spec:` pointer; SDD reads the spec at
+  setup.
+- **`finishing-a-development-branch` no longer destroys untracked
+  files.** When `git worktree remove` refuses because the tree holds
+  uncommitted work, the skill stops, names the files, and asks instead
+  of reaching for `--force`.
+- **`testing-anti-patterns.md` renamed to `writing-good-tests.md`.**
+  Rebuilt as a positive catalog with six rules leading with the good
+  example; absorbs falsifiability discipline; closes the string-presence
+  trap and change-detector trap each with a hard stop.
+- Codex subagent waits are event-driven instead of poll-heavy.
+- `render-graphs.js` works on Windows; Copilot CLI backgrounding
+  guidance corrected for Windows.
+
+### Plugin changes
+
+- Updated Superpowers skill table: `testing-anti-patterns` renamed to
+  `writing-good-tests` in Quick Reference and both SKILL.md evaluation
+  tables.
+- `/browse` Quick Reference note updated to mention macOS XProtect
+  self-heal.
+- `/superpowers:brainstorming` Quick Reference note updated to mention
+  task-size ceremony scaling.
+- `/superpowers:finishing-a-development-branch` Quick Reference note
+  updated to reflect safe worktree removal behavior.
+
 ## [2.35.0] - 2026-08-16
 
 New emitted block: **Keep the plan true to the code**. Closes a gap found while

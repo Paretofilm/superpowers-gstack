@@ -321,7 +321,7 @@ Review passed? → /qa → /cso → /ship
 | `/freeze` | Restrict edits to one directory |
 | `/unfreeze` | Clear the freeze boundary mid-session |
 | `/guard` | Full safety: `/careful` + `/freeze` combined |
-| `/browse` | Headless browser |
+| `/browse` | Headless browser — self-heals on macOS XProtect kills |
 | `/open-gstack-browser` | Launch GStack Browser (Chromium + sidebar) |
 | `/pair-agent` | Pair a remote AI agent with your browser |
 | `/setup-browser-cookies` | Import cookies for authenticated tests |
@@ -336,18 +336,19 @@ Review passed? → /qa → /cso → /ship
 
 | Command | When to Use |
 |---------|------------|
-| `/superpowers:brainstorming` | Refining technical approach |
+| `/superpowers:brainstorming` | Refining technical approach — scales ceremony to task size (spike/bounded/architectural) |
 | `/superpowers:writing-plans` | Creating TDD task breakdown |
 | `/superpowers:subagent-driven-development` | Executing with subagents + TDD |
 | `/superpowers:executing-plans` | Inline execution (small projects) |
 | `/superpowers:dispatching-parallel-agents` | Independent parallel tasks |
 | `/superpowers:systematic-debugging` | Finding root cause of bugs |
 | `/superpowers:using-git-worktrees` | Feature branch isolation — asks for consent before creating; detects if already in a worktree |
-| `/superpowers:finishing-a-development-branch` | Merge/PR/discard — only cleans up worktrees it created (inside `.worktrees/`) |
+| `/superpowers:finishing-a-development-branch` | Merge/PR — stops and names files if worktree holds uncommitted work instead of force-removing |
 | `/superpowers:test-driven-development` | Manual TDD enforcement |
 | `/superpowers:verification-before-completion` | Verify before claiming done |
 | `/superpowers:requesting-code-review` | Dispatch review subagent (uses `general-purpose` agent with self-contained template) |
 | `/superpowers:receiving-code-review` | Handle review feedback |
+| `/superpowers:writing-good-tests` | Writing effective, falsifiable tests (formerly `writing-anti-patterns`) |
 | `/superpowers:writing-skills` | Plugin/skill projects only |
 
 ### Model Routing (v0.2)
