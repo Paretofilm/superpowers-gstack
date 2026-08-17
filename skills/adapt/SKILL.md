@@ -290,6 +290,8 @@ The block to insert: read `blocks/plan-fidelity.md` (see **Shared block files** 
 
 The block to insert: read `blocks/session-continuity.md` (see **Shared block files** above) and insert its content verbatim, subject to the heading-level rule above.
 
+**Verify after inserting.** "Modify the template's first line, then paste the rest verbatim" is the instruction shape most easily skipped under pressure — the reflex is to paste the whole block unchanged. So do not trust that you applied it: re-read the section you just wrote, and confirm its first line has the SAME number of `#` characters as the heading you replaced. If it does not, fix it now, before moving on. Getting this wrong is silent — the file still looks well-formed, but every H3 that followed the section has been reparented underneath it.
+
 **Preserve or upgrade existing Track-aware routing.** Before
 inserting the Track-aware routing section, scan the project's
 CLAUDE.md. Check two things independently: (a) does any heading

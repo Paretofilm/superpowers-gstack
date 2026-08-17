@@ -3,8 +3,10 @@
 On session start or after `/compact`: if `docs/superpowers/handoff.md` exists and
 contains content, read it and present a one-line summary of where you left off.
 Quote `next_step` verbatim, name the `active_task` ID, and surface `env` (venv,
-dev_server, test_cmd) so commands work immediately. Then proceed normally — do
-not ask "ready to continue?".
+dev_server, test_cmd) so commands work immediately. If the file has no YAML
+frontmatter at all (a pre-1.12.0 prose-only handoff), none of those fields
+exist — summarize from the prose instead, and treat `mode` as absent below. Then
+proceed normally — do not ask "ready to continue?".
 
 **Read the `mode:` field BEFORE you clear the file.** Clearing first destroys the
 value the very next step depends on. Once you have read it:

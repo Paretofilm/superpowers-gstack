@@ -102,7 +102,13 @@ def heading_text(line: str) -> str | None:
     marker, and letter case. Body-only copies with no heading remain out of
     reach — a heading-keyed check cannot see them, and the CHANGELOG says so.
     """
-    s = re.sub(r"^[\s>*+-]*", "", line)
+    # Blockquote markers and whitespace strip unconditionally. A list marker
+    # strips only in its real form (`- `, `* `, `+ ` with trailing space) — a
+    # blanket [-*+]* class would also eat a `---` rule or a hyphenated token and
+    # expose a following `#`, inventing a false-positive class that the older
+    # startswith("#") check did not have (third-lens P3, 2.36.0).
+    s = re.sub(r"^[\s>]*", "", line)
+    s = re.sub(r"^[-*+][ \t]+", "", s)
     if not s.startswith("#"):
         return None
     s = s.lstrip("#").strip()

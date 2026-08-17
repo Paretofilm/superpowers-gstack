@@ -186,7 +186,7 @@ Long sessions degrade Claude's output quality — a problem known as context rot
 1. After `/compact`, Claude asks if you want continuous handoff for the session (unrelated to Claude Code's `auto` permission mode — this only governs how often `handoff.md` is rewritten)
 2. If yes, it keeps `docs/superpowers/handoff.md` updated as a living document — current task, decisions, next step
 3. When context gets heavy again, Claude suggests `/clear`
-4. After `/clear`, Claude automatically reads the handoff file, presents where you left off, and clears it — no "resume" command needed
+4. After `/clear`, Claude automatically reads the handoff file, presents where you left off, and clears it — no "resume" command needed. In continuous mode it keeps the `mode:` line instead of blanking the file, so the next compact doesn't ask you again
 
 **Manual use:** Run `/context-handoff` anytime to save state before a `/clear`.
 
