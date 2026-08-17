@@ -56,6 +56,31 @@ remaining: [a-2]
     expect(r.kind).toBe("handoff");
   });
 
+  // 2.36.0 renamed the handoff persistence mode auto -> continuous (it collided
+  // with Claude Code's `auto` PERMISSION mode). classify() hard-exits via
+  // die(EXIT.SCHEMA) on a rejected enum, and the PostToolUse hook runs it on
+  // EVERY handoff.md write — so a value missing from the enum breaks the hook,
+  // not just the render. All three spellings must parse.
+  for (const mode of ["manual", "continuous", "auto"]) {
+    test(`handoff mode: ${mode} parses (auto = pre-2.36.0 legacy)`, () => {
+      const p = write(
+        `h-${mode}.md`,
+        `---
+type: handoff
+session_end: 2026-08-17T09:00:00+02:00
+mode: ${mode}
+next_step: Do X
+completed: []
+remaining: []
+---
+`
+      );
+      const r = classify(readArtifact(p));
+      expect(r.kind).toBe("handoff");
+      expect((r.frontmatter as any).mode).toBe(mode);
+    });
+  }
+
   test("legacy handoff (filename + fields, no type:) → handoff", () => {
     const p = write(
       "handoff.md",
