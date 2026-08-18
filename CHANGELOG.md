@@ -1,5 +1,64 @@
 # Changelog
 
+## [2.37.0] - 2026-08-18
+
+Upstream skill references are now validated. They never were, and the weekly
+auto-update job writes exactly that kind of reference from release notes.
+
+### Added
+- **Lint rule E10 — `superpowers:<name>` must name a real upstream skill.**
+  E2 has always validated `superpowers-gstack:<skill>` and repo `scripts/` paths
+  — this plugin's *own* references. Upstream names were unchecked everywhere.
+  Roster: `SUPERPOWERS_SKILLS` in `scripts/lint-skills.py`.
+- **Warning W3 — roster drift.** Where a Superpowers install exists, the roster is
+  compared against it in both directions (missing entry / phantom entry). Skipped
+  in CI, which has no upstream installed — which is exactly why the roster is
+  checked in rather than read from disk: a disk-only check would be silent on the
+  auto-update PR, the one place it matters.
+- `tests/unit/test_lint_upstream_skills.py` — 19 tests: every rostered name
+  accepted, three unknown names rejected (including the real phantom below and a
+  near-miss on a real name), our own namespace not mistaken for upstream, and
+  layer 2 asserted where an install exists.
+
+### Why now
+The 2026-08-17 auto-update PR (#55) proposed adding `/superpowers:writing-good-tests`
+to the skill-evaluation tables in **both** generators. The installed Superpowers
+6.3.0 has 14 skills and that is not one of them. The PR also claimed GStack
+v1.67.0.0 against an installed 1.61.0.0.
+
+Merged, it would have passed every existing gate and shipped a routing row for a
+nonexistent skill into every project that ran `/adapt` — agents invoking something
+that isn't there. Verified by negative test before the fix: adding that exact line
+to `adapt/SKILL.md` left the lint at **0 errors**.
+
+The auto-update job composes its content with a model from upstream release notes.
+That is fine as a drafting mechanism and is not being changed — but its output goes
+straight into the two files emitted to every project, so it needs a gate that
+checks claims against reality rather than plausibility.
+
+### Changed
+- **`VERSIONS.md` corrected** to what is actually installed and published — GStack
+  1.61.0.0, Superpowers 6.3.0, Claude Code 2.1.234 — replacing a table that had
+  drifted since 2026-07-04. Verified against `~/.claude/skills/gstack/VERSION`, the
+  plugin cache, and `npm view`, not against release notes.
+
+### Repository housekeeping
+Six auto-update PRs (#41, #43, #46, #48, #50, #55) and their six paired
+notification issues were closed unmerged. All six touch the same files, all bump
+`plugin.json`, and all edit `CHANGELOG.md` — mutually conflicting, and conflicting
+with a `main` that had moved six releases past them. The newest would have set the
+version to 2.36.0, a number already spent on unrelated content. Their still-true
+content (the upstream version bump) is folded into `VERSIONS.md` above; their
+untrue content is what motivated E10. Issues #52 and #53 stay open — they are real
+htmlify defects, not notifications.
+
+### Scope
+E10 covers Superpowers only. gstack ships ~50 skills on a weekly cadence, and its
+bare `/name` reference form collides with E9's own-skill matcher — a checked-in
+roster that large would drift faster than it protects. Superpowers is 14 names on a
+slow cadence with an unambiguous namespaced form. Left undone deliberately, not
+overlooked.
+
 ## [2.36.2] - 2026-08-18
 
 Model refresh. The Opus tier head had been one generation stale for three weeks
