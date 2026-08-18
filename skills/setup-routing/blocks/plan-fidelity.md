@@ -1,4 +1,4 @@
-## Keep the plan true to the code <!-- gstack-plan-fidelity-v1 -->
+## Keep the plan true to the code <!-- gstack-plan-fidelity-v2 -->
 
 When implementation diverges from the plan, **fix the plan in the same commit as the divergence.** Not at the end, not at `/ship`, not "later".
 
@@ -14,7 +14,7 @@ A plan that describes something nobody built is worse than no plan: the next age
 
 Replace the superseded section — do not append a correction below it. Someone skimming reads the first plausible thing they find.
 
-- Mark the task `✅ LEVERT <commit-sha>` and state, in one or two sentences, how the built thing differs from the draft
+- Mark the task done **in the notation the file already uses** — if the plan or progress file has an established convention (`- [x] … (sha)`, a `DONE:` prefix, a status column), follow it; introduce a marker of your own only when the file has none yet. What matters is that the marker carries the commit SHA, not which glyph carries it. A second completion format in a file that already had one makes the file harder to scan, which is the opposite of the point. Then state, in one or two sentences, how the built thing differs from the draft
 - Keep the *reason* the draft was dropped. That is the part a future reader cannot reconstruct
 - If part of the draft is still worth doing, move it to an explicit "deferred" note **with a trigger** — what would make it urgent — rather than leaving it inline as if it were planned work
 

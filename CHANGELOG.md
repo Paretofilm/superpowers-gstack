@@ -1,5 +1,84 @@
 # Changelog
 
+## [2.36.1] - 2026-08-18
+
+Everything here was found by running 2.36.0's own `/adapt` against a real project
+(`live-swiftui`, on 2.34.1). The first live exercise of the upgrade path found
+three defects the three review lenses had not.
+
+### Fixed
+- **Session Continuity could silently destroy a file that was not a handoff.**
+  The block said: if `handoff.md` exists and has content, read it, present it as
+  where you left off, then clear it. Nothing checked that the file *was* a
+  handoff. `live-swiftui` kept a permanent pointer note at that path; the next
+  session start would have presented it as a handoff and emptied it, with no
+  copy anywhere but git.
+  The block now consumes the file only on **positive identification** —
+  `type: handoff`, or YAML carrying both `session_end` and `next_step`. Anything
+  else, **including a file with no frontmatter at all**, is reported in one line
+  and left alone.
+  This removes auto-consume for pre-1.12.0 prose-only handoffs. That format has
+  been dead for dozens of releases, and the cost of guessing wrong (unrecoverable
+  deletion of someone's notes) is not comparable to the benefit of auto-resuming
+  it. Marker `gstack-session-continuity-v1` → `v2`.
+
+  Worth recording how it got in: 2.36.0 *added* the prose-only fallback, in
+  response to a third-lens P3 the reviewer itself flagged as "uncertain whether
+  this is worth fixing". Taking it turned an ambiguity an agent would have
+  hesitated over into an explicit instruction to treat arbitrary prose as a
+  handoff and then delete it. A cheap fix on an uncertain finding is exactly
+  where the "is this even right?" step gets skipped.
+- **Three bare skill references shipped inside emitted blocks.**
+  `blocks/track-routing.md` said `/htmlify`, and `blocks/model-routing-section.md`
+  said `/pitfall-verification` twice. Blocks are pasted verbatim into other
+  projects, where only `/superpowers-gstack:<name>` resolves — so those were dead
+  references in every project that ran `/adapt`. The inconsistency was visible
+  inside a single generated file: `multi-lens-review` emitted the namespaced form
+  twenty lines from `model-routing-section`'s bare one. Marker
+  `gstack-routing-v1` → `v2`.
+
+### Changed
+- **`plan-fidelity` no longer prescribes a completion glyph.** It mandated
+  `✅ LEVERT <sha>`, which collided with a project whose progress file had used
+  `- [x] … (sha)` across 51 entries. The rule was always "mark it done and keep
+  the reason the draft was dropped" — the glyph was never the point. It now says
+  to follow the file's existing convention and introduce a marker only when there
+  is none, as long as it carries the SHA. Marker
+  `gstack-plan-fidelity-v1` → `v2`.
+
+- **`context-handoff` contradicted the block it depends on.** Its Backwards
+  compatibility section still said a frontmatter-less handoff should be read as
+  prose and converted on next write — the exact behaviour the fix above removes.
+  It now distinguishes the two paths: on the automatic read path such a file is
+  reported and left alone; when the user explicitly invokes the skill to save
+  state, writing is what they asked for, but what is being replaced gets named
+  first. Overwriting on request is fine; overwriting silently is not.
+- **A stale marker was hardcoded in `adapt`'s heading-level rule.** It told the
+  agent to write `<!-- gstack-session-continuity-v1 -->` when demoting the block
+  to H3 — correct when written, wrong one release later. It now says to copy the
+  marker from the block file and never retype it from the instruction, which is
+  how it went stale in the first place. Caught by the new DENYLIST entries below,
+  on their first run.
+
+### Release-gate hardening
+- **Stale-marker DENYLIST entries** for `gstack-session-continuity-v1`,
+  `gstack-plan-fidelity-v1`, and `gstack-routing-v1`, following the existing
+  multi-lens precedent. They earned their place immediately by finding the
+  hardcoded marker above.
+- **New lint rule E9:** no bare `/skill-name` for a skill this plugin owns inside
+  `blocks/*.md`. Deliberately scoped to `blocks/` — inside this repo's own
+  SKILL.md files a bare name is sloppy, but in an emitted block it is broken in
+  every project downstream. The name list is derived from `skills/` itself, so
+  gstack and Superpowers skills (`/ship`, `/review`, `/investigate`) stay
+  correctly bare and are not flagged. Negative-tested in both directions;
+  `tests/unit/test_lint_heading_text.py` pins the matcher, including that
+  `/e2e-route` is never reported as `/e2e`.
+
+### Upgrading
+Three marker versions moved, so `/superpowers-gstack:adapt` will replace the
+Session Continuity, Track-aware routing, and plan-fidelity sections in existing
+projects. Your own sections are untouched, as always.
+
 ## [2.36.0] - 2026-08-17
 
 Renames the handoff persistence mode `auto` → `continuous`, and extracts Session

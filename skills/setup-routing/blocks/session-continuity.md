@@ -1,15 +1,25 @@
-## Session Continuity <!-- gstack-session-continuity-v1 -->
+## Session Continuity <!-- gstack-session-continuity-v2 -->
 
-On session start or after `/compact`: if `docs/superpowers/handoff.md` exists and
-contains content, read it and present a one-line summary of where you left off.
-Quote `next_step` verbatim, name the `active_task` ID, and surface `env` (venv,
-dev_server, test_cmd) so commands work immediately. If the file has no YAML
-frontmatter at all (a pre-1.12.0 prose-only handoff), none of those fields
-exist — summarize from the prose instead, and treat `mode` as absent below. Then
-proceed normally — do not ask "ready to continue?".
+On session start or after `/compact`, look at `docs/superpowers/handoff.md`. It is
+consumed **only** when you can positively identify it as a handoff. Reading a
+handoff clears it, so misidentifying the file destroys whatever was in it:
+
+- YAML `type: handoff` — the current format (v2.1.1+). Consume it.
+- YAML frontmatter carrying **both** `session_end` and `next_step` but no
+  `type:` — a legacy handoff (v1.12.0–v2.1.0). Consume it.
+- **Anything else, including a file with no frontmatter at all** — NOT a handoff.
+  Say in one line that the file exists and holds unrecognized content, do not
+  present it as "where you left off", and **do not clear it**. A project may be
+  using that path for its own notes, and silently emptying it is not recoverable
+  from the session.
+
+When it *is* a handoff: present a one-line summary of where you left off. Quote
+`next_step` verbatim, name the `active_task` ID, and surface `env` (venv,
+dev_server, test_cmd) so commands work immediately. Then proceed normally — do
+not ask "ready to continue?".
 
 **Read the `mode:` field BEFORE you clear the file.** Clearing first destroys the
-value the very next step depends on. Once you have read it:
+value the next step depends on. Once you have read it:
 
 - `mode: continuous` (or a legacy spelling, below) → do NOT blank the file.
   Rewrite it carrying just the frontmatter — `type: handoff` plus
