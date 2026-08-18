@@ -15,10 +15,12 @@ classification destroys whatever was there.
   a usable `next_step` to resume from. Consume it (below).
 - **Anything else** → NOT consumable: frontmatter that claims to be a handoff but
   carries no `next_step`, a file cut off mid-write, or a file with no frontmatter
-  at all. Say in one line that the file exists and could not be read as a
-  handoff, do not present it as where you left off, and **do not clear it**. A
+  at all. Do not present it as where you left off, and **do not clear it** — a
   truncated handoff and a project's own notes both live at this path, and neither
-  survives being emptied.
+  survives being emptied. Say so in one line **and name the way out**, because
+  this branch otherwise re-fires at every session start forever: the file has to
+  be deleted, or overwritten by invoking `/superpowers-gstack:context-handoff`.
+  Recurring noise the user cannot act on is worse than the state it reports.
 
 For a complete handoff: present a one-line summary of where you left off. Quote
 `next_step` verbatim, name the `active_task` ID, and surface `env` (venv,
@@ -33,6 +35,13 @@ value the next step depends on. Once you have read it:
   above — so the setting survives into the next compact. Blanking it here is
   exactly what makes a project ask the opt-in question forever.
 - anything else → clear the file (write empty string), as before.
+
+Either way, **copy what you consumed to `docs/superpowers/.handoff-last.md`
+first** (one file, overwritten each time — not an accumulating log). Classifying a
+handoff is a judgement call made by a model, not a parse, and a truncation that
+lands *after* valid frontmatter looks complete from the inside. This makes any
+misjudgement recoverable without depending on the file having been committed —
+`handoff.md` is session state, and plenty of projects gitignore it.
 
 After `/compact`, decide whether to offer **continuous handoff**, using the `mode`
 you read above:

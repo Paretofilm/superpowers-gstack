@@ -104,10 +104,35 @@ three defects the three review lenses had not.
   `tests/unit/test_lint_heading_text.py` pins the matcher, including that
   `/e2e-route` is never reported as `/e2e`.
 
+### Fixed — third pass (GLM-5.2, on the patched patch)
+- **The unreadable branch was a stuck state.** It reported the file and stopped,
+  with no exit — so a single truncated handoff became a line of noise at every
+  session start, forever, and nothing told the user how to resolve it. It now
+  names the way out (delete it, or overwrite via `/context-handoff`). Recurring
+  noise a user cannot act on is worse than the state it reports.
+- **Consuming a handoff now leaves a copy** at `docs/superpowers/.handoff-last.md`
+  — one file, overwritten each time, not an accumulating log. Classification is a
+  model's judgement, not a parse, and a truncation landing *after* valid
+  frontmatter looks complete from the inside. Both earlier lenses assumed git was
+  the backstop; `handoff.md` is session state and plenty of projects gitignore it.
+  This is the only structural mitigation for a condition the reader cannot
+  reliably detect.
+- **The heading-level rule no longer reasons about whether a block "has
+  subsections".** That was a prose claim about a file, and it is exactly the claim
+  that expired when `gstack-routing` moved off `v1`. The rule now demotes
+  subsections unconditionally when the root is H3 — a no-op for a block without
+  them, and the fix for one that grows them later. Stated once, for all
+  marker-managed sections, instead of per-block.
+
 ### Upgrading
 Three marker versions moved, so `/superpowers-gstack:adapt` will replace the
 Session Continuity, Track-aware routing, and plan-fidelity sections in existing
 projects. Your own sections are untouched, as always.
+
+One transient note for mixed-version teams: the continuous-mode stub is only
+meaningful to a 2.36.1 reader. A machine still on 2.36.0 will present it as
+"where you left off" with nothing to quote. Harmless — it preserves the mode
+correctly — but it looks wrong until every machine is upgraded.
 
 ## [2.36.0] - 2026-08-17
 
