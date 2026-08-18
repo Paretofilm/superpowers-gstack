@@ -1,5 +1,58 @@
 # Changelog
 
+## [2.38.0] - 2026-08-18
+
+Branch work that never lands is invisible debt. The plugin shipped two skills that
+*finish* a branch and nothing that **noticed** one had been left behind.
+
+### Added
+- **`scripts/check-branch-hygiene.sh` — a SessionStart hook that reports unlanded
+  work.** Three signals, all from already-fetched refs (no network call):
+  uncommitted changes left from a previous session; local branches unmerged and
+  idle past a threshold; remote branches with no local copy, unmerged and idle.
+  Plus a count of already-merged local branches once clutter reaches five.
+  Routes to `/ship` and `/superpowers:finishing-a-development-branch` rather than
+  re-implementing them.
+  **Signal discipline is the design.** Silent on a clean repo, silent on the branch
+  you are standing on, silent on a branch you committed to yesterday. A hook that
+  speaks when there is nothing to say gets ignored when there is. Threshold is
+  `GSTACK_BRANCH_IDLE_DAYS` (default 7; `0` disables).
+- `blocks/git-hygiene.md` **v3 → v4**, new **Landing the branch** section: a branch
+  is done when merged *or deliberately discarded*, never end a session silently on
+  unmerged commits, land via a skill rather than a hand-rolled merge, and **closing
+  a PR does not delete its branch**.
+- `tests/unit/test_branch_hygiene_hook.py` — 8 tests, weighted toward the silence
+  cases (clean repo, non-git directory, current branch, recent branch, disable
+  switch), because false positives are what kill a hook like this.
+
+### Fixed
+- **The hook crashed on a non-integer threshold.** Found by its own test: under
+  `set -u`, a failed `$(( ))` left `cutoff` unbound and aborted the script. A
+  SessionStart hook must never fail the session — invalid input now falls back to
+  the default instead.
+
+### The dogfood gap
+`check-plugin-version.sh` exempts this repo from the `/adapt` nag — correctly, since
+its CLAUDE.md *is* the source of the routing and carries no generated marker. But the
+exemption is wholesale, so **every emitted block never applies to the repo that
+produces them**: git hygiene, autonomy, code reuse, plan fidelity, session continuity.
+The plugin has been prescribing discipline it does not practise.
+
+Measured on 2026-08-18, in this repo: six remote branches unmerged for up to five
+weeks (their PRs closed, the branches outliving them), and six merged local branches
+never deleted.
+
+Two fixes: the new hook is **deliberately not exempt** — branch hygiene is universal,
+unlike the version marker — and CLAUDE.md gains a `Branch discipline (this repo)`
+section restating the v4 landing rules, with a note that it must be kept in sync by
+hand. The wider gap (this repo receives none of its own blocks) is named here rather
+than solved; solving it means either generating the repo's own CLAUDE.md or accepting
+hand-sync, and that is a bigger call than this release.
+
+### Release-gate
+- `DENYLIST` entry for `gstack-git-hygiene-v[0-3]`, per the standing rule that a
+  superseded marker stays purged.
+
 ## [2.37.0] - 2026-08-18
 
 Upstream skill references are now validated. They never were, and the weekly

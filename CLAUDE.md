@@ -119,6 +119,29 @@ Key routing rules:
 - Context long, before /clear, before /compact → invoke context-handoff
 - Code quality, health check → invoke health
 
+## Branch discipline (this repo)
+
+**This repo does not receive its own emitted blocks.** `scripts/check-plugin-version.sh`
+exempts it (correctly — its CLAUDE.md *is* the source of the routing and carries no
+generated marker), which means every block shipped to user projects — git hygiene,
+autonomy, code reuse, plan fidelity, session continuity — never applies here. The
+plugin has been prescribing discipline it did not practice.
+
+So the `Landing the branch` rules from `blocks/git-hygiene.md` are restated here, and
+must be kept in sync with that file by hand:
+
+- A branch is done when it is **merged or deliberately discarded**, not when the code
+  works. Never end a session silently on a branch with unmerged commits — state where
+  the work stands even when the answer is "still open".
+- Land with `/ship` or `/superpowers:finishing-a-development-branch`; don't hand-roll it.
+- **Closing a PR does not delete its branch.** Delete it after the PR closes or merges.
+  Six auto-update branches outlived their PRs here by up to five weeks (2026-08-18).
+- After merging a branch to main, delete the local copy. `scripts/check-branch-hygiene.sh`
+  reports the clutter at five or more.
+
+The hook is **not** exempt for this repo, unlike the version check — branch hygiene is
+universal, and this repo demonstrably needs it.
+
 ## Release gate (this repo)
 
 Before merging/pushing any plugin change (skills/, scripts/, CLAUDE.md, workflows):
