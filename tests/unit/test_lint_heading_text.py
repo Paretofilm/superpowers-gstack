@@ -106,10 +106,22 @@ def test_bare_plugin_skill_refs_are_caught(line, hit, why):
         ("invoke `/ship` then `/review`", "gstack skills are correctly bare"),
         ("`/investigate` for bugs", "Superpowers/gstack skill, not ours"),
         ("`/superpowers-gstack:e2e-route`", "namespaced hyphenated name"),
+        # Boundary cases from the Codex P2 on the 2.36.1 branch — the first
+        # `\\b`-only version accepted all three of these.
+        ("see ./htmlify/SKILL.md", "relative path — trailing slash after the name"),
+        ("/htmlify/SKILL.md at repo root", "absolute-looking path, same reason"),
+        ("the /e2e-route-extra variant", "longer token, not our skill"),
     ],
 )
 def test_legitimate_forms_are_not_flagged(line, why):
     assert lint.bare_skill_ref_re(OWN).search(line) is None, why
+
+
+def test_colon_prefix_is_still_caught():
+    """`:` is NOT in the lookbehind. It cannot protect the namespaced form (that
+    string holds no `/name` to match), so excluding it only created misses."""
+    m = lint.bare_skill_ref_re(OWN).search("label:/htmlify here")
+    assert m and m.group(1) == "htmlify"
 
 
 def test_longest_name_wins_over_prefix():

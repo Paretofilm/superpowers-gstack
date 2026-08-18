@@ -60,6 +60,36 @@ three defects the three review lenses had not.
   how it went stale in the first place. Caught by the new DENYLIST entries below,
   on their first run.
 
+### Fixed — second pass (Codex, on the patch itself)
+- **The continuous-mode stub was misread as a handoff.** 2.36.0 invented that
+  stub — `type: handoff` + `mode: continuous`, written in place of blanking the
+  file — and 2.36.1's first identification rule then classified it as a complete
+  handoff, because `type: handoff` alone was treated as sufficient. It would have
+  been "presented" with no `next_step` to quote, and cleared. Same hole swallowed
+  a handoff truncated mid-write. Classification is now four-way — empty,
+  continuous stub, complete handoff, unreadable — and a handoff claim without a
+  usable `next_step` is preserved, not consumed. Marker
+  `gstack-session-continuity-v2` → `v3`.
+- **An empty handoff would be reported as unrecognized content, every session.**
+  Manual handoffs are deliberately cleared to an empty string, so the resting
+  state of the file hit the "anything else" branch. Empty is now a silent no-op.
+- **The `gstack-routing-v1` → `v2` bump activated a latent H3 bug.** While the
+  marker sat at `v1`, case 1 always fired and the replace path was unreachable.
+  Bumping it made every pre-2.34 project with an H3-rooted section take a path
+  that says "preserve the original heading level" and "insert verbatim" in the
+  same breath — and the track-routing block has H3 subsections, so preserving an
+  H3 root leaves them as its siblings. `adapt` now requires demoting the block's
+  subsections to H4 whenever the root is H3.
+- **E9's boundaries were wrong on both sides.** `\b` alone accepted `-` and `/`,
+  so `./htmlify/SKILL.md` and `/e2e-route-extra` were false positives; and `:` in
+  the lookbehind could not protect the namespaced form (that string contains no
+  `/htmlify` to match) while creating misses like `label:/htmlify`. Now guarded
+  with an explicit trailing `(?![\w/-])` and no `:` exclusion. All five boundary
+  cases are pinned in tests.
+- `tests/integration/test_track_aware_dispatch.sh` carried `gstack-routing-v1` in
+  a fixture that claims to mirror emitted content. Tests sit outside the E7 scan,
+  so the new stale-marker denylist could not catch it.
+
 ### Release-gate hardening
 - **Stale-marker DENYLIST entries** for `gstack-session-continuity-v1`,
   `gstack-plan-fidelity-v1`, and `gstack-routing-v1`, following the existing

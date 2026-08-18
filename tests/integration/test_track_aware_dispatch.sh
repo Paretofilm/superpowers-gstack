@@ -44,7 +44,7 @@ echo ""
 read -r -d '' PROJECT_CLAUDE_MD <<'CLAUDE_MD' || true
 # Project CLAUDE.md (test fixture)
 
-## Track-aware routing (dual-track) <!-- gstack-routing-v1 -->
+## Track-aware routing (dual-track) <!-- gstack-routing-v2 -->
 
 This project follows superpowers-gstack's dual-track convention.
 Track is declared in `.gstack/track` (`ios` | `macos` | `both`).

@@ -1,19 +1,26 @@
-## Session Continuity <!-- gstack-session-continuity-v2 -->
+## Session Continuity <!-- gstack-session-continuity-v3 -->
 
-On session start or after `/compact`, look at `docs/superpowers/handoff.md`. It is
-consumed **only** when you can positively identify it as a handoff. Reading a
-handoff clears it, so misidentifying the file destroys whatever was in it:
+On session start or after `/compact`, look at `docs/superpowers/handoff.md` and
+**classify it before touching it**. Consuming a handoff clears it, so a wrong
+classification destroys whatever was there.
 
-- YAML `type: handoff` — the current format (v2.1.1+). Consume it.
-- YAML frontmatter carrying **both** `session_end` and `next_step` but no
-  `type:` — a legacy handoff (v1.12.0–v2.1.0). Consume it.
-- **Anything else, including a file with no frontmatter at all** — NOT a handoff.
-  Say in one line that the file exists and holds unrecognized content, do not
-  present it as "where you left off", and **do not clear it**. A project may be
-  using that path for its own notes, and silently emptying it is not recoverable
-  from the session.
+- **Empty or whitespace only** → nothing to do, say nothing. This is the normal
+  resting state after a handoff has been consumed.
+- **Continuous-mode stub** — frontmatter carrying `mode` (`continuous`, or the
+  legacy `auto`) and no `next_step`. This is the marker left behind by the
+  clearing step below, not a handoff. Say nothing, leave the file exactly as it
+  is, and treat continuous handoff as already active.
+- **Complete handoff** — `type: handoff` (current, v2.1.1+), or both
+  `session_end` and `next_step` with no `type:` (legacy v1.12.0–v2.1.0) — **and**
+  a usable `next_step` to resume from. Consume it (below).
+- **Anything else** → NOT consumable: frontmatter that claims to be a handoff but
+  carries no `next_step`, a file cut off mid-write, or a file with no frontmatter
+  at all. Say in one line that the file exists and could not be read as a
+  handoff, do not present it as where you left off, and **do not clear it**. A
+  truncated handoff and a project's own notes both live at this path, and neither
+  survives being emptied.
 
-When it *is* a handoff: present a one-line summary of where you left off. Quote
+For a complete handoff: present a one-line summary of where you left off. Quote
 `next_step` verbatim, name the `active_task` ID, and surface `env` (venv,
 dev_server, test_cmd) so commands work immediately. Then proceed normally — do
 not ask "ready to continue?".
@@ -21,10 +28,10 @@ not ask "ready to continue?".
 **Read the `mode:` field BEFORE you clear the file.** Clearing first destroys the
 value the next step depends on. Once you have read it:
 
-- `mode: continuous` (or a legacy spelling, below) → do NOT blank the file.
-  Rewrite it carrying just the frontmatter — `type: handoff` plus
-  `mode: continuous` — so the setting survives into the next compact. Blanking it
-  here is exactly what makes a project ask the opt-in question forever.
+- `mode: continuous` (or the legacy `auto`) → do NOT blank the file. Rewrite it
+  carrying just `type: handoff` and `mode: continuous` — the continuous-mode stub
+  above — so the setting survives into the next compact. Blanking it here is
+  exactly what makes a project ask the opt-in question forever.
 - anything else → clear the file (write empty string), as before.
 
 After `/compact`, decide whether to offer **continuous handoff**, using the `mode`

@@ -281,7 +281,7 @@ The block to insert: read `blocks/plan-fidelity.md` (see **Shared block files** 
 
 **Insert or upgrade the Session Continuity section.** This section applies to ALL projects (context handoff is platform-agnostic). Scan CLAUDE.md for heading `^#{2,3} Session [Cc]ontinuity` and its version marker `<!-- gstack-session-continuity-vN -->`. Apply the same four-case logic:
 
-1. **Heading present + marker matches `v2`** → skip (idempotent).
+1. **Heading present + marker matches `v3`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level (see the heading-level rule below).
 3. **Heading present + marker absent** → the section is either a pre-2.36.0 emitted block or one the user wrote themselves, and unlike `Git hygiene & commit cadence` or `Autonomy and user interruption`, "Session Continuity" is a heading a project could plausibly own. Tell them apart before touching it: treat it as emitted ONLY if the section body mentions `docs/superpowers/handoff.md`. **If it does** → REPLACE as in case 2. This is the upgrade that matters, because every pre-2.36.0 emitter wrote a sensor keyed only to the `## Mode: auto` Markdown marker, which `/superpowers-gstack:context-handoff` deletes the moment it writes YAML — so those projects re-ask the opt-in question after every single compact. **If it does not** → leave the user's section untouched, insert the block as a separate H2 section, and tell the user both now exist so they can merge by hand. Never silently overwrite a section you cannot attribute to a past emitter.
 4. **Heading absent** → APPEND the block as H2.
@@ -308,7 +308,15 @@ Four cases:
    the next heading of the same OR shallower level. Preserves
    surrounding CLAUDE.md content. This is how routing rules evolve
    without manual editing across N projects. Preserve the original
-   heading level (H2 or H3) — do not change it during upgrade.
+   heading level (H2 or H3) — do not change it during upgrade. **If
+   that level is H3, you MUST also demote every `###` subsection in
+   the replacement block to `####`.** The block ships H2-rooted with
+   H3 subsections; pasting it under an H3 root leaves the
+   subsections as SIBLINGS of the root, so the next upgrade — which
+   replaces "through the next heading of equal-or-shallower level" —
+   stops at the first subsection and leaves stale content behind.
+   This path was unreachable while the marker sat at `v1` (case 1
+   always fired); the `v2` bump activates it.
 3. **Heading present + marker absent** (legacy v2.3.0/v2.3.1
    projects) → REPLACE the section the same way as case 2. Treats
    the missing marker as "older than v1". This is a one-time silent
