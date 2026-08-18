@@ -1,5 +1,45 @@
 # Changelog
 
+## [2.36.2] - 2026-08-18
+
+Model refresh. The Opus tier head had been one generation stale for three weeks
+while the automation that caught it sat waiting for a human.
+
+### Changed
+- **`opus` tier: `claude-opus-4-8` → `claude-opus-5`** in `model-routing.md` and
+  the emitted `blocks/model-routing-section.md`. **Same list price** ($5/$25 per
+  Mtok), so the tier upgrade costs nothing — Opus 5 is a drop-in at Opus 4.8's
+  pricing with a 1M context window and the same feature set.
+- **The sonnet→opus rationale is re-calibrated.** The old note said the split was
+  "about blast-radius, not a raw capability gap" — true when Sonnet 5 had closed
+  most of the distance to Opus 4.8. Opus 5 reopened part of it on deep reasoning
+  and long-horizon agentic work, so the note now says the split is *mostly* about
+  blast radius, and that on genuinely hard reasoning opus buys capability again.
+
+### Process note
+`check-new-models.py` did its job: issue #45 opened **2026-07-27** flagging
+`claude-opus-5` against the router's v4.8, with the exact wire-in steps. It then
+sat open for three weeks. The detection half of this pipeline works; the
+follow-through half is a human, and this release is that human finally arriving.
+Nothing to fix in the automation — worth recording that the gap was never
+detection.
+
+### Verified, not assumed
+- Every tier checked against the authoritative model catalogue rather than recall:
+  `fable-5`, `opus-5`, `sonnet-5`, `haiku-4-5` are all current heads. Only opus
+  moved; the Fable "~2× Opus price" note still holds at $10/$50 vs $5/$25.
+- **Third-lens models re-verified against the OpenRouter `/models` endpoint, not
+  press coverage** — and the two disagreed. GLM-5.3 was announced 2026-08-14, but
+  it is absent from both OpenRouter and z.ai's own release-notes page, so
+  `z-ai/glm-5.2` remains the newest reachable GLM and there is nothing to upgrade
+  to. The rationale now lives in `scripts/third-lens-review.py`, including why
+  DeepSeek deliberately stays on the floating `deepseek-v4-pro` alias rather than
+  the pinned `-0813` checkpoint: nothing in this repo watches DeepSeek, so a pin
+  would rot silently while the alias tracks GA on its own.
+- Watchdog re-verified after the edit: `--self-test` passes, and it parses all
+  four tiers from the updated table (`opus` → `(5,)`), so the next generation
+  still gets flagged.
+
 ## [2.36.1] - 2026-08-18
 
 Everything here was found by running 2.36.0's own `/adapt` against a real project

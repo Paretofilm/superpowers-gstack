@@ -37,12 +37,15 @@ high-blast-radius domain is a false economy (see below).
   it's close to Opus — don't pay the premium there. Safety note: Fable routes
   cybersecurity/bio/chem to an Opus fallback, so in those domains it is literally
   identical to Opus — never pay the Fable premium there.
-- `opus` — `claude-opus-4-8` — heavy reasoning, novel synthesis, strategic
-  challenge, and the default for high-blast-radius coding.
+- `opus` — `claude-opus-5` — heavy reasoning, novel synthesis, strategic
+  challenge, and the default for high-blast-radius coding. Same list price as the
+  Opus 4.8 it replaces ($5/$25 per Mtok), so the tier upgrade costs nothing.
 - `sonnet` — `claude-sonnet-5` — structured engineering, code review, planning,
-  contained-blast-radius coding with tests as the net. Near-Opus (63.2% SWE-bench
-  Pro) at Sonnet cost since 2026-06-30, so the sonnet→opus split is now about
-  blast-radius, not a raw capability gap; opus stays the floor for high-blast work.
+  contained-blast-radius coding with tests as the net. It closed most of the gap to
+  Opus 4.8 (63.2% SWE-bench Pro at Sonnet cost, since 2026-06-30); Opus 5 reopened
+  part of it on deep reasoning and long-horizon agentic work. So the split is still
+  mostly about blast-radius — but on genuinely hard reasoning, opus now buys
+  capability again, not just caution. Opus stays the floor for high-blast work.
 - `haiku` — `claude-haiku-4-5` — mechanical, templated, deterministic.
 
 ## The domain-sensitivity axis

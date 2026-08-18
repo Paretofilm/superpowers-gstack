@@ -32,6 +32,18 @@ KEYCHAIN_ACCOUNT = "openrouter-api-key"
 
 # Default lens-by-role transport + target.
 # OpenRouter for distant houses with no CLI; the codex CLI for OpenAI (subscription).
+#
+# Currency (verified 2026-08-18 against the OpenRouter /models endpoint, not press):
+#   glm-5.2  — newest GLM OpenRouter serves. GLM-5.3 was announced 2026-08-14 but
+#              is absent from both OpenRouter and z.ai's own release-notes page, so
+#              there is nothing to upgrade to yet. This ID is version-pinned and has
+#              NO watchdog (scripts/check-new-models.py covers Anthropic tiers only)
+#              — re-check it by hand when bumping this file.
+#   v4-pro   — deliberately the FLOATING alias, not the pinned `-0813` checkpoint.
+#              Pinning would buy reproducibility we cannot maintain: nothing here
+#              notices when DeepSeek ships a newer checkpoint, so a pin rots
+#              silently while the alias tracks GA on its own.
+#   codex    — self-updating by design; the CLI picks OpenAI's current default.
 ROLE_SPEC = {
     "architecture": {"transport": "openrouter", "target": "z-ai/glm-5.2"},
     "correctness": {"transport": "openrouter", "target": "deepseek/deepseek-v4-pro"},
