@@ -1,5 +1,139 @@
 # Changelog
 
+## [2.36.1] - 2026-08-18
+
+Everything here was found by running 2.36.0's own `/adapt` against a real project
+(`live-swiftui`, on 2.34.1). The first live exercise of the upgrade path found
+three defects the three review lenses had not.
+
+### Fixed
+- **Session Continuity could silently destroy a file that was not a handoff.**
+  The block said: if `handoff.md` exists and has content, read it, present it as
+  where you left off, then clear it. Nothing checked that the file *was* a
+  handoff. `live-swiftui` kept a permanent pointer note at that path; the next
+  session start would have presented it as a handoff and emptied it, with no
+  copy anywhere but git.
+  The block now consumes the file only on **positive identification** —
+  `type: handoff`, or YAML carrying both `session_end` and `next_step`. Anything
+  else, **including a file with no frontmatter at all**, is reported in one line
+  and left alone.
+  This removes auto-consume for pre-1.12.0 prose-only handoffs. That format has
+  been dead for dozens of releases, and the cost of guessing wrong (unrecoverable
+  deletion of someone's notes) is not comparable to the benefit of auto-resuming
+  it. Marker `gstack-session-continuity-v1` → `v2`.
+
+  Worth recording how it got in: 2.36.0 *added* the prose-only fallback, in
+  response to a third-lens P3 the reviewer itself flagged as "uncertain whether
+  this is worth fixing". Taking it turned an ambiguity an agent would have
+  hesitated over into an explicit instruction to treat arbitrary prose as a
+  handoff and then delete it. A cheap fix on an uncertain finding is exactly
+  where the "is this even right?" step gets skipped.
+- **Three bare skill references shipped inside emitted blocks.**
+  `blocks/track-routing.md` said `/htmlify`, and `blocks/model-routing-section.md`
+  said `/pitfall-verification` twice. Blocks are pasted verbatim into other
+  projects, where only `/superpowers-gstack:<name>` resolves — so those were dead
+  references in every project that ran `/adapt`. The inconsistency was visible
+  inside a single generated file: `multi-lens-review` emitted the namespaced form
+  twenty lines from `model-routing-section`'s bare one. Marker
+  `gstack-routing-v1` → `v2`.
+
+### Changed
+- **`plan-fidelity` no longer prescribes a completion glyph.** It mandated
+  `✅ LEVERT <sha>`, which collided with a project whose progress file had used
+  `- [x] … (sha)` across 51 entries. The rule was always "mark it done and keep
+  the reason the draft was dropped" — the glyph was never the point. It now says
+  to follow the file's existing convention and introduce a marker only when there
+  is none, as long as it carries the SHA. Marker
+  `gstack-plan-fidelity-v1` → `v2`.
+
+- **`context-handoff` contradicted the block it depends on.** Its Backwards
+  compatibility section still said a frontmatter-less handoff should be read as
+  prose and converted on next write — the exact behaviour the fix above removes.
+  It now distinguishes the two paths: on the automatic read path such a file is
+  reported and left alone; when the user explicitly invokes the skill to save
+  state, writing is what they asked for, but what is being replaced gets named
+  first. Overwriting on request is fine; overwriting silently is not.
+- **A stale marker was hardcoded in `adapt`'s heading-level rule.** It told the
+  agent to write `<!-- gstack-session-continuity-v1 -->` when demoting the block
+  to H3 — correct when written, wrong one release later. It now says to copy the
+  marker from the block file and never retype it from the instruction, which is
+  how it went stale in the first place. Caught by the new DENYLIST entries below,
+  on their first run.
+
+### Fixed — second pass (Codex, on the patch itself)
+- **The continuous-mode stub was misread as a handoff.** 2.36.0 invented that
+  stub — `type: handoff` + `mode: continuous`, written in place of blanking the
+  file — and 2.36.1's first identification rule then classified it as a complete
+  handoff, because `type: handoff` alone was treated as sufficient. It would have
+  been "presented" with no `next_step` to quote, and cleared. Same hole swallowed
+  a handoff truncated mid-write. Classification is now four-way — empty,
+  continuous stub, complete handoff, unreadable — and a handoff claim without a
+  usable `next_step` is preserved, not consumed. Marker
+  `gstack-session-continuity-v2` → `v3`.
+- **An empty handoff would be reported as unrecognized content, every session.**
+  Manual handoffs are deliberately cleared to an empty string, so the resting
+  state of the file hit the "anything else" branch. Empty is now a silent no-op.
+- **The `gstack-routing-v1` → `v2` bump activated a latent H3 bug.** While the
+  marker sat at `v1`, case 1 always fired and the replace path was unreachable.
+  Bumping it made every pre-2.34 project with an H3-rooted section take a path
+  that says "preserve the original heading level" and "insert verbatim" in the
+  same breath — and the track-routing block has H3 subsections, so preserving an
+  H3 root leaves them as its siblings. `adapt` now requires demoting the block's
+  subsections to H4 whenever the root is H3.
+- **E9's boundaries were wrong on both sides.** `\b` alone accepted `-` and `/`,
+  so `./htmlify/SKILL.md` and `/e2e-route-extra` were false positives; and `:` in
+  the lookbehind could not protect the namespaced form (that string contains no
+  `/htmlify` to match) while creating misses like `label:/htmlify`. Now guarded
+  with an explicit trailing `(?![\w/-])` and no `:` exclusion. All five boundary
+  cases are pinned in tests.
+- `tests/integration/test_track_aware_dispatch.sh` carried `gstack-routing-v1` in
+  a fixture that claims to mirror emitted content. Tests sit outside the E7 scan,
+  so the new stale-marker denylist could not catch it.
+
+### Release-gate hardening
+- **Stale-marker DENYLIST entries** for `gstack-session-continuity-v1`,
+  `gstack-plan-fidelity-v1`, and `gstack-routing-v1`, following the existing
+  multi-lens precedent. They earned their place immediately by finding the
+  hardcoded marker above.
+- **New lint rule E9:** no bare `/skill-name` for a skill this plugin owns inside
+  `blocks/*.md`. Deliberately scoped to `blocks/` — inside this repo's own
+  SKILL.md files a bare name is sloppy, but in an emitted block it is broken in
+  every project downstream. The name list is derived from `skills/` itself, so
+  gstack and Superpowers skills (`/ship`, `/review`, `/investigate`) stay
+  correctly bare and are not flagged. Negative-tested in both directions;
+  `tests/unit/test_lint_heading_text.py` pins the matcher, including that
+  `/e2e-route` is never reported as `/e2e`.
+
+### Fixed — third pass (GLM-5.2, on the patched patch)
+- **The unreadable branch was a stuck state.** It reported the file and stopped,
+  with no exit — so a single truncated handoff became a line of noise at every
+  session start, forever, and nothing told the user how to resolve it. It now
+  names the way out (delete it, or overwrite via `/context-handoff`). Recurring
+  noise a user cannot act on is worse than the state it reports.
+- **Consuming a handoff now leaves a copy** at `docs/superpowers/.handoff-last.md`
+  — one file, overwritten each time, not an accumulating log. Classification is a
+  model's judgement, not a parse, and a truncation landing *after* valid
+  frontmatter looks complete from the inside. Both earlier lenses assumed git was
+  the backstop; `handoff.md` is session state and plenty of projects gitignore it.
+  This is the only structural mitigation for a condition the reader cannot
+  reliably detect.
+- **The heading-level rule no longer reasons about whether a block "has
+  subsections".** That was a prose claim about a file, and it is exactly the claim
+  that expired when `gstack-routing` moved off `v1`. The rule now demotes
+  subsections unconditionally when the root is H3 — a no-op for a block without
+  them, and the fix for one that grows them later. Stated once, for all
+  marker-managed sections, instead of per-block.
+
+### Upgrading
+Three marker versions moved, so `/superpowers-gstack:adapt` will replace the
+Session Continuity, Track-aware routing, and plan-fidelity sections in existing
+projects. Your own sections are untouched, as always.
+
+One transient note for mixed-version teams: the continuous-mode stub is only
+meaningful to a 2.36.1 reader. A machine still on 2.36.0 will present it as
+"where you left off" with nothing to quote. Harmless — it preserves the mode
+correctly — but it looks wrong until every machine is upgraded.
+
 ## [2.36.0] - 2026-08-17
 
 Renames the handoff persistence mode `auto` → `continuous`, and extracts Session

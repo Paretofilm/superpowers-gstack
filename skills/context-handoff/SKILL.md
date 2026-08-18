@@ -104,9 +104,12 @@ When the user opts in to continuous handoff after a compact trigger:
 
 ## Backwards compatibility
 
-If you encounter an existing handoff.md without YAML frontmatter (pre-1.12.0 prose-only format):
-- Read it as-is for the current session.
-- On next write, convert to YAML+prose format. Preserve the user-meaningful prose sections; populate YAML fields from prose where possible, leave others as `n/a`.
+A handoff.md **with** YAML frontmatter is handled by the field rules above: `type: handoff` is current, and YAML carrying both `session_end` and `next_step` without `type:` is a v1.12.0–v2.1.0 legacy handoff. Both are read normally and rewritten in the current format.
+
+A handoff.md **without** any frontmatter is NOT assumed to be a handoff (changed in 2.36.1). The old rule — read it as prose, convert it on next write — meant any file sitting at that path got consumed, and the automatic session-start reader then cleared it. At least one project used the path for permanent notes. So:
+
+- **On the automatic read path** (the Session Continuity rule in CLAUDE.md): do not present it, do not clear it. Say in one line that the file holds unrecognized content.
+- **When the user explicitly invokes this skill** to save state: writing is what they asked for, so write — but if the existing file has unrecognized content, say what you are replacing in one line first. Overwriting on request is fine; overwriting silently is not.
 
 ## Resume is automatic
 

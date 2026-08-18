@@ -75,3 +75,56 @@ def test_block_headings_are_discoverable():
     for name in lint.MARKER_BLOCKS:
         first = (blocks / name).read_text().split("\n", 1)[0]
         assert lint.heading_text(first), f"{name} first line is not a parseable heading"
+
+
+# --- E9: bare plugin-skill references inside emitted blocks (2.36.1) ----------
+# blocks/*.md is pasted verbatim into other projects, where `/htmlify` does not
+# resolve — only `/superpowers-gstack:htmlify` does. Three bare references had
+# shipped to every adopting project before this guard existed.
+
+OWN = ["htmlify", "adapt", "e2e-route", "pitfall-verification", "context-handoff"]
+
+
+@pytest.mark.parametrize(
+    "line,hit,why",
+    [
+        ("- `/htmlify --open` renders it", "htmlify", "the reference that shipped broken"),
+        ("run `/pitfall-verification` after", "pitfall-verification", "same class"),
+        ("see `/e2e-route` for routing", "e2e-route", "hyphenated name matches whole"),
+    ],
+)
+def test_bare_plugin_skill_refs_are_caught(line, hit, why):
+    m = lint.bare_skill_ref_re(OWN).search(line)
+    assert m and m.group(1) == hit, why
+
+
+@pytest.mark.parametrize(
+    "line,why",
+    [
+        ("`/superpowers-gstack:htmlify --open`", "namespaced — the correct form"),
+        ("read skills/htmlify/SKILL.md", "a path, not a reference"),
+        ("invoke `/ship` then `/review`", "gstack skills are correctly bare"),
+        ("`/investigate` for bugs", "Superpowers/gstack skill, not ours"),
+        ("`/superpowers-gstack:e2e-route`", "namespaced hyphenated name"),
+        # Boundary cases from the Codex P2 on the 2.36.1 branch — the first
+        # `\\b`-only version accepted all three of these.
+        ("see ./htmlify/SKILL.md", "relative path — trailing slash after the name"),
+        ("/htmlify/SKILL.md at repo root", "absolute-looking path, same reason"),
+        ("the /e2e-route-extra variant", "longer token, not our skill"),
+    ],
+)
+def test_legitimate_forms_are_not_flagged(line, why):
+    assert lint.bare_skill_ref_re(OWN).search(line) is None, why
+
+
+def test_colon_prefix_is_still_caught():
+    """`:` is NOT in the lookbehind. It cannot protect the namespaced form (that
+    string holds no `/name` to match), so excluding it only created misses."""
+    m = lint.bare_skill_ref_re(OWN).search("label:/htmlify here")
+    assert m and m.group(1) == "htmlify"
+
+
+def test_longest_name_wins_over_prefix():
+    """`/e2e-route` must not be reported as `/e2e` — alternation is longest-first."""
+    m = lint.bare_skill_ref_re(["e2e", "e2e-route"]).search("use `/e2e-route` here")
+    assert m and m.group(1) == "e2e-route"

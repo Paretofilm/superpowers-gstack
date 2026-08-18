@@ -50,6 +50,9 @@ DENYLIST = [
     (re.compile(r"`sensitive`\s*="), "third-lens 'sensitive' role was removed in 2.18.0"),
     (re.compile(r"--role\s+sensitive|--sensitive\b"), "third-lens --sensitive flag was removed in 2.18.0"),
     (re.compile(r"gstack-multi-lens-review-v[0-4]\b"), "stale multi-lens marker (current: v5+)"),
+    (re.compile(r"gstack-session-continuity-v[12]\b"), "stale session-continuity marker (current: v3+, 2.36.1)"),
+    (re.compile(r"gstack-plan-fidelity-v1\b"), "stale plan-fidelity marker (current: v2+, 2.36.1)"),
+    (re.compile(r"gstack-routing-v1\b"), "stale track-routing marker (current: v2+, 2.36.1)"),
     (re.compile(r"Pi \(local|Pi \(hybrid"), "local-model (Pi) routing columns removed in v0.2 (2.27.0)"),
     (re.compile(r"start-mlx"), "MLX local-server routing removed in v0.2 (2.27.0)"),
     (re.compile(r"models\.json"), "Pi models.json runtime detection removed in v0.2 (2.27.0)"),
@@ -114,6 +117,27 @@ def heading_text(line: str) -> str | None:
     s = s.lstrip("#").strip()
     s = re.sub(r"\s*<!-- gstack-[a-z-]+-v\d+ -->\s*$", "", s)
     return re.sub(r"\s*#+$", "", s).strip().lower()
+
+
+def bare_skill_ref_re(own_skill_names) -> "re.Pattern":
+    r"""Match a bare `/skill-name` for a skill THIS plugin owns (E9).
+
+    The boundaries do the work. Both sides must be guarded:
+      `/superpowers-gstack:htmlify`  namespaced — holds no `/htmlify` substring,
+                                     so it never matches in the first place
+      `skills/htmlify/SKILL.md`      a path — word char before the slash
+      `./htmlify/SKILL.md`           a path — trailing `/` after the name
+      `/e2e-route-extra`             a longer token — trailing `-` after the name
+      `/ship`, `/review`             gstack/Superpowers skills, correctly bare —
+                                     excluded by not being in `own_skill_names`
+    `:` is deliberately NOT in the lookbehind: it cannot protect the namespaced
+    form (no `/name` there to match) and only creates misses like `label:/htmlify`.
+    A trailing `\b` alone is not enough — it accepts `-` and `/`, which is how
+    both false-positive classes got in. Longest-first alternation so `/e2e-route`
+    is never reported as `/e2e`.
+    """
+    names = sorted(own_skill_names, key=len, reverse=True)
+    return re.compile(r"(?<![\w/-])/(" + "|".join(map(re.escape, names)) + r")(?![\w/-])")
 
 
 def frontmatter(text: str) -> dict | None:
@@ -298,6 +322,26 @@ def main() -> int:
         for ref in set(re.findall(r"blocks/([A-Za-z0-9_.-]+\.md)", text)):
             if not (blocks_dir / ref).is_file():
                 errors.append(f"E8 {gen}/SKILL.md references nonexistent blocks/{ref}")
+
+    # E9: no bare `/skill-name` for a THIS-PLUGIN skill inside blocks/. Blocks are
+    # pasted verbatim into other projects, where `/htmlify` does not resolve —
+    # only `/superpowers-gstack:htmlify` does. Scoped to blocks/ on purpose:
+    # inside this repo's own SKILL.md files a bare name is merely sloppy, but in
+    # an emitted block it is a dead reference in every project that adopts it.
+    # gstack/Superpowers skills (/ship, /review, /investigate…) are correctly
+    # bare and must NOT be flagged, so the name list comes from skills/ itself.
+    if blocks_dir.is_dir():
+        own = sorted((d.name for d in SKILLS.iterdir() if (d / "SKILL.md").is_file()),
+                     key=len, reverse=True)
+        if own:
+            bare = bare_skill_ref_re(own)
+            for f in sorted(blocks_dir.glob("*.md")):
+                for i, line in enumerate(f.read_text().splitlines(), 1):
+                    for m in bare.finditer(line):
+                        errors.append(
+                            f"E9 {BLOCKS_DIR_REL}/{f.name}:{i}: bare /{m.group(1)} in an emitted "
+                            f"block — use /superpowers-gstack:{m.group(1)} (bare form does not "
+                            f"resolve in the projects this block is pasted into)")
 
     for w in warnings:
         print(f"WARN  {w}")

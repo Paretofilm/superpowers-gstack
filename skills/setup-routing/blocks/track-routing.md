@@ -1,4 +1,4 @@
-## Track-aware routing (dual-track) <!-- gstack-routing-v1 -->
+## Track-aware routing (dual-track) <!-- gstack-routing-v2 -->
 
 This project follows superpowers-gstack's dual-track convention.
 Track is declared in `.gstack/track` (`ios` | `macos` | `both`).
@@ -13,7 +13,7 @@ then handles:
 - Inline platform question (iOS/macOS/both) if native or ambiguous, only
   when `.gstack/track` is absent
 - Design-doc relocation from gstack defaults into repo `docs/`
-- `/htmlify --open` rendering BEFORE the approval gate (so the user can
+- `/superpowers-gstack:htmlify --open` rendering BEFORE the approval gate (so the user can
   read the rich HTML before deciding)
 - Approve / Revise / Restart gate after they've seen the rendered HTML
 - Suggests `/superpowers-gstack:swiftui-design-consultation` next for

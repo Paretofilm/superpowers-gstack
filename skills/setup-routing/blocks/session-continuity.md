@@ -1,21 +1,47 @@
-## Session Continuity <!-- gstack-session-continuity-v1 -->
+## Session Continuity <!-- gstack-session-continuity-v3 -->
 
-On session start or after `/compact`: if `docs/superpowers/handoff.md` exists and
-contains content, read it and present a one-line summary of where you left off.
-Quote `next_step` verbatim, name the `active_task` ID, and surface `env` (venv,
-dev_server, test_cmd) so commands work immediately. If the file has no YAML
-frontmatter at all (a pre-1.12.0 prose-only handoff), none of those fields
-exist — summarize from the prose instead, and treat `mode` as absent below. Then
-proceed normally — do not ask "ready to continue?".
+On session start or after `/compact`, look at `docs/superpowers/handoff.md` and
+**classify it before touching it**. Consuming a handoff clears it, so a wrong
+classification destroys whatever was there.
+
+- **Empty or whitespace only** → nothing to do, say nothing. This is the normal
+  resting state after a handoff has been consumed.
+- **Continuous-mode stub** — frontmatter carrying `mode` (`continuous`, or the
+  legacy `auto`) and no `next_step`. This is the marker left behind by the
+  clearing step below, not a handoff. Say nothing, leave the file exactly as it
+  is, and treat continuous handoff as already active.
+- **Complete handoff** — `type: handoff` (current, v2.1.1+), or both
+  `session_end` and `next_step` with no `type:` (legacy v1.12.0–v2.1.0) — **and**
+  a usable `next_step` to resume from. Consume it (below).
+- **Anything else** → NOT consumable: frontmatter that claims to be a handoff but
+  carries no `next_step`, a file cut off mid-write, or a file with no frontmatter
+  at all. Do not present it as where you left off, and **do not clear it** — a
+  truncated handoff and a project's own notes both live at this path, and neither
+  survives being emptied. Say so in one line **and name the way out**, because
+  this branch otherwise re-fires at every session start forever: the file has to
+  be deleted, or overwritten by invoking `/superpowers-gstack:context-handoff`.
+  Recurring noise the user cannot act on is worse than the state it reports.
+
+For a complete handoff: present a one-line summary of where you left off. Quote
+`next_step` verbatim, name the `active_task` ID, and surface `env` (venv,
+dev_server, test_cmd) so commands work immediately. Then proceed normally — do
+not ask "ready to continue?".
 
 **Read the `mode:` field BEFORE you clear the file.** Clearing first destroys the
-value the very next step depends on. Once you have read it:
+value the next step depends on. Once you have read it:
 
-- `mode: continuous` (or a legacy spelling, below) → do NOT blank the file.
-  Rewrite it carrying just the frontmatter — `type: handoff` plus
-  `mode: continuous` — so the setting survives into the next compact. Blanking it
-  here is exactly what makes a project ask the opt-in question forever.
+- `mode: continuous` (or the legacy `auto`) → do NOT blank the file. Rewrite it
+  carrying just `type: handoff` and `mode: continuous` — the continuous-mode stub
+  above — so the setting survives into the next compact. Blanking it here is
+  exactly what makes a project ask the opt-in question forever.
 - anything else → clear the file (write empty string), as before.
+
+Either way, **copy what you consumed to `docs/superpowers/.handoff-last.md`
+first** (one file, overwritten each time — not an accumulating log). Classifying a
+handoff is a judgement call made by a model, not a parse, and a truncation that
+lands *after* valid frontmatter looks complete from the inside. This makes any
+misjudgement recoverable without depending on the file having been committed —
+`handoff.md` is session state, and plenty of projects gitignore it.
 
 After `/compact`, decide whether to offer **continuous handoff**, using the `mode`
 you read above:
