@@ -1,5 +1,40 @@
 # Changelog
 
+## [2.38.1] - 2026-08-18
+
+Fixes #52 — two htmlify defects that both failed in the "looks finished" direction:
+exit 0, valid HTML, nothing on stderr, content silently missing.
+
+### Fixed
+- **A `--plan` reaching the generic renderer was accepted and dropped in silence.**
+  `renderGeneric` declared `plan?: Plan | null` in its input type and never
+  destructured it. `readPlan` validated the plan, so the whole chain was green
+  while the plan was discarded. In a review flow the feedback panel *is* the
+  mechanism for user input — a silently dropped panel means the review looks
+  complete while the user was never shown the form.
+  The panel is the one part that carries without type-specific scaffolding, so it
+  now renders. Section treatments and pullquotes genuinely cannot apply to an
+  unstructured document, so they produce an explicit stderr warning naming what
+  was ignored and how to fix it (`type: design-doc`) — rather than pretending the
+  plan was honoured.
+- **Body H2s outside both the canonical list and the plan were dropped.**
+  `renderPlannedSections` iterated canonical headings then `plan.sections` and
+  stopped. A design-doc with 9 H2s and a 2-section plan rendered 2 of them, no
+  warning. A third pass now renders every remaining H2 as a plain `section-card`:
+  the document's own content is never wrong to show, and the previous workaround
+  (list all 9 headings verbatim in the plan) was undocumented and fragile against
+  `normalizeHeading` being only trim+lowercase.
+
+### Tests
+`tests/silent-drops.test.ts` — 6 regression tests, including the two silence cases
+that matter: a heading in the plan is not rendered twice, and no plan produces no
+warning. 148 bun tests total.
+
+### Note
+The two pre-existing `tsc --noEmit` errors (`markdown.ts:39`, `classify.test.ts:204`)
+are unchanged by this release — verified identical with the working tree stashed.
+They predate it and are not part of the gate, which runs `bun test`.
+
 ## [2.38.0] - 2026-08-18
 
 Branch work that never lands is invisible debt. The plugin shipped two skills that
