@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# SessionStart hook: surface work that is at risk of being stranded in a branch.
+#
+# The failure this exists for: a feature gets built on a branch, the session ends,
+# and nothing ever tells anyone the branch was never landed. Weeks later it is
+# forgotten work. Superpowers and gstack both ship skills that *finish* a branch
+# (/ship, /superpowers:finishing-a-development-branch) — what was missing is the
+# thing that NOTICES. This is that.
+#
+# Deliberately NOT exempt for the superpowers-gstack repo itself. The version-check
+# hook exempts it because that repo's CLAUDE.md is the source of the routing and has
+# no generated marker — a correct exemption for that check. Branch hygiene is
+# universal, and the plugin repo strands branches like any other (six were found
+# there on 2026-08-18).
+#
+# Signal discipline: silent when there is nothing to report. A branch you committed
+# to today is work in progress, not a problem — only IDLE unmerged branches are
+# surfaced, so mid-feature sessions are never nagged.
+set -uo pipefail
+
+command -v git >/dev/null 2>&1 || exit 0
+git rev-parse --git-dir >/dev/null 2>&1 || exit 0
+
+# Days a branch must sit untouched before it counts as at-risk. 0 disables the hook.
+IDLE_DAYS="${GSTACK_BRANCH_IDLE_DAYS:-7}"
+# Validate before any arithmetic. A SessionStart hook must never fail the session,
+# and under `set -u` a failed $(( )) leaves the next variable unbound and aborts —
+# a non-integer override would have crashed the hook rather than being ignored.
+case "$IDLE_DAYS" in
+  ''|*[!0-9]*) IDLE_DAYS=7 ;;
+esac
+[ "$IDLE_DAYS" -eq 0 ] && exit 0
+
+# Default branch: origin/HEAD, else main, else master. No network call.
+default_ref=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
+if [ -z "$default_ref" ]; then
+  for c in main master; do git show-ref --verify -q "refs/heads/$c" && { default_ref="$c"; break; }; done
+fi
+[ -z "$default_ref" ] && exit 0
+
+# Compare against the remote tip when we have it — a local default branch that is
+# behind origin would otherwise report branches that are in fact already landed.
+base="$default_ref"
+git show-ref --verify -q "refs/remotes/origin/$default_ref" && base="origin/$default_ref"
+
+current=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+cutoff=$(( $(date +%s) - IDLE_DAYS * 86400 ))
+
+stale=""; stale_n=0
+while IFS='|' read -r ref ts; do
+  [ -z "$ref" ] && continue
+  [ "$ref" = "$default_ref" ] && continue
+  [ "$ref" = "$current" ] && continue          # you are working here right now
+  [ "$ts" -ge "$cutoff" ] 2>/dev/null && continue
+  git merge-base --is-ancestor "$ref" "$base" 2>/dev/null && continue   # already landed
+  ahead=$(git rev-list --count "$base..$ref" 2>/dev/null || echo "?")
+  age=$(( ( $(date +%s) - ts ) / 86400 ))
+  stale="${stale}      ${ref}  —  ${ahead} commit(s), idle ${age}d\n"
+  stale_n=$((stale_n + 1))
+done < <(git for-each-ref --format='%(refname:short)|%(committerdate:unix)' refs/heads 2>/dev/null)
+
+# Uncommitted changes AT SESSION START are leftovers, not work in progress —
+# whatever this was, the last session ended without committing it. This is the
+# "ikke committet" half of the failure and the cheapest thing to detect.
+dirty_n=$(git status --porcelain 2>/dev/null | grep -c . || true)
+
+# Remote branches with no local counterpart, unmerged — the true orphans. Uses
+# already-fetched refs only, so no network call. This is the shape that stranded
+# six branches in this very repo: a bot opened them, the PRs were closed, and the
+# branches outlived both.
+remote_orphans=""; remote_n=0
+while IFS='|' read -r ref ts; do
+  [ -z "$ref" ] && continue
+  short="${ref#origin/}"
+  [ "$short" = "$default_ref" ] || [ "$short" = "HEAD" ] && continue
+  git show-ref --verify -q "refs/heads/$short" && continue      # has a local twin, counted above
+  [ "$ts" -ge "$cutoff" ] 2>/dev/null && continue
+  git merge-base --is-ancestor "$ref" "$base" 2>/dev/null && continue
+  age=$(( ( $(date +%s) - ts ) / 86400 ))
+  [ "$remote_n" -lt 8 ] && remote_orphans="${remote_orphans}      ${short}  —  idle ${age}d\n"
+  remote_n=$((remote_n + 1))
+done < <(git for-each-ref --format='%(refname:short)|%(committerdate:unix)' refs/remotes/origin 2>/dev/null)
+
+# Merged local branches are pure clutter — cheap to count, never urgent.
+merged_n=$(git branch --merged "$base" --format='%(refname:short)' 2>/dev/null \
+  | grep -vx -e "$default_ref" -e "$current" | grep -c . || true)
+
+if [ "$stale_n" = "0" ] && [ "$remote_n" = "0" ] && [ "${dirty_n:-0}" = "0" ] \
+   && [ "${merged_n:-0}" -lt 5 ]; then exit 0; fi
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo " Unlanded git work"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo
+if [ "${dirty_n:-0}" != "0" ]; then
+  echo "  $dirty_n uncommitted change(s) on '$current', left from a previous session."
+  echo "      git status        # then commit, stash, or discard deliberately"
+  echo
+fi
+if [ "$remote_n" != "0" ]; then
+  echo "  $remote_n remote branch(es) with no local copy, unmerged and idle >${IDLE_DAYS}d:"
+  printf "%b" "$remote_orphans"
+  [ "$remote_n" -gt 8 ] && echo "      … and $((remote_n - 8)) more"
+  echo "      Closing a PR does not delete its branch — these outlive their PRs."
+  echo
+fi
+if [ "$stale_n" != "0" ]; then
+  echo "  $stale_n branch(es) not merged into $default_ref and idle >${IDLE_DAYS}d:"
+  printf "%b" "$stale"
+  echo
+  echo "  Land them with /ship, or /superpowers:finishing-a-development-branch"
+  echo "  to merge, PR, or deliberately discard."
+  echo
+fi
+if [ "${merged_n:-0}" -ge 5 ]; then
+  echo "  $merged_n local branch(es) already merged into $default_ref — safe to delete:"
+  echo "      git branch --merged $base | grep -v '^[* ]*$default_ref$' | xargs -r git branch -d"
+  echo
+fi
+echo "  Silence this with GSTACK_BRANCH_IDLE_DAYS=0 (or raise the threshold)."
+echo
+exit 0

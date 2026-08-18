@@ -1,4 +1,4 @@
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v3 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v4 -->
 
 Commit at meaningful milestones — not at every file save, not only at session end.
 
@@ -22,6 +22,23 @@ Follow the convention established in the repo (`git log --oneline -10` first). I
 - ❌ `git push --force` to `main` or shared branches
 - ❌ `git reset --hard` without stashing or committing first — silent work loss
 - ❌ `git add -A` / `git add .` when secrets, large binaries, or build artifacts may be present — stage specific paths
+
+### Landing the branch
+
+A branch is done when it is **merged or deliberately discarded** — not when the code
+works. Work sitting on an unlanded branch is invisible: it doesn't ship, doesn't reach
+review, and rots against the default branch while everything else moves.
+
+- **Never end a session silently on a branch with unmerged commits.** Say where the
+  work stands — landed, ready to land, or still open — even when the answer is "still
+  open". The failure mode is not a wrong decision, it's no decision being stated.
+- **Landing is a skill, not a hand-rolled merge:** `/ship` (tests → review → PR) or
+  `/superpowers:finishing-a-development-branch` (merge, PR, or discard). Pick one.
+- **Deliberate abandonment counts as done.** Say so and delete the branch. An
+  explicitly discarded branch is finished; a silently abandoned one is debt nobody
+  remembers taking on.
+- **Closing a PR does not delete its branch.** Delete it after the PR merges or
+  closes, or it outlives the PR and reads as open work forever.
 
 ### Cadence rule
 
