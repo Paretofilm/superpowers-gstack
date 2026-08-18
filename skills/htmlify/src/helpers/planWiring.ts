@@ -129,5 +129,26 @@ export function renderPlannedSections(opts: {
     }
   }
 
+  // Third pass: every remaining H2 in the document. Without this, a body heading
+  // that is neither canonical nor named in the plan is silently dropped — a
+  // design-doc with 9 H2s and a 2-section plan rendered 2 of them and exited 0
+  // (#52). The document's own content is never wrong to show, so an uncovered
+  // heading defaults to a plain section-card rather than disappearing.
+  for (const tok of tokens) {
+    if (tok.type !== "heading") continue;
+    const h = tok as Token & { depth?: number; text?: string };
+    if (h.depth !== 2 || !h.text) continue;
+    const norm = normalizeHeading(h.text);
+    if (rendered.has(norm)) continue;
+    const section = extractSection(tokens, h.text);
+    if (section === null || section.length === 0) continue;
+    blocks.push(
+      renderSectionWithPlan({ heading: h.text, collapsible: false }, renderTokens(section), undefined)
+    );
+    const pq = pullquotesAfter(h.text, plan);
+    if (pq) blocks.push(pq);
+    rendered.add(norm);
+  }
+
   return blocks.join("\n");
 }
