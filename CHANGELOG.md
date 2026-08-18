@@ -1,5 +1,65 @@
 # Changelog
 
+## [2.39.0] - 2026-08-18
+
+Closes #53, wires gstack upgrade detection, and makes this repo an actual consumer
+of the blocks it ships.
+
+### Fixed — #53, unreadable diagrams shipped silently
+The renderer could emit a flowchart at ~6px effective node text with labels spilling
+outside their boxes, exit 0, nothing on stderr. The agent that authors a plan never
+sees the rendered output, so this gate cannot live in SKILL.md prose — it has to be
+in the tool.
+
+- **Labels are measured and wrapped.** `emitNode` drew one centred line at a fixed
+  165px width, so anything longer spilled out both sides. Labels now wrap to the box
+  as `<tspan>` lines (max 3), and a single unsplittable word is clipped with an
+  ellipsis. Visibly clipped beats invisibly overflowing into the neighbouring node.
+- **The height clamp no longer crushes text below readability.** `max-height: 360px`
+  scales the whole SVG uniformly, dragging the 15.5px font down with it. The renderer
+  now computes the effective on-screen size; below an 11px floor it adds
+  `.flowchart-unclamped`, and the diagram keeps its intrinsic size and scrolls inside
+  its card instead. A diagram you must scroll beats one you cannot read.
+- The gate **warns on stderr** with the measured size and the node count, so the
+  cause is visible rather than inferred.
+
+Silence discipline again: a small diagram is untouched and produces no warning.
+8 regression tests in `tests/flowchart-readability.test.ts`.
+
+### Added — gstack upgrade detection
+`check-branch-hygiene.sh` now reports a pending gstack upgrade. gstack ships its own
+updater (`gstack-update-check` + an `auto_upgrade` config), but it only runs inside a
+gstack **skill's** preamble — invoke none of them and it never fires. Measured today:
+`auto_upgrade` already `true`, and still six versions behind (1.61.0.0 vs 1.67.1.0).
+
+We only **report**. Performing the upgrade stays gstack's decision, gated by its own
+config — this plugin has no business mutating another tool's install.
+
+### Added — this repo eats its own dog food (the broad gap, now closed)
+`check-plugin-version.sh` exempts this repo from the `/adapt` nag, correctly: its
+CLAUDE.md is the *source* of the routing and carries no generated marker. But the
+exemption was wholesale, so **every block shipped to user projects never applied to
+the repo producing them**.
+
+- `scripts/sync-own-claude-md.py` emits the six universal blocks — autonomy, git
+  hygiene, multi-lens review, code reuse, plan fidelity, session continuity — into
+  this repo's CLAUDE.md between generated sentinels, byte-identical to what `/adapt`
+  writes elsewhere. Track-conditional blocks and the placeholder-bearing model-routing
+  block are deliberately excluded.
+- **Lint rule E11** fails the build when that region goes stale.
+- The hand-written `Branch discipline (this repo)` section added in 2.38.0 is removed
+  — the real git-hygiene v4 block now covers it, which was the point.
+
+Two alternatives were rejected. Running `/adapt` on this repo would stamp a version
+marker, making the version-check hook nag here forever and putting the *source* of
+the routing under generated management. Hand-sync with a "keep in sync" comment is
+the exact mechanism that let Session Continuity drift between the two generators for
+four releases. Generated and enforced is the only version that holds.
+
+### Repository
+Six orphaned auto-update branches and five merged feature branches deleted; the
+branch-hygiene hook now reports nothing on this repo. Issue #52 closed in 2.38.1.
+
 ## [2.38.1] - 2026-08-18
 
 Fixes #52 — two htmlify defects that both failed in the "looks finished" direction:
