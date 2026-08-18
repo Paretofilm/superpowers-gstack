@@ -922,6 +922,18 @@ details.expandable[open] > summary::after {
   min-width: 0;
   flex: 1;
 }
+/* Readability escape hatch (#53): when the renderer measures that the height clamp
+   would push node text below the readable floor, it adds .flowchart-unclamped and
+   the diagram keeps its intrinsic size, scrolling instead of being crushed.
+   Keep 360px in sync with CSS_MAX_HEIGHT in flowchart-svg.ts. */
+.flowchart-unclamped {
+  overflow: auto;
+  max-height: 70vh;
+}
+.flowchart-unclamped svg {
+  max-height: none;
+  max-width: none;
+}
 .flowchart svg {
   display: block;
   max-width: 100%;

@@ -45,6 +45,15 @@ const FONT_MONO = `ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace`;
 
 // Layout policy thresholds. Documented here so the reasoning lives next to
 // the numbers and survives future tweaks.
+// Readability policy (#53). A diagram that renders at ~6px effective font is not
+// a smaller diagram, it is an unreadable one — and the agent that authored the
+// plan never sees the rendered output, so this gate has to live in the tool.
+const CSS_MAX_HEIGHT = 360;      // must track `.flowchart svg { max-height }` in companion.css
+const MIN_READABLE_PX = 11;      // below this, stop downscaling and let it scroll instead
+const NODE_TEXT_PAD = 12;        // horizontal breathing room inside a node
+const CHAR_W_RATIO = 0.55;       // mean glyph width / font-size for the system sans stack
+const MAX_LABEL_LINES = 3;       // beyond this the label is truncated, not shrunk further
+
 const AUTO_LR_MAX_NODES = 4;        // chains ≤4 → LR; longer would crowd edge labels
 const TB_BALANCED_NODES = 5;         // exactly-5 chains → TB single column, 50/50 with notes
 const SPLIT_TARGET_LEFT_MAX = 5;     // split column tries to keep ≤5 on the left
@@ -190,6 +199,54 @@ function decideLayout(data: FlowchartData): LayoutDecision {
 // SVG primitive emitters (shared between dagre and split paths)
 // ============================================================
 
+// Width of a string at a given font size. An estimate, not a measurement — there is
+// no text-metrics API in a headless renderer — but a conservative ratio beats the
+// previous behaviour of assuming every label fits.
+export function estimateTextWidth(s: string, fontPx: number): number {
+  return s.length * fontPx * CHAR_W_RATIO;
+}
+
+// Greedy wrap on word boundaries. A single word wider than the box cannot be split
+// without hyphenation rules we do not have, so it is truncated with an ellipsis —
+// visibly clipped beats invisibly overflowing into the neighbouring node.
+export function wrapLabel(label: string, maxWidth: number, fontPx: number): string[] {
+  const clip = (s: string): string => {
+    if (estimateTextWidth(s, fontPx) <= maxWidth) return s;
+    const max = Math.max(1, Math.floor(maxWidth / (fontPx * CHAR_W_RATIO)) - 1);
+    return s.slice(0, max) + "\u2026";
+  };
+
+  const words = label.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [""];
+
+  const lines: string[] = [];
+  let cur = "";
+  for (const w of words) {
+    const next = cur ? `${cur} ${w}` : w;
+    if (estimateTextWidth(next, fontPx) <= maxWidth || !cur) {
+      cur = next;
+    } else {
+      lines.push(cur);
+      cur = w;
+    }
+    if (lines.length === MAX_LABEL_LINES) break;
+  }
+  if (cur && lines.length < MAX_LABEL_LINES) lines.push(cur);
+
+  // Anything that did not fit in MAX_LABEL_LINES is signalled on the last line
+  // rather than silently dropped.
+  const used = lines.join(" ").split(/\s+/).filter(Boolean).length;
+  if (used < words.length) lines[lines.length - 1] = clip(lines[lines.length - 1] + " \u2026");
+
+  return lines.map(clip);
+}
+
+// Effective on-screen font size after the CSS max-height clamp scales the whole SVG.
+export function effectiveFontPx(svgHeight: number): number {
+  const scale = svgHeight > CSS_MAX_HEIGHT ? CSS_MAX_HEIGHT / svgHeight : 1;
+  return NODE_FONT_PX * scale;
+}
+
 function emitNode(
   node: FlowchartNode,
   x: number,
@@ -199,9 +256,21 @@ function emitNode(
 ): string {
   const rx = node.shape === "round" ? nh / 2 : 12;
   const cls = `flowchart-node${node.emphasis ? " flowchart-node-emphasis" : ""}`;
+
+  // Labels used to be drawn as a single centred line at a fixed width, so anything
+  // longer than the box simply spilled out both sides — no wrap, no measurement, no
+  // warning (#53). Wrap to the box instead; text outside a node should be impossible,
+  // not unlikely.
+  const lines = wrapLabel(node.label, nw - NODE_TEXT_PAD * 2, NODE_FONT_PX);
+  const lineH = NODE_FONT_PX * 1.15;
+  const first = y + nh / 2 - ((lines.length - 1) * lineH) / 2;
+  const tspans = lines
+    .map((ln, i) => `<tspan x="${x + nw / 2}" y="${(first + i * lineH).toFixed(1)}">${esc(ln)}</tspan>`)
+    .join("");
+
   return `<g class="${cls}">
         <rect x="${x}" y="${y}" width="${nw}" height="${nh}" rx="${rx}" ry="${rx}"/>
-        <text x="${x + nw / 2}" y="${y + nh / 2}" text-anchor="middle" dominant-baseline="central" font-family="${FONT}" font-size="${NODE_FONT_PX}" font-weight="500">${esc(node.label)}</text>
+        <text text-anchor="middle" dominant-baseline="central" font-family="${FONT}" font-size="${NODE_FONT_PX}" font-weight="500">${tspans}</text>
       </g>`;
 }
 
@@ -482,7 +551,24 @@ export function renderFlowchart(data: FlowchartData): string {
     }
   }
 
-  return `<div class="flowchart${layoutClass}">
+  // Readability gate (#53). The CSS `max-height: 360px` scales the whole SVG
+  // uniformly, so a tall chain drags the 15.5px node font down with it — measured
+  // at ~6px on an 8-node TB chain, with no warning and exit 0. Below the readable
+  // floor we stop clamping: the diagram keeps its intrinsic size and scrolls in
+  // its card. A diagram you must scroll beats one you cannot read.
+  const effPx = effectiveFontPx(svgHeight);
+  let readabilityClass = "";
+  if (effPx < MIN_READABLE_PX) {
+    readabilityClass = " flowchart-unclamped";
+    process.stderr.write(
+      `Warning: flowchart would render at ~${effPx.toFixed(1)}px node text under the ` +
+      `${CSS_MAX_HEIGHT}px height clamp (below the ${MIN_READABLE_PX}px readable floor). ` +
+      `Rendering at full size with scrolling instead. ` +
+      `Consider splitting this ${(data.nodes ?? []).length}-node diagram, or shortening labels.\n`
+    );
+  }
+
+  return `<div class="flowchart${layoutClass}${readabilityClass}">
   <div class="flowchart-svg-wrap">
     <svg viewBox="0 0 ${svgWidth} ${svgHeight}" width="${svgWidth}" height="${svgHeight}" preserveAspectRatio="xMidYMid meet" aria-label="Flowchart diagram" role="img" xmlns="http://www.w3.org/2000/svg">
       ${svgBody}

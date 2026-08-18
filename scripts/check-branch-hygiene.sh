@@ -85,8 +85,38 @@ done < <(git for-each-ref --format='%(refname:short)|%(committerdate:unix)' refs
 merged_n=$(git branch --merged "$base" --format='%(refname:short)' 2>/dev/null \
   | grep -vx -e "$default_ref" -e "$current" | grep -c . || true)
 
+# gstack ships its own updater (`gstack-update-check` + `auto_upgrade` config), but
+# it only ever runs inside a gstack SKILL's preamble — invoke none of them and it
+# never fires. A user with auto_upgrade already true sat six versions behind for
+# exactly that reason (measured 2026-08-18: 1.61.0.0 vs 1.67.1.0 available).
+# We only REPORT. Performing the upgrade stays gstack's decision, gated by its own
+# config — this plugin has no business mutating another tool's install.
+report_gstack() {
+  local bin="$HOME/.claude/skills/gstack/bin/gstack-update-check"
+  [ -x "$bin" ] || return 0
+  local out; out=$("$bin" 2>/dev/null | head -1)
+  case "$out" in
+    UPGRADE_AVAILABLE\ *)
+      set -- $out
+      echo "  gstack $2 → $3 available.  Run /gstack-upgrade"
+      echo
+      ;;
+  esac
+}
+
 if [ "$stale_n" = "0" ] && [ "$remote_n" = "0" ] && [ "${dirty_n:-0}" = "0" ] \
-   && [ "${merged_n:-0}" -lt 5 ]; then exit 0; fi
+   && [ "${merged_n:-0}" -lt 5 ]; then
+  # Nothing to say about branches — but a pending gstack upgrade still deserves a line.
+  gs=$(report_gstack)
+  if [ -n "$gs" ]; then
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo " Upstream"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    printf "%s\n" "$gs"
+  fi
+  exit 0
+fi
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " Unlanded git work"
@@ -119,4 +149,5 @@ if [ "${merged_n:-0}" -ge 5 ]; then
 fi
 echo "  Silence this with GSTACK_BRANCH_IDLE_DAYS=0 (or raise the threshold)."
 echo
+report_gstack
 exit 0
