@@ -24,10 +24,18 @@ ERRORS (exit 1, CI-blocking):
       a SKILL.md). Replaced the old byte-identity drift guard in 2.33.0 —
       one source can't drift from itself.
 
+  E10 upstream skill references resolve: every `superpowers:<name>` names a
+      real Superpowers skill (roster: SUPERPOWERS_SKILLS). E2 only ever checked
+      this plugin's OWN skill names, so an upstream name was unvalidated — the
+      exact content the weekly auto-update job writes from release notes.
+
 WARNINGS (reported, exit 0):
   W1  frontmatter description over budget (target <=30 words; hard cap comes
       with the Phase-3 description rewrites)
   W2  SKILL.md body over 500 lines (bloat radar)
+  W3  SUPERPOWERS_SKILLS roster disagrees with the installed Superpowers plugin
+      (maintainer machines only — CI has no upstream installed, so E10's roster
+      is the CI-side source of truth and this is the drift alarm for it)
 
 Run: python3 scripts/lint-skills.py   (from the repo root or anywhere)
 """
@@ -162,6 +170,63 @@ def frontmatter(text: str) -> dict | None:
     return fm
 
 
+# Upstream skills this plugin is allowed to route to (E10). Checked in rather
+# than read from disk because CI has no upstream installed — a disk-only check
+# would be silent exactly where it matters, on the auto-update PR.
+#
+# Scoped to Superpowers on purpose. gstack ships ~50 skills on a weekly cadence;
+# a checked-in list that large would drift faster than it protects, and its bare
+# `/name` form collides with E9's own-skill matcher. Superpowers is 14 names on a
+# slow cadence, and the namespaced `superpowers:<name>` form is unambiguous.
+SUPERPOWERS_SKILLS = {
+    "brainstorming",
+    "dispatching-parallel-agents",
+    "executing-plans",
+    "finishing-a-development-branch",
+    "receiving-code-review",
+    "requesting-code-review",
+    "subagent-driven-development",
+    "systematic-debugging",
+    "test-driven-development",
+    "using-git-worktrees",
+    "using-superpowers",
+    "verification-before-completion",
+    "writing-plans",
+    "writing-skills",
+}
+SUPERPOWERS_CACHE_GLOB = "plugins/cache/claude-plugins-official/superpowers/*/skills"
+
+
+def installed_superpowers_skills():
+    """Skill names from the newest installed Superpowers, or None if absent.
+
+    Absent is the normal case in CI. Returning None (not an empty set) keeps the
+    caller from reading "not installed" as "upstream has no skills".
+    """
+    dirs = sorted((Path.home() / ".claude").glob(SUPERPOWERS_CACHE_GLOB))
+    if not dirs:
+        return None
+    newest = dirs[-1]
+    return {d.name for d in newest.iterdir() if (d / "SKILL.md").is_file()}
+
+
+def check_upstream_skills(path: Path, text: str) -> None:
+    """E10: `superpowers:<name>` references must name a real upstream skill.
+
+    E2 validates only THIS plugin's own skill names, so an upstream name was
+    unvalidated everywhere. That is precisely the content the weekly auto-update
+    job generates from release notes — a hallucinated skill would have passed
+    every gate and shipped a dead routing row into every generated CLAUDE.md.
+    """
+    for name in set(re.findall(r"(?<!-)superpowers:([a-z0-9-]+)", text)):
+        if name not in SUPERPOWERS_SKILLS:
+            errors.append(
+                f"E10 {path.relative_to(REPO)}: reference to unknown upstream skill "
+                f"'superpowers:{name}' — not in SUPERPOWERS_SKILLS. If upstream really "
+                f"added it, verify against the installed plugin and add it to the roster."
+            )
+
+
 def check_refs(path: Path, text: str, repo_doc: bool) -> None:
     """E2: skill-name and repo-script references must resolve.
 
@@ -215,10 +280,24 @@ def main() -> int:
         if text.count("\n") > BODY_WARN_LINES:
             warnings.append(f"W2 {d.name}: SKILL.md body is {text.count(chr(10))} lines (>500 — bloat radar)")
         check_refs(skill_md, text, repo_doc=False)
+        check_upstream_skills(skill_md, text)
 
     # E2 on CLAUDE.md + README too
     check_refs(REPO / "CLAUDE.md", claude_md, repo_doc=True)
+    check_upstream_skills(REPO / "CLAUDE.md", claude_md)
     check_refs(REPO / "README.md", readme, repo_doc=True)
+    check_upstream_skills(REPO / "README.md", readme)
+
+    # E10 layer 2: the roster itself must match reality. Only runs where an
+    # upstream is installed (never in CI), so it catches roster drift on a
+    # maintainer's machine without making CI depend on a local install.
+    _installed = installed_superpowers_skills()
+    if _installed is not None:
+        for missing in sorted(_installed - SUPERPOWERS_SKILLS):
+            warnings.append(f"W3 SUPERPOWERS_SKILLS is missing '{missing}' — installed upstream has it; add it to the roster")
+        for phantom in sorted(SUPERPOWERS_SKILLS - _installed):
+            warnings.append(f"W3 SUPERPOWERS_SKILLS lists '{phantom}' — installed upstream does NOT have it; verify before routing to it")
+
 
     # E3 routing coverage
     for d in skill_dirs:
