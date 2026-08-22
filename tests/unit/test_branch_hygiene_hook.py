@@ -162,3 +162,53 @@ def test_stale_stash_is_reported(tmp_path, repo):
                         "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t.t"})
     out = run_hook(repo)
     assert "stash(es)" in out and "meant for hours" in out
+
+
+# --- worktrees (2.41.0) ---------------------------------------------------------
+# `git status` only ever reports the tree you stand in, so uncommitted work in a
+# sibling worktree was invisible — while refs/heads is shared, so its BRANCH was
+# already checked. Half-covered is the worst state: the branch looked fine and the
+# uncommitted work went unmentioned. Relevant in practice because the Agent tool's
+# `isolation: "worktree"` mode auto-removes a temp worktree only when UNCHANGED —
+# one that produced changes is left on disk by design.
+
+
+def add_worktree(repo, path, branch):
+    git(repo, "worktree", "add", "-q", str(path), "-b", branch)
+    return path
+
+
+def test_clean_worktrees_are_silent(tmp_path, repo):
+    with_remote(tmp_path, repo)
+    add_worktree(repo, tmp_path.parent / f"{tmp_path.name}-wt", "feature")
+    assert run_hook(repo) == ""
+
+
+def test_uncommitted_work_in_another_worktree_is_reported(tmp_path, repo):
+    with_remote(tmp_path, repo)
+    wt = add_worktree(repo, tmp_path.parent / f"{tmp_path.name}-wt", "feature")
+    (wt / "stranded.txt").write_text("work nobody will revisit")
+    out = run_hook(repo)
+    assert "other worktree" in out and "feature" in out
+
+
+def test_current_and_other_worktree_are_counted_separately(tmp_path, repo):
+    """The current tree is already covered by dirty_n; counting it again in the
+    worktree scan would report one change twice."""
+    with_remote(tmp_path, repo)
+    wt = add_worktree(repo, tmp_path.parent / f"{tmp_path.name}-wt", "feature")
+    (wt / "there.txt").write_text("x")
+    (repo / "here.txt").write_text("y")
+    out = run_hook(repo)
+    assert "1 uncommitted change(s)" in out      # here, not 2
+    assert "1 other worktree(s)" in out          # there, not 2
+
+
+def test_deleted_worktree_directory_does_not_crash(tmp_path, repo):
+    """A worktree whose directory was removed but not pruned is a normal state; the
+    hook must skip it, not abort the session."""
+    import shutil
+    with_remote(tmp_path, repo)
+    wt = add_worktree(repo, tmp_path.parent / f"{tmp_path.name}-wt", "feature")
+    shutil.rmtree(wt)
+    run_hook(repo)  # run_hook already asserts exit 0

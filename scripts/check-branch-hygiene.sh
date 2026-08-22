@@ -64,6 +64,44 @@ done < <(git for-each-ref --format='%(refname:short)|%(committerdate:unix)' refs
 # "ikke committet" half of the failure and the cheapest thing to detect.
 dirty_n=$(git status --porcelain 2>/dev/null | grep -c . || true)
 
+# ...and the same check for every OTHER worktree. `git status` only ever reports the
+# tree you are standing in, so work left in a sibling worktree was invisible — while
+# refs/heads is shared, so its BRANCH was already being checked. Half-covered is the
+# worst state: the branch looked fine and the uncommitted work went unmentioned.
+#
+# This matters more than it looks: the Agent tool's `isolation: "worktree"` mode
+# auto-removes a temporary worktree only if it is UNCHANGED. One that produced
+# changes is left on disk by design — precisely the stranded work nobody revisits.
+#
+# Bounded to WORKTREE_SCAN_MAX so a repo with many worktrees cannot make a
+# SessionStart hook slow; each entry costs one `git status`.
+WORKTREE_SCAN_MAX=12
+here=$(git rev-parse --show-toplevel 2>/dev/null)
+other_wt=""; other_wt_n=0; scanned=0
+while IFS= read -r line; do
+  case "$line" in
+    "worktree "*)  wt_path="${line#worktree }"; wt_branch=""; wt_skip="" ;;
+    "branch "*)    wt_branch="${line#branch refs/heads/}" ;;
+    "bare"|"prunable"*|"detached")
+                   [ "$line" = "detached" ] || wt_skip=1 ;;
+    "")
+      [ -z "${wt_path:-}" ] && continue
+      [ -n "${wt_skip:-}" ] && { wt_path=""; continue; }
+      [ "$wt_path" = "$here" ] && { wt_path=""; continue; }   # counted by dirty_n above
+      [ ! -d "$wt_path" ] && { wt_path=""; continue; }
+      if [ "$scanned" -lt "$WORKTREE_SCAN_MAX" ]; then
+        scanned=$((scanned + 1))
+        n=$(git -C "$wt_path" status --porcelain 2>/dev/null | grep -c . || true)
+        if [ "${n:-0}" -gt 0 ]; then
+          other_wt="${other_wt}      ${wt_path}  (${wt_branch:-detached})  —  ${n} change(s)\n"
+          other_wt_n=$((other_wt_n + 1))
+        fi
+      fi
+      wt_path=""
+      ;;
+  esac
+done < <(git worktree list --porcelain 2>/dev/null; echo)
+
 # Remote branches with no local counterpart, unmerged — the true orphans. Uses
 # already-fetched refs only, so no network call. This is the shape that stranded
 # six branches in this very repo: a bot opened them, the PRs were closed, and the
@@ -140,6 +178,7 @@ report_gstack() {
 }
 
 if [ "$stale_n" = "0" ] && [ "$remote_n" = "0" ] && [ "${dirty_n:-0}" = "0" ] \
+   && [ "${other_wt_n:-0}" = "0" ] \
    && [ "${unpushed_n:-0}" = "0" ] && [ "$stash_oldest" -lt "$IDLE_DAYS" ] \
    && [ "${merged_n:-0}" -lt 5 ]; then
   # Nothing to say about branches — but a pending gstack upgrade still deserves a line.
@@ -161,6 +200,12 @@ echo
 if [ "${dirty_n:-0}" != "0" ]; then
   echo "  $dirty_n uncommitted change(s) on '$current', left from a previous session."
   echo "      git status        # then commit, stash, or discard deliberately"
+  echo
+fi
+if [ "${other_wt_n:-0}" != "0" ]; then
+  echo "  Uncommitted work in $other_wt_n other worktree(s) — invisible from here:"
+  printf "%b" "$other_wt"
+  echo "      git -C <path> status"
   echo
 fi
 if [ "${unpushed_n:-0}" != "0" ]; then
