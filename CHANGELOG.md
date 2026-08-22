@@ -1,5 +1,76 @@
 # Changelog
 
+## [2.42.0] - 2026-08-22
+
+A three-lens pitfall review asked one question: does the branch-hygiene system
+actually stop someone who does not understand git from losing work? It does not.
+It detects correctly and then talks past the only person who could act.
+
+### Fixed — the hole that made the rest academic
+**A branch that is current and was never pushed was reported by nothing.** The
+stale-branch check skips the branch you are standing on ("you are working here right
+now"); the unpushed check skipped branches with no upstream ("already covered by the
+stale check"). Each exclusion was defensible alone. Their intersection is the default
+state of someone whose agent commits for them and who has never heard of pushing —
+and it was covered by neither. Verified empirically: five commits of real work on the
+active branch, no warning, ever.
+
+Never-pushed branches are now reported, and **not gated on the idle threshold** —
+"exists in one place only" is a data-loss risk from the first commit, not a
+forgetting risk that ripens over a week.
+
+### Fixed — the guidance never taught the thing that prevents loss
+`git-hygiene` **v4 → v5**. The block taught *when to commit* and *how to land*, and
+never taught **push**. For an expert pushing is reflexive; for this user it does not
+exist. A user following every instruction in the block perfectly could still lose a
+week to a dead laptop. The block now says plainly: **committing is not backing up —
+pushing is backup, landing is completion, and you do both.**
+
+**"Say so and delete the branch" was a data-destruction instruction.** For a user
+whose every branch is local-only, deleting one makes its commits unreachable. The
+block now requires checking whether the branch was ever pushed, explains that
+`git branch -d` refusing is the guard working, and says never to reach for `-D` to
+silence it.
+
+### Added — the agent contract
+Nothing anywhere told the **agent** what to do when the hook fires. Verified by grep
+across CLAUDE.md and every emitted block: zero references. For a user whose only
+interface to git is the agent, a report the agent merely echoes is a report nobody
+acted on — detection without a responder is not a safety net.
+
+v5 adds *When the session-start hook reports unlanded work*: look before you speak
+(find out which feature, not which SHA), lead with what is at stake in the user's
+words, **preserve before offering to remove**, never act destructively without an
+explicit yes to a question that named the actual work, and say what you left
+unresolved.
+
+### Changed — the report itself
+- **Grouped by risk, not by detection order.** "Work that exists in only one place"
+  (opens with *if this computer died right now, the following would be gone*) is
+  separated from "Finished work that never shipped" and from optional tidy-up. One
+  banner made a lost-forever risk and a cosmetic one look equally alarming, which
+  makes both equally ignorable.
+- **Remedies lead with preservation.** The first thing a reader saw used to be
+  "commit, stash, or discard" and "pop, branch, or drop" — irreversible options
+  offered to someone who cannot evaluate them. Deleting is still possible; it is no
+  longer the opening suggestion.
+- **Plain language throughout.** "worktree" → "working folder", "ahead of origin" →
+  "not yet backed up to", "N commits idle 19d" now sits under a sentence saying what
+  that costs.
+- **The disable switch is no longer advertised.** `GSTACK_BRANCH_IDLE_DAYS=0` was
+  printed on every firing — handing the off switch to the reader least able to judge
+  whether the warning mattered. Still supported and documented in the script.
+
+### Review provenance
+Self-pitfall found the missing agent contract and the escape hatch. **Codex** found
+the current-never-pushed hole and that destructive remedies came first. **GLM-5.2**
+found the two the other two lenses missed, and they were the deepest: that the
+guidance never teaches push as backup at all, and that the delete instruction
+destroys unpushed work. Nothing was refuted. Cost: $0.052.
+
+21 hook tests (199 total), including four new ones asserting what must NOT appear:
+no destructive option first, no advertised disable switch, no double-reporting.
+
 ## [2.41.0] - 2026-08-22
 
 Closes the last documented blind spot: uncommitted work in a worktree you did not
