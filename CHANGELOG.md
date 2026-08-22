@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.40.0] - 2026-08-22
+
+Two ways work could still vanish that every existing check missed. Both surfaced
+while writing the end-user documentation for the hook — writing down what a tool
+does *not* catch turns out to be a cheaper audit than re-reading its code.
+
+### Added
+- **Commits that exist only on this machine are now reported.** Every other check
+  compares branches against `origin/<default>`, so a branch merged locally and never
+  pushed looked landed from every angle and reported nothing. Verified before the
+  fix: a clean tree one commit ahead of origin produced complete silence. That is
+  the case where a dead laptop costs you the work.
+  Scoped tightly to stay quiet: only when a remote exists at all (a local-only repo
+  cannot push, and saying so every session is noise), and only for branches that
+  *have* an upstream and sit ahead of it — a branch never pushed at all is already
+  covered by the stale-unmerged check, and double-reporting one piece of work is how
+  a hook trains you to skim past it.
+- **Stale stashes are now reported.** A stash is not a branch, so it was invisible
+  to everything. The shipped git-hygiene block tells users a stash is for "holds of
+  minutes-to-hours" — so one older than the idle threshold is not a hold, it is
+  forgotten work. A fresh stash stays silent: that is the tool being used correctly.
+
+### Fixed
+- Two test-harness bugs, both worth naming because both looked like product bugs:
+  a bare repo created *inside* the work tree showed up as an untracked directory,
+  so the hook correctly reported a dirty tree and the test read it as a false
+  positive. Same shape as the `WARN` grep that made W3 look dead in 2.37.0 — when a
+  test disagrees with the code, suspect the harness first.
+
+5 new tests (14 for the hook, 192 total), weighted as always toward the silence
+cases: local-only repo, fresh stash, and no double-reporting.
+
 ## [2.39.0] - 2026-08-18
 
 Closes #53, wires gstack upgrade detection, and makes this repo an actual consumer

@@ -81,6 +81,41 @@ while IFS='|' read -r ref ts; do
   remote_n=$((remote_n + 1))
 done < <(git for-each-ref --format='%(refname:short)|%(committerdate:unix)' refs/remotes/origin 2>/dev/null)
 
+# Commits that exist only on this machine. Found as a blind spot on 2026-08-22:
+# a branch fully merged locally but never pushed reported nothing, because every
+# other check compares against origin/<default> and simply found nothing unmerged.
+# At session start this means the previous session ended without pushing — the
+# same class as a dirty tree, and the one where a dead laptop costs you the work.
+unpushed=""; unpushed_n=0
+# Only meaningful when a remote exists — a local-only repo cannot push, and saying
+# so every session would be pure noise. And only branches that HAVE an upstream and
+# sit ahead of it: a branch that was never pushed at all is already covered by the
+# stale-unmerged check above, so counting it here would double-report the same work.
+# What this adds is the case every other check misses — commits merged locally and
+# never pushed, which look landed from every branch-comparison angle.
+if git remote 2>/dev/null | grep -q .; then
+  while IFS='|' read -r ref up; do
+    [ -z "$ref" ] || [ -z "$up" ] && continue
+    n=$(git rev-list --count "$up..$ref" 2>/dev/null || echo 0)
+    [ "${n:-0}" -eq 0 ] && continue
+    unpushed="${unpushed}      ${ref}  —  ${n} commit(s) ahead of ${up}\n"
+    unpushed_n=$((unpushed_n + 1))
+  done < <(git for-each-ref --format='%(refname:short)|%(upstream:short)' refs/heads 2>/dev/null)
+fi
+
+# Stashes. git-hygiene tells users a stash is for "holds of minutes-to-hours" — so
+# a stash older than the idle threshold is not a hold, it is forgotten work. And a
+# stash is invisible to every branch-based check: it is not a branch.
+stash_n=0; stash_oldest=0
+if git rev-parse --verify -q refs/stash >/dev/null 2>&1; then
+  while read -r ts; do
+    [ -z "$ts" ] && continue
+    stash_n=$((stash_n + 1))
+    age=$(( ( $(date +%s) - ts ) / 86400 ))
+    [ "$age" -gt "$stash_oldest" ] && stash_oldest=$age
+  done < <(git stash list --format='%ct' 2>/dev/null)
+fi
+
 # Merged local branches are pure clutter — cheap to count, never urgent.
 merged_n=$(git branch --merged "$base" --format='%(refname:short)' 2>/dev/null \
   | grep -vx -e "$default_ref" -e "$current" | grep -c . || true)
@@ -105,6 +140,7 @@ report_gstack() {
 }
 
 if [ "$stale_n" = "0" ] && [ "$remote_n" = "0" ] && [ "${dirty_n:-0}" = "0" ] \
+   && [ "${unpushed_n:-0}" = "0" ] && [ "$stash_oldest" -lt "$IDLE_DAYS" ] \
    && [ "${merged_n:-0}" -lt 5 ]; then
   # Nothing to say about branches — but a pending gstack upgrade still deserves a line.
   gs=$(report_gstack)
@@ -125,6 +161,17 @@ echo
 if [ "${dirty_n:-0}" != "0" ]; then
   echo "  $dirty_n uncommitted change(s) on '$current', left from a previous session."
   echo "      git status        # then commit, stash, or discard deliberately"
+  echo
+fi
+if [ "${unpushed_n:-0}" != "0" ]; then
+  echo "  $unpushed_n branch(es) with commits that exist only on this machine:"
+  printf "%b" "$unpushed"
+  echo "      git push        # a local-only commit is one disk failure from gone"
+  echo
+fi
+if [ "$stash_oldest" -ge "$IDLE_DAYS" ]; then
+  echo "  $stash_n stash(es), oldest ${stash_oldest}d — a stash is meant for hours, not weeks."
+  echo "      git stash list        # then pop, branch, or drop deliberately"
   echo
 fi
 if [ "$remote_n" != "0" ]; then
