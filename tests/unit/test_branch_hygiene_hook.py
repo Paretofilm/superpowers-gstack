@@ -46,7 +46,7 @@ def test_non_git_directory_is_silent(tmp_path):
 
 def test_uncommitted_changes_are_reported(repo):
     (repo / "f.txt").write_text("changed")
-    assert "uncommitted change" in run_hook(repo)
+    assert "not saved into git at all" in run_hook(repo)
 
 
 def test_current_branch_is_never_nagged(repo):
@@ -76,13 +76,13 @@ def test_idle_unmerged_branch_is_reported(repo):
                         "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t.t"})
     git(repo, "checkout", "-q", "main")
     out = run_hook(repo)
-    assert "feature" in out and "not merged" in out
+    assert "feature" in out and "never merged into" in out
 
 
 def test_invalid_threshold_falls_back_instead_of_crashing(repo):
     """A hook that aborts on a typo'd env var is worse than one that ignores it."""
     (repo / "f.txt").write_text("changed")
-    assert "uncommitted change" in run_hook(repo, idle_days="seven")
+    assert "not saved into git at all" in run_hook(repo, idle_days="seven")
 
 
 def test_disable_switch_silences_everything(repo):
@@ -120,7 +120,7 @@ def test_unpushed_commits_are_reported(tmp_path, repo):
     (repo / "f.txt").write_text("local only")
     git(repo, "commit", "-qam", "local only")
     out = run_hook(repo)
-    assert "only on this machine" in out and "ahead of origin/main" in out
+    assert "nowhere else" in out and "not yet backed up to origin/main" in out
 
 
 def test_local_only_repo_is_never_nagged_about_pushing(tmp_path, repo):
@@ -129,17 +129,48 @@ def test_local_only_repo_is_never_nagged_about_pushing(tmp_path, repo):
     git(repo, "checkout", "-qb", "feature")
     (repo / "g.txt").write_text("x"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "wip")
     git(repo, "checkout", "-q", "main")
-    assert "only on this machine" not in run_hook(repo)
+    assert "nowhere else" not in run_hook(repo)
 
 
-def test_unpushed_is_not_double_reported_with_stale(tmp_path, repo):
-    """A branch never pushed at all is already covered by the stale-unmerged check;
-    counting it again here would report one piece of work twice."""
+def test_never_pushed_branch_is_reported(tmp_path, repo):
+    """Premise inverted in 2.42.0. This was excluded as "already covered by the
+    stale-unmerged check" — but that check skips the branch you are standing on, so
+    the intersection (current branch, never pushed) was covered by NEITHER. Verified
+    empirically at five commits with no warning ever, which is the default state of
+    someone whose agent commits for them and who has never heard of pushing."""
     with_remote(tmp_path, repo)
     git(repo, "checkout", "-qb", "feature")
     (repo / "g.txt").write_text("x"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "wip")
-    git(repo, "checkout", "-q", "main")
-    assert "only on this machine" not in run_hook(repo)
+    assert "never backed up anywhere" in run_hook(repo)
+
+
+def test_never_pushed_is_reported_once_not_twice(tmp_path, repo):
+    """Reported by the backup check, not also by the stale check — one piece of work,
+    one line. Double-reporting is how a warning trains you to skim past it."""
+    with_remote(tmp_path, repo)
+    git(repo, "checkout", "-qb", "feature")
+    (repo / "g.txt").write_text("x"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "wip")
+    out = run_hook(repo)
+    assert out.count("feature") == 1
+
+
+def test_destructive_options_are_never_offered_first(tmp_path, repo):
+    """A remedy a novice cannot evaluate must not be the first thing they read.
+    Deleting stays possible; it is just never the opening suggestion."""
+    with_remote(tmp_path, repo)
+    (repo / "f.txt").write_text("changed")
+    out = run_hook(repo)
+    assert "discard" not in out and "drop" not in out
+    assert "git push" in out or "commit" in out
+
+
+def test_disable_switch_is_not_advertised_to_the_user(tmp_path, repo):
+    """The escape hatch was printed on every firing — handing the off switch to the
+    reader least able to judge whether the warning mattered. Still supported, no
+    longer advertised."""
+    with_remote(tmp_path, repo)
+    (repo / "f.txt").write_text("changed")
+    assert "GSTACK_BRANCH_IDLE_DAYS" not in run_hook(repo)
 
 
 def test_fresh_stash_is_not_nagged(tmp_path, repo):
@@ -147,7 +178,7 @@ def test_fresh_stash_is_not_nagged(tmp_path, repo):
     one is the tool being used correctly, not debt."""
     with_remote(tmp_path, repo)
     (repo / "f.txt").write_text("wip"); git(repo, "stash", "-q")
-    assert "stash" not in run_hook(repo)
+    assert "git stash" not in run_hook(repo)
 
 
 def test_stale_stash_is_reported(tmp_path, repo):
@@ -161,7 +192,7 @@ def test_stale_stash_is_reported(tmp_path, repo):
                         "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t.t",
                         "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t.t"})
     out = run_hook(repo)
-    assert "stash(es)" in out and "meant for hours" in out
+    assert "git stash" in out and "meant to last hours" in out
 
 
 # --- worktrees (2.41.0) ---------------------------------------------------------
@@ -189,7 +220,7 @@ def test_uncommitted_work_in_another_worktree_is_reported(tmp_path, repo):
     wt = add_worktree(repo, tmp_path.parent / f"{tmp_path.name}-wt", "feature")
     (wt / "stranded.txt").write_text("work nobody will revisit")
     out = run_hook(repo)
-    assert "other worktree" in out and "feature" in out
+    assert "other working folder" in out and "feature" in out
 
 
 def test_current_and_other_worktree_are_counted_separately(tmp_path, repo):
@@ -200,8 +231,8 @@ def test_current_and_other_worktree_are_counted_separately(tmp_path, repo):
     (wt / "there.txt").write_text("x")
     (repo / "here.txt").write_text("y")
     out = run_hook(repo)
-    assert "1 uncommitted change(s)" in out      # here, not 2
-    assert "1 other worktree(s)" in out          # there, not 2
+    assert "1 file change(s)" in out             # here, not 2
+    assert "1 other working folder(s)" in out    # there, not 2
 
 
 def test_deleted_worktree_directory_does_not_crash(tmp_path, repo):

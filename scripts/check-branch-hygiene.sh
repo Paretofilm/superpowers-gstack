@@ -133,10 +133,24 @@ unpushed=""; unpushed_n=0
 # never pushed, which look landed from every branch-comparison angle.
 if git remote 2>/dev/null | grep -q .; then
   while IFS='|' read -r ref up; do
-    [ -z "$ref" ] || [ -z "$up" ] && continue
-    n=$(git rev-list --count "$up..$ref" 2>/dev/null || echo 0)
-    [ "${n:-0}" -eq 0 ] && continue
-    unpushed="${unpushed}      ${ref}  —  ${n} commit(s) ahead of ${up}\n"
+    [ -z "$ref" ] && continue
+    if [ -z "$up" ]; then
+      # Never pushed anywhere. 2.40.0 excluded this as "already covered by the
+      # stale-unmerged check" — but that check skips the branch you are standing
+      # on, so the intersection (current branch, never pushed) was covered by
+      # NEITHER. That is the default state of someone whose agent commits for them
+      # and who has never heard of pushing: verified as five commits, no warning,
+      # ever. Not gated on idle days — "exists in one place only" is a data-loss
+      # risk from the first commit, not a forgetting risk that ripens over a week.
+      [ "$ref" = "$default_ref" ] && continue
+      n=$(git rev-list --count "$base..$ref" 2>/dev/null || echo 0)
+      [ "${n:-0}" -eq 0 ] && continue
+      unpushed="${unpushed}      ${ref}  —  ${n} commit(s), never backed up anywhere\n"
+    else
+      n=$(git rev-list --count "$up..$ref" 2>/dev/null || echo 0)
+      [ "${n:-0}" -eq 0 ] && continue
+      unpushed="${unpushed}      ${ref}  —  ${n} commit(s) not yet backed up to ${up}\n"
+    fi
     unpushed_n=$((unpushed_n + 1))
   done < <(git for-each-ref --format='%(refname:short)|%(upstream:short)' refs/heads 2>/dev/null)
 fi
@@ -193,53 +207,81 @@ if [ "$stale_n" = "0" ] && [ "$remote_n" = "0" ] && [ "${dirty_n:-0}" = "0" ] \
   exit 0
 fi
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo " Unlanded git work"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo
-if [ "${dirty_n:-0}" != "0" ]; then
-  echo "  $dirty_n uncommitted change(s) on '$current', left from a previous session."
-  echo "      git status        # then commit, stash, or discard deliberately"
+# Report in risk order, not detection order. A novice cannot tell "this exists in
+# one place and a dead disk ends it" from "this is safely on the server, just not
+# shipped yet" from "this is tidy-up" — and the old single banner made all three
+# look equally alarming, which means equally ignorable.
+#
+# Remedies lead with PRESERVATION. The previous wording offered "commit, stash, or
+# discard" and "pop, branch, or drop" as the first thing a reader saw: an
+# irreversible option presented to someone who cannot evaluate it. Deleting is
+# still allowed — it is just never the suggestion that arrives first.
+
+at_risk=$(( ${dirty_n:-0} + ${other_wt_n:-0} + ${unpushed_n:-0} ))
+[ "$stash_oldest" -ge "$IDLE_DAYS" ] && at_risk=$((at_risk + 1))
+
+if [ "$at_risk" -gt 0 ]; then
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo " Work that exists in only one place"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo
+  echo "  If this computer died right now, the following would be gone."
+  echo
+  if [ "${unpushed_n:-0}" != "0" ]; then
+    echo "  Saved here, but nowhere else — $unpushed_n branch(es):"
+    printf "%b" "$unpushed"
+    echo "      Back it up:  git push -u origin <branch>"
+    echo
+  fi
+  if [ "${dirty_n:-0}" != "0" ]; then
+    echo "  $dirty_n file change(s) on '$current' not saved into git at all."
+    echo "      See what they are:  git status"
+    echo "      Keep them:          git add -A && git commit -m \"...\" && git push"
+    echo
+  fi
+  if [ "${other_wt_n:-0}" != "0" ]; then
+    echo "  Unsaved changes in $other_wt_n other working folder(s) for this project:"
+    printf "%b" "$other_wt"
+    echo "      See what they are:  git -C <path> status"
+    echo
+  fi
+  if [ "$stash_oldest" -ge "$IDLE_DAYS" ]; then
+    echo "  $stash_n set(s) of changes parked with 'git stash', oldest ${stash_oldest}d."
+    echo "      Parking is meant to last hours. Look before deciding:  git stash list"
+    echo
+  fi
+fi
+
+if [ "$stale_n" != "0" ] || [ "$remote_n" != "0" ]; then
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo " Finished work that never shipped"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo
+  echo "  Not at risk of being lost — just never merged into $default_ref,"
+  echo "  so nobody is using it and it is drifting out of date."
+  echo
+  if [ "$stale_n" != "0" ]; then
+    echo "  $stale_n branch(es), untouched for over ${IDLE_DAYS} days:"
+    printf "%b" "$stale"
+    echo
+  fi
+  if [ "$remote_n" != "0" ]; then
+    echo "  $remote_n branch(es) on the server with no copy here:"
+    printf "%b" "$remote_orphans"
+    echo "      Closing a pull request does not delete its branch."
+    echo
+  fi
+  echo "  Finish them with /ship, or /superpowers:finishing-a-development-branch"
+  echo "  — which will merge, open a PR, or discard, and say which it did."
   echo
 fi
-if [ "${other_wt_n:-0}" != "0" ]; then
-  echo "  Uncommitted work in $other_wt_n other worktree(s) — invisible from here:"
-  printf "%b" "$other_wt"
-  echo "      git -C <path> status"
-  echo
-fi
-if [ "${unpushed_n:-0}" != "0" ]; then
-  echo "  $unpushed_n branch(es) with commits that exist only on this machine:"
-  printf "%b" "$unpushed"
-  echo "      git push        # a local-only commit is one disk failure from gone"
-  echo
-fi
-if [ "$stash_oldest" -ge "$IDLE_DAYS" ]; then
-  echo "  $stash_n stash(es), oldest ${stash_oldest}d — a stash is meant for hours, not weeks."
-  echo "      git stash list        # then pop, branch, or drop deliberately"
-  echo
-fi
-if [ "$remote_n" != "0" ]; then
-  echo "  $remote_n remote branch(es) with no local copy, unmerged and idle >${IDLE_DAYS}d:"
-  printf "%b" "$remote_orphans"
-  [ "$remote_n" -gt 8 ] && echo "      … and $((remote_n - 8)) more"
-  echo "      Closing a PR does not delete its branch — these outlive their PRs."
-  echo
-fi
-if [ "$stale_n" != "0" ]; then
-  echo "  $stale_n branch(es) not merged into $default_ref and idle >${IDLE_DAYS}d:"
-  printf "%b" "$stale"
-  echo
-  echo "  Land them with /ship, or /superpowers:finishing-a-development-branch"
-  echo "  to merge, PR, or deliberately discard."
-  echo
-fi
+
 if [ "${merged_n:-0}" -ge 5 ]; then
-  echo "  $merged_n local branch(es) already merged into $default_ref — safe to delete:"
+  echo "  Tidy-up (nothing at risk): $merged_n branch(es) already merged into"
+  echo "  $default_ref. Their work is safely in $default_ref; the labels can go:"
   echo "      git branch --merged $base | grep -v '^[* ]*$default_ref$' | xargs -r git branch -d"
   echo
 fi
-echo "  Silence this with GSTACK_BRANCH_IDLE_DAYS=0 (or raise the threshold)."
-echo
+
 report_gstack
 exit 0
