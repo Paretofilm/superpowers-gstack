@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.41.0] - 2026-08-22
+
+Closes the last documented blind spot: uncommitted work in a worktree you did not
+open.
+
+### Added
+- **The dirty-tree check now covers every worktree, not just the current one.**
+  `git status` only ever reports the tree you are standing in, so work left in a
+  sibling worktree was invisible — while `refs/heads` is shared, so that worktree's
+  *branch* was already being checked. Half-covered is the worst state to be in: the
+  branch looked fine and the uncommitted work went unmentioned.
+
+  This is not theoretical. The Agent tool's `isolation: "worktree"` mode auto-removes
+  a temporary worktree **only when it is unchanged** — one that produced changes is
+  left on disk by design, which is exactly the stranded work nobody revisits.
+
+  Enumerated via `git worktree list --porcelain`, which works from any worktree.
+  Bare, prunable, and missing-directory entries are skipped; the current tree is
+  excluded so one change is never counted twice; the scan is bounded to 12 worktrees
+  so a SessionStart hook cannot become slow.
+
+4 new tests (18 for the hook, 196 total), again weighted toward the cases that must
+stay quiet: clean worktrees, no double-counting, and a worktree whose directory was
+deleted but not pruned — a normal state that must be skipped, not abort the session.
+
+### Note
+This was listed in the previous release's user documentation as something the user
+had to watch for themselves. Writing that list is what produced the last three
+fixes — naming a gap in prose turns out to be the cheapest way to find out it was
+never as hard to close as it looked.
+
 ## [2.40.0] - 2026-08-22
 
 Two ways work could still vanish that every existing check missed. Both surfaced
