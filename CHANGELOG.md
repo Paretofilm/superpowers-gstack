@@ -1,5 +1,73 @@
 # Changelog
 
+## [2.45.0] - 2026-08-24
+
+Reported: *"After something is fixed I often don't see it in the local app, because
+the branch isn't built. The flow should be: fixes get built and the macOS app opened
+so I can check it works. Then I must be sure I'm offered merge to main or a PR."*
+
+Measured on the reporter's own macOS project before designing anything: `open -a
+SwiftConfig` — what Spotlight, the Dock and Launchpad all resolve to — is
+`/Applications/SwiftConfig.app`, built **2026-07-25**. The branch build lands in
+DerivedData, built **2026-08-24**. A one-month gap, plus four other stale build
+products still registered with LaunchServices. Nothing rebuilds on a branch switch.
+
+So the fix was usually correct and simply not on screen — and the natural conclusion
+was that it had failed.
+
+### Added — `/superpowers-gstack:verify-and-land`
+Build the branch that is checked out, launch **that** bundle, prove which one came
+up, then land it. In order: commit anything uncommitted (a dirty tree compiles but
+does not push, so verifying it and landing it approves something that never shipped)
+→ name the change in behavioural terms → resolve container, scheme and a pinned
+destination → census every copy the user could be looking at → build → quit, wait,
+`open` the absolute path → confirm by string equality that the running executable is
+the one just built → **ask the user whether the fix is there** → on yes: push first,
+then offer merge / PR / keep, and carry out the pick.
+
+macOS and iOS simulator, with a short dev-server path for web. iOS gets its own proof
+(the simulator can hold an older install of the same bundle id) and a pinned UDID —
+`booted` is ambiguous with several devices up.
+
+### Added — `xcode-tools` v4 → v5: macOS exists
+Every row from v1 through v4 assumed a simulator. A macOS app has none, so the block
+had **no** build, launch, product-path or verification path at all — half of a
+dual-track plugin's declared platforms, silently uncovered, because an omission
+breaks nothing. v5 adds those rows plus *Verifying a macOS app by eye — never against
+an installed copy*: verify by construction, not inspection.
+
+### Changed — `git-hygiene` v7 → v8
+A fix nobody has watched run is not verified. Tests answer *did I break something
+else*; they cannot answer *is the thing I fixed actually fixed*.
+
+### Review provenance — and the defect that mattered most
+Self-pitfall caught an undefined `$DEFAULT`, an existence probe that opened a Finder
+window, and a report that would have named a commit for a build made from a dirty
+tree.
+
+**GLM-5.2 found a catastrophic one.** Phase 2 set `EXECUTABLE_NAME`; Phase 5 used
+`$EXEC`. Followed literally, the fallback became `pkill -f "/Contents/MacOS/"` —
+which was then measured against a live process list and matches **`loginwindow`,
+`authd` and CodeSigningHelper**, not merely user apps. It would have logged the user
+out. A plain variable-name disagreement between two sections of one file. The phase
+now aborts on any unset value via `${VAR:?}` before a pattern can ever be empty.
+
+**Codex** found nine more: `-workspace`/`-project` never carried through, XcodeGen
+run after scheme discovery (so repos committing only `project.yml` never got that
+far), an unpinned simulator, an unquoted branch name in `git push`, default-branch
+resolution that fails in a fresh clone, and the dirty-tree hole above.
+
+Both houses independently flagged the quit→launch race and the claim that merging
+"works from either side" — `git merge` always merges *into* the current branch, so
+run from the feature branch it goes the wrong way.
+
+One accepted fix was then **measured and found wrong**: `mdfind` by bundle id, the
+suggested replacement for the census probe, returns nothing at all — Spotlight does
+not index these. `path to application id` does, and `lsregister -dump` proved four
+stale products existed. Cost: $0.011 + one Codex pass.
+
+217 pytest (6 new), 156 bun, 2/2 integration, lint 0 errors.
+
 ## [2.44.0] - 2026-08-23
 
 A review traced one path end to end: work done in a git worktree → committed →

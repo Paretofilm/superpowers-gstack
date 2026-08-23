@@ -1,4 +1,4 @@
-## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v4 -->
+## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v5 -->
 
 Xcode-related operations MUST be performed by the agent — NEVER delegated to the user; the user should never need to open Xcode to verify your work. Prefer MCP tools, falling back to CLI otherwise. Check MCP availability via `ToolSearch` first (deferred tools load on demand); drop to CLI only if the search returns nothing.
 
@@ -15,8 +15,33 @@ Xcode-related operations MUST be performed by the agent — NEVER delegated to t
 | List / boot simulators | `mcp__XcodeBuildMCP__list_sims`, `boot_sim` | `xcrun simctl list devices`, `xcrun simctl boot <udid>` |
 | Capture simulator logs | `mcp__XcodeBuildMCP__launch_app_logs_sim` | `xcrun simctl spawn booted log stream --predicate '...'` |
 | UI automation in simulator | `mcp__XcodeBuildMCP__ui_tap`, `screenshot`, `snapshot_ui`, `ui_describe_all` | `xcrun simctl io booted screenshot <path>.png` (screenshots only; tap/snapshot are MCP-only) |
+| **Build a macOS app** | (XcodeBuildMCP's macOS workflow is off by default) | `xcodebuild -scheme <name> -configuration Debug -destination 'platform=macOS' build` |
+| **Resolve the built product path** | — | `xcodebuild -showBuildSettings -scheme <name> -configuration Debug \| grep -E '^ +(BUILT_PRODUCTS_DIR\|FULL_PRODUCT_NAME\|PRODUCT_BUNDLE_IDENTIFIER) '` |
+| **Launch the macOS app you just built** | — | quit the running instance, then `open "$BUILT_PRODUCTS_DIR/$FULL_PRODUCT_NAME"` |
+| **Prove which bundle is running** | — | `ps -o comm= -p "$(pgrep -n <exec-name>)"` — prints the full executable path |
 | Apple platform docs (HIG, APIs) | `mcp__apple-docs__search_apple_docs`, `get_apple_doc_content` | `man` pages for CLI tools; online docs at developer.apple.com |
 | WWDC video search / examples | `mcp__apple-docs__search_wwdc_content`, `get_wwdc_code_examples` | (no CLI fallback — fetch via `WebFetch` against developer.apple.com/wwdc) |
+
+### Verifying a macOS app by eye — never against an installed copy
+
+macOS has no simulator, so "run it and look" means launching a real bundle — and the
+machine usually holds more than one. Spotlight, the Dock, Launchpad and `open -a
+<Name>` all resolve to the copy in `/Applications`, which is whatever was last
+released. A `DerivedData` product may be from a different branch. Neither rebuilds
+when you switch branches, because nothing ever does.
+
+So a fix can be correct, committed, and completely absent from the app the user
+opens — and the natural conclusion is that the fix failed. Verify by **construction,
+not inspection**:
+
+1. Build the branch that is checked out.
+2. Quit any running instance — otherwise macOS activates the one already up.
+3. `open` the **absolute path** under `BUILT_PRODUCTS_DIR`. Never by app name.
+4. Confirm with `ps -o comm=` that the running executable is inside that directory.
+5. Say which branch and commit is on screen before asking whether the fix is there.
+
+`/superpowers-gstack:verify-and-land` performs exactly this sequence and then offers
+the landing; reach for it rather than re-deriving the steps.
 
 ### Project file management (prefer declarative)
 
@@ -40,6 +65,7 @@ Three surfaces, three different handlers:
 
 - ❌ "Open Xcode and run the tests" — use `mcp__XcodeBuildMCP__test_sim` (MCP) or `xcodebuild test` (CLI) instead
 - ❌ "Build the app in Xcode to verify" — use `mcp__XcodeBuildMCP__build_sim` (MCP) or `xcodebuild build` (CLI) instead
+- ❌ "Open the app and check" (macOS) — that opens `/Applications`, not this branch. Build, then `open` the absolute `BUILT_PRODUCTS_DIR` path
 - ❌ "Take a screenshot of the simulator" — use `mcp__XcodeBuildMCP__screenshot` (MCP) or `xcrun simctl io booted screenshot` (CLI) instead
 - ❌ "Click through the Signing & Capabilities pane in Xcode" — declare entitlements in `*.entitlements` + `project.yml` (XcodeGen) instead
 - ❌ "Check what the system color looks like in HIG" — use `mcp__apple-docs__search_apple_docs` or `mcp__swiftui-rag__search_swiftui_corpus` instead
