@@ -53,10 +53,13 @@ git log --oneline "$BASE..HEAD"; git diff --stat "$BASE..HEAD"
 Keep the *ref* that verified, not a stripped name — in a fresh clone `origin/main`
 exists and `main` may not, and `merge-base` against a missing ref fails.
 
-Turn the diff into **one sentence about observable behaviour**, not files: "the
-sidebar should keep its width when you resize the window" beats "3 commits touching
-`SidebarView.swift`". If the change has no user-visible effect — a refactor, a test —
-say so: looking is the wrong check for it, so run the tests and go to Phase 7.
+Turn the diff into **one sentence per observable change**, not files: "the sidebar
+should keep its width when you resize the window" beats "3 commits touching
+`SidebarView.swift`". A branch often carries more than one change — name each,
+because the gate in Phase 6 asks about all of them: one yes must never quietly ship
+three changes of which the user looked at one. If a change has no user-visible
+effect — a refactor, a test — say so: looking is the wrong check for it; the tests
+cover it and the gate covers the rest.
 
 ## Phase 2 — resolve the container, the scheme, and the destination
 
@@ -232,7 +235,8 @@ Report one line: which branch, which bundle path, and which commit is on screen.
 The user is the instrument; a person looking is the entire point. Ask with
 `AskUserQuestion`, naming the behaviour from Phase 1:
 
-- **Yes, the fix is there** → Phase 7.
+- **Yes, it works** — asked per observable change when there are several; only when
+  all of them hold → Phase 7.
 - **No, it still behaves the old way** → stay on the branch, land nothing. Say what
   you would check next and offer `/investigate`.
 - **Something else broke** → same: land nothing, investigate.

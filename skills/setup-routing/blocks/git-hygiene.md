@@ -1,4 +1,4 @@
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v8 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v9 -->
 
 Commit at meaningful milestones — not at every file save, not only at session end.
 
@@ -48,6 +48,12 @@ review, and rots against the default branch while everything else moves.
   starts the copy in `/Applications`, which is the last release, not this branch. "I
   checked and it is still broken" is very often a stale bundle rather than a failed
   fix, and the fix gets rewritten for no reason.
+- **Offer landing choices in the user's language, with one recommendation.**
+  "Merge", "PR" and "default branch" are git policy, not choices a non-git user can
+  weigh. Phrase the outcomes: *"make this the live version"* (merge), *"send it for
+  review first"* (PR), *"keep it safely stored but not live"* (leave the pushed
+  branch) — and recommend one based on how the repo actually works (solo repo with
+  no CI review → merge; anything with review or deploys on main → PR).
 - **Landing is a skill, not a hand-rolled merge:** `/ship` (tests → review → PR) or
   `/superpowers:finishing-a-development-branch` (merge, PR, or discard). Pick one.
 - **Deliberate abandonment counts as done.** Say so and delete the branch — but
@@ -121,10 +127,13 @@ When it fires:
      same text unquoted is a command substitution. Branch names are repo-controlled
      input, and a cloned repo is somebody else's input.
    - **If the session is non-interactive** (`--print`, piped, CI, a subagent — no
-     one can click), do not stall on `AskUserQuestion`. Carry out the preservation
-     steps under option 1, which by construction only save work, and report what you
-     did. Take nothing below option 1, and end by naming every item you left
-     unresolved so the decision is still visibly waiting.
+     one can click), do not stall on `AskUserQuestion`. Preserve **without
+     publishing**: commit loose work to a local recovery branch
+     (`git switch -c recovery/<date>`), and do NOT push it — uncommitted files can
+     hold secrets, half-edits, or generated junk that no one has looked at, and a
+     push is a publish. Pushing branches that were already committed by a person is
+     fine. Report what you did, take nothing below option 1, and name every item
+     left unresolved so the decision is still visibly waiting.
 3. **Lead with what is at stake, in their words.** Distinguish *this exists only on
    your machine and a disk failure ends it* from *this is safely stored, just never
    merged*. They are different problems and only the first is urgent.
@@ -134,7 +143,13 @@ When it fires:
    until they know what they would be losing.
 5. **Do not act destructively without an explicit yes** to a question that named the
    actual work. "Shall I clean up?" is not that question.
-6. **Say what you left unresolved.** If the user declines, or something needs a
+6. **A click authorizes what it names, nothing more.** "Back up" ends at the push;
+   it does not continue into merging, opening PRs, or deleting. Each of those is its
+   own question. And when a preservation step succeeds, **offer the next decision
+   for that same work immediately** — backed-up-but-unlanded work re-reports next
+   session, and a warning that reappears after the user did the right thing teaches
+   them that responding changes nothing.
+7. **Say what you left unresolved.** If the user declines, or something needs a
    decision you cannot make for them, name it before moving on — otherwise the next
    session starts from the same report and nothing has changed.
 
