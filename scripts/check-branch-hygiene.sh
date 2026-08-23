@@ -73,13 +73,14 @@ shortpath() {
   printf '.../%s/%s' "$(basename "$(dirname "$p")")" "$(basename "$p")"
 }
 cutoff=$(( $(date +%s) - IDLE_DAYS * 86400 ))
+wt_det_first=""
 
 # Commits made on a detached HEAD live in no branch at all, so every check below —
 # all of which walk refs/heads — is blind to them. One `git checkout` and they are
 # reflog-only. Found 2026-08-23: a commit of real work produced total silence.
 detached_n=0
 if [ "$current" = "HEAD" ]; then
-  detached_n=$(git rev-list --count "$base..HEAD" 2>/dev/null || echo 0)
+  detached_n=$(git rev-list --count HEAD --not --branches --remotes --tags 2>/dev/null || echo 0)
   case "$detached_n" in ''|*[!0-9]*) detached_n=0 ;; esac
 fi
 
@@ -90,6 +91,7 @@ while IFS='|' read -r ref ts; do
   [ "$ref" = "$current" ] && continue          # you are working here right now
   [ "$ts" -ge "$cutoff" ] 2>/dev/null && continue
   git merge-base --is-ancestor "$ref" "$base" 2>/dev/null && continue   # already landed
+  git diff --quiet "$base" "$ref" 2>/dev/null && continue                # squash-merged: same content
   # Already counted under "only on this computer" if it has no upstream, or sits
   # ahead of one. Reporting it here too put the SAME branch under a heading that
   # says it is safe on the server when it has never been on a server — a false
@@ -128,19 +130,63 @@ dirty_n=$(git status --porcelain 2>/dev/null | grep -c . || true)
 WORKTREE_SCAN_MAX=12
 here=$(git rev-parse --show-toplevel 2>/dev/null)
 other_wt=""; other_wt_n=0; scanned=0; wt_first=""; wt_first_n=0; wt_names=""
+wt_branches=""      # branches checked out SOMEWHERE — git refuses to delete these
+wt_map=""           # "<branch>|<path>" per line, so an action can say where to run
+main_wt=""; wt_stale_reg=0; wt_unscanned=0
+wt_det=""; wt_det_n=0; wt_det_names=""   # commits sitting on a detached worktree HEAD: in no branch
+wt_done=""; wt_done_n=0 # worktrees whose branch already landed — finished, removable
 while IFS= read -r line; do
   case "$line" in
-    "worktree "*)  wt_path="${line#worktree }"; wt_branch=""; wt_skip="" ;;
+    "worktree "*)  wt_path="${line#worktree }"; wt_branch=""; wt_skip=""; wt_detached=""
+                   wt_locked=""; wt_prunable=""
+                   [ -z "$main_wt" ] && main_wt="$wt_path" ;;   # porcelain lists it first
     "branch "*)    wt_branch="${line#branch refs/heads/}" ;;
-    "bare"|"prunable"*|"detached")
-                   [ "$line" = "detached" ] || wt_skip=1 ;;
+    "bare")        wt_skip=1 ;;
+    "prunable"*)   wt_prunable=1 ;;
+    "locked"*)     wt_locked=1 ;;
+    "detached")    wt_detached=1 ;;
     "")
       [ -z "${wt_path:-}" ] && continue
       [ -n "${wt_skip:-}" ] && { wt_path=""; continue; }
-      [ "$wt_path" = "$here" ] && { wt_path=""; continue; }   # counted by dirty_n above
+
+      # Recorded for EVERY worktree including this one: which worktree a branch
+      # lives in is true regardless of which tree we happen to have opened.
+      # Real newlines and tabs, not escapes expanded later by printf %b: a repo
+      # path containing a backslash would otherwise be silently rewritten, and this
+      # string decides which branches are undeletable.
+      if [ -n "${wt_branch:-}" ]; then
+        wt_branches="${wt_branches}${wt_branch}"$'\n'
+        wt_map="${wt_map}${wt_branch}"$'\t'"${wt_path}"$'\n'
+        # A prunable worktree (its folder was deleted by hand) still holds its
+        # branch: `git branch -d` refuses until `git worktree prune` runs. Verified.
+        if [ -n "${wt_prunable:-}" ]; then
+          wt_stale_reg=$((wt_stale_reg + 1)); wt_path=""; continue
+        fi
+      fi
+      [ -n "${wt_prunable:-}" ] && { wt_path=""; continue; }
       [ ! -d "$wt_path" ] && { wt_path=""; continue; }
+
+      if [ "$wt_path" = "$here" ]; then wt_path=""; continue; fi   # counted by dirty_n/detached_n
+
+      # Commits on a DETACHED worktree HEAD are in no branch, so refs/heads-based
+      # checks cannot see them — the same blind spot 2.43.0 closed for the current
+      # tree, still open for every other one. Verified 2026-08-23 as total silence
+      # on a real commit. Remove the worktree and they are unreachable.
+      if [ -n "${wt_detached:-}" ]; then
+        dn=$(git -C "$wt_path" rev-list --count HEAD --not --branches --remotes --tags 2>/dev/null || echo 0)
+        case "$dn" in ''|*[!0-9]*) dn=0 ;; esac
+        if [ "$dn" -gt 0 ]; then
+          wt_det="${wt_det}$(row "$(shortpath "$wt_path")" "${dn} commit(s), in no branch")\n"
+          wt_det_n=$((wt_det_n + 1))
+          [ -z "$wt_det_first" ] && wt_det_first="$wt_path"
+          [ "$wt_det_n" -le 3 ] && wt_det_names="${wt_det_names} $(shq "$wt_path")"
+        fi
+      fi
+
+      n=0; wt_seen=""
+      [ "$scanned" -ge "$WORKTREE_SCAN_MAX" ] && wt_unscanned=$((wt_unscanned + 1))
       if [ "$scanned" -lt "$WORKTREE_SCAN_MAX" ]; then
-        scanned=$((scanned + 1))
+        scanned=$((scanned + 1)); wt_seen=1
         n=$(git -C "$wt_path" status --porcelain 2>/dev/null | grep -c . || true)
         if [ "${n:-0}" -gt 0 ]; then
           other_wt="${other_wt}$(row "$(shortpath "$wt_path") (${wt_branch:-detached})" "${n} file(s) not committed")\n"
@@ -149,6 +195,30 @@ while IFS= read -r line; do
           [ "$other_wt_n" -le 3 ] && wt_names="${wt_names} $(shq "$wt_path")"
         fi
       fi
+
+      # Spent: its work is in the default branch and there is nothing left in the
+      # folder. Four guards, because each missing one produces noise or a dead end.
+      #  - work actually landed — as an ancestor, or squash-merged (same content,
+      #    different commits: the GitHub default, and the ancestor test misses it)
+      #  - not simply identical to the default branch, or a worktree created ten
+      #    seconds ago and not yet committed to reads as finished
+      #  - idle, so a workspace someone is mid-feature in is never called spent
+      #  - CLEAN, because `git worktree remove` refuses a dirty worktree — offering
+      #    it would be an action that fails when run, and the loose files are
+      #    already reported above as work at risk
+      if [ -n "${wt_branch:-}" ] && [ -n "$wt_seen" ] && [ "${n:-0}" -eq 0 ] \
+         && [ -z "${wt_locked:-}" ] && [ "$wt_path" != "$main_wt" ]; then
+        wt_bts=$(git log -1 --format=%ct "$wt_branch" 2>/dev/null || echo 0)
+        if { git merge-base --is-ancestor "$wt_branch" "$base" 2>/dev/null \
+             || git diff --quiet "$base" "$wt_branch" 2>/dev/null; } \
+           && { [ "$(git rev-parse -q --verify "$wt_branch" 2>/dev/null)" != "$(git rev-parse -q --verify "$base" 2>/dev/null)" ] \
+                || [ "$(git -C "$wt_path" reflog show HEAD 2>/dev/null | grep -c . || echo 0)" -gt 1 ]; } \
+           && [ "${wt_bts:-0}" -lt "$cutoff" ] 2>/dev/null; then
+          wt_done="${wt_done}$(row "$(shortpath "$wt_path")" "${wt_branch} — already on ${default_ref}")\n"
+          wt_done_n=$((wt_done_n + 1))
+        fi
+      fi
+
       wt_path=""
       ;;
   esac
@@ -229,8 +299,15 @@ if git rev-parse --verify -q refs/stash >/dev/null 2>&1; then
 fi
 
 # Merged local branches are pure clutter — cheap to count, never urgent.
-merged_n=$(git branch --merged "$base" --format='%(refname:short)' 2>/dev/null \
-  | grep -vx -e "$default_ref" -e "$current" | grep -c . || true)
+# A branch checked out in a worktree is NOT deletable clutter: `git branch -d`
+# refuses it outright ("cannot delete branch 'x' used by worktree at ..."). Counting
+# it made the tidy action a command that fails halfway and returns next session.
+merged_list=$(git branch --merged "$base" --format='%(refname:short)' 2>/dev/null \
+  | grep -vx -e "$default_ref" -e "$current" || true)
+if [ -n "$wt_branches" ]; then
+  merged_list=$(printf '%s\n' "$merged_list" | grep -vxF "${wt_branches%$'\n'}" || true)
+fi
+merged_n=$(printf '%s' "$merged_list" | grep -c . || true)
 
 # gstack ships its own updater (`gstack-update-check` + `auto_upgrade` config), but
 # it only ever runs inside a gstack SKILL's preamble — invoke none of them and it
@@ -254,6 +331,7 @@ report_gstack() {
 if [ "$stale_n" = "0" ] && [ "$remote_n" = "0" ] && [ "${dirty_n:-0}" = "0" ] \
    && [ "${other_wt_n:-0}" = "0" ] \
    && [ "${unpushed_n:-0}" = "0" ] && [ "${detached_n:-0}" = "0" ] \
+   && [ "${wt_det_n:-0}" = "0" ] && [ "${wt_done_n:-0}" = "0" ] \
    && [ "$stash_oldest" -lt "$IDLE_DAYS" ] \
    && [ "${merged_n:-0}" -lt 5 ]; then
   # Nothing to say about branches — but a pending gstack upgrade still deserves a line.
@@ -276,7 +354,7 @@ fi
 # does not use a terminal is decoration. What follows the findings is therefore a
 # menu addressed to the agent — which turns it into choices the user can click.
 
-at_risk=$(( ${dirty_n:-0} + ${other_wt_n:-0} + ${unpushed_n:-0} + ${detached_n:-0} ))
+at_risk=$(( ${dirty_n:-0} + ${other_wt_n:-0} + ${unpushed_n:-0} + ${detached_n:-0} + ${wt_det_n:-0} ))
 [ "$stash_oldest" -ge "$IDLE_DAYS" ] && at_risk=$((at_risk + 1))
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -288,9 +366,11 @@ if [ "$at_risk" -gt 0 ]; then
   echo "  Only on this computer — gone if the disk dies:"
   [ "${unpushed_n:-0}" != "0" ] && printf "%b" "$unpushed"
   [ "${detached_n:-0}" != "0" ] && printf "%b\n" "$(row "detached HEAD" "${detached_n} commit(s), in no branch")"
+  [ "${wt_det_n:-0}" != "0" ] && printf "%b" "$wt_det"
   [ "${dirty_n:-0}" != "0" ] && printf "%b\n" "$(row "$current" "${dirty_n} file(s) not committed")"
   [ "${other_wt_n:-0}" != "0" ] && printf "%b" "$other_wt"
   [ "$stash_oldest" -ge "$IDLE_DAYS" ] && printf "%b\n" "$(row "stashed changes" "${stash_n} set(s), oldest ${stash_oldest}d")"
+  [ "${wt_unscanned:-0}" -gt 0 ] && printf "%b\n" "$(row "not checked" "${wt_unscanned} more working folder(s) — over the ${WORKTREE_SCAN_MAX} scanned")"
   echo
 fi
 
@@ -301,7 +381,16 @@ if [ "$stale_n" != "0" ] || [ "$remote_n" != "0" ]; then
   echo
 fi
 
-[ "${merged_n:-0}" -ge 5 ] && { echo "  Already merged, just clutter: ${merged_n} branch(es)"; echo; }
+if [ "${wt_done_n:-0}" != "0" ] || [ "${merged_n:-0}" -ge 5 ]; then
+  [ "${merged_n:-0}" -ge 5 ] && echo "  Already merged, just clutter: ${merged_n} branch(es)"
+  if [ "${wt_done_n:-0}" != "0" ]; then
+    echo "  Working folder(s) whose work already landed — nothing left in them:"
+    printf "%b" "$wt_done"
+  fi
+  [ "${wt_stale_reg:-0}" -gt 0 ] && \
+    echo "  ${wt_stale_reg} branch(es) held by a working folder that no longer exists."
+  echo
+fi
 
 # The menu. Two invariants, both learned the hard way:
 #
@@ -340,6 +429,11 @@ if [ "${dirty_n:-0}" != "0" ]; then
 fi
 [ "${unpushed_n:-0}" != "0" ] && [ "$has_remote" = "1" ] && \
   step "push${push_names}$(more "$unpushed_n") — every branch listed above as unpushed$([ "${dirty_n:-0}" != "0" ] && [ "${current_unpushed:-0}" = "1" ] && printf ', after the commit above')"
+if [ "${wt_det_n:-0}" != "0" ]; then
+  det_wt_tail=" — otherwise removing that folder makes them unreachable"
+  [ "$has_remote" = "1" ] && det_wt_tail=", then push it${det_wt_tail}"
+  step "in${wt_det_names}$(more "$wt_det_n"): give each folder's detached commit(s) a branch (git -C <path> switch -c <name>)${det_wt_tail}"
+fi
 [ "${other_wt_n:-0}" != "0" ] && \
   step "in the other working folder(s)${wt_names}$(more "$other_wt_n") — commit the loose file(s) there and push"
 [ "$stash_oldest" -ge "$IDLE_DAYS" ] && \
@@ -358,11 +452,34 @@ if [ -n "$stale_names" ] || [ "$remote_n" != "0" ]; then
   target="${stale_names}$(more "$stale_n")"
   [ -z "$stale_names" ] && target=" the ${remote_n} server-only branch(es)"
   [ -n "$stale_names" ] && [ "$remote_n" != "0" ] && target="${target} (plus ${remote_n} server-only)"
-  act "finish" "${target# } via /ship — merges, opens a PR, or drops it, and says which"
+  # A branch checked out in a worktree cannot be checked out anywhere else — git
+  # hard-fails with "already used by worktree at ...". /ship works on the CURRENT
+  # branch, so it has to be run in that folder; run from here it stops dead on a
+  # message the user cannot act on.
+  where=""
+  # Only when there is exactly ONE branch to finish can a single folder be named;
+  # with several in several worktrees, naming the first folder sends /ship to the
+  # wrong place for the rest.
+  if [ "$stale_n" = "1" ] && [ -n "$stale_first" ]; then
+    where=$(printf '%s' "$wt_map" | awk -F'\t' -v b="$stale_first" '$1 == b { print $2; exit }')
+  fi
+  if [ -n "$where" ]; then
+    act "finish" "${target# } via /ship — run it in $(shortpath "$where"), the folder that branch is checked out in"
+  else
+    hint=" — merges, opens a PR, or drops it, and says which"
+    [ "$stale_n" -gt 1 ] && [ -n "$wt_map" ] && \
+      hint=" — run it in whichever folder each branch is checked out in (git worktree list)"
+    act "finish" "${target# } via /ship${hint}"
+  fi
 fi
-if [ "${merged_n:-0}" -ge 5 ]; then
-  [ "$i" -eq 0 ] && act "show" "which ${merged_n} branch(es) are already merged — nothing is deleted by this"
-  act "tidy" "delete those ${merged_n} merged branch(es) — their commits are already in ${default_ref}"
+if [ "${merged_n:-0}" -ge 5 ] || [ "${wt_done_n:-0}" != "0" ] || [ "${wt_stale_reg:-0}" -gt 0 ]; then
+  [ "$i" -eq 0 ] && act "show" "what is left over — nothing is deleted by this"
+  [ "${wt_done_n:-0}" != "0" ] && \
+    act "tidy" "remove ${wt_done_n} spent working folder(s) — git worktree remove <path>; their branch cannot be deleted until you do"
+  [ "${wt_stale_reg:-0}" -gt 0 ] && \
+    act "tidy" "run git worktree prune — until then git refuses to delete those ${wt_stale_reg} branch(es)"
+  [ "${merged_n:-0}" -ge 5 ] && \
+    act "tidy" "delete those ${merged_n} merged branch(es) — their commits are already in ${default_ref}"
 fi
 echo
 

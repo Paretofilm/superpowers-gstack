@@ -327,3 +327,141 @@ def test_hostile_branch_name_is_quoted_before_it_reaches_the_menu(tmp_path, repo
     quoted = [w for w in menu.split() if w.startswith("'wip")][0]
     out = subprocess.run(["bash", "-c", f"printf '%s' {quoted}"], capture_output=True, text=True)
     assert out.stdout == hostile
+
+
+# --- the worktree lifecycle (2.44.0) --------------------------------------------
+# The plugin scans worktrees, superpowers ships a skill that creates them, and the
+# Agent tool leaves one behind exactly when it produced changes. Carrying that work
+# to the default branch has its own failure modes, and each of these was silent.
+
+
+def add_detached_worktree(repo, path):
+    git(repo, "worktree", "add", "-q", "--detach", str(path), "HEAD")
+    return path
+
+
+def test_commits_in_a_detached_worktree_are_reported(tmp_path, repo):
+    """Verified as total silence before the fix: every other check walks refs/heads,
+    and a detached worktree's commits are in no branch. Remove the folder and they
+    are unreachable — the sharpest way to lose work this hook has found."""
+    with_remote(tmp_path, repo)
+    wt = add_detached_worktree(repo, tmp_path.parent / f"{tmp_path.name}-det")
+    (wt / "work.txt").write_text("three hours")
+    git(wt, "add", "-A"); git(wt, "commit", "-qm", "detached work")
+    out = run_hook(repo)
+    assert "in no branch" in out
+    assert "switch -c" in out.split(MENU)[1]
+
+
+def test_worktree_branch_is_not_counted_as_deletable_clutter(tmp_path, repo):
+    """`git branch -d` refuses a branch checked out in a worktree. Counting it made
+    the tidy action a command that fails partway and returns next session."""
+    with_remote(tmp_path, repo)
+    add_worktree(repo, tmp_path.parent / f"{tmp_path.name}-wt", "in-a-worktree")
+    git(repo, "merge", "-q", "--no-ff", "in-a-worktree", "-m", "land")
+    for n in range(5):
+        git(repo, "branch", f"done-{n}", "main")
+    out = run_hook(repo)
+    assert "5 branch(es)" in out          # the five, not the six
+    assert "in-a-worktree" not in out.split("What can be done")[0].split("clutter")[-1]
+
+
+def test_finish_action_says_which_folder_to_run_it_in(tmp_path, repo):
+    """/ship works on the current branch, and a branch checked out in a worktree
+    cannot be checked out anywhere else — git hard-fails. Naming the branch without
+    naming the folder sends the agent into that error."""
+    with_remote(tmp_path, repo)
+    wt = add_worktree(repo, tmp_path.parent / f"{tmp_path.name}-wt", "old-feature")
+    old = "2020-01-01T00:00:00"
+    (wt / "f.txt").write_text("x"); git(wt, "add", "-A")
+    subprocess.run(["git", "-C", str(wt), "commit", "-qm", "old", "--date", old],
+                   check=True, env={"PATH": "/usr/bin:/bin", "HOME": str(repo),
+                                    "GIT_COMMITTER_DATE": old,
+                                    "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t.t",
+                                    "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t.t"})
+    git(repo, "push", "-q", "origin", "old-feature")
+    git(wt, "branch", "-q", "--set-upstream-to=origin/old-feature")
+    menu = run_hook(repo).split(MENU)[1]
+    assert "finish" in menu and "-wt" in menu, "the folder must be named, not just the branch"
+
+
+def test_squash_merged_branch_is_not_called_unmerged(tmp_path, repo):
+    """A squash merge — GitHub's default — lands the content, not the commits, so an
+    ancestor test says "never merged" forever about work that is already on main.
+    Telling a user their shipped feature is unshipped is how a report loses its
+    authority."""
+    with_remote(tmp_path, repo)
+    git(repo, "checkout", "-qb", "squashed")
+    (repo / "s.txt").write_text("x"); git(repo, "add", "-A")
+    old = "2020-01-01T00:00:00"
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "work", "--date", old], check=True,
+                   env={"PATH": "/usr/bin:/bin", "HOME": str(repo), "GIT_COMMITTER_DATE": old,
+                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t.t",
+                        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t.t"})
+    git(repo, "push", "-q", "origin", "squashed")
+    git(repo, "branch", "-q", "--set-upstream-to=origin/squashed")
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "--squash", "-q", "squashed")
+    git(repo, "commit", "-qm", "squash: work")
+    git(repo, "push", "-q", "origin", "main")
+    assert git(repo, "merge-base", "--is-ancestor", "squashed", "main").returncode != 0
+    assert "squashed" not in run_hook(repo)
+
+
+def test_dirty_spent_worktree_is_not_offered_for_removal(tmp_path, repo):
+    """`git worktree remove` refuses a dirty worktree. Offering it would be an action
+    that fails when run — and the loose files are already reported as work at risk,
+    so the removal is simply premature."""
+    with_remote(tmp_path, repo)
+    wt = add_worktree(repo, tmp_path.parent / f"{tmp_path.name}-wt", "landed")
+    (wt / "f.txt").write_text("x"); git(wt, "add", "-A")
+    old = "2020-01-01T00:00:00"
+    subprocess.run(["git", "-C", str(wt), "commit", "-qm", "work", "--date", old], check=True,
+                   env={"PATH": "/usr/bin:/bin", "HOME": str(repo), "GIT_COMMITTER_DATE": old,
+                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t.t",
+                        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t.t"})
+    git(repo, "merge", "-q", "--no-ff", "landed", "-m", "land")
+    (wt / "leftover.txt").write_text("still working")
+    out = run_hook(repo)
+    assert "not committed" in out                    # reported as at-risk
+    assert "spent working folder" not in out         # but not offered for removal
+
+
+def test_detached_at_an_already_pushed_tip_is_not_called_at_risk(tmp_path, repo):
+    """`base..HEAD` counts commits that are already on a branch or on the remote, so
+    checking out a pushed tip detached produced "gone if the disk dies" about work
+    that is safely on the server. A false alarm here costs the report its credibility
+    for the true ones.
+
+    Note the fix that does NOT work: `rev-list HEAD --not --all` returns 0 always,
+    because --all includes HEAD — it would have silenced the check entirely."""
+    with_remote(tmp_path, repo)
+    git(repo, "checkout", "-qb", "pushed-feature")
+    (repo / "f.txt").write_text("x"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "feat")
+    git(repo, "push", "-q", "-u", "origin", "pushed-feature")
+    git(repo, "checkout", "-q", "main")
+    wt = tmp_path.parent / f"{tmp_path.name}-det"
+    git(repo, "worktree", "add", "-q", "--detach", str(wt), "pushed-feature")
+    assert "in no branch" not in run_hook(repo)          # nothing is at risk here
+    git(wt, "commit", "-q", "--allow-empty", "-m", "genuinely new")
+    assert "in no branch" in run_hook(repo)              # ...and now there is
+
+
+def test_branch_held_by_a_deleted_worktree_is_not_offered_for_deletion(tmp_path, repo):
+    """A worktree whose folder was deleted by hand stays registered, and git keeps
+    refusing `branch -d` until `git worktree prune` runs. Counting it made the tidy
+    action fail partway; the fix is to name the prune as its own step.
+
+    Regression guard for an ordering bug found in review: the `[ ! -d $path ]` guard
+    ran before the branch was recorded, so the worktrees whose folder is gone — the
+    only ones this case is about — were the ones dropped."""
+    import shutil
+    with_remote(tmp_path, repo)
+    wt = add_worktree(repo, tmp_path.parent / f"{tmp_path.name}-gone", "held-branch")
+    git(repo, "merge", "-q", "--no-ff", "held-branch", "-m", "land")
+    shutil.rmtree(wt)
+    for n in range(5):
+        git(repo, "branch", f"done-{n}", "main")
+    out = run_hook(repo)
+    assert "5 branch(es)" in out                          # the five, not the six
+    assert "worktree prune" in out.split(MENU)[1]
