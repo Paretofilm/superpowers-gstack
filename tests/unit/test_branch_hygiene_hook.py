@@ -465,3 +465,38 @@ def test_branch_held_by_a_deleted_worktree_is_not_offered_for_deletion(tmp_path,
     out = run_hook(repo)
     assert "5 branch(es)" in out                          # the five, not the six
     assert "worktree prune" in out.split(MENU)[1]
+
+
+# --- offering the verification (2.46.0) -----------------------------------------
+# A skill nobody remembers the name of is a skill nobody uses. The report already
+# fires every session and already offers clickable actions, so it is the one place
+# the check can be reached without recalling anything.
+
+
+def test_report_offers_to_build_and_show_the_app(tmp_path, repo):
+    with_remote(tmp_path, repo)
+    (repo / "MyApp.xcodeproj").mkdir()
+    git(repo, "add", "-A"); git(repo, "commit", "-qm", "project"); git(repo, "push", "-q")
+    git(repo, "checkout", "-qb", "fix-login")
+    (repo / "f.swift").write_text("x"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "fix")
+    menu = run_hook(repo).split(MENU)[1]
+    assert "verify-and-land" in menu
+    assert action_label(menu, 1) == "back"     # backup still outranks looking at it
+
+
+def test_no_app_target_means_no_such_offer(tmp_path, repo):
+    """A library has nothing to look at; offering to open an app that does not exist
+    is the kind of dead-end action this report has spent four releases removing."""
+    with_remote(tmp_path, repo)
+    git(repo, "checkout", "-qb", "fix-lib")
+    (repo / "f.py").write_text("x"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "fix")
+    assert "verify-and-land" not in run_hook(repo)
+
+
+def test_app_target_alone_does_not_break_silence(tmp_path, repo):
+    """The offer is an extra action on a report that was already firing — never a
+    reason to start one. A clean, pushed repo with an app stays quiet."""
+    with_remote(tmp_path, repo)
+    (repo / "MyApp.xcodeproj").mkdir()
+    git(repo, "add", "-A"); git(repo, "commit", "-qm", "project"); git(repo, "push", "-q")
+    assert run_hook(repo) == ""

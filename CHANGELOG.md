@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.46.0] - 2026-08-24
+
+The user's question after 2.45.0: *"Am I supposed to invoke verify-and-land myself?
+I'm afraid I won't remember it."* The honest answer was that they would have had to —
+which is wrong for a skill whose entire audience is someone who should not need to
+memorise anything.
+
+### Changed — the session report now offers the check itself
+When the repository has an app target and the current branch carries unlanded
+commits, the branch-hygiene report's action menu gains a **check it** entry: build
+this branch and open the app so you can see the work run —
+`/superpowers-gstack:verify-and-land`, which then offers the landing. Nothing to
+remember: the report already fires every session, the agent already turns its menu
+into clickable choices, and this is now one of them.
+
+Discipline unchanged: the offer is an extra action on a report that was already
+firing — it never breaks silence by itself, never appears without an app target
+(root-relative detection, so sessions started in a subdirectory still find it),
+never appears for squash-merged branches whose content is already landed, and sits
+below "back up" — seeing it run matters less than not losing it.
+
+### Fixed (own review, before ship)
+Codex on the patch: the branch name was interpolated unquoted into the menu —
+violating the hook's own hostile-ref invariant from 2.43.0; `package.json` detection
+matched the string `"dev"` anywhere in the file rather than an actual
+`scripts.dev`/`scripts.start` entry; content-equivalent branches triggered the offer.
+All three fixed; 220 pytest.
+
 ## [2.45.0] - 2026-08-24
 
 Reported: *"After something is fixed I often don't see it in the local app, because

@@ -45,6 +45,25 @@ git show-ref --verify -q "refs/remotes/origin/$default_ref" && base="origin/$def
 
 current=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 
+# Is there something a person could look at? Globs only: a SessionStart hook must not
+# shell out to xcodebuild, and this only decides whether to OFFER a verification.
+# Look at the repo ROOT, not the shell's cwd — a session started in a subdirectory
+# would otherwise find nothing and silently never offer the check.
+has_app=0
+_root=$(git rev-parse --show-toplevel 2>/dev/null || echo .)
+for g in "$_root"/*.xcodeproj "$_root"/*.xcworkspace "$_root"/project.yml; do
+  [ -e "$g" ] && { has_app=1; break; }
+done
+if [ "$has_app" = "0" ] && [ -f "$_root/package.json" ]; then
+  # Parse scripts.dev / scripts.start properly — a "dev" anywhere in the file
+  # (a dependency name, a description) is not a runnable app.
+  python3 - "$_root/package.json" <<'PJ' >/dev/null 2>&1 && has_app=1
+import json,sys
+s=json.load(open(sys.argv[1])).get("scripts",{})
+sys.exit(0 if ("dev" in s or "start" in s) else 1)
+PJ
+fi
+
 # One finding = one aligned line. The previous format spent two to four lines per
 # finding on explanation and a literal command; a user who already knows what a
 # push is reads that as padding around the only new information — the name.
@@ -354,6 +373,15 @@ fi
 # does not use a terminal is decoration. What follows the findings is therefore a
 # menu addressed to the agent — which turns it into choices the user can click.
 
+unlanded_here=0
+if [ "$current" != "$default_ref" ] && [ "$current" != "HEAD" ]; then
+  unlanded_here=$(git rev-list --count "$base..HEAD" 2>/dev/null || echo 0)
+  case "$unlanded_here" in ''|*[!0-9]*) unlanded_here=0 ;; esac
+  # Squash-merged: the content is already in the default branch, so there is
+  # nothing new to look at — same content test the other checks use.
+  [ "$unlanded_here" -gt 0 ] && git diff --quiet "$base" HEAD 2>/dev/null && unlanded_here=0
+fi
+
 at_risk=$(( ${dirty_n:-0} + ${other_wt_n:-0} + ${unpushed_n:-0} + ${detached_n:-0} + ${wt_det_n:-0} ))
 [ "$stash_oldest" -ge "$IDLE_DAYS" ] && at_risk=$((at_risk + 1))
 
@@ -445,6 +473,8 @@ if [ -n "$bk" ]; then
   printf "%b" "$bk"
   [ -n "$uncovered" ] && printf '             (not covered: %s)\n' "$uncovered"
 fi
+[ "$has_app" = "1" ] && [ "${unlanded_here:-0}" -gt 0 ] && \
+  act "check it" "build $(shq "$current") and open the app, so you can see the ${unlanded_here} commit(s) actually work — /superpowers-gstack:verify-and-land, which then offers the landing"
 [ "${dirty_n:-0}" != "0" ] && act "show" "what those ${dirty_n} file(s) actually change, before deciding"
 [ "${other_wt_n:-0}" != "0" ] && act "look at" "$(shortpath "$wt_first") — a second working folder (git worktree list), ${wt_first_n} loose file(s)"
 [ "$stash_oldest" -ge "$IDLE_DAYS" ] && act "look at" "the ${stash_n} parked change set(s) — git stash list, then git stash show -p"
