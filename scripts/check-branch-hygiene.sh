@@ -44,19 +44,69 @@ base="$default_ref"
 git show-ref --verify -q "refs/remotes/origin/$default_ref" && base="origin/$default_ref"
 
 current=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+
+# One finding = one aligned line. The previous format spent two to four lines per
+# finding on explanation and a literal command; a user who already knows what a
+# push is reads that as padding around the only new information — the name.
+row() { printf '      %-26s %s' "$1" "$2"; }
+
+# Every ref in the MENU is printed pre-quoted. Refs may legally contain `$( )`,
+# backticks, `;`, `&` and `|` — `safe$(whoami)` is an accepted branch name — and the
+# menu's whole purpose is that an agent turns it into a shell command. Handing over a
+# literal it can paste beats handing over a name it must remember to escape. Findings
+# rows stay unquoted: they are read, never executed.
+shq() { local v=${1//\'/\'\\\'\'}; printf "'%s'" "$v"; }
+
+# Whether a push is even possible. Gated once, because "and push" printed at a repo
+# with no remote is an instruction that dead-ends — and a dead-ended backup reads as
+# a completed one.
+has_remote=0; git remote 2>/dev/null | grep -q . && has_remote=1
+
+# Worktree paths are absolute and often deep enough to blow the line apart, which
+# turns a scannable column into wrapped mush. Shorten for display only: $HOME to ~,
+# and anything still long to its last two segments — enough for a human to recognise
+# the folder. The agent resolves the real path with `git worktree list`.
+shortpath() {
+  local t='~' p="$1"
+  [ -n "${HOME:-}" ] && p="${p/#$HOME/$t}"
+  [ "${#p}" -le 34 ] && { printf '%s' "$p"; return; }
+  printf '.../%s/%s' "$(basename "$(dirname "$p")")" "$(basename "$p")"
+}
 cutoff=$(( $(date +%s) - IDLE_DAYS * 86400 ))
 
-stale=""; stale_n=0
+# Commits made on a detached HEAD live in no branch at all, so every check below —
+# all of which walk refs/heads — is blind to them. One `git checkout` and they are
+# reflog-only. Found 2026-08-23: a commit of real work produced total silence.
+detached_n=0
+if [ "$current" = "HEAD" ]; then
+  detached_n=$(git rev-list --count "$base..HEAD" 2>/dev/null || echo 0)
+  case "$detached_n" in ''|*[!0-9]*) detached_n=0 ;; esac
+fi
+
+stale=""; stale_n=0; stale_first=""; stale_names=""
 while IFS='|' read -r ref ts; do
   [ -z "$ref" ] && continue
   [ "$ref" = "$default_ref" ] && continue
   [ "$ref" = "$current" ] && continue          # you are working here right now
   [ "$ts" -ge "$cutoff" ] 2>/dev/null && continue
   git merge-base --is-ancestor "$ref" "$base" 2>/dev/null && continue   # already landed
+  # Already counted under "only on this computer" if it has no upstream, or sits
+  # ahead of one. Reporting it here too put the SAME branch under a heading that
+  # says it is safe on the server when it has never been on a server — a false
+  # statement of safety, and the one a user would act on. Only applied when a remote
+  # exists: in a local-only repo no branch has an upstream, and skipping them all
+  # would silence this check completely.
+  if [ "$has_remote" = "1" ]; then
+    up_of=$(git for-each-ref --format='%(upstream:short)' "refs/heads/$ref" 2>/dev/null)
+    [ -z "$up_of" ] && continue
+    [ "$(git rev-list --count "$up_of..$ref" 2>/dev/null || echo 0)" -gt 0 ] && continue
+  fi
   ahead=$(git rev-list --count "$base..$ref" 2>/dev/null || echo "?")
   age=$(( ( $(date +%s) - ts ) / 86400 ))
-  stale="${stale}      ${ref}  —  ${ahead} commit(s), idle ${age}d\n"
+  stale="${stale}$(row "$ref" "${ahead} commit(s), idle ${age}d")\n"
   stale_n=$((stale_n + 1))
+  [ -z "$stale_first" ] && stale_first="$ref"
+  [ "$stale_n" -le 3 ] && stale_names="${stale_names} $(shq "$ref")"
 done < <(git for-each-ref --format='%(refname:short)|%(committerdate:unix)' refs/heads 2>/dev/null)
 
 # Uncommitted changes AT SESSION START are leftovers, not work in progress —
@@ -77,7 +127,7 @@ dirty_n=$(git status --porcelain 2>/dev/null | grep -c . || true)
 # SessionStart hook slow; each entry costs one `git status`.
 WORKTREE_SCAN_MAX=12
 here=$(git rev-parse --show-toplevel 2>/dev/null)
-other_wt=""; other_wt_n=0; scanned=0
+other_wt=""; other_wt_n=0; scanned=0; wt_first=""; wt_first_n=0; wt_names=""
 while IFS= read -r line; do
   case "$line" in
     "worktree "*)  wt_path="${line#worktree }"; wt_branch=""; wt_skip="" ;;
@@ -93,8 +143,10 @@ while IFS= read -r line; do
         scanned=$((scanned + 1))
         n=$(git -C "$wt_path" status --porcelain 2>/dev/null | grep -c . || true)
         if [ "${n:-0}" -gt 0 ]; then
-          other_wt="${other_wt}      ${wt_path}  (${wt_branch:-detached})  —  ${n} change(s)\n"
+          other_wt="${other_wt}$(row "$(shortpath "$wt_path") (${wt_branch:-detached})" "${n} file(s) not committed")\n"
           other_wt_n=$((other_wt_n + 1))
+          [ -z "$wt_first" ] && wt_first="$wt_path" && wt_first_n="$n"
+          [ "$other_wt_n" -le 3 ] && wt_names="${wt_names} $(shq "$wt_path")"
         fi
       fi
       wt_path=""
@@ -115,7 +167,7 @@ while IFS='|' read -r ref ts; do
   [ "$ts" -ge "$cutoff" ] 2>/dev/null && continue
   git merge-base --is-ancestor "$ref" "$base" 2>/dev/null && continue
   age=$(( ( $(date +%s) - ts ) / 86400 ))
-  [ "$remote_n" -lt 8 ] && remote_orphans="${remote_orphans}      ${short}  —  idle ${age}d\n"
+  [ "$remote_n" -lt 8 ] && remote_orphans="${remote_orphans}$(row "$short" "server-only, idle ${age}d")\n"
   remote_n=$((remote_n + 1))
 done < <(git for-each-ref --format='%(refname:short)|%(committerdate:unix)' refs/remotes/origin 2>/dev/null)
 
@@ -124,7 +176,7 @@ done < <(git for-each-ref --format='%(refname:short)|%(committerdate:unix)' refs
 # other check compares against origin/<default> and simply found nothing unmerged.
 # At session start this means the previous session ended without pushing — the
 # same class as a dirty tree, and the one where a dead laptop costs you the work.
-unpushed=""; unpushed_n=0
+unpushed=""; unpushed_n=0; push_first=""; push_names=""; current_unpushed=0
 # Only meaningful when a remote exists — a local-only repo cannot push, and saying
 # so every session would be pure noise. And only branches that HAVE an upstream and
 # sit ahead of it: a branch that was never pushed at all is already covered by the
@@ -145,13 +197,21 @@ if git remote 2>/dev/null | grep -q .; then
       [ "$ref" = "$default_ref" ] && continue
       n=$(git rev-list --count "$base..$ref" 2>/dev/null || echo 0)
       [ "${n:-0}" -eq 0 ] && continue
-      unpushed="${unpushed}      ${ref}  —  ${n} commit(s), never backed up anywhere\n"
+      age_ts=$(git log -1 --format=%ct "$ref" 2>/dev/null || echo 0)
+      idle_note=""
+      [ "${age_ts:-0}" -lt "$cutoff" ] 2>/dev/null && idle_note=", idle $(( ( $(date +%s) - age_ts ) / 86400 ))d"
+      unpushed="${unpushed}$(row "$ref" "${n} commit(s), never pushed${idle_note}")\n"
+      [ -z "$push_first" ] && push_first="$ref"
+      [ "$unpushed_n" -le 3 ] && push_names="${push_names} $(shq "$ref")"
     else
       n=$(git rev-list --count "$up..$ref" 2>/dev/null || echo 0)
       [ "${n:-0}" -eq 0 ] && continue
-      unpushed="${unpushed}      ${ref}  —  ${n} commit(s) not yet backed up to ${up}\n"
+      unpushed="${unpushed}$(row "$ref" "${n} commit(s) not pushed")\n"
+      [ -z "$push_first" ] && push_first="$ref"
+      [ "$unpushed_n" -le 3 ] && push_names="${push_names} $(shq "$ref")"
     fi
     unpushed_n=$((unpushed_n + 1))
+    [ "$ref" = "$current" ] && current_unpushed=1
   done < <(git for-each-ref --format='%(refname:short)|%(upstream:short)' refs/heads 2>/dev/null)
 fi
 
@@ -193,7 +253,8 @@ report_gstack() {
 
 if [ "$stale_n" = "0" ] && [ "$remote_n" = "0" ] && [ "${dirty_n:-0}" = "0" ] \
    && [ "${other_wt_n:-0}" = "0" ] \
-   && [ "${unpushed_n:-0}" = "0" ] && [ "$stash_oldest" -lt "$IDLE_DAYS" ] \
+   && [ "${unpushed_n:-0}" = "0" ] && [ "${detached_n:-0}" = "0" ] \
+   && [ "$stash_oldest" -lt "$IDLE_DAYS" ] \
    && [ "${merged_n:-0}" -lt 5 ]; then
   # Nothing to say about branches — but a pending gstack upgrade still deserves a line.
   gs=$(report_gstack)
@@ -207,81 +268,103 @@ if [ "$stale_n" = "0" ] && [ "$remote_n" = "0" ] && [ "${dirty_n:-0}" = "0" ] \
   exit 0
 fi
 
-# Report in risk order, not detection order. A novice cannot tell "this exists in
-# one place and a dead disk ends it" from "this is safely on the server, just not
-# shipped yet" from "this is tidy-up" — and the old single banner made all three
-# look equally alarming, which means equally ignorable.
+# Report in risk order, not detection order — a novice cannot tell "this exists in
+# one place and a dead disk ends it" from "this is on the server, just not shipped".
 #
-# Remedies lead with PRESERVATION. The previous wording offered "commit, stash, or
-# discard" and "pop, branch, or drop" as the first thing a reader saw: an
-# irreversible option presented to someone who cannot evaluate it. Deleting is
-# still allowed — it is just never the suggestion that arrives first.
+# One line per finding, no inline commands. The report's job is to name the work and
+# its risk; ACTING on it is the agent's job, and a command printed for a user who
+# does not use a terminal is decoration. What follows the findings is therefore a
+# menu addressed to the agent — which turns it into choices the user can click.
 
-at_risk=$(( ${dirty_n:-0} + ${other_wt_n:-0} + ${unpushed_n:-0} ))
+at_risk=$(( ${dirty_n:-0} + ${other_wt_n:-0} + ${unpushed_n:-0} + ${detached_n:-0} ))
 [ "$stash_oldest" -ge "$IDLE_DAYS" ] && at_risk=$((at_risk + 1))
 
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo " Unlanded work"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo
+
 if [ "$at_risk" -gt 0 ]; then
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo " Work that exists in only one place"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  Only on this computer — gone if the disk dies:"
+  [ "${unpushed_n:-0}" != "0" ] && printf "%b" "$unpushed"
+  [ "${detached_n:-0}" != "0" ] && printf "%b\n" "$(row "detached HEAD" "${detached_n} commit(s), in no branch")"
+  [ "${dirty_n:-0}" != "0" ] && printf "%b\n" "$(row "$current" "${dirty_n} file(s) not committed")"
+  [ "${other_wt_n:-0}" != "0" ] && printf "%b" "$other_wt"
+  [ "$stash_oldest" -ge "$IDLE_DAYS" ] && printf "%b\n" "$(row "stashed changes" "${stash_n} set(s), oldest ${stash_oldest}d")"
   echo
-  echo "  If this computer died right now, the following would be gone."
-  echo
-  if [ "${unpushed_n:-0}" != "0" ]; then
-    echo "  Saved here, but nowhere else — $unpushed_n branch(es):"
-    printf "%b" "$unpushed"
-    echo "      Back it up:  git push -u origin <branch>"
-    echo
-  fi
-  if [ "${dirty_n:-0}" != "0" ]; then
-    echo "  $dirty_n file change(s) on '$current' not saved into git at all."
-    echo "      See what they are:  git status"
-    echo "      Keep them:          git add -A && git commit -m \"...\" && git push"
-    echo
-  fi
-  if [ "${other_wt_n:-0}" != "0" ]; then
-    echo "  Unsaved changes in $other_wt_n other working folder(s) for this project:"
-    printf "%b" "$other_wt"
-    echo "      See what they are:  git -C <path> status"
-    echo
-  fi
-  if [ "$stash_oldest" -ge "$IDLE_DAYS" ]; then
-    echo "  $stash_n set(s) of changes parked with 'git stash', oldest ${stash_oldest}d."
-    echo "      Parking is meant to last hours. Look before deciding:  git stash list"
-    echo
-  fi
 fi
 
 if [ "$stale_n" != "0" ] || [ "$remote_n" != "0" ]; then
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo " Finished work that never shipped"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo
-  echo "  Not at risk of being lost — just never merged into $default_ref,"
-  echo "  so nobody is using it and it is drifting out of date."
-  echo
-  if [ "$stale_n" != "0" ]; then
-    echo "  $stale_n branch(es), untouched for over ${IDLE_DAYS} days:"
-    printf "%b" "$stale"
-    echo
-  fi
-  if [ "$remote_n" != "0" ]; then
-    echo "  $remote_n branch(es) on the server with no copy here:"
-    printf "%b" "$remote_orphans"
-    echo "      Closing a pull request does not delete its branch."
-    echo
-  fi
-  echo "  Finish them with /ship, or /superpowers:finishing-a-development-branch"
-  echo "  — which will merge, open a PR, or discard, and say which it did."
+  echo "  On the server, never merged into ${default_ref}:"
+  [ "$stale_n" != "0" ] && printf "%b" "$stale"
+  [ "$remote_n" != "0" ] && printf "%b" "$remote_orphans"
   echo
 fi
 
-if [ "${merged_n:-0}" -ge 5 ]; then
-  echo "  Tidy-up (nothing at risk): $merged_n branch(es) already merged into"
-  echo "  $default_ref. Their work is safely in $default_ref; the labels can go:"
-  echo "      git branch --merged $base | grep -v '^[* ]*$default_ref$' | xargs -r git branch -d"
-  echo
+[ "${merged_n:-0}" -ge 5 ] && { echo "  Already merged, just clutter: ${merged_n} branch(es)"; echo; }
+
+# The menu. Two invariants, both learned the hard way:
+#
+#  * Option 1 never destroys anything. A merged-clutter-only repo used to print
+#    "Option 1 only ever preserves" directly above "1. tidy  delete 6 branches" —
+#    a safety guarantee attached to a deletion. When nothing preservable applies,
+#    inspection is offered first and deleting is second.
+#  * The back-up option covers EVERY at-risk item, or names what it does not.
+#    Covering the first target and leaving the rest guarantees the identical
+#    warning next session, which is how a hook teaches you to skip it.
+i=0
+act()  { i=$((i + 1)); printf '      %d. %-8s %s\n' "$i" "$1" "$2"; }
+step() { bk="${bk}             · ${1}\n"; }
+more()  { [ "$1" -gt 3 ] && printf ' and %d more' "$(( $1 - 3 ))"; }
+
+bk=""; uncovered=""
+push_tail=", then push it"
+[ "$has_remote" = "0" ] && push_tail=" (no remote is configured, so this is a checkpoint on the same disk — not a backup)"
+
+# A branch is where the reflog stops being the only way back — but a brand-new local
+# branch is still one disk. The step has to carry through to the push, or the next
+# session reports the same work under a different name.
+if [ "${detached_n:-0}" != "0" ]; then
+  det_tail=" — otherwise they are reachable only through the reflog"
+  [ "$has_remote" = "1" ] && det_tail=", then push it${det_tail}"
+  step "give the ${detached_n} detached commit(s) a branch (git switch -c <name>)${det_tail}"
 fi
+if [ "${dirty_n:-0}" != "0" ]; then
+  dirty_tail="$push_tail"
+  [ "${current_unpushed:-0}" = "1" ] && dirty_tail=""   # the push step below covers it
+  if [ "$current" = "HEAD" ]; then
+    step "commit the ${dirty_n} loose file(s) onto that new branch${dirty_tail}"
+  else
+    step "commit the ${dirty_n} loose file(s) on $(shq "$current")${dirty_tail}"
+  fi
+fi
+[ "${unpushed_n:-0}" != "0" ] && [ "$has_remote" = "1" ] && \
+  step "push${push_names}$(more "$unpushed_n") — every branch listed above as unpushed$([ "${dirty_n:-0}" != "0" ] && [ "${current_unpushed:-0}" = "1" ] && printf ', after the commit above')"
+[ "${other_wt_n:-0}" != "0" ] && \
+  step "in the other working folder(s)${wt_names}$(more "$other_wt_n") — commit the loose file(s) there and push"
+[ "$stash_oldest" -ge "$IDLE_DAYS" ] && \
+  uncovered="the ${stash_n} parked change set(s) — no push reaches a stash, so it needs a decision, see below"
+
+echo "  What can be done — offer these as choices and carry out the pick:"
+if [ -n "$bk" ]; then
+  act "back up" "make everything above recoverable — all of:"
+  printf "%b" "$bk"
+  [ -n "$uncovered" ] && printf '             (not covered: %s)\n' "$uncovered"
+fi
+[ "${dirty_n:-0}" != "0" ] && act "show" "what those ${dirty_n} file(s) actually change, before deciding"
+[ "${other_wt_n:-0}" != "0" ] && act "look at" "$(shortpath "$wt_first") — a second working folder (git worktree list), ${wt_first_n} loose file(s)"
+[ "$stash_oldest" -ge "$IDLE_DAYS" ] && act "look at" "the ${stash_n} parked change set(s) — git stash list, then git stash show -p"
+if [ -n "$stale_names" ] || [ "$remote_n" != "0" ]; then
+  target="${stale_names}$(more "$stale_n")"
+  [ -z "$stale_names" ] && target=" the ${remote_n} server-only branch(es)"
+  [ -n "$stale_names" ] && [ "$remote_n" != "0" ] && target="${target} (plus ${remote_n} server-only)"
+  act "finish" "${target# } via /ship — merges, opens a PR, or drops it, and says which"
+fi
+if [ "${merged_n:-0}" -ge 5 ]; then
+  [ "$i" -eq 0 ] && act "show" "which ${merged_n} branch(es) are already merged — nothing is deleted by this"
+  act "tidy" "delete those ${merged_n} merged branch(es) — their commits are already in ${default_ref}"
+fi
+echo
 
 report_gstack
 exit 0

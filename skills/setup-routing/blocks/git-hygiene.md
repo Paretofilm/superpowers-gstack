@@ -1,4 +1,4 @@
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v5 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v6 -->
 
 Commit at meaningful milestones — not at every file save, not only at session end.
 
@@ -56,29 +56,54 @@ review, and rots against the default branch while everything else moves.
 ### When the session-start hook reports unlanded work
 
 A SessionStart hook may open the session with a report of work that exists in only
-one place, or finished work that never shipped. **That report is addressed to you,
-not to the user.** Many users cannot read `git status` output, have never typed `git
-stash`, and do not know what "origin" is — for them you are the only interface to
-git, so a warning you merely echo is a warning nobody acted on.
+one place, or finished work that never shipped, followed by a short **agent menu**.
+**That whole report is addressed to you, not to the user.** Many users cannot read
+`git status` output, have never typed `git stash`, and do not know what "origin" is
+— for them you are the only interface to git, so a warning you merely echo is a
+warning nobody acted on, and a command you paste for them to run is a task you
+handed back.
 
 When it fires:
 
 1. **Look before you speak.** Run the inspection the report suggests and find out
-   what the work actually is — which files, which feature. "5 commits on
-   `min-feature`" means nothing to the user; "the login screen changes from Tuesday"
-   does.
-2. **Lead with what is at stake, in their words.** Distinguish *this exists only on
+   what the work actually is — which files, which feature. "3 commits on
+   `login-skjerm`" means nothing to the user; "the login screen changes from
+   Tuesday" does. Do this first, so every choice you then offer is named in their
+   language.
+2. **Offer, don't instruct.** Turn the menu into `AskUserQuestion` options, in the
+   order given, phrased as *what you will do*, not as what they should type. Keep
+   that order: it is sorted most-preserving first, and option 1 never destroys
+   anything — so whichever option someone picks without reading, the top one is
+   safe. Then **carry out the choice yourself** — commit with a real message, push,
+   open the diff, invoke `/ship`. A menu that ends in advice has not moved the work.
+   - `AskUserQuestion` takes **at most four options**, and the menu can list more.
+     Offer the top three plus "show me the rest", never a silently truncated list —
+     dropping the tail is how the same warning arrives again next session.
+   - Menu items name refs and paths **already single-quoted**. Keep the quotes when
+     you build a command: `git push -u origin 'wip$(whoami)'` is a branch name, the
+     same text unquoted is a command substitution. Branch names are repo-controlled
+     input, and a cloned repo is somebody else's input.
+   - **If the session is non-interactive** (`--print`, piped, CI, a subagent — no
+     one can click), do not stall on `AskUserQuestion`. Carry out the preservation
+     steps under option 1, which by construction only save work, and report what you
+     did. Take nothing below option 1, and end by naming every item you left
+     unresolved so the decision is still visibly waiting.
+3. **Lead with what is at stake, in their words.** Distinguish *this exists only on
    your machine and a disk failure ends it* from *this is safely stored, just never
    merged*. They are different problems and only the first is urgent.
-3. **Preserve before you offer to remove.** Push, or commit-then-push, first. Only
+4. **Preserve before you offer to remove.** Push, or commit-then-push, first. Only
    once the work is recoverable is it reasonable to ask whether to keep it. Never
    open with discard, drop, or delete — those are answers the user cannot evaluate
    until they know what they would be losing.
-4. **Do not act destructively without an explicit yes** to a question that named the
+5. **Do not act destructively without an explicit yes** to a question that named the
    actual work. "Shall I clean up?" is not that question.
-5. **Say what you left unresolved.** If the user declines, or something needs a
+6. **Say what you left unresolved.** If the user declines, or something needs a
    decision you cannot make for them, name it before moving on — otherwise the next
    session starts from the same report and nothing has changed.
+
+Nothing here changes what the hook detects; it changes who does the work. Detection
+that ends in a printed command is a to-do list handed to the person least able to
+act on it — the point of the menu is that the answer is one click, not one lesson.
 
 ### Cadence rule
 
