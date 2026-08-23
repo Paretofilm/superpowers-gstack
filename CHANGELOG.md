@@ -1,5 +1,83 @@
 # Changelog
 
+## [2.43.0] - 2026-08-23
+
+2.42.0 made the branch-hygiene report readable. It still ended in shell commands —
+and a command printed for someone who does not use a terminal is a task handed back
+to the person least able to do it. This release turns the report into something the
+**agent executes**, and a three-lens review of that change found four more ways the
+old shape could lose or destroy work.
+
+### Changed — the report hands over actions, not homework
+- **One line per finding.** Name and risk, nothing else. The tutorial prose and the
+  inline `git` commands are gone; the findings section now contains no command at
+  all, which is a tested invariant.
+- **A menu the agent carries out.** Each finding class becomes an offer the agent
+  turns into `AskUserQuestion` choices and then *performs* — commit with a real
+  message, push, open the diff, invoke `/ship`. `git-hygiene` **v5 → v6** makes that
+  contractual: *offer, don't instruct*.
+- The old `▸ Agent: do not echo this back` line was itself printed to the user.
+  Replaced by a header that reads correctly to both: *What can be done — offer these
+  as choices and carry out the pick.*
+
+### Fixed — the menu could lead with deletion
+In a repo whose only finding was merged clutter, the sole option was
+`1. tidy  delete 6 branch(es)` — printed directly beneath a guarantee that option 1
+only preserves and decides nothing. **Option 1 is now never destructive**: when
+nothing preservable applies, inspection is offered first and deleting is second.
+Tested as an invariant, not as a string.
+
+### Fixed — "Safe on the server" was said about branches that had never been on one
+The stale-branch section never checked whether a branch had an upstream, so an idle,
+never-pushed branch appeared **twice** — once as at-risk, once under a heading
+asserting it was safe — and the false one is the one a user would act on. Branches
+with no upstream, or ahead of one, now appear only in the at-risk section (skipped
+when no remote exists, so local-only repos keep the check). Their idle age comes
+along, so nothing is lost by moving them.
+
+### Fixed — the backup option didn't cover everything it counted as at risk
+`at_risk` included sibling worktrees and stale stashes; the backup step covered only
+current-tree changes and unpushed branches. Picking option 1 protected some of the
+listed work and silently left the rest — which guarantees the identical warning next
+session. Option 1 now covers every at-risk target, names all of them rather than the
+first of each kind, and **explicitly names what it does not cover** (a stash: no push
+reaches one).
+
+### Fixed — commits on a detached HEAD were invisible to every check
+Every check walks `refs/heads`, and detached commits are in no branch. Verified: a
+commit of real work produced total silence, one `git checkout` from reflog-only.
+Now reported, with a step that carries through to a branch *and* a push.
+
+### Fixed — `git push` was offered where no remote exists
+The unpushed check was gated on having a remote; the dirty-tree remedy was not, so a
+local-only repo was told to push. It now says plainly that the commit is a checkpoint
+on the same disk, **not a backup**.
+
+### Fixed — branch names are repo-controlled input
+`wip$(whoami)` is a branch name git accepts. The menu exists to be turned into shell
+commands, so every ref and path in it is now emitted **single-quoted**, and v6
+requires the quotes be kept. Tested by round-tripping a hostile ref through `eval`.
+
+### Fixed — the contract asked for something the tool cannot do
+`AskUserQuestion` takes at most four options; the menu can list six. v6 now specifies
+the fold — top three plus "show me the rest", never a silently truncated list — and
+adds a **non-interactive fallback**: with no one to click, perform option 1's
+preservation steps, take nothing below it, and name what was left unresolved.
+
+### Review provenance
+Self-pitfall found the detached-HEAD dirty case and a `q()` helper whose name
+collided with a real binary on PATH. **Codex** found four P1s: deletion-as-option-1,
+the "safe on the server" misclassification, the backup/at-risk coverage gap, and
+unquoted refs. **GLM-5.2** independently found the same misclassification — agreement
+across houses, so no refutation was owed — plus detached-HEAD commits, the visible
+agent meta-instruction, and the missing non-interactive path. Nothing was refuted;
+one Codex suggestion was declined with reasons (offering to *configure* a remote is
+an outward-facing action needing the user's own decision and credentials). Cost:
+$0.065 + one Codex pass (130k tokens).
+
+204 pytest (26 in the hook file, 5 new asserting invariants rather than strings),
+156 bun, 2/2 integration, lint 0 errors.
+
 ## [2.42.0] - 2026-08-22
 
 A three-lens pitfall review asked one question: does the branch-hygiene system

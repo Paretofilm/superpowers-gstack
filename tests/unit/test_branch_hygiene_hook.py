@@ -46,7 +46,7 @@ def test_non_git_directory_is_silent(tmp_path):
 
 def test_uncommitted_changes_are_reported(repo):
     (repo / "f.txt").write_text("changed")
-    assert "not saved into git at all" in run_hook(repo)
+    assert "file(s) not committed" in run_hook(repo)
 
 
 def test_current_branch_is_never_nagged(repo):
@@ -82,7 +82,7 @@ def test_idle_unmerged_branch_is_reported(repo):
 def test_invalid_threshold_falls_back_instead_of_crashing(repo):
     """A hook that aborts on a typo'd env var is worse than one that ignores it."""
     (repo / "f.txt").write_text("changed")
-    assert "not saved into git at all" in run_hook(repo, idle_days="seven")
+    assert "file(s) not committed" in run_hook(repo, idle_days="seven")
 
 
 def test_disable_switch_silences_everything(repo):
@@ -120,7 +120,7 @@ def test_unpushed_commits_are_reported(tmp_path, repo):
     (repo / "f.txt").write_text("local only")
     git(repo, "commit", "-qam", "local only")
     out = run_hook(repo)
-    assert "nowhere else" in out and "not yet backed up to origin/main" in out
+    assert "Only on this computer" in out and "commit(s) not pushed" in out
 
 
 def test_local_only_repo_is_never_nagged_about_pushing(tmp_path, repo):
@@ -129,7 +129,7 @@ def test_local_only_repo_is_never_nagged_about_pushing(tmp_path, repo):
     git(repo, "checkout", "-qb", "feature")
     (repo / "g.txt").write_text("x"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "wip")
     git(repo, "checkout", "-q", "main")
-    assert "nowhere else" not in run_hook(repo)
+    assert "Only on this computer" not in run_hook(repo)
 
 
 def test_never_pushed_branch_is_reported(tmp_path, repo):
@@ -141,7 +141,7 @@ def test_never_pushed_branch_is_reported(tmp_path, repo):
     with_remote(tmp_path, repo)
     git(repo, "checkout", "-qb", "feature")
     (repo / "g.txt").write_text("x"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "wip")
-    assert "never backed up anywhere" in run_hook(repo)
+    assert "never pushed" in run_hook(repo)
 
 
 def test_never_pushed_is_reported_once_not_twice(tmp_path, repo):
@@ -150,8 +150,8 @@ def test_never_pushed_is_reported_once_not_twice(tmp_path, repo):
     with_remote(tmp_path, repo)
     git(repo, "checkout", "-qb", "feature")
     (repo / "g.txt").write_text("x"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "wip")
-    out = run_hook(repo)
-    assert out.count("feature") == 1
+    findings = findings_of(run_hook(repo))
+    assert findings.count("feature") == 1
 
 
 def test_destructive_options_are_never_offered_first(tmp_path, repo):
@@ -178,7 +178,7 @@ def test_fresh_stash_is_not_nagged(tmp_path, repo):
     one is the tool being used correctly, not debt."""
     with_remote(tmp_path, repo)
     (repo / "f.txt").write_text("wip"); git(repo, "stash", "-q")
-    assert "git stash" not in run_hook(repo)
+    assert "stashed changes" not in run_hook(repo)
 
 
 def test_stale_stash_is_reported(tmp_path, repo):
@@ -192,7 +192,7 @@ def test_stale_stash_is_reported(tmp_path, repo):
                         "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t.t",
                         "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t.t"})
     out = run_hook(repo)
-    assert "git stash" in out and "meant to last hours" in out
+    assert "stashed changes" in out and "parked change set" in out
 
 
 # --- worktrees (2.41.0) ---------------------------------------------------------
@@ -220,7 +220,7 @@ def test_uncommitted_work_in_another_worktree_is_reported(tmp_path, repo):
     wt = add_worktree(repo, tmp_path.parent / f"{tmp_path.name}-wt", "feature")
     (wt / "stranded.txt").write_text("work nobody will revisit")
     out = run_hook(repo)
-    assert "other working folder" in out and "feature" in out
+    assert "second working folder" in out and "feature" in out
 
 
 def test_current_and_other_worktree_are_counted_separately(tmp_path, repo):
@@ -231,8 +231,8 @@ def test_current_and_other_worktree_are_counted_separately(tmp_path, repo):
     (wt / "there.txt").write_text("x")
     (repo / "here.txt").write_text("y")
     out = run_hook(repo)
-    assert "1 file change(s)" in out             # here, not 2
-    assert "1 other working folder(s)" in out    # there, not 2
+    assert "1 file(s) not committed" in out      # here, not 2
+    assert "1 loose file(s)" in out              # there, not 2
 
 
 def test_deleted_worktree_directory_does_not_crash(tmp_path, repo):
@@ -243,3 +243,87 @@ def test_deleted_worktree_directory_does_not_crash(tmp_path, repo):
     wt = add_worktree(repo, tmp_path.parent / f"{tmp_path.name}-wt", "feature")
     shutil.rmtree(wt)
     run_hook(repo)  # run_hook already asserts exit 0
+
+
+# --- the agent menu (2.43.0) ----------------------------------------------------
+# 2.42.0 made the report readable; it still ended in commands, and a command printed
+# for someone who does not use a terminal is a task handed back to the person least
+# able to do it. The report now names the work and hands the AGENT a menu, which it
+# turns into choices the user clicks. These tests guard that split.
+
+MENU = "What can be done"
+
+
+def action_label(menu, n):
+    """The verb of option `n` — asserting on the whole line catches 'deleted by this'
+    in a description and calls an inspection destructive."""
+    line = [l for l in menu.splitlines() if l.strip().startswith(f"{n}. ")][0]
+    return line.split(f"{n}.", 1)[1].split()[0]
+
+
+def findings_of(out):
+    """Everything above the menu — what the user is actually being told."""
+    return out.split(MENU)[0]
+
+
+def test_findings_never_hand_the_user_a_command(tmp_path, repo):
+    """The old report's first remedy line was a shell command. Naming the work is
+    the report's job; running the command is the agent's. Any 'git ...' above the
+    menu is that boundary leaking back."""
+    with_remote(tmp_path, repo)
+    git(repo, "checkout", "-qb", "feature")
+    (repo / "g.txt").write_text("x"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "wip")
+    (repo / "loose.txt").write_text("y")
+    assert "git " not in findings_of(run_hook(repo))
+
+
+def test_menu_names_the_work_it_would_act_on(tmp_path, repo):
+    """An action whose target the agent has to re-derive is an action it will get
+    wrong. The menu carries the branch name so the offer can be concrete."""
+    with_remote(tmp_path, repo)
+    git(repo, "checkout", "-qb", "login-screen")
+    (repo / "g.txt").write_text("x"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "wip")
+    menu = run_hook(repo).split(MENU)[1]
+    assert "1. back up" in menu and "login-screen" in menu
+
+
+def test_first_action_preserves_even_when_cleanup_is_available(tmp_path, repo):
+    """Ordering is the safety property: someone who picks option 1 without reading
+    the rest must land on the one that only saves. Deleting branches is offered —
+    below, and never as 1."""
+    with_remote(tmp_path, repo)
+    for n in range(5):
+        git(repo, "branch", f"done-{n}", "main")
+    (repo / "loose.txt").write_text("x")
+    menu = run_hook(repo).split(MENU)[1]
+    assert menu.index("back up") < menu.index("tidy")
+    assert "1. back up" in menu
+
+
+def test_option_one_is_never_destructive_even_with_nothing_else_to_offer(tmp_path, repo):
+    """Regression, found by Codex and reproduced: in a repo whose ONLY finding was
+    merged clutter, the menu's sole entry was `1. tidy  delete 6 branch(es)` — under
+    a printed guarantee that option 1 only preserves. A user who clicks 1 without
+    reading must never be authorising a deletion."""
+    with_remote(tmp_path, repo)
+    for n in range(6):
+        git(repo, "branch", f"done-{n}", "main")
+    menu = run_hook(repo).split(MENU)[1]
+    assert action_label(menu, 1) == "show"     # inspection, not deletion
+    assert "tidy" in menu                       # still offered, just not first
+
+
+def test_hostile_branch_name_is_quoted_before_it_reaches_the_menu(tmp_path, repo):
+    """`safe$(whoami)` is a branch name git accepts. The menu exists to be turned
+    into shell commands by an agent, so an unquoted ref there is repo-controlled
+    input on its way to a command line. Quoted, it survives eval as a literal."""
+    with_remote(tmp_path, repo)
+    hostile = "wip$(whoami)"
+    git(repo, "checkout", "-qb", hostile)
+    (repo / "g.txt").write_text("x"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "wip")
+    menu = run_hook(repo).split(MENU)[1]
+    assert f"'{hostile}'" in menu, "ref must appear single-quoted in the menu"
+    # and quoting must actually neutralise it, not merely decorate it
+    quoted = [w for w in menu.split() if w.startswith("'wip")][0]
+    out = subprocess.run(["bash", "-c", f"printf '%s' {quoted}"], capture_output=True, text=True)
+    assert out.stdout == hostile
