@@ -109,6 +109,7 @@ Key routing rules:
 - third-lens-review (normally auto-invoked by pitfall-verification Stage 3; invoke directly only for an ad-hoc third-house read) → runs an external model house on the PATCHED artifact (`scripts/third-lens-review.py`). Routing by `--role`: architecture=GLM-5.2 (default, OpenRouter), correctness=DeepSeek V4-Pro (OpenRouter), countersynthesis=OpenAI via the `codex` CLI (subscription). OpenRouter key in Keychain `openrouter-api-key`; the `sensitive` role was removed in 2.18.0.
 - After a PRD/spec/plan for a native Apple app, before implementation → invoke /superpowers-gstack:macos-native-review (macOS) or /superpowers-gstack:ios-native-review (iOS/iPadOS). HIG-citation-grounded conformance gate; complementary to pitfall-verification and quality-review.
 - After a PRD/spec/plan, before implementation — "will this feel good?", perceived quality, loading/empty states, error recovery → invoke /superpowers-gstack:quality-review. Complementary to pitfall-verification ("will this work?").
+- "I fixed it but I don't see it in the app", check a fix/feature by eye before landing, "build and open the app" → invoke /superpowers-gstack:verify-and-land. Builds the branch you are standing on, launches that exact bundle (not the `/Applications` copy Spotlight opens), proves on screen which build is running, gates on the user's eyes, then pushes and offers merge/PR. macOS + iOS simulator; short path for web dev servers.
 - E2E test a Swift app, "test the app", "trykk gjennom flyten", "e2e", press buttons and verify result → invoke /superpowers-gstack:e2e-route. Pure dispatcher: reads platform (scheme/SUPPORTED_PLATFORMS/.gstack/track) × intent (CI-env/verbs; asks once if ambiguous; multiplatform → asks iOS/macOS/both) and routes to /macos-e2e-scaffold, /ios-e2e-scaffold, MCP-live simulator automation (XcodeBuildMCP / ios-simulator), or visual-regression review (/ios-design-review for iOS, /design-review for macOS). Does not execute itself — names the executor + next action, then hands off.
 - Scaffold committed XCUITest for an iOS SwiftUI app → invoke /superpowers-gstack:ios-e2e-scaffold (manual only; mirrors /macos-e2e-scaffold with iOS heuristics — TabView/NavigationStack scene-walk, sheet/tab/push/gesture TIERs, iOS-Simulator runner). Normally reached via /e2e-route.
 - Visual exploration of an iOS/iPadOS app when the accessibility tree is insufficient (layout regressions, visual landmarks, "find visual issues") → invoke /superpowers-gstack:ios-visual-explore. Tier-2 escalation after XCUITest, not first resort; paid Gemini computer-use per run. Normally reached via /e2e-route.
@@ -168,7 +169,7 @@ If one of these appears without a category-1-to-5 reason, you have failed the au
 
 When you DO legitimately stop (scope done, or a category-1-to-5 reason fires): state what's done in one or two sentences, name the specific blocker if any, and do NOT propose new work or invite continuation.
 
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v7 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v8 -->
 
 Commit at meaningful milestones — not at every file save, not only at session end.
 
@@ -210,6 +211,14 @@ review, and rots against the default branch while everything else moves.
 - **Never end a session silently on a branch with unmerged commits.** Say where the
   work stands — landed, ready to land, or still open — even when the answer is "still
   open". The failure mode is not a wrong decision, it's no decision being stated.
+- **A fix nobody has watched run is not verified.** Tests answer *did I break
+  something else*; they cannot answer *is the thing I fixed actually fixed*. When the
+  project has a runnable app, build the branch and launch **that build** before
+  landing — `/superpowers-gstack:verify-and-land` does exactly that and then offers
+  the landing. On macOS this matters more than it sounds: opening the app by name
+  starts the copy in `/Applications`, which is the last release, not this branch. "I
+  checked and it is still broken" is very often a stale bundle rather than a failed
+  fix, and the fix gets rewritten for no reason.
 - **Landing is a skill, not a hand-rolled merge:** `/ship` (tests → review → PR) or
   `/superpowers:finishing-a-development-branch` (merge, PR, or discard). Pick one.
 - **Deliberate abandonment counts as done.** Say so and delete the branch — but

@@ -1,4 +1,4 @@
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v7 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v8 -->
 
 Commit at meaningful milestones — not at every file save, not only at session end.
 
@@ -40,6 +40,14 @@ review, and rots against the default branch while everything else moves.
 - **Never end a session silently on a branch with unmerged commits.** Say where the
   work stands — landed, ready to land, or still open — even when the answer is "still
   open". The failure mode is not a wrong decision, it's no decision being stated.
+- **A fix nobody has watched run is not verified.** Tests answer *did I break
+  something else*; they cannot answer *is the thing I fixed actually fixed*. When the
+  project has a runnable app, build the branch and launch **that build** before
+  landing — `/superpowers-gstack:verify-and-land` does exactly that and then offers
+  the landing. On macOS this matters more than it sounds: opening the app by name
+  starts the copy in `/Applications`, which is the last release, not this branch. "I
+  checked and it is still broken" is very often a stale bundle rather than a failed
+  fix, and the fix gets rewritten for no reason.
 - **Landing is a skill, not a hand-rolled merge:** `/ship` (tests → review → PR) or
   `/superpowers:finishing-a-development-branch` (merge, PR, or discard). Pick one.
 - **Deliberate abandonment counts as done.** Say so and delete the branch — but
