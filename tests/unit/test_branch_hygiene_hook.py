@@ -500,3 +500,31 @@ def test_app_target_alone_does_not_break_silence(tmp_path, repo):
     (repo / "MyApp.xcodeproj").mkdir()
     git(repo, "add", "-A"); git(repo, "commit", "-qm", "project"); git(repo, "push", "-q")
     assert run_hook(repo) == ""
+
+
+# --- cognitive-load review (2.47.0) ---------------------------------------------
+
+
+def test_backup_on_default_branch_warns_about_deploy(tmp_path, repo):
+    """Auto-deploy on push to the default branch is the DEFAULT on Vercel, Netlify
+    and Pages. A safety-labelled click must never be the thing that publishes
+    unverified work without saying so."""
+    with_remote(tmp_path, repo)
+    (repo / "loose.txt").write_text("x")
+    menu = run_hook(repo).split(MENU)[1]
+    assert "deploys automatically" in menu
+
+
+def test_no_remote_says_checkpoint_not_back_up(tmp_path, repo):
+    """'Back up — make everything recoverable' about a same-disk commit is the false
+    safety this report exists to remove."""
+    (repo / "loose.txt").write_text("x")
+    menu = run_hook(repo).split(MENU)[1]
+    assert "checkpoint" in menu
+    assert "recoverable" not in menu
+
+
+def test_one_click_is_one_action_boundary_is_stated(tmp_path, repo):
+    with_remote(tmp_path, repo)
+    (repo / "loose.txt").write_text("x")
+    assert "anything further is a new question" in run_hook(repo)

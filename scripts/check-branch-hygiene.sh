@@ -92,7 +92,6 @@ shortpath() {
   printf '.../%s/%s' "$(basename "$(dirname "$p")")" "$(basename "$p")"
 }
 cutoff=$(( $(date +%s) - IDLE_DAYS * 86400 ))
-wt_det_first=""
 
 # Commits made on a detached HEAD live in no branch at all, so every check below —
 # all of which walk refs/heads — is blind to them. One `git checkout` and they are
@@ -197,7 +196,6 @@ while IFS= read -r line; do
         if [ "$dn" -gt 0 ]; then
           wt_det="${wt_det}$(row "$(shortpath "$wt_path")" "${dn} commit(s), in no branch")\n"
           wt_det_n=$((wt_det_n + 1))
-          [ -z "$wt_det_first" ] && wt_det_first="$wt_path"
           [ "$wt_det_n" -le 3 ] && wt_det_names="${wt_det_names} $(shq "$wt_path")"
         fi
       fi
@@ -341,7 +339,7 @@ report_gstack() {
   case "$out" in
     UPGRADE_AVAILABLE\ *)
       set -- $out
-      echo "  gstack $2 → $3 available.  Run /gstack-upgrade"
+      echo "  gstack $2 → $3 is available. Offer to run /gstack-upgrade and carry it out on a yes."
       echo
       ;;
   esac
@@ -449,6 +447,11 @@ fi
 if [ "${dirty_n:-0}" != "0" ]; then
   dirty_tail="$push_tail"
   [ "${current_unpushed:-0}" = "1" ] && dirty_tail=""   # the push step below covers it
+  if [ "$current" = "$default_ref" ] && [ "$has_remote" = "1" ]; then
+    # Pushing the default branch can PUBLISH (auto-deploy on push is the default on
+    # Vercel/Netlify/Pages). A backup must never be the thing that ships.
+    dirty_tail=", then push — but if this repo deploys automatically from ${default_ref}, pushing publishes: say so and use a backup branch instead"
+  fi
   if [ "$current" = "HEAD" ]; then
     step "commit the ${dirty_n} loose file(s) onto that new branch${dirty_tail}"
   else
@@ -467,9 +470,14 @@ fi
 [ "$stash_oldest" -ge "$IDLE_DAYS" ] && \
   uncovered="the ${stash_n} parked change set(s) — no push reaches a stash, so it needs a decision, see below"
 
-echo "  What can be done — offer these as choices and carry out the pick:"
+echo "  What can be done — offer these as choices and carry out the pick."
+echo "  Do only what the picked option names — anything further is a new question."
 if [ -n "$bk" ]; then
-  act "back up" "make everything above recoverable — all of:"
+  if [ "$has_remote" = "1" ]; then
+    act "back up" "make everything above recoverable — all of:"
+  else
+    act "checkpoint" "save everything above into git — still only on this machine, since no remote is configured — all of:"
+  fi
   printf "%b" "$bk"
   [ -n "$uncovered" ] && printf '             (not covered: %s)\n' "$uncovered"
 fi
@@ -495,11 +503,14 @@ if [ -n "$stale_names" ] || [ "$remote_n" != "0" ]; then
   fi
   if [ -n "$where" ]; then
     act "finish" "${target# } via /ship — run it in $(shortpath "$where"), the folder that branch is checked out in"
+  elif false; then
+    :
   else
-    hint=" — merges, opens a PR, or drops it, and says which"
-    [ "$stale_n" -gt 1 ] && [ -n "$wt_map" ] && \
-      hint=" — run it in whichever folder each branch is checked out in (git worktree list)"
-    act "finish" "${target# } via /ship${hint}"
+    if [ "$stale_n" -gt 1 ]; then
+      act "finish" "the oldest one first via /ship — one branch per run; offer the next when it lands"
+    else
+      act "finish" "${target# } — /ship runs tests and review and opens a PR; /superpowers:finishing-a-development-branch merges or discards instead. Recommend one based on the repo"
+    fi
   fi
 fi
 if [ "${merged_n:-0}" -ge 5 ] || [ "${wt_done_n:-0}" != "0" ] || [ "${wt_stale_reg:-0}" -gt 0 ]; then

@@ -67,7 +67,7 @@ DENYLIST = [
     (re.compile(r"gstack-session-continuity-v[12]\b"), "stale session-continuity marker (current: v3+, 2.36.1)"),
     (re.compile(r"gstack-plan-fidelity-v1\b"), "stale plan-fidelity marker (current: v2+, 2.36.1)"),
     (re.compile(r"gstack-routing-v1\b"), "stale track-routing marker (current: v2+, 2.36.1)"),
-    (re.compile(r"gstack-git-hygiene-v[0-7]\b"), "stale git-hygiene marker (current: v8+, 2.45.0)"),
+    (re.compile(r"gstack-git-hygiene-v[0-8]\b"), "stale git-hygiene marker (current: v9+, 2.47.0)"),
     (re.compile(r"gstack-xcode-tools-v[0-4]\b"), "stale xcode-tools marker (current: v5+, 2.45.0)"),
     (re.compile(r"Pi \(local|Pi \(hybrid"), "local-model (Pi) routing columns removed in v0.2 (2.27.0)"),
     (re.compile(r"start-mlx"), "MLX local-server routing removed in v0.2 (2.27.0)"),

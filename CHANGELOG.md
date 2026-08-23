@@ -1,5 +1,64 @@
 # Changelog
 
+## [2.47.0] - 2026-08-24
+
+A holistic three-lens review of the whole 2.42–2.46 git workflow, through one
+question: does it hold a non-git user's hand with the lowest possible cognitive load
+and a near-self-driving flow? Seventeen findings across two external lenses; the ones
+that survived adversarial synthesis:
+
+### Fixed — a safety-labelled click could publish
+- **Backing up the default branch can deploy.** Auto-deploy on push to `main` is the
+  *default* on Vercel, Netlify and GitHub Pages. The "back up" step for loose files
+  on the default branch now says so and points to a backup branch when it applies.
+- **Non-interactive preservation no longer pushes uncommitted work.** Loose files can
+  hold secrets, half-edits and generated junk nobody has looked at; a push is a
+  publish. With no one to click, the agent now commits to a local
+  `recovery/<date>` branch and does **not** push it — pushing branches a person
+  already committed remains fine. (`git-hygiene` v8 → v9.)
+- **"Back up … make everything recoverable" with no remote configured** is now
+  labelled what it is: a *checkpoint*, still on one machine.
+
+### Changed — lower load, same protection
+- **The agent-instruction preamble is gone from the report.** It was the most
+  jargon-dense thing the user saw. The menu header now carries the two lines that
+  matter: offer these as choices and carry out the pick; a click authorizes what it
+  names, nothing more.
+- **One click is one action.** "Finish 3 branches" was one menu line hiding three
+  `/ship` runs in three folders; it now offers the oldest first and the next when
+  that lands. `/ship` and `/superpowers:finishing-a-development-branch` are also no
+  longer described with each other's verbs — the menu says what each does and asks
+  the agent to recommend one from how the repo works.
+- **Landing choices in the user's language** (v9): *make this the live version* /
+  *send it for review first* / *keep it stored but not live* — with one
+  recommendation, instead of "merge / PR / keep".
+- **After a preservation succeeds, the agent offers the next decision for that same
+  work immediately** — backed-up-but-unlanded work re-reports next session, and a
+  warning that reappears after the user did the right thing teaches them that
+  responding changes nothing.
+- **The gstack-upgrade line in the clean path** was still a bare printed command;
+  it is now an offer the agent carries out.
+- **The /adapt nudge states precedence**: until adapt runs, where the project's
+  older copied rules disagree with the plugin's current hooks and skills, the
+  plugin's current behavior wins. (Found as a real conflict: one project carried
+  v1-era rules, five safety generations old.)
+- **`/verify-and-land` names every observable change** on the branch and gates on
+  all of them — one yes must never quietly ship three changes of which the user
+  looked at one.
+
+### Dropped (with reasons) and deferred
+- *Auto-materialize stashes into the backup step* — dropped: applying a stash can
+  conflict, and a conflicted auto-apply is worse than the named exclusion the menu
+  already carries. Inspection-first stands.
+- *"check it" requires an adapted project* — refuted: the skill is installed at
+  user level and invoked by exact name; CLAUDE.md routing is not on that path.
+- *One consolidated session-start dispatcher* replacing independent hooks, and
+  *per-block schema versioning with silent auto-refresh* — deferred: both are real
+  and architectural. Trigger for the first: a third hook. Trigger for the second:
+  the /adapt nudge measurably going ignored across projects.
+
+Cost: $0.046 (GLM) + one Codex pass. 223 pytest, 156 bun, lint 0 errors.
+
 ## [2.46.0] - 2026-08-24
 
 The user's question after 2.45.0: *"Am I supposed to invoke verify-and-land myself?

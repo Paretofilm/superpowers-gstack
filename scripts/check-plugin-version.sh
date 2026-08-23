@@ -45,13 +45,19 @@ project_version=$(grep -oE 'superpowers-gstack: [0-9]+\.[0-9]+\.[0-9]+' "$CLAUDE
 
 # No marker at all = old setup, needs update
 if [ -z "$project_version" ]; then
-  echo "⚠️  superpowers-gstack v$plugin_version is installed but this project has no version marker. Run /adapt to update routing and session rules."
+  echo "⚠️  superpowers-gstack v$plugin_version is installed, but this project's rules were never generated."
+  echo "   Offer to run /superpowers-gstack:adapt now and carry it out on a yes — it sets up routing and"
+  echo "   session rules, preserves everything already in CLAUDE.md, and normally asks nothing."
   echo ""
   exit 0
 fi
 
 # Compare versions
 if [ "$project_version" != "$plugin_version" ]; then
-  echo "⚠️  superpowers-gstack updated ($project_version → $plugin_version). Run /adapt to update routing and session rules."
+  echo "⚠️  superpowers-gstack updated ($project_version → $plugin_version), but this project still runs the old rules."
+  echo "   Offer to run /superpowers-gstack:adapt now and carry it out on a yes — it upgrades the rules in"
+  echo "   place, preserves everything already in CLAUDE.md, and normally asks nothing. Until then, where"
+  echo "   this project's older copied rules disagree with the plugin's current hooks and skills, the"
+  echo "   plugin's current behavior wins."
   echo ""
 fi
