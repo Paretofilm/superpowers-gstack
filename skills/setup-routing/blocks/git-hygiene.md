@@ -1,4 +1,4 @@
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v6 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v7 -->
 
 Commit at meaningful milestones — not at every file save, not only at session end.
 
@@ -52,6 +52,35 @@ review, and rots against the default branch while everything else moves.
   delete: a pushed-then-deleted branch can be restored, a never-pushed one cannot.
 - **Closing a PR does not delete its branch.** Delete it after the PR merges or
   closes, or it outlives the PR and reads as open work forever.
+
+### Landing work that lives in a worktree
+
+Worktrees are second checkouts of the same repository — `superpowers:using-git-worktrees`
+makes them, and the `Agent` tool's `isolation: "worktree"` makes one per agent and
+**leaves it on disk precisely when it produced changes**. So the isolated workspace
+that did the work is also the one nobody opens again. Five facts decide whether that
+work reaches the default branch:
+
+- **A branch lives in at most one worktree.** `git checkout <branch>` anywhere else
+  fails outright: *"already used by worktree at …"*. This is not a warning to work
+  around — it is git refusing to give one branch two states.
+- **`/ship` therefore runs *inside* that worktree**, because it operates on the
+  current branch. Started from the main checkout it stops on the error above, which
+  is a dead end for a user who cannot read it. The hook's report names the folder;
+  `git worktree list` gives it otherwise.
+- **Merging does not need a checkout.** From the default branch,
+  `git merge <branch>` lands the work with the branch still checked out elsewhere.
+  Landing is available from both sides; only *switching* is constrained.
+- **Remove the worktree before deleting its branch** — `git worktree remove <path>`,
+  then `git branch -d <branch>`. In the other order git refuses, and a tidy-up that
+  fails halfway leaves exactly the state it was meant to clear.
+- **Commits on a detached worktree HEAD belong to no branch.** Nothing that walks
+  branches can see them, and removing the folder makes them unreachable. Give them a
+  branch and push it before removing anything.
+
+A worktree is finished when its work is merged **and** the folder is gone. Leaving
+the folder is not harmless tidiness debt: its branch cannot be deleted while it
+stands, so it reports as unlanded work forever.
 
 ### When the session-start hook reports unlanded work
 

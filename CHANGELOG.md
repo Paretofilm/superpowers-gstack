@@ -1,5 +1,82 @@
 # Changelog
 
+## [2.44.0] - 2026-08-23
+
+A review traced one path end to end: work done in a git worktree → committed →
+verified → landed on the default branch → pushed → worktree removed. Worktrees are
+not exotic here — `superpowers:using-git-worktrees` creates them and the Agent tool's
+`isolation: "worktree"` leaves one on disk **exactly when the agent produced
+changes**. The isolated workspace that did the work is the one nobody opens again.
+Every stage of that path had a hole.
+
+### Fixed — commits in a detached worktree were invisible to everything
+Every check walks `refs/heads`; a detached worktree's commits are in no branch.
+Verified as **total silence** on a real commit, one `git worktree remove` from
+unreachable. Now reported, with a step that carries through to a branch *and* a push.
+
+The same check was also over-eager in the other direction: it counted `base..HEAD`,
+so detaching at an already-pushed tip claimed work was "gone if the disk dies" when
+it was on the server. Now counted as commits reachable from no ref at all. The
+obvious fix — `rev-list HEAD --not --all` — was measured and **returns 0 always**,
+because `--all` includes HEAD; it would have silenced the check completely.
+
+### Fixed — the tidy action offered deletions git refuses
+`git branch -d` refuses a branch checked out in a worktree, and keeps refusing after
+the folder is deleted by hand until `git worktree prune` runs. Both kinds were
+counted as deletable clutter, so the action failed partway and returned next session.
+Both are now excluded, and the prune is offered as its own step.
+
+Fixing that exposed an ordering bug of our own: the `[ ! -d "$path" ]` guard ran
+*before* the branch was recorded, so worktrees whose folder is gone — the only ones
+the case is about — were the ones dropped.
+
+### Fixed — "finish it with /ship" was unrunnable where it was aimed
+A branch lives in at most one worktree; `git checkout` elsewhere hard-fails with
+*"already used by worktree at …"*. `/ship` works on the current branch, so it must
+run **inside** that folder. The action now names the folder when exactly one branch
+is involved, and says to look it up when several are.
+
+### Added — worktrees that have done their job
+A worktree whose work already landed is not harmless tidiness debt: its branch cannot
+be deleted while it stands, so it reports as unfinished work forever. Now surfaced —
+gated on landed **and** not merely identical to the default branch **and** idle
+**and** clean **and** neither locked nor the main checkout, because `git worktree
+remove` refuses several of those and tidy-up is the one category where a false
+positive is pure cost. Fast-forward landings, where branch and base share an OID, are
+recovered through the worktree's own HEAD reflog.
+
+### Fixed — squash-merged branches were called unmerged forever
+A squash merge (GitHub's default) lands the content, not the commits, so the ancestry
+test says "never merged" about work already on main. Now treated as landed wherever
+ancestry is tested, so one branch can never read as unmerged in one section and
+landed in another.
+
+### Added — `git-hygiene` v6 → v7: worktrees exist
+The emitted block had **zero** mentions of worktrees while the plugin's own tooling
+created and scanned them. v7 adds *Landing work that lives in a worktree*: one branch
+lives in one worktree; `/ship` runs inside it; merging into the default branch needs
+no checkout, only *switching* is constrained; remove the worktree before deleting its
+branch; detached commits need a branch before the folder goes.
+
+### Changed
+- The worktree scan still stops at 12, but now says how many it did not check —
+  a cap that drops work silently reads as "everything is covered".
+- Branch names and paths used for decisions carry real tabs and newlines instead of
+  escapes expanded later, so a repo path containing a backslash cannot be rewritten
+  into a wrong exclusion.
+
+### Review provenance
+Self-pitfall found five, each verified by reproduction. **Codex** found three more
+P1s — fast-forward landings, the single-target `finish`, and multi-worktree backup
+coverage — plus the prunable and silent-cap cases. **GLM-5.2** independently found
+the same multi-target gap and added squash-merge blindness and the dirty-spent
+double-report. Two external fixes were **measured and rejected**: `--not --all` (a
+no-op) and re-reading grep patterns from a file (no safer than the current form,
+which was verified to split correctly). One GLM finding was refuted outright —
+`grep -vxF` does split newline-separated patterns. Cost: $0.052 + one Codex pass.
+
+211 pytest (33 in the hook file, 7 new), 156 bun, 2/2 integration, lint 0 errors.
+
 ## [2.43.0] - 2026-08-23
 
 2.42.0 made the branch-hygiene report readable. It still ended in shell commands —
