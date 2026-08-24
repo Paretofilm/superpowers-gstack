@@ -324,7 +324,7 @@ Review passed? → /qa → /cso → /ship
 | `/guard` | Full safety: `/careful` + `/freeze` combined |
 | `/browse` | Headless browser |
 | `/open-gstack-browser` | Launch GStack Browser (Chromium + sidebar) |
-| `/pair-agent` | Pair a remote AI agent with your browser |
+| `/pair-agent` | Pair a remote AI agent with your browser session; re-pair with same name + narrower `--restrict` to immediately revoke old access |
 | `/setup-browser-cookies` | Import cookies for authenticated tests |
 | `/benchmark` | Performance regression detection |
 | `/benchmark-models` | Cross-model benchmark |

@@ -1,5 +1,62 @@
 # Changelog
 
+## [2.48.0] - 2026-08-24
+
+GStack updated to v1.68.3.0 (three releases: 1.68.1.0–1.68.3.0). Security and
+reliability fixes across the browser-agent pairing system and the hook-registration
+infrastructure.
+
+### Changed — GStack browser agent pairing (v1.68.2.0–v1.68.3.0)
+
+- **Re-pairing now revokes immediately.** A narrowing re-pair (`/pair-agent --client
+  <name> --restrict ...`) revokes the agent's live session and releases its tabs the
+  instant you run it — the old full-access session can no longer linger up to 24 h.
+  Broadening or refreshing the same agent leaves its working session intact, so an
+  agent is never stranded mid-task.
+- **Revoke is now complete.** `DELETE /token/<agent>` deletes all tokens for a client
+  (session + spent + pending setup keys). A revoked agent can no longer reconnect via
+  a leftover setup key, and a second DELETE correctly returns 404.
+- **`$B tunnel revoke <name>` is now real.** The CLI subcommand previously returned
+  "Unknown command 'tunnel'"; it now revokes the agent, re-reads `/agents` to confirm
+  it is gone, and exits with a truthful code. `$B tunnel agents` lists all paired
+  agents including pending (unexchanged) setup keys.
+- **`--client root` is rejected.** `root` is the sentinel that bypasses all scope,
+  domain, rate, and tab checks; `/pair` and `/token` now return a named 400, and the
+  CLI fast-fails before reaching the daemon. A persisted `root` registry entry is
+  skipped on restore.
+- **Bare `--restrict` errors out** instead of silently granting full access; `--restrict`
+  can never grant the `control` scope.
+- Revoking an agent releases the tab ownership it held; a re-paired agent under the
+  same name can no longer inherit the previous agent's authenticated tabs.
+- `GET /agents` lists pending setup keys (marked `pending`); setup-key tokens never
+  leave the server. `DELETE /token` responses now carry a `tokens_deleted` count.
+- Default pairing scopes are documented accurately (read+write+admin+meta, not the
+  previously stated read+write sandbox); the 403-hint recommends re-pairing without
+  `--restrict` or with `--control` rather than `--admin`.
+- README Quick Reference updated: `/pair-agent` description notes the re-pair
+  tightening behavior.
+
+### Fixed — GStack hook registration / settings.json healing (v1.68.1.0)
+
+- **Phantom hook errors eliminated.** `PostToolUse:AskUserQuestion hook error … No
+  such file or directory` was caused by three compounding bugs: setup baked the
+  running workspace path into `~/.claude/settings.json`, the Conductor auto-opt-in
+  overrode the flag that prevents this, and gstack's dedupe tag gets stripped by
+  Claude Code so every new workspace appended a fresh dead entry.
+- Every `./setup` run (and `/gstack-upgrade`) now heals first:
+  `gstack-settings-hook prune-stale --repoint` removes dead entries, re-points stale
+  ones, restores stripped tags, and collapses duplicates — printing one line only when
+  it changes something.
+- Hook registration is now canonical-only: commands point at the stable
+  `~/.claude/skills/gstack` install; ephemeral workspace paths are never written into
+  global settings.
+- `settings.json` writes are now atomic and locked; a corrupt file is never clobbered
+  with `{}`; a user-tightened 0600 mode is preserved across rewrites.
+- `gstack-uninstall` now removes hooks before deleting the install root (previously
+  the cleanup silently no-op'd in exactly the case it existed for).
+- New: `gstack-config has <key>` for key-presence checks; KNOWN_HOOKS identity table
+  shared by registration and the healer so the two cannot drift apart.
+
 ## [2.47.0] - 2026-08-24
 
 A holistic three-lens review of the whole 2.42–2.46 git workflow, through one
