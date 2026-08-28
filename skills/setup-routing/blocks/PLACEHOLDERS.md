@@ -34,13 +34,24 @@ Never emit another project's or another user's team ID as a default.
 
 A simulator model that exists on this machine right now. Resolve with:
 
-    xcrun simctl list devices available | grep -m1 -oE 'iPhone [0-9]+[a-z]*( Pro( Max)?)?'
+    xcrun simctl list devices available | sed -nE 's/^ *(iPhone [0-9]+) \(.*/\1/p' | sort -uV | tail -1
 
-Prefer a plain numbered model over a Pro/Max variant — it is the one most likely
-to exist on a collaborator's machine too. If the command returns nothing (no
-simulator runtimes installed), emit `iPhone 17` and say in the adapt report that
-no simulator was found locally, so the destination is a guess until a runtime is
-installed.
+That returns the highest plain numbered model — `iPhone 17`, not `iPhone 17 Pro`. The
+plain model is the one most likely to exist on a collaborator's machine too, and the
+pattern earns that claim rather than asserting it: requiring ` (` immediately after the
+digits excludes every `Pro`, `Pro Max` and `e` variant, so the answer does not depend on
+the order `simctl` happens to list devices in. Do not simplify it back to a `grep -m1`
+over the raw list — that returns whichever variant is listed first, which on a normal
+machine is the Pro.
+
+If it returns nothing, this machine has no plain numbered iPhone. Fall back to whatever
+iPhone it does have:
+
+    xcrun simctl list devices available | sed -nE 's/^ *(iPhone [^(]*[^ (]) \(.*/\1/p' | head -1
+
+If that is empty too, no simulator runtimes are installed: emit `iPhone 17`, and say in
+the report that no simulator was found locally so the destination is a guess until a
+runtime is installed.
 
 Never hardcode a constant here. Xcode ships a rolling set of simulators and drops
 old ones: on the machine that motivated this placeholder (2026-08-27) no iPhone 16
