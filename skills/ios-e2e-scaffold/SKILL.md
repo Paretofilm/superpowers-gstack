@@ -363,19 +363,18 @@ SCHEME="<APP>"
 UITEST_TARGET="<TARGET_DIR>"   # <App>UITests, or <App>iOSUITests on multiplatform
 RESULT_BUNDLE="$(mktemp -d)/uitests.xcresult"
 
-# Pick a simulator: prefer an EXACT "iPhone 15"; else the first available iPhone by
-# UDID (robust to naming — avoids the "iPhone 15" substring matching "iPhone 15 Pro",
-# and avoids the digit-only grep missing "iPhone SE"). Targeting by id= is exact.
-DEST='platform=iOS Simulator,name=iPhone 15'
-if ! xcrun simctl list devices available | grep -q 'iPhone 15 ('; then
-  UDID="$(xcrun simctl list devices available | grep 'iPhone' | grep -oiE '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' | head -1)"
-  if [ -n "$UDID" ]; then
-    DEST="platform=iOS Simulator,id=${UDID}"
-    echo "(iPhone 15 unavailable — using first available iPhone simulator ${UDID})"
-  else
-    echo "(no iPhone simulator available — xcodebuild will report a destination error)"
-  fi
+# Pick a simulator by UDID. Never hardcode a model name: Xcode ships a rolling set
+# and drops old ones, and a stale name fails as "Unable to find a device matching
+# the provided destination specifier" — which reads as a broken project rather than
+# a dead device name. Targeting by id= is also exact, so it cannot match "iPhone 15
+# Pro" when you meant "iPhone 15", and it does not miss "iPhone SE".
+UDID="$(xcrun simctl list devices available | grep 'iPhone' | grep -oiE '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' | head -1)"
+if [ -z "$UDID" ]; then
+  echo "No iPhone simulator available. Install a runtime: Xcode > Settings > Components." >&2
+  exit 2
 fi
+DEST="platform=iOS Simulator,id=${UDID}"
+echo "(using iPhone simulator ${UDID})"
 
 # Run the tests. Capture xcodebuild's OWN exit status via PIPESTATUS — piping into
 # `tail` would otherwise mask a non-zero status (tail returns 0), making a failing
