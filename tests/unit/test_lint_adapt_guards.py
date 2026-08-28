@@ -70,3 +70,24 @@ def test_header_comment_does_not_nest_a_comment_terminator():
     start = ADAPT_SKILL.index("<!-- Sections whose heading carries")
     body = ADAPT_SKILL[start + 4 : ADAPT_SKILL.index("-->", start)]
     assert "<!--" not in body
+
+
+def test_growth_check_exists_and_states_a_threshold():
+    assert "**Growth check" in ADAPT_SKILL
+    assert "1.5×" in ADAPT_SKILL
+
+
+def test_growth_check_precedes_every_per_section_rule():
+    """Stated once, above the rules it governs — a gate below its cases is a gate
+    the reader meets after deciding."""
+    gate = ADAPT_SKILL.index("**Growth check")
+    first_rule = ADAPT_SKILL.index("**Insert or upgrade the Autonomy")
+    assert gate < first_rule
+
+
+def test_growth_check_has_a_non_interactive_branch():
+    """/adapt also runs under --print, in CI, and as a subagent. A hard stop
+    there is a hang, not a safeguard."""
+    gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check"):]
+    gate = gate[: gate.index("**Insert or upgrade the Autonomy")]
+    assert "Non-interactive runs" in gate

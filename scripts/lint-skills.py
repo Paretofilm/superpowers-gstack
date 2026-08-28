@@ -129,6 +129,8 @@ ADAPT_GUARDS = [
      "the sentinel that makes an empty Removed block mean 'checked', not 'skipped'"),
     ("are plugin-managed: /adapt replaces each one",
      "the CLAUDE.md header telling the user which sections are volatile"),
+    ("**Growth check",
+     "the size gate that stops a silent replace of a section grown past its block"),
 ]
 
 errors: list[str] = []
