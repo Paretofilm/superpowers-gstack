@@ -47,8 +47,11 @@ notes below describe what ships, not what was drafted.
   Apple development tools, Companion skills); unmarked `## Model Routing` was deleted
   outright. A shared **Attribution check** generalises what `Code reuse discipline`'s
   case 3 and `Session Continuity`'s `handoff.md` test already did: each rule names a
-  sentinel only a past emitter would have written, and an absent sentinel means preserve
-  the section and add the block beside it. The emitted header no longer promises
+  sentinel string, and an absent sentinel means preserve the section and add the block
+  beside it. The sentinels are not all equally strong — `Multi-lens review`'s
+  `pitfall-verification` and `Native Apple`'s `XcodeBuildMCP` are ordinary domain terms a
+  project could write itself, so those two trade precision for keeping the legacy upgrade
+  path working. The other four are emitter-specific. The emitted header no longer promises
   `/adapt` never touches unmarked sections — it names the reserved headings as reserved
   and gives the escape (prefix your own with the project's name).
 - **The snapshot was unmanaged, unannounced and self-destroying.** It is now rotated
@@ -90,9 +93,10 @@ notes below describe what ships, not what was drafted.
   snapshot instruction left it green because the path string survived elsewhere. Each of
   those four mutations is now a unit test that excises the guard in memory and asserts
   the lint goes red.
-- **`tests/integration/test_adapt_growth_gate.sh`:** asserts against the file, not the
-  report — the regression to catch is a run that claims nothing was removed while the
-  diff disagrees. Getting there took fixing the harness three times: its first version
+- **`tests/integration/test_adapt_growth_gate.sh`:** its load-bearing assertions read the
+  resulting file, not the report — the regression to catch is a run that claims nothing was
+  removed while the diff disagrees. (Two further assertions do read the report, to check it
+  names the deferral; they are corroboration, not the gate.) Getting there took fixing the harness three times: its first version
   reported PASS while proving nothing (`/adapt` stopped at its own confirmation gate and
   the assertions passed against an untouched fixture); its fixture was 0.22× its block
   against the 1.5× threshold, so the check it exists to exercise could never fire; and

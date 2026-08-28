@@ -365,7 +365,10 @@ change across all nine blocks and both generators. It is deferred until the firs
 report of a section lost with both triggers quiet, or the next time a block shrinks
 between releases.
 
-**Attribution check — applies to case 3 of every marker-managed section below.**
+**Attribution check — applies to case 3 of the six sections below that replace on a
+missing marker.** Three do not need it: `Code reuse discipline` already preserves,
+`Session Continuity` has its own `handoff.md` content test, and `Track-aware routing`
+carries a heading this plugin coined, which no project would write by accident.
 Case 3 is "heading present, marker absent", and it replaces on the theory that a
 markerless copy must be pre-marker plugin legacy. That theory is a guess, and it is
 wrong exactly where it costs most: most of these headings are ordinary English that a

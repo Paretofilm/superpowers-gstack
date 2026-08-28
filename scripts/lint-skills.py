@@ -152,6 +152,9 @@ ADAPT_GUARDS = [
      "the size gate itself, not one of its cross-references"),
     ("Step 5", "**Attribution check — applies to case 3",
      "the rule that refuses to replace a markerless section it cannot attribute"),
+    ("Step 5", "sed -n '<start>,<end>p' CLAUDE.md",
+     "the gate reads the LIVE file — pointing it at the snapshot applies live line "
+     "numbers to a shifted file, and truncation only lowers the ratio, so it fails OPEN"),
     ("Step 6", "3. **Diff against the snapshot and classify every removed line.**",
      "the MANDATORY diff — the optional review's re-check runs only if the user says yes"),
     ("Step 6", "diff .gstack/CLAUDE.md.pre-adapt CLAUDE.md",
