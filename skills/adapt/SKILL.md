@@ -327,8 +327,9 @@ When the gate fires, do not replace the section silently:
 1. Collect the at-risk lines from the diff you just ran: the `<` lines that are not
    simply a reworded version of block prose. That is the content at risk.
 2. Ask the user, naming the section and the number of lines at risk, and offer two
-   outcomes: **move that content into a new unmarked H2 section** (recommended —
-   `/adapt` never touches unmarked sections, so it survives every future upgrade), or
+   outcomes: **move that content into a new unmarked H2 section** (recommended — give
+   it a heading starting with the project's own name, so it can never collide with a
+   heading the plugin manages, and it survives every future upgrade), or
    **leave this section at its old version** and skip its upgrade.
 3. Do not proceed past this gate without an answer. This is a category-3 stop under
    the Autonomy rules — genuinely ambiguous, with materially different consequences —
