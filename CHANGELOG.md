@@ -8,51 +8,108 @@ project replaced a 198-line section with its 73-line block; the 125-line delta w
 recovered only because the operator happened to snapshot the file first. Field notes:
 `skills/adapt/IMPROVEMENTS.md`.
 
+A four-lens review of the first cut found that several of the new guards repeated the
+defect they exist to close — a gate that read the wrong file and so failed open, a lint
+that pinned one of the four guards it claimed to, and a promise in the emitted header
+that was false for every heading the plugin manages. Those are fixed here too; the
+notes below describe what ships, not what was drafted.
+
 ### Fixed — the verification that could not be performed
 - **Step 6 asked for a diff against a file Step 5 had already overwritten**, "mentally".
   An unperformable verification is always answered optimistically. Step 5 now snapshots
   CLAUDE.md to `.gstack/CLAUDE.md.pre-adapt` before its first write, and Step 6 diffs
-  against it and classifies every removed line as plugin prose or project content.
+  against it and classifies every removed line as plugin prose or project content —
+  listing any hunk it cannot attribute, since a diff against the *new* block cannot
+  separate project content from reworded old plugin prose and an over-inclusive list is
+  recoverable where a missing one is not.
 - **The report listed survivors, which cannot reveal a casualty.** A destroyed section
   appeared under "Changes made" as one accurate, uninformative version-bump line. A
   mandatory **Removed (not plugin prose)** block now carries the diff's verdict, with an
   explicit sentence for the empty case so a missing block cannot pass as a clean one.
+  Deferrals get a separate **Deferred (grown past its block, not upgraded)** block: they
+  lost nothing, and filing them under a heading that says content was removed
+  contradicted the verify step that produced the list.
 - **A marked section grown past its block is mostly user-authored, whatever the marker
-  says.** A growth check above the nine per-section rules stops at ~1.5× and asks;
-  non-interactive runs take the preserving branch and report the section as deferred.
+  says.** A growth check above the nine per-section rules stops and asks; non-interactive
+  runs take the preserving branch and report the section as deferred. It fires on the
+  union of two triggers, because a ratio alone scales with the block — 1.5× of the
+  162-line `git-hygiene.md` is 81 losable lines, of the 23-line `companion-skills.md`
+  just 11 — so a flat second trigger (>~20 section lines absent from the block) covers
+  the small-block case. The gate reads the section from the **live** CLAUDE.md: it was
+  drafted against the snapshot, but its line numbers come from the live file, and Step 5
+  has already written above the section by then, so the window slid off and truncated.
+  Truncation only shortens, so the ratio only fell: 90 lines inserted above turned a true
+  2.51× into 1.40×, a silent replace. The gate only worked when disobeyed.
+- **`/adapt` replaced markerless sections it could not attribute.** Case 3 — heading
+  present, marker absent — assumed a markerless copy must be pre-marker plugin legacy,
+  and six of those headings are ordinary English a project would write for itself
+  (Autonomy…, Git hygiene…, Multi-lens review, Keep the plan true to the code, Native
+  Apple development tools, Companion skills); unmarked `## Model Routing` was deleted
+  outright. A shared **Attribution check** generalises what `Code reuse discipline`'s
+  case 3 and `Session Continuity`'s `handoff.md` test already did: each rule names a
+  sentinel only a past emitter would have written, and an absent sentinel means preserve
+  the section and add the block beside it. The emitted header no longer promises
+  `/adapt` never touches unmarked sections — it names the reserved headings as reserved
+  and gives the escape (prefix your own with the project's name).
+- **The snapshot was unmanaged, unannounced and self-destroying.** It is now rotated
+  aside with a timestamp instead of overwritten (a second `/adapt` after a bad first one
+  is the recovery case, and overwriting destroyed the only original), excluded through
+  `.git/info/exclude` so a stale copy of an instruction file is not committed and read as
+  current, and named in the report with its restore command.
 
 ### Fixed — an emitted command that could not work
 - **`xcode-tools` hardcoded `name=iPhone 16`.** Xcode drops old simulators; the failure
   reads as a broken project, not a stale device name. Now `{{IOS_SIMULATOR}}`, resolved
-  from `xcrun simctl` at emit time (marker `v6`). The resolution rule went through two
-  passes: the first anchored on the model name alone and a `grep -m1` returned
-  `iPhone 17 Pro`, contradicting the plain-numbered-model promise directly below it —
-  the same defect class the placeholder exists to fix. It now anchors on ` (`
-  immediately after the digits, which Pro/Max/e variants cannot match. `ios-e2e-scaffold`'s
-  runner resolves by UDID and names no model; its exit-code contract (`0` = tests
-  passed, `1` = tests failed, `2` = setup error) is now documented in the emitted
-  script.
+  from `xcrun simctl` at emit time (marker `v6`). The resolution rule took three passes,
+  each a variant of the same defect — prose that was never executed. The first anchored
+  on the model name alone and a `grep -m1` returned `iPhone 17 Pro`, contradicting the
+  plain-numbered-model promise directly below it. The second fixed that but left the
+  fallback anchored on the first `(` in the line, which truncates `iPhone SE
+  (3rd generation)` — the device's exact name — to a nonexistent `iPhone SE`. It now
+  anchors on the parenthesis holding the UDID, verified against live `simctl` output and
+  pinned by a unit test that extracts the documented command and runs it.
+- **`ios-e2e-scaffold` documented an exit code it does not return.** The runner ends
+  `exit "$TEST_STATUS"` from `xcodebuild test`, which answers 65 on a failed test run,
+  while the header said `1 = tests failed` — a caller testing `-eq 1` would read every
+  failure as a pass. Documented as non-zero (typically 65), with the pass-through marked
+  deliberate: xcodebuild's code distinguishes a test failure from a build failure.
+  The runner also resolves the simulator by UDID and names no model.
 
 ### Added — guards so this cannot regress quietly
-- **Lint E12:** every `{{TOKEN}}` in a shared block must have a resolution rule in
-  `blocks/PLACEHOLDERS.md`, or the generators emit it verbatim into a project.
-- **Lint E13:** `/adapt` must carry all four content-loss guards. They are prose, so
-  nothing but a lint keeps a reword from dropping them.
+- **Lint E12:** every `{{TOKEN}}` in a shared block must have a **non-empty** resolution
+  rule in `blocks/PLACEHOLDERS.md`. Heading membership was the original check, so
+  ``## `{{TOKEN}}` `` with nothing under it documented nothing and still passed — the
+  generator has as little to apply as if the entry did not exist.
+- **Lint E13:** `/adapt` must carry its content-loss guards — snapshot, real diff,
+  mandatory Removed block, growth check, attribution check, Deferred label — **each
+  inside the `### Step N` region that owns it**, and in the right order within it. The
+  first cut used bare substring needles and pinned one guard of four: deleting the whole
+  growth gate left the lint green because `"**Growth check"` also matched its own 17
+  cross-references; deleting Step 6's mandatory diff item left the lint green *and* the
+  unit suite passing, and that is the guard feeding the Removed block; deleting the
+  snapshot instruction left it green because the path string survived elsewhere. Each of
+  those four mutations is now a unit test that excises the guard in memory and asserts
+  the lint goes red.
 - **`tests/integration/test_adapt_growth_gate.sh`:** asserts against the file, not the
   report — the regression to catch is a run that claims nothing was removed while the
-  diff disagrees. Getting there took fixing the harness itself twice: its first version
-  reported PASS while proving nothing (`/adapt` stopped at its own confirmation gate
-  and the assertions passed against an untouched fixture), and its fixture was 0.22×
-  its block against the 1.5× growth threshold, so the check it exists to exercise could
-  never fire. Both are now preconditions that exit 2 (inconclusive) rather than silent
-  passes, and the fixture is 196 lines against a 78-line block (2.51×) — a test that
-  cannot fail correctly is worse than no test.
+  diff disagrees. Getting there took fixing the harness three times: its first version
+  reported PASS while proving nothing (`/adapt` stopped at its own confirmation gate and
+  the assertions passed against an untouched fixture); its fixture was 0.22× its block
+  against the 1.5× threshold, so the check it exists to exercise could never fire; and
+  its prompt told `/adapt` to "continue without stopping to ask", one reading away from
+  overriding the gate under test. The first two are now preconditions that exit 2
+  (inconclusive) rather than silent passes, the fixture is 196 lines against a 78-line
+  block (2.51×), and the prompt states the condition (nobody can answer) instead of the
+  desired action. A test that cannot fail correctly is worse than no test.
 
 ### Told the user where knowledge belongs
 - Adapted CLAUDE.md files now carry a second line in the existing version-comment
-  header, rewritten on every run, naming marked sections as plugin-managed and
-  unmarked H2 sections as the place `/adapt` never touches. The report repeats it,
-  but only when something was actually removed.
+  header, rewritten on every run, naming marked sections as plugin-managed, the managed
+  headings as reserved even when unmarked, and a project-name prefix as the way to stay
+  clear of both. An existing one-line header from 2.47.0 is replaced in place rather
+  than left standing beside the new pair. The report repeats the guidance whenever a
+  marked section was replaced — not only after content has already been lost, which was
+  too late to be advice.
 
 ## [2.47.0] - 2026-08-24
 
