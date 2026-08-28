@@ -261,12 +261,25 @@ replacing any section, compare its length against the block's:
 
 ```bash
 TMP="$(mktemp)"
-sed -n '<start>,<end>p' .gstack/CLAUDE.md.pre-adapt > "$TMP"
+sed -n '<start>,<end>p' CLAUDE.md > "$TMP"
 wc -l "$TMP" <path-to-block>.md
 ```
 
 You already know `<start>` and `<end>` — finding them is how you perform the REPLACE
-at all. If the existing section is more than **1.5×** the block's line count, it has
+at all. **Read the section from `CLAUDE.md`, not from the snapshot, and do not
+"helpfully" repoint this at `.gstack/CLAUDE.md.pre-adapt`.** `<start>` and `<end>` are
+line numbers in the LIVE file, and by the time this gate runs Step 5 has already
+written above the section — the new header line, the `## Skill routing` insert, the
+`## Model Routing` replace. Those same numbers land lower in the snapshot, so the
+window slides off the section and past EOF returns nothing. Truncation only ever
+shortens, so the ratio only ever falls: the gate goes quiet exactly when it should
+fire. Measured on this branch's own fixture (196-line section, 78-line block, true
+2.51×): 40 lines inserted above → 2.04× (fires), 90 → 1.40× (silent replace), 200 →
+0.00× (silent replace). The section is still unmodified in `CLAUDE.md` at gate time
+and the line numbers came from that same file, so reading it there is the only
+self-consistent choice. The snapshot's job is Step 6's whole-file diff, not this.
+
+If the existing section is more than **1.5×** the block's line count, it has
 accumulated project-authored content that the replacement will destroy. Do not
 replace it silently:
 
