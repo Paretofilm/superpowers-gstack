@@ -1,5 +1,59 @@
 # Changelog
 
+## [2.48.0] - 2026-08-28
+
+`/adapt` could complete a re-adaptation correctly on every marker and still destroy a
+project's accumulated knowledge without saying so. A 2.9.0 → 2.47.0 run on a real
+project replaced a 198-line section with its 73-line block; the 125-line delta was
+recovered only because the operator happened to snapshot the file first. Field notes:
+`skills/adapt/IMPROVEMENTS.md`.
+
+### Fixed — the verification that could not be performed
+- **Step 6 asked for a diff against a file Step 5 had already overwritten**, "mentally".
+  An unperformable verification is always answered optimistically. Step 5 now snapshots
+  CLAUDE.md to `.gstack/CLAUDE.md.pre-adapt` before its first write, and Step 6 diffs
+  against it and classifies every removed line as plugin prose or project content.
+- **The report listed survivors, which cannot reveal a casualty.** A destroyed section
+  appeared under "Changes made" as one accurate, uninformative version-bump line. A
+  mandatory **Removed (not plugin prose)** block now carries the diff's verdict, with an
+  explicit sentence for the empty case so a missing block cannot pass as a clean one.
+- **A marked section grown past its block is mostly user-authored, whatever the marker
+  says.** A growth check above the nine per-section rules stops at ~1.5× and asks;
+  non-interactive runs take the preserving branch and report the section as deferred.
+
+### Fixed — an emitted command that could not work
+- **`xcode-tools` hardcoded `name=iPhone 16`.** Xcode drops old simulators; the failure
+  reads as a broken project, not a stale device name. Now `{{IOS_SIMULATOR}}`, resolved
+  from `xcrun simctl` at emit time (marker `v6`). The resolution rule went through two
+  passes: the first anchored on the model name alone and a `grep -m1` returned
+  `iPhone 17 Pro`, contradicting the plain-numbered-model promise directly below it —
+  the same defect class the placeholder exists to fix. It now anchors on ` (`
+  immediately after the digits, which Pro/Max/e variants cannot match. `ios-e2e-scaffold`'s
+  runner resolves by UDID and names no model; its exit-code contract (`0` = tests
+  passed, `1` = tests failed, `2` = setup error) is now documented in the emitted
+  script.
+
+### Added — guards so this cannot regress quietly
+- **Lint E12:** every `{{TOKEN}}` in a shared block must have a resolution rule in
+  `blocks/PLACEHOLDERS.md`, or the generators emit it verbatim into a project.
+- **Lint E13:** `/adapt` must carry all four content-loss guards. They are prose, so
+  nothing but a lint keeps a reword from dropping them.
+- **`tests/integration/test_adapt_growth_gate.sh`:** asserts against the file, not the
+  report — the regression to catch is a run that claims nothing was removed while the
+  diff disagrees. Getting there took fixing the harness itself twice: its first version
+  reported PASS while proving nothing (`/adapt` stopped at its own confirmation gate
+  and the assertions passed against an untouched fixture), and its fixture was 0.22×
+  its block against the 1.5× growth threshold, so the check it exists to exercise could
+  never fire. Both are now preconditions that exit 2 (inconclusive) rather than silent
+  passes, and the fixture is 196 lines against a 78-line block (2.51×) — a test that
+  cannot fail correctly is worse than no test.
+
+### Told the user where knowledge belongs
+- Adapted CLAUDE.md files now carry a second line in the existing version-comment
+  header, rewritten on every run, naming marked sections as plugin-managed and
+  unmarked H2 sections as the place `/adapt` never touches. The report repeats it,
+  but only when something was actually removed.
+
 ## [2.47.0] - 2026-08-24
 
 A holistic three-lens review of the whole 2.42–2.46 git workflow, through one
