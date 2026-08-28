@@ -158,6 +158,8 @@ ADAPT_GUARDS = [
      "the only report block that can reveal a casualty — survivors lists cannot"),
     ("Step 6", "Nothing project-authored was removed.",
      "the sentinel that makes an empty Removed block mean 'checked', not 'skipped'"),
+    ("Step 6", "> **Deferred (grown past its block, not upgraded):**",
+     "the label that keeps a deferral (nothing lost) out of the block that means loss"),
 ]
 
 # E13 ordering: a guard in the right step but the wrong place is still broken.

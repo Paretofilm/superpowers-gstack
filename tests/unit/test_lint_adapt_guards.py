@@ -156,6 +156,36 @@ def test_the_empty_case_has_an_explicit_sentinel():
     assert "Nothing project-authored was removed." in ADAPT_SKILL
 
 
+def test_a_deferral_is_not_reported_as_a_removal():
+    """The growth check's non-interactive branch used to file a deferred section
+    under 'Removed (not plugin prose)', which the report template defines as
+    content actually lost. A deferral lost nothing; it needs its own label."""
+    assert "**Deferred (grown past its block, not upgraded):**" in ADAPT_SKILL
+    gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check — applies"):]
+    gate = gate[: gate.index("**Attribution check — applies")]
+    rule4 = gate[gate.index("4. **Non-interactive runs**"):]
+    assert "**Deferred (grown past its block, not upgraded):**" in rule4
+    assert "**Removed (not plugin prose):**" not in rule4
+
+
+def test_the_snapshot_is_rotated_excluded_and_named_to_the_user():
+    """A restore point that the next run overwrites, that git commits, and that
+    nobody is told about fails in three separate ways."""
+    step5 = lint.step_regions(ADAPT_SKILL)["Step 5"]
+    assert 'mv .gstack/CLAUDE.md.pre-adapt ".gstack/CLAUDE.md.pre-adapt.$(date' in step5
+    assert "info/exclude" in step5
+    assert "cp .gstack/CLAUDE.md.pre-adapt CLAUDE.md" in lint.step_regions(ADAPT_SKILL)["Step 6"]
+
+
+def test_the_growth_gate_has_a_second_trigger_for_small_blocks():
+    """A ratio scales with the block: 1.5x of the 162-line git-hygiene block is 81
+    losable lines, of the 23-line companion-skills block 11."""
+    gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check — applies"):]
+    gate = gate[: gate.index("**Attribution check — applies")]
+    assert "**Ratio**" in gate and "**Volume**" in gate
+    assert "either" in gate
+
+
 def test_header_warns_which_sections_are_plugin_owned():
     assert "are plugin-managed: /adapt replaces each one" in ADAPT_SKILL
 

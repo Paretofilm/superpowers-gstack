@@ -218,7 +218,19 @@ Apply the changes identified in Step 4. Follow these rules strictly:
 rule in this step:
 
 ```bash
-mkdir -p .gstack && cp CLAUDE.md .gstack/CLAUDE.md.pre-adapt
+mkdir -p .gstack
+# Rotate, never overwrite: the second /adapt after a bad first one is exactly the
+# recovery case, and overwriting would destroy the only copy of the original.
+[ -f .gstack/CLAUDE.md.pre-adapt ] && \
+  mv .gstack/CLAUDE.md.pre-adapt ".gstack/CLAUDE.md.pre-adapt.$(date +%Y%m%d-%H%M%S)"
+cp CLAUDE.md .gstack/CLAUDE.md.pre-adapt
+# Keep the snapshots out of git WITHOUT touching the user's tracked .gitignore.
+EXCL="$(git rev-parse --git-path info/exclude 2>/dev/null)"
+if [ -n "$EXCL" ]; then
+  mkdir -p "$(dirname "$EXCL")"
+  grep -qxF '.gstack/CLAUDE.md.pre-adapt*' "$EXCL" 2>/dev/null \
+    || echo '.gstack/CLAUDE.md.pre-adapt*' >> "$EXCL"
+fi
 ```
 
 `.gstack/` already holds `track`, so this introduces no new location. This snapshot is
@@ -226,6 +238,16 @@ what Step 6 diffs against and what the user restores from if the run goes wrong.
 NOT substitute `git diff` for it: the project may have uncommitted CLAUDE.md changes,
 and CLAUDE.md may not be tracked at all. If CLAUDE.md does not exist yet, skip the
 copy — there is no prior content to lose — and say so in the Step 6 report.
+
+Three details, each of which was missing and each of which defeats the snapshot on its
+own. **Rotate** rather than overwrite: a user who runs `/adapt` again after a bad run
+would otherwise replace the good original with the bad result — the one scenario the
+snapshot exists for. **Exclude** it via `.git/info/exclude` (local, so it does not edit
+a tracked `.gitignore` the user owns): a committed stale copy of an instruction file is
+read by future agents as if it were current. **Name it in the report** (Step 6), because
+a restore point nobody is told about is not a restore point. If `git rev-parse` fails
+this is not a git repository — skip the exclude silently and carry on; the snapshot
+still works.
 
 **CLAUDE.md updates:**
 - Read the plugin version from `.claude-plugin/plugin.json` in the superpowers-gstack plugin directory (check `~/.claude/plugins/cache/*/superpowers-gstack/*/plugin.json`, use the latest). Add or update the **two-line** HTML header at the very top of CLAUDE.md — rewrite both lines every run, so the warning stays current without needing a marker of its own:
@@ -236,6 +258,8 @@ copy — there is no prior content to lose — and say so in the Step 6 report.
   ```
 
   Keep the second line as a single HTML comment with no nested `<!--` inside it: HTML comments do not nest, so an inner opener followed by the first `-->` would end the comment early and render the remainder as visible text.
+
+  If the file already carries the **one-line** header that 2.47.0 and earlier wrote (`<!-- superpowers-gstack: X.Y.Z -->` alone), replace that line in place with both lines. Do not leave the old line standing above or below the new pair — two version comments in one file is one of them lying, and the reader has no way to tell which.
 - If CLAUDE.md exists: READ it first, then INSERT or UPDATE the `## Skill routing` section
 - NEVER delete or rewrite existing sections (conventions, tech stack, project-specific rules)
 - If a `## Skill routing` section already exists: **UPDATE its plugin-managed subsections per the per-section case-logic below (cases 1-4 for each marker-section).** Do NOT wholesale-replace the entire Skill routing block — that would destroy any user-authored subsections nested inside (e.g. a hand-written `### Code reuse discipline` markerless heading). The per-section logic handles every plugin-managed subsection individually; anything inside Skill routing that the per-section logic does NOT match must be PRESERVED verbatim, including its position and surrounding whitespace.
@@ -279,12 +303,29 @@ fire. Measured on this branch's own fixture (196-line section, 78-line block, tr
 and the line numbers came from that same file, so reading it there is the only
 self-consistent choice. The snapshot's job is Step 6's whole-file diff, not this.
 
-If the existing section is more than **1.5×** the block's line count, it has
-accumulated project-authored content that the replacement will destroy. Do not
-replace it silently:
+Then run the diff — always, before deciding, because both triggers read it:
 
-1. Run `diff "$TMP" <path-to-block>.md` and collect the `<` lines that are not simply
-   a reworded version of block prose. That is the content at risk.
+```bash
+diff "$TMP" <path-to-block>.md
+```
+
+The gate fires when **either** of these holds:
+
+- **Ratio** — the section is more than **1.5×** the block's line count.
+- **Volume** — more than ~20 of the section's lines carry material the block does not
+  have in any form. Not reworded block prose, which a version bump produces by the
+  dozen; lines whose subject matter is absent from the block entirely.
+
+Neither alone is enough, which is why there are two. Ratio scales with the block, so
+one threshold buys wildly different exposure: 1.5× of the 162-line `git-hygiene.md` is
+81 losable lines, 1.5× of the 23-line `companion-skills.md` is 11 — a 7× difference
+from the same number. Volume is flat, so it catches the small-block case the ratio
+sleeps through.
+
+When the gate fires, do not replace the section silently:
+
+1. Collect the at-risk lines from the diff you just ran: the `<` lines that are not
+   simply a reworded version of block prose. That is the content at risk.
 2. Ask the user, naming the section and the number of lines at risk, and offer two
    outcomes: **move that content into a new unmarked H2 section** (recommended —
    `/adapt` never touches unmarked sections, so it survives every future upgrade), or
@@ -293,18 +334,35 @@ replace it silently:
    the Autonomy rules — genuinely ambiguous, with materially different consequences —
    and the one place in `/adapt` where silent correctness is worse than asking. A
    wrong guess here is unrecoverable for the user; the cost of asking is one question.
-4. **Non-interactive runs** (`--print`, CI, a subagent — nobody can answer): take the
-   preserving branch without asking. Leave the section at its old version, do not
-   replace it, and list it in the report's **Removed (not plugin prose):** block as
-   *deferred, not applied*, naming the section. A stale section is recoverable; a
-   deleted one is not.
+4. **Non-interactive runs** — nobody is there to answer. Take the preserving branch
+   without asking: leave the section at its old version, do not replace it, and list
+   it in the report's **Deferred (grown past its block, not upgraded):** block, naming
+   the section. A stale section is recoverable; a deleted one is not.
 
-The threshold is a heuristic, not a measurement. A section at 1.1× is usually a user
-fixing a typo in plugin prose; the run that motivated this gate was at 2.7× — a
+   Be precise about when this applies. Two `STOP HERE` gates sit above Step 5 — the
+   Step 2 stack confirmation and the Step 4 "shall I proceed" — so a bare
+   `claude --print "/adapt"` never reaches this gate at all; it stops at the first one.
+   Rule 4 is for a run that got *past* those gates and then meets a question it cannot
+   put to anyone: a prompt that pre-answered them, an orchestrator running `/adapt` as
+   one step of something larger, a subagent with no channel back to the user. Do not
+   read it as "`--print` means proceed" — assuming that reachability is exactly what
+   made this branch's first test harness report PASS while proving nothing.
+
+Both triggers are heuristics, and neither establishes authorship — a line count is not
+a byline. They are cheap proxies for "someone has been writing in here", chosen because
+they are computable from what the gate already reads. A section at 1.1× is usually a
+user fixing a typo in plugin prose; the run that motivated this gate was at 2.7× — a
 73-line block against a 198-line section, and the 125-line delta held an
 `-allowProvisioningUpdates` discovery, three lessons about running on a physical
 iPhone, and a note on a tool's current status. None of it was recoverable from the
 plugin.
+
+The real test is a three-way compare against the block the section was *originally*
+emitted from, which separates project content from plugin drift instead of guessing.
+That needs the emitted block's length or hash recorded in the marker itself — a format
+change across all nine blocks and both generators. It is deferred until the first
+report of a section lost with both triggers quiet, or the next time a block shrinks
+between releases.
 
 **Attribution check — applies to case 3 of every marker-managed section below.**
 Case 3 is "heading present, marker absent", and it replaces on the theory that a
@@ -476,8 +534,13 @@ After applying changes, verify:
    Read the `<` side. Every removed line is either **(a)** plugin prose replaced by a
    newer version of the same block — expected — or **(b)** project-authored content,
    which is a loss. Put every hunk in one of those two buckets; the (b) list is what
-   the report's **Removed** block prints. Do not summarise the diff without reading
-   it, and do not answer this item from memory: the file you would be recalling was
+   the report's **Removed** block prints. **When a hunk cannot be attributed to
+   either bucket — and it often cannot, since a diff against the NEW block cannot
+   tell project content from reworded old plugin prose — list it.** An over-inclusive
+   Removed block costs the user a glance at a line that turns out to be plugin prose;
+   a missing one costs them the content. The block's job is to put candidates in front
+   of a human, not to be an oracle. Do not summarise the diff without reading it, and
+   do not answer this item from memory: the file you would be recalling was
    overwritten earlier in Step 5. If the snapshot is missing because CLAUDE.md did
    not exist before this run, say that instead — do not skip the item silently.
 
@@ -495,6 +558,17 @@ Report to the user:
 >    unmarked section, or lost]
 > - If nothing project-authored was removed, write exactly:
 >   `Nothing project-authored was removed.`
+>
+> **Deferred (grown past its block, not upgraded):**
+> - [one line per section the Growth check or the Attribution check left alone:
+>    the section name, its line count against the block's, and the marker it is
+>    still on. Nothing was lost here — the upgrade simply was not applied]
+> - Omit this block entirely when nothing was deferred.
+>
+> **Snapshot:** `.gstack/CLAUDE.md.pre-adapt` holds CLAUDE.md exactly as it was
+> before this run. Restore the whole file with
+> `cp .gstack/CLAUDE.md.pre-adapt CLAUDE.md`. [If an earlier snapshot was rotated
+> aside at the start of Step 5, name that path too.]
 
 **Never omit the Removed block.** An absent block reads as "not checked" — which is
 the state the block exists to prevent — so it is the one part of this report that
@@ -502,7 +576,13 @@ must appear even when it is empty. A line under **Changes made** such as
 `Native Apple development tools: v3 → v5` is true and says nothing about the 125
 project-authored lines that upgrade destroyed; only this block can.
 
-When the Removed block is non-empty, add:
+**Deferred is not Removed.** A deferred section lost nothing — that is the whole point
+of deferring it — so filing one under a heading that says content was removed
+contradicts the verify step that produced the list, and trains the user to discount the
+block that matters. Keep the two apart even when only one of them has entries.
+
+Whenever a marker-managed section was replaced at all — not only when the Removed block
+has entries — add:
 
 > **Where project knowledge belongs.** A heading carrying a `gstack-<name>-vN` marker
 > is plugin-owned: `/adapt` replaces the whole section on every upgrade. Pasting
