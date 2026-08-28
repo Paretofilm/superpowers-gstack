@@ -214,6 +214,19 @@ Present the gap analysis to the user:
 
 Apply the changes identified in Step 4. Follow these rules strictly:
 
+**Snapshot before the first write.** Before modifying CLAUDE.md — before any other
+rule in this step:
+
+```bash
+mkdir -p .gstack && cp CLAUDE.md .gstack/CLAUDE.md.pre-adapt
+```
+
+`.gstack/` already holds `track`, so this introduces no new location. This snapshot is
+what Step 6 diffs against and what the user restores from if the run goes wrong. Do
+NOT substitute `git diff` for it: the project may have uncommitted CLAUDE.md changes,
+and CLAUDE.md may not be tracked at all. If CLAUDE.md does not exist yet, skip the
+copy — there is no prior content to lose — and say so in the Step 6 report.
+
 **CLAUDE.md updates:**
 - Read the plugin version from `.claude-plugin/plugin.json` in the superpowers-gstack plugin directory (check `~/.claude/plugins/cache/*/superpowers-gstack/*/plugin.json`, use the latest). Add or update an HTML comment at the very top of CLAUDE.md: `<!-- superpowers-gstack: {version} -->`
 - If CLAUDE.md exists: READ it first, then INSERT or UPDATE the `## Skill routing` section
@@ -371,7 +384,19 @@ The block to insert: read `blocks/companion-skills.md` (see **Shared block files
 After applying changes, verify:
 1. Read the updated CLAUDE.md and confirm routing section is correct
 2. Confirm `docs/superpowers/` directories exist
-3. Check that no existing content was lost
+3. **Diff against the snapshot and classify every removed line.** Run:
+
+   ```bash
+   diff .gstack/CLAUDE.md.pre-adapt CLAUDE.md
+   ```
+
+   Read the `<` side. Every removed line is either **(a)** plugin prose replaced by a
+   newer version of the same block — expected — or **(b)** project-authored content,
+   which is a loss. Put every hunk in one of those two buckets; the (b) list is what
+   the report's **Removed** block prints. Do not summarise the diff without reading
+   it, and do not answer this item from memory: the file you would be recalling was
+   overwritten earlier in Step 5. If the snapshot is missing because CLAUDE.md did
+   not exist before this run, say that instead — do not skip the item silently.
 
 Report to the user:
 
@@ -398,7 +423,7 @@ If the user says yes, run the review:
 
 1. **Re-read the updated CLAUDE.md** end-to-end and check for internal consistency
 2. **Cross-check routing against project files** — does the routing reference skills that don't make sense? (e.g., `/qa` listed but no browser UI, `/cso` listed but no auth/user data)
-3. **Verify preserved content** — diff the old vs new CLAUDE.md mentally. Was anything accidentally removed or mangled?
+3. **Re-check the preservation classification** — re-run `diff .gstack/CLAUDE.md.pre-adapt CLAUDE.md` and re-read the `<` side with fresh eyes. The mandatory verify step above already classified each hunk; this pass asks whether any hunk filed under "expected plugin prose" is actually project content wearing plugin-shaped wording.
 4. **Check for contradictions** — do existing CLAUDE.md instructions conflict with the new routing rules?
 5. **Validate structure** — do all referenced directories exist? (`docs/superpowers/specs/`, `docs/superpowers/plans/`)
 6. **Test routing logic** — walk through 3-4 common scenarios for this project type and verify the decision tree produces the right skill
