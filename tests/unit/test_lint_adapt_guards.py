@@ -91,3 +91,34 @@ def test_growth_check_has_a_non_interactive_branch():
     gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check"):]
     gate = gate[: gate.index("**Insert or upgrade the Autonomy")]
     assert "Non-interactive runs" in gate
+
+
+BLOCKS = REPO / "skills" / "setup-routing" / "blocks"
+
+
+def test_no_block_hardcodes_a_simulator_model():
+    import re
+    for f in sorted(BLOCKS.glob("*.md")):
+        assert not re.search(r"name=iPhone \d", f.read_text()), f"{f.name} names a model"
+
+
+def test_xcode_tools_uses_the_placeholder():
+    assert "{{IOS_SIMULATOR}}" in (BLOCKS / "xcode-tools.md").read_text()
+
+
+def test_every_placeholder_in_a_block_is_documented():
+    """E12's invariant, asserted directly: an undocumented {{TOKEN}} reaches a
+    project's CLAUDE.md raw, which PLACEHOLDERS.md's own preamble forbids."""
+    import re
+    documented = set(re.findall(r"^##\s+`\{\{([A-Z0-9_]+)\}\}`",
+                                (BLOCKS / "PLACEHOLDERS.md").read_text(), re.M))
+    for f in sorted(BLOCKS.glob("*.md")):
+        if f.name == "PLACEHOLDERS.md":
+            continue
+        for tok in set(re.findall(r"\{\{([A-Z0-9_]+)\}\}", f.read_text())):
+            assert tok in documented, f"{f.name}: {{{{{tok}}}}} undocumented"
+
+
+def test_denylist_catches_a_hardcoded_simulator_model():
+    line = "`xcodebuild -scheme X -destination 'platform=iOS Simulator,name=iPhone 16' build`"
+    assert any(p.search(line) for p, _ in lint.DENYLIST)
