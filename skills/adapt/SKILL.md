@@ -228,7 +228,14 @@ and CLAUDE.md may not be tracked at all. If CLAUDE.md does not exist yet, skip t
 copy — there is no prior content to lose — and say so in the Step 6 report.
 
 **CLAUDE.md updates:**
-- Read the plugin version from `.claude-plugin/plugin.json` in the superpowers-gstack plugin directory (check `~/.claude/plugins/cache/*/superpowers-gstack/*/plugin.json`, use the latest). Add or update an HTML comment at the very top of CLAUDE.md: `<!-- superpowers-gstack: {version} -->`
+- Read the plugin version from `.claude-plugin/plugin.json` in the superpowers-gstack plugin directory (check `~/.claude/plugins/cache/*/superpowers-gstack/*/plugin.json`, use the latest). Add or update the **two-line** HTML header at the very top of CLAUDE.md — rewrite both lines every run, so the warning stays current without needing a marker of its own:
+
+  ```
+  <!-- superpowers-gstack: {version} -->
+  <!-- Sections whose heading carries a gstack-<name>-vN marker are plugin-managed: /adapt replaces each one wholesale on upgrade. Put project-specific findings — the measurement you took, the flag that worked — in your own H2 section with no marker. /adapt never touches those. -->
+  ```
+
+  Keep the second line as a single HTML comment with no nested `<!--` inside it: HTML comments do not nest, so an inner opener followed by the first `-->` would end the comment early and render the remainder as visible text.
 - If CLAUDE.md exists: READ it first, then INSERT or UPDATE the `## Skill routing` section
 - NEVER delete or rewrite existing sections (conventions, tech stack, project-specific rules)
 - If a `## Skill routing` section already exists: **UPDATE its plugin-managed subsections per the per-section case-logic below (cases 1-4 for each marker-section).** Do NOT wholesale-replace the entire Skill routing block — that would destroy any user-authored subsections nested inside (e.g. a hand-written `### Code reuse discipline` markerless heading). The per-section logic handles every plugin-managed subsection individually; anything inside Skill routing that the per-section logic does NOT match must be PRESERVED verbatim, including its position and surrounding whitespace.

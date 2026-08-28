@@ -58,3 +58,15 @@ def test_report_has_a_block_for_what_was_removed():
 def test_the_empty_case_has_an_explicit_sentinel():
     """An omitted block reads as 'not checked' — the state it exists to prevent."""
     assert "Nothing project-authored was removed." in ADAPT_SKILL
+
+
+def test_header_warns_which_sections_are_plugin_owned():
+    assert "are plugin-managed: /adapt replaces each one" in ADAPT_SKILL
+
+
+def test_header_comment_does_not_nest_a_comment_terminator():
+    """HTML comments do not nest: an inner '-->' would close the header early and
+    dump the rest of the warning into the rendered file as visible text."""
+    start = ADAPT_SKILL.index("<!-- Sections whose heading carries")
+    body = ADAPT_SKILL[start + 4 : ADAPT_SKILL.index("-->", start)]
+    assert "<!--" not in body

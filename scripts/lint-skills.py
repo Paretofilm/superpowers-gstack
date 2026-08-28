@@ -127,6 +127,8 @@ ADAPT_GUARDS = [
      "the only report block that can reveal a casualty — survivors lists cannot"),
     ("Nothing project-authored was removed.",
      "the sentinel that makes an empty Removed block mean 'checked', not 'skipped'"),
+    ("are plugin-managed: /adapt replaces each one",
+     "the CLAUDE.md header telling the user which sections are volatile"),
 ]
 
 errors: list[str] = []
