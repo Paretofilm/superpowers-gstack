@@ -70,6 +70,27 @@ if [ ! -f "$WORK/.gstack/CLAUDE.md.pre-adapt" ]; then
   exit 2
 fi
 
+# Precondition, not an assertion: verify the fixture's own premise instead of
+# assuming it. The growth check only fires above 1.5x (section lines vs. block
+# lines); a fixture that doesn't actually cross that ratio would make
+# assertion 3 test a mechanism that never ran, and nothing else in this script
+# would notice. Derive both counts from the real files — never hardcode the
+# block's line count, since it grows with the block's own version bumps.
+BLOCK_FILE="$PLUGIN_DIR/skills/setup-routing/blocks/xcode-tools.md"
+SECTION_START=$(grep -n '^## Native Apple development tools' "$FIXTURE" | head -1 | cut -d: -f1)
+SECTION_END=$(awk -v start="$SECTION_START" 'NR>start && /^## /{print NR-1; exit}' "$FIXTURE")
+[ -n "$SECTION_END" ] || SECTION_END=$(wc -l < "$FIXTURE")
+SECTION_LINES=$((SECTION_END - SECTION_START + 1))
+BLOCK_LINES=$(wc -l < "$BLOCK_FILE" | tr -d ' ')
+RATIO=$(LC_NUMERIC=C awk -v s="$SECTION_LINES" -v b="$BLOCK_LINES" 'BEGIN { printf "%.2f", s / b }')
+if ! LC_NUMERIC=C awk -v s="$SECTION_LINES" -v b="$BLOCK_LINES" 'BEGIN { exit !(s > 1.5 * b) }'; then
+  echo "SETUP ERROR: fixture section is $SECTION_LINES lines against a $BLOCK_LINES-line block (${RATIO}x)." >&2
+  echo "  The growth check fires above 1.5x, so this fixture cannot exercise it and" >&2
+  echo "  assertion 3 would test a mechanism that never ran. INCONCLUSIVE, not a pass." >&2
+  exit 2
+fi
+echo "Fixture premise verified: section is $SECTION_LINES lines against a $BLOCK_LINES-line block (${RATIO}x, gate fires above 1.5x)."
+
 # 2. Every sentinel line survives. This is the assertion that matters: it reads
 #    the file, so a run that CLAIMS nothing was removed still fails here.
 MISSING=0
