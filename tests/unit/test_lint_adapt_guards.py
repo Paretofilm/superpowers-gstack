@@ -46,8 +46,79 @@ def test_denylist_catches_the_unperformable_instruction():
 
 
 def test_every_adapt_guard_is_present():
-    for needle, why in lint.ADAPT_GUARDS:
-        assert needle in ADAPT_SKILL, f"{needle!r} missing ({why})"
+    assert lint.check_adapt_guards(ADAPT_SKILL) == []
+
+
+def test_every_guard_needle_lives_in_the_step_that_owns_it():
+    """Region anchoring is the whole mechanism — assert it directly, so a needle
+    quietly re-pointed at a step it does not belong to shows up here."""
+    regions = lint.step_regions(ADAPT_SKILL)
+    for step, needle, why in lint.ADAPT_GUARDS:
+        assert step in regions, f"{step} region missing"
+        assert needle in regions[step], f"{needle!r} not in {step} ({why})"
+
+
+# --- Mutation tests -------------------------------------------------------
+#
+# E13 claimed to pin four guards and pinned one. Deleting the whole Growth check
+# gate left the lint green (the needle `"**Growth check"` also matched the 17
+# cross-references); deleting Step 6's mandatory diff item left the lint green
+# AND the unit suite passing, and that is the guard that FEEDS the Removed block;
+# deleting the snapshot instruction left it green because the path string
+# survived elsewhere. A guard that survives its own deletion is decoration.
+#
+# Each case excises the guard's region from the file text IN MEMORY — the real
+# file is never touched — and asserts the lint's own checker reports it.
+
+GUARD_REGIONS = {
+    "growth check gate (cross-references left in place)": (
+        "**Growth check — applies to every marker-managed section",
+        "**Insert or upgrade the Autonomy",
+    ),
+    "Step 6 mandatory diff item 3": (
+        "3. **Diff against the snapshot and classify every removed line.**",
+        "Report to the user:",
+    ),
+    "Step 5 pre-write snapshot instruction": (
+        "**Snapshot before the first write.**",
+        "**CLAUDE.md updates:**",
+    ),
+    "Step 6 Removed report block": (
+        "> **Removed (not plugin prose):**",
+        "**Never omit the Removed block.**",
+    ),
+}
+
+
+def excise(text, start_marker, end_marker):
+    i = text.index(start_marker)
+    j = text.index(end_marker, i)
+    mutated = text[:i] + text[j:]
+    assert len(mutated) < len(text), "excision removed nothing — markers are stale"
+    return mutated
+
+
+def test_deleting_any_guard_turns_the_lint_red():
+    for name, (start, end) in GUARD_REGIONS.items():
+        errs = lint.check_adapt_guards(excise(ADAPT_SKILL, start, end))
+        assert errs, f"deleting the {name} left E13 green"
+
+
+def test_deleting_the_gate_is_caught_even_though_the_cross_refs_remain():
+    """The specific mutation the old needle missed: 17 `Run the **Growth check**
+    above` cross-references still say the words after the gate itself is gone."""
+    mutated = excise(ADAPT_SKILL, *GUARD_REGIONS["growth check gate (cross-references left in place)"])
+    assert "Run the **Growth check** above" in mutated
+    assert any("Growth check" in e for e in lint.check_adapt_guards(mutated))
+
+
+def test_the_mandatory_diff_must_precede_the_optional_review_gate():
+    """Moving it below the yes/no leaves it behind a question users usually
+    decline — present in the file, absent from most runs."""
+    item = "3. **Diff against the snapshot and classify every removed line.**"
+    below = "If the user says yes, run the review:"
+    moved = ADAPT_SKILL.replace(item, "3. (moved)").replace(below, f"{item}\n\n{below}")
+    assert any("appears after" in e for e in lint.check_adapt_guards(moved))
 
 
 def test_report_has_a_block_for_what_was_removed():

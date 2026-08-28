@@ -39,10 +39,14 @@ ERRORS (exit 1, CI-blocking):
       blocks/PLACEHOLDERS.md. Without one the generators emit it verbatim into
       the project's CLAUDE.md — the exact outcome that file's preamble forbids.
 
-  E13 /adapt carries its content-loss guards: the pre-write snapshot, the real
-      diff, the mandatory Removed report block and the growth check. Each is
-      prose that a reword could silently drop; the 2.47.0 field run showed the
-      failure is invisible without them (skills/adapt/IMPROVEMENTS.md).
+  E13 /adapt carries its content-loss guards — the pre-write snapshot, the real
+      diff, the mandatory Removed report block and the growth check — each
+      inside the `### Step N` region that owns it, and in the right order
+      within it. Each is prose that a reword could silently
+      drop; the 2.47.0 field run showed the failure is invisible without them
+      (skills/adapt/IMPROVEMENTS.md). Anchoring to the step is what makes the
+      check real: bare substring needles left three of the four guards
+      deletable with the lint still green.
 
 WARNINGS (reported, exit 0):
   W1  frontmatter description over budget (target <=30 words; hard cap comes
@@ -127,19 +131,43 @@ PLAIN_BLOCKS = ["model-routing-section.md", "PLACEHOLDERS.md"]
 # E13: /adapt's content-loss guards. Each needle is a contract string, not a
 # phrasing preference — the snapshot path a user restores from, the report label
 # they grep for, the gate heading the per-section rules cross-reference.
+#
+# Each entry is anchored to the `### Step N` region that OWNS the guard, because
+# a bare substring check proves only that the words occur somewhere in the file.
+# Mutation-tested before this anchoring landed: deleting the whole Growth check
+# gate left the lint GREEN, since the old needle `"**Growth check"` was also a
+# substring of the 17 cross-references `Run the **Growth check** above`; deleting
+# Step 6's mandatory diff item left it GREEN and the unit suite passing, which is
+# the guard that FEEDS the Removed block; deleting the snapshot instruction left
+# it GREEN because the path string survived at two other sites. A needle must
+# prove the guard is in its own place, not that its words exist.
 ADAPT_GUARDS = [
-    (".gstack/CLAUDE.md.pre-adapt",
+    ("Step 5", "cp CLAUDE.md .gstack/CLAUDE.md.pre-adapt",
      "the pre-write snapshot that gives Step 6 a real 'before' side"),
-    ("diff .gstack/CLAUDE.md.pre-adapt CLAUDE.md",
-     "the diff that replaces the unperformable mental one"),
-    ("**Removed (not plugin prose):**",
-     "the only report block that can reveal a casualty — survivors lists cannot"),
-    ("Nothing project-authored was removed.",
-     "the sentinel that makes an empty Removed block mean 'checked', not 'skipped'"),
-    ("are plugin-managed: /adapt replaces each one",
+    ("Step 5", "are plugin-managed: /adapt replaces each one",
      "the CLAUDE.md header telling the user which sections are volatile"),
-    ("**Growth check",
-     "the size gate that stops a silent replace of a section grown past its block"),
+    ("Step 5", "**Growth check — applies to every marker-managed section",
+     "the size gate itself, not one of its cross-references"),
+    ("Step 6", "3. **Diff against the snapshot and classify every removed line.**",
+     "the MANDATORY diff — the optional review's re-check runs only if the user says yes"),
+    ("Step 6", "diff .gstack/CLAUDE.md.pre-adapt CLAUDE.md",
+     "the diff that replaces the unperformable mental one"),
+    ("Step 6", "> **Removed (not plugin prose):**",
+     "the only report block that can reveal a casualty — survivors lists cannot"),
+    ("Step 6", "Nothing project-authored was removed.",
+     "the sentinel that makes an empty Removed block mean 'checked', not 'skipped'"),
+]
+
+# E13 ordering: a guard in the right step but the wrong place is still broken.
+# (region, earlier, later, why)
+ADAPT_GUARD_ORDER = [
+    ("Step 5", "cp CLAUDE.md .gstack/CLAUDE.md.pre-adapt",
+     "**Growth check — applies to every marker-managed section",
+     "the snapshot must be written before anything reads a 'before' state"),
+    ("Step 6", "3. **Diff against the snapshot and classify every removed line.**",
+     "Would you like me to run a comprehensive review",
+     "the mandatory diff must sit above the optional-review gate — below it, a user "
+     "who declines the review never gets the classification the Removed block needs"),
 ]
 
 errors: list[str] = []
@@ -170,6 +198,50 @@ def heading_text(line: str) -> str | None:
     s = s.lstrip("#").strip()
     s = re.sub(r"\s*<!-- gstack-[a-z-]+-v\d+ -->\s*$", "", s)
     return re.sub(r"\s*#+$", "", s).strip().lower()
+
+
+def step_regions(text: str) -> dict[str, str]:
+    """Split an instruction file into its `### Step N` regions.
+
+    E13's anchor. A guard's needle has to be found inside the step that owns it —
+    `**Growth check` matched 17 cross-references elsewhere in the file, so the
+    gate could be deleted outright with the lint still green.
+    """
+    marks = [(m.start(), m.group(1)) for m in re.finditer(r"^### (Step \d+)\b", text, re.M)]
+    regions: dict[str, str] = {}
+    for i, (pos, name) in enumerate(marks):
+        end = marks[i + 1][0] if i + 1 < len(marks) else len(text)
+        regions[name] = text[pos:end]
+    return regions
+
+
+def check_adapt_guards(text: str) -> list[str]:
+    """E13: /adapt's content-loss guards, each in the step that owns it.
+
+    Returns the error strings rather than appending to the module-level list, so
+    the unit suite can mutate the skill text in memory and prove each guard's
+    deletion turns the lint red — the property the guards claim and did not have.
+    """
+    errs: list[str] = []
+    regions = step_regions(text)
+    for step in sorted({s for s, _, _ in ADAPT_GUARDS} - set(regions)):
+        errs.append(
+            f"E13 adapt/SKILL.md has no `### {step}` heading — the content-loss "
+            f"guards anchored to it cannot be located, so nothing pins them")
+    for step, needle, why in ADAPT_GUARDS:
+        region = regions.get(step)
+        if region is not None and needle not in region:
+            errs.append(
+                f"E13 adapt/SKILL.md: {step} is missing content-loss guard "
+                f"{needle!r} — {why}")
+    for step, first, second, why in ADAPT_GUARD_ORDER:
+        region = regions.get(step)
+        if region and first in region and second in region:
+            if region.index(first) > region.index(second):
+                errs.append(
+                    f"E13 adapt/SKILL.md: in {step}, {first!r} appears after "
+                    f"{second!r} — {why}")
+    return errs
 
 
 def bare_skill_ref_re(own_skill_names) -> "re.Pattern":
@@ -511,10 +583,7 @@ def main() -> int:
     # reworded away.
     adapt_skill = SKILLS / "adapt" / "SKILL.md"
     if adapt_skill.is_file():
-        adapt_text = adapt_skill.read_text()
-        for needle, why in ADAPT_GUARDS:
-            if needle not in adapt_text:
-                errors.append(f"E13 adapt/SKILL.md missing content-loss guard {needle!r} — {why}")
+        errors.extend(check_adapt_guards(adapt_skill.read_text()))
 
     for w in warnings:
         print(f"WARN  {w}")
