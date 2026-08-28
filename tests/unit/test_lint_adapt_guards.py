@@ -48,3 +48,13 @@ def test_denylist_catches_the_unperformable_instruction():
 def test_every_adapt_guard_is_present():
     for needle, why in lint.ADAPT_GUARDS:
         assert needle in ADAPT_SKILL, f"{needle!r} missing ({why})"
+
+
+def test_report_has_a_block_for_what_was_removed():
+    """A list of survivors cannot reveal a casualty."""
+    assert "**Removed (not plugin prose):**" in ADAPT_SKILL
+
+
+def test_the_empty_case_has_an_explicit_sentinel():
+    """An omitted block reads as 'not checked' — the state it exists to prevent."""
+    assert "Nothing project-authored was removed." in ADAPT_SKILL

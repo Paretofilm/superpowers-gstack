@@ -405,6 +405,28 @@ Report to the user:
 >
 > **Preserved:**
 > - [existing CLAUDE.md content that was kept]
+>
+> **Removed (not plugin prose):**
+> - [one line per hunk the verify diff classified as project content: the section
+>    it came from, its line count, and where the content went — moved to an
+>    unmarked section, or lost]
+> - If nothing project-authored was removed, write exactly:
+>   `Nothing project-authored was removed.`
+
+**Never omit the Removed block.** An absent block reads as "not checked" — which is
+the state the block exists to prevent — so it is the one part of this report that
+must appear even when it is empty. A line under **Changes made** such as
+`Native Apple development tools: v3 → v5` is true and says nothing about the 125
+project-authored lines that upgrade destroyed; only this block can.
+
+When the Removed block is non-empty, add:
+
+> **Where project knowledge belongs.** A heading carrying a `gstack-<name>-vN` marker
+> is plugin-owned: `/adapt` replaces the whole section on every upgrade. Pasting
+> rescued content back into one guarantees a repeat at the next upgrade. Project
+> findings — the measurement you took, the flag that turned out to work, the thing
+> that cost you an hour — belong in your own H2 section with no marker. `/adapt`
+> never touches those.
 
 Then ask:
 

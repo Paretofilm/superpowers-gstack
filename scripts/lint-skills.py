@@ -123,6 +123,10 @@ ADAPT_GUARDS = [
      "the pre-write snapshot that gives Step 6 a real 'before' side"),
     ("diff .gstack/CLAUDE.md.pre-adapt CLAUDE.md",
      "the diff that replaces the unperformable mental one"),
+    ("**Removed (not plugin prose):**",
+     "the only report block that can reveal a casualty — survivors lists cannot"),
+    ("Nothing project-authored was removed.",
+     "the sentinel that makes an empty Removed block mean 'checked', not 'skipped'"),
 ]
 
 errors: list[str] = []
