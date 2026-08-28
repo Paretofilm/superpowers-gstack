@@ -87,7 +87,32 @@ GUARD_REGIONS = {
         "> **Removed (not plugin prose):**",
         "**Never omit the Removed block.**",
     ),
+    "case-3 attribution check": (
+        "**Attribution check — applies to case 3",
+        "**Insert or upgrade the Autonomy",
+    ),
 }
+
+
+def test_every_case_3_replace_names_an_attribution_sentinel():
+    """Six reserved headings are ordinary English a project would plausibly write
+    for itself; case 3 used to replace them on the heading alone. Each must now
+    name a string only a past emitter would have written into that section."""
+    reserved = [
+        "**Insert or upgrade the Autonomy and user interruption section.**",
+        "**Insert or upgrade the Git hygiene & commit cadence section.**",
+        "**Insert or upgrade the Multi-lens review section.**",
+        "**Insert or upgrade the Keep the plan true to the code section.**",
+        "**Insert or upgrade the Native Apple development tools section.**",
+        "**Insert or upgrade the Companion skills (discovery) section.**",
+    ]
+    for anchor in reserved:
+        i = ADAPT_SKILL.index(anchor)
+        rule = ADAPT_SKILL[i : ADAPT_SKILL.index("The block to insert:", i)]
+        case3 = next(l for l in rule.splitlines()
+                     if l.startswith("3. **Heading present + marker absent**"))
+        assert "**Attribution check** above" in case3, anchor
+        assert "Sentinel: the body contains" in case3, anchor
 
 
 def excise(text, start_marker, end_marker):

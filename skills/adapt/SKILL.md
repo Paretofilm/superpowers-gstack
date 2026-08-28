@@ -232,7 +232,7 @@ copy — there is no prior content to lose — and say so in the Step 6 report.
 
   ```
   <!-- superpowers-gstack: {version} -->
-  <!-- Sections whose heading carries a gstack-<name>-vN marker are plugin-managed: /adapt replaces each one wholesale on upgrade. Put project-specific findings — the measurement you took, the flag that worked — in your own H2 section with no marker. /adapt never touches those. -->
+  <!-- Sections whose heading carries a gstack-<name>-vN marker are plugin-managed: /adapt replaces each one wholesale on upgrade. Put project-specific findings — the measurement you took, the flag that worked — in your own H2 section with no marker; /adapt leaves those alone. One exception: the headings it manages are reserved even when unmarked (the marked ones in this file, plus Model Routing), because an unmarked copy of one reads as an older emitted section. Prefix your own headings with this project's name and none of them can collide. -->
   ```
 
   Keep the second line as a single HTML comment with no nested `<!--` inside it: HTML comments do not nest, so an inner opener followed by the first `-->` would end the comment early and render the remainder as visible text.
@@ -247,7 +247,7 @@ copy — there is no prior content to lose — and say so in the Step 6 report.
     - Web/mobile app UI feature work → **medium**
     - CLI tools / libraries / format-plumbing / serialization → **low**
     - If ambiguous, ask the user one line: "How silently could a subtle bug here compound — very high / high / medium / low?"
-  - **First, replace any stale Model Routing block.** If the project's existing CLAUDE.md already has a Model Routing section from a prior plugin version — whether a v0.1 `### Model Routing` subsection (the one with Pi/MLX/local-model columns) or an older top-level `## Model Routing` — DELETE that entire section (from its heading through the line before the next heading of equal-or-higher level) before emitting the new one. This is an explicit exception to the "never delete existing sections" rule above: Model Routing is fully plugin-managed, so a stale copy must be **replaced**, not preserved alongside the new block — otherwise the generated CLAUDE.md carries two contradictory routing tables (old Pi/MLX + new Claude-only).
+  - **First, replace any stale Model Routing block.** If the project's existing CLAUDE.md already has a Model Routing section from a prior plugin version — whether a v0.1 `### Model Routing` subsection (the one with Pi/MLX/local-model columns) or an older top-level `## Model Routing` — DELETE that entire section (from its heading through the line before the next heading of equal-or-higher level) before emitting the new one. This is an explicit exception to the "never delete existing sections" rule above: Model Routing is fully plugin-managed, so a stale copy must be **replaced**, not preserved alongside the new block — otherwise the generated CLAUDE.md carries two contradictory routing tables (old Pi/MLX + new Claude-only). **Apply the Attribution check below to it as well** — `Model Routing` carries no marker, and this is the one place `/adapt` DELETES rather than replaces, so an unattributable section is gone outright rather than merely overwritten. Sentinel: the body carries a routing table with a model column (the v0.1 Pi/MLX/local-model columns, or a `Model` / `Sensitivity` column). If it carries none, the heading is the project's own: leave it untouched, skip emitting the plugin's Model Routing this run, and tell the user to rename their section and re-run `/adapt` if they want the plugin-managed one.
   - Then emit a top-level `## Model Routing` section (placed after `## Skill routing` and all its subsections): read `blocks/model-routing-section.md` from the plugin's `skills/setup-routing/blocks/` directory (same path resolution as `model-routing.md` above) and emit its content verbatim, substituting `{{DOMAIN_SENSITIVITY}}` with the inferred value.
 
   - **Fallback:** If `model-routing.md` is missing (older cached plugin), warn the user and skip the section entirely.
@@ -306,11 +306,35 @@ fixing a typo in plugin prose; the run that motivated this gate was at 2.7× —
 iPhone, and a note on a tool's current status. None of it was recoverable from the
 plugin.
 
+**Attribution check — applies to case 3 of every marker-managed section below.**
+Case 3 is "heading present, marker absent", and it replaces on the theory that a
+markerless copy must be pre-marker plugin legacy. That theory is a guess, and it is
+wrong exactly where it costs most: most of these headings are ordinary English that a
+project would plausibly write for itself. A hand-written 15-line
+`Git hygiene & commit cadence` holding a team's own conventions is 0.1× its block, so
+the Growth check never fires and case 3 replaces it without a word.
+
+So case 3 does not fire on the heading alone. Each rule below names a **sentinel** — a
+string only a past emitter would have written into that section. Before replacing:
+
+- **Sentinel present in the section body** → it is emitted content. REPLACE as in
+  case 2, still subject to the Growth check above.
+- **Sentinel absent** → you cannot attribute the section to a past emitter. Do NOT
+  replace it. Leave it byte-for-byte intact, insert the plugin block as a separate H2
+  section immediately below it, and say in the report that both now exist and which
+  one is theirs, so they can merge by hand.
+
+This is `Code reuse discipline`'s case 3 and `Session Continuity`'s `handoff.md` test
+generalised, and it accepts one failure to avoid a worse one: an old emitted section
+that has drifted past its sentinel gets preserved instead of upgraded. A stale section
+costs one `/adapt` run after the user deletes it; a destroyed one costs whatever was
+in it.
+
 **Insert or upgrade the Autonomy and user interruption section.** This section applies to ALL projects (web and native equally — agents over-asking is platform-agnostic). Scan CLAUDE.md for the heading `^#{2,3} Autonomy and user interruption` and its version marker `<!-- gstack-autonomy-vN -->`. Apply the same four-case logic:
 
 1. **Heading present + marker matches `v2`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4 below.
-3. **Heading present + marker absent** (legacy pre-v2.8.0) → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Growth check** above before replacing.
+3. **Heading present + marker absent** (legacy pre-v2.8.0) → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Attribution check** above FIRST — replace only if the sentinel is present; if it is absent, preserve the section and insert the block below it — then the **Growth check** before replacing. Sentinel: the body contains `The only five reasons to stop and ask` or `Forbidden phrases`.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
 
 The block to insert: read `blocks/autonomy.md` (see **Shared block files** above) and insert its content verbatim.
@@ -319,7 +343,7 @@ The block to insert: read `blocks/autonomy.md` (see **Shared block files** above
 
 1. **Heading present + marker matches `v9`** → skip (idempotent).
 2. **Heading present + marker `v1` or `v2` (older emitters — universalist convention rule, autonomy cross-ref missing, stash advice without WIP-branch caveat) OR different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. (The Git hygiene block has H4 subsections; "next heading" alone would stop at the first one and leave old v1 prose behind.) **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level so subsections do not sit at the same level as the root — same demote requirement as case 4 below.
-3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Growth check** above before replacing.
+3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Attribution check** above FIRST — replace only if the sentinel is present; if it is absent, preserve the section and insert the block below it — then the **Growth check** before replacing. Sentinel: the body contains `Hygiene rules (NEVER violate)` or `Committing is not backing up`.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
 
 The block to insert: read `blocks/git-hygiene.md` (see **Shared block files** above) and insert its content verbatim.
@@ -328,7 +352,7 @@ The block to insert: read `blocks/git-hygiene.md` (see **Shared block files** ab
 
 1. **Heading present + marker matches the current version (`v5`)** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4 below. (The Multi-lens review block has H4 subsections; "next heading" alone would stop at the first one and leave old prose behind.)
-3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Growth check** above before replacing.
+3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Attribution check** above FIRST — replace only if the sentinel is present; if it is absent, preserve the section and insert the block below it — then the **Growth check** before replacing. Sentinel: the body contains `What counts as ship-worthy` or `pitfall-verification`.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
 
 The block to insert: read `blocks/multi-lens-review.md` (see **Shared block files** above) and insert its content verbatim.
@@ -346,7 +370,7 @@ The block to insert: read `blocks/code-reuse.md` (see **Shared block files** abo
 
 1. **Heading present + marker matches `v2`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. (The block has H3 subsections; "next heading" alone would stop at the first one and leave old prose behind.) **If the existing root is H3**, demote every subsection in the replacement one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4.
-3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Growth check** above before replacing. (Unlike Code reuse, this heading is specific enough that a user-authored collision is implausible.)
+3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Attribution check** above FIRST — replace only if the sentinel is present; if it is absent, preserve the section and insert the block below it — then the **Growth check** before replacing. (This heading is specific enough that a user-authored collision is unlikely, but "unlikely" is not a test, and the cost of being wrong is the user's section.) Sentinel: the body contains `The three ways a plan goes stale` or `fix the plan in the same commit`.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root). If you instead insert it under `## Skill routing` as H3, you MUST demote every H3 subsection to H4 — otherwise the next marker upgrade stops at the first subsection and leaves stale content behind.
 
 The block to insert: read `blocks/plan-fidelity.md` (see **Shared block files** above) and insert its content verbatim.
@@ -409,7 +433,7 @@ The block to insert: read `blocks/track-routing.md` (see **Shared block files** 
 
 1. **Heading present + marker matches `v6`** → skip (idempotent).
 2. **Heading present + marker `v1`–`v5`** (v1 assumed XcodeBuildMCP universally; v2 added CLI fallback but missed capabilities; v3 hardcoded one team's `DEVELOPMENT_TEAM`; v4 was simulator-only and had no macOS build/launch path at all; v5 hardcoded an `iPhone 16` destination that Xcode no longer ships) → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. (The Native Apple tools block has H4 subsections; "next heading" alone would stop at the first one and leave old prose behind.) **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level so subsections do not sit at the same level as the root — same demote requirement as case 4 below. Auto-upgrade is what the marker pattern is for.
-3. **Heading present + marker absent** (pre-v2.7.0) → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Growth check** above before replacing.
+3. **Heading present + marker absent** (pre-v2.7.0) → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Attribution check** above FIRST — replace only if the sentinel is present; if it is absent, preserve the section and insert the block below it — then the **Growth check** before replacing. Sentinel: the body contains `XcodeBuildMCP` or `MUST be performed by the agent`.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
 
 The block to insert: read `blocks/xcode-tools.md` (see **Shared block files** above) and insert its content verbatim.
@@ -418,7 +442,7 @@ The block to insert: read `blocks/xcode-tools.md` (see **Shared block files** ab
 
 1. **Heading present + marker matches `v2`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4 below.
-3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Growth check** above before replacing.
+3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Attribution check** above FIRST — replace only if the sentinel is present; if it is absent, preserve the section and insert the block below it — then the **Growth check** before replacing. Sentinel: the body contains `swiftui-expert-skill` or `discovery — not routing`.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
 
 The block to insert: read `blocks/companion-skills.md` (see **Shared block files** above) and insert its content verbatim.
@@ -485,7 +509,9 @@ When the Removed block is non-empty, add:
 > rescued content back into one guarantees a repeat at the next upgrade. Project
 > findings — the measurement you took, the flag that turned out to work, the thing
 > that cost you an hour — belong in your own H2 section with no marker. `/adapt`
-> never touches those.
+> leaves those alone, with one exception: the headings it manages are reserved even
+> when unmarked, because an unmarked copy of one reads as an older emitted section.
+> Prefix your own headings with this project's name and none of them can collide.
 
 Then ask:
 

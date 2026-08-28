@@ -40,9 +40,9 @@ ERRORS (exit 1, CI-blocking):
       the project's CLAUDE.md — the exact outcome that file's preamble forbids.
 
   E13 /adapt carries its content-loss guards — the pre-write snapshot, the real
-      diff, the mandatory Removed report block and the growth check — each
-      inside the `### Step N` region that owns it, and in the right order
-      within it. Each is prose that a reword could silently
+      diff, the mandatory Removed report block, the growth check and the case-3
+      attribution check — each inside the `### Step N` region that owns it, and
+      in the right order within it. Each is prose that a reword could silently
       drop; the 2.47.0 field run showed the failure is invisible without them
       (skills/adapt/IMPROVEMENTS.md). Anchoring to the step is what makes the
       check real: bare substring needles left three of the four guards
@@ -148,6 +148,8 @@ ADAPT_GUARDS = [
      "the CLAUDE.md header telling the user which sections are volatile"),
     ("Step 5", "**Growth check — applies to every marker-managed section",
      "the size gate itself, not one of its cross-references"),
+    ("Step 5", "**Attribution check — applies to case 3",
+     "the rule that refuses to replace a markerless section it cannot attribute"),
     ("Step 6", "3. **Diff against the snapshot and classify every removed line.**",
      "the MANDATORY diff — the optional review's re-check runs only if the user says yes"),
     ("Step 6", "diff .gstack/CLAUDE.md.pre-adapt CLAUDE.md",
