@@ -47,7 +47,16 @@ machine is the Pro.
 If it returns nothing, this machine has no plain numbered iPhone. Fall back to whatever
 iPhone it does have:
 
-    xcrun simctl list devices available | sed -nE 's/^ *(iPhone [^(]*[^ (]) \(.*/\1/p' | head -1
+    xcrun simctl list devices available | sed -nE 's/^ *(iPhone .*) \([0-9A-Fa-f-]{36}\).*/\1/p' | head -1
+
+Anchor the fallback on the parenthesis holding the **UDID**, not on the first `(` in the
+line. A model name can itself contain parentheses: `iPhone SE (3rd generation)` is the
+device's real, exact name, and stopping at the first `(` yields `iPhone SE`, which no
+simulator is called — so `xcodebuild` answers "Unable to find a device matching the
+provided destination specifier" and the placeholder has emitted the very failure it
+exists to prevent. Verified against live `simctl` output: the UDID-anchored pattern
+returns `iPhone SE (3rd generation)` whole, and still returns `iPhone 17 Pro`,
+`iPhone 17e` and `iPhone Air` correctly.
 
 If that is empty too, no simulator runtimes are installed: emit `iPhone 17`, and say in
 the report that no simulator was found locally so the destination is a guess until a

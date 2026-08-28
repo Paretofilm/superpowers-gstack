@@ -233,16 +233,41 @@ def test_xcode_tools_uses_the_placeholder():
 
 
 def test_every_placeholder_in_a_block_is_documented():
-    """E12's invariant, asserted directly: an undocumented {{TOKEN}} reaches a
-    project's CLAUDE.md raw, which PLACEHOLDERS.md's own preamble forbids."""
+    """E12's invariant, asserted through the lint's own function so the test and
+    the rule cannot drift: an undocumented {{TOKEN}} reaches a project's
+    CLAUDE.md raw, which PLACEHOLDERS.md's own preamble forbids."""
     import re
-    documented = set(re.findall(r"^##\s+`\{\{([A-Z0-9_]+)\}\}`",
-                                (BLOCKS / "PLACEHOLDERS.md").read_text(), re.M))
+    documented = lint.documented_placeholders((BLOCKS / "PLACEHOLDERS.md").read_text())
     for f in sorted(BLOCKS.glob("*.md")):
         if f.name == "PLACEHOLDERS.md":
             continue
         for tok in set(re.findall(r"\{\{([A-Z0-9_]+)\}\}", f.read_text())):
             assert tok in documented, f"{f.name}: {{{{{tok}}}}} undocumented"
+
+
+def test_a_placeholder_heading_with_no_body_is_not_documentation():
+    """The empty case E12 used to accept: a heading names the token and gives the
+    generator nothing to resolve it with, which emits it verbatim exactly as if
+    the entry did not exist."""
+    empty = "# Placeholders\n\n## `{{EMPTY_TOKEN}}` (somewhere)\n\n## `{{REAL_TOKEN}}`\n\nRun `echo hi`.\n"
+    assert lint.documented_placeholders(empty) == {"REAL_TOKEN"}
+
+
+def test_the_simulator_fallback_keeps_a_parenthesised_model_name_whole():
+    """`iPhone SE (3rd generation)` is the device's exact name. A pattern anchored
+    on the first '(' truncates it to `iPhone SE`, which no simulator is called —
+    so the placeholder emits the destination error it exists to prevent."""
+    import re as _re
+    import subprocess
+    ph = (BLOCKS / "PLACEHOLDERS.md").read_text()
+    fallback = _re.search(r"^ +(xcrun simctl list devices available \| sed -nE "
+                          r"'s/\^ \*\(iPhone \.\*\).*?/p'.*)$", ph, _re.M)
+    assert fallback, "the {{IOS_SIMULATOR}} fallback command is not in PLACEHOLDERS.md"
+    line = "    iPhone SE (3rd generation) (AABBCCDD-1122-3344-5566-778899AABBCC) (Shutdown) \n"
+    out = subprocess.run(["bash", "-c", fallback.group(1).replace(
+        "xcrun simctl list devices available", "cat")], input=line,
+        capture_output=True, text=True).stdout.strip()
+    assert out == "iPhone SE (3rd generation)", out
 
 
 def test_denylist_catches_a_hardcoded_simulator_model():
