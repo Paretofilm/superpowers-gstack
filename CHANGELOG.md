@@ -15,9 +15,12 @@ threshold, seven times the exposure.
   The growth check subtracts instead of dividing, and fires when a section is more than
   ~20 lines above what the plugin actually wrote. It no longer cares what the block
   weighs today.
-- **The ratio and volume triggers remain**, retitled as the fallbacks they now are, for
-  every section written before this release. Both thresholds are pinned by a test —
-  tuning them is fine, and updating that test is how you record that you meant to.
+- **The ratio and volume triggers remain**, relabelled as the proxies they are and
+  checked alongside provenance rather than only when it is missing. All four numbers in
+  the gate — the provenance delta, the sanity band on `<N>`, and the two proxy
+  thresholds — are pinned by a test AT THEIR OWN SITES. The first cut of that test
+  sliced the whole gate and asserted the numbers occurred somewhere in it, which three
+  of them did more than once: 1.5 could become 15 and stay green.
 - **All nine scan rules match a marker by its prefix**, so a section this release writes
   is not read by the next run as having no marker at all.
 - **Lint E14** keeps `emitted=` out of the source blocks, where it would be a constant

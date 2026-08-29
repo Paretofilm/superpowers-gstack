@@ -392,13 +392,31 @@ def test_an_implausible_emitted_count_is_distrusted():
 
 
 def test_the_gate_thresholds_are_pinned():
-    """A parked 2.48.0 finding: the test asserted only that the Ratio and Volume
-    labels existed, so 1.5x could become 15x and stay green. Tuning these is fine —
-    updating this test is how you record that you meant to."""
-    gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check"):]
-    gate = gate[: gate.index("**Insert or upgrade the Autonomy")]
-    assert "1.5×" in gate
-    assert "~20" in gate
+    """Each number pinned AT ITS OWN SITE, in the sentence that uses it.
+
+    The first cut of this test sliced the whole gate and asserted `"1.5×" in gate`
+    and `"~20" in gate`. The slice held `1.5×` three times and `~20` twice, so
+    Ratio's 1.5 could become 15, Volume's ~20 could become ~30, and Provenance's
+    ~20 could become ~50, each with this test green — verified by making all three
+    edits. A threshold is pinned when changing IT fails, not when some other
+    sentence still quotes the old number. Tuning any of them is fine; updating the
+    matching line here is how you record that you meant to.
+    """
+    gate = _growth_gate()
+
+    def between(start, end):
+        i = gate.index(start)
+        return gate[i : gate.index(end, i)]
+
+    prov = between("- **Provenance (measured, not inferred).**", "- **Ratio (proxy).**")
+    assert "now more than **~20** lines longer than `<N>`" in prov
+    assert "more than ~20 lines ABOVE the block" in prov, "the distrust band"
+
+    ratio = between("- **Ratio (proxy).**", "- **Volume (proxy).**")
+    assert "more than **1.5×** the block's line count" in ratio
+
+    volume = between("- **Volume (proxy).**", "A section with no `emitted=`")
+    assert "more than ~20 of the section's lines" in volume
 
 
 def test_session_continuity_explains_a_preserve_the_same_way():
