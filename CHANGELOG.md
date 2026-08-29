@@ -10,7 +10,8 @@ written content could sit under a 1.5× gate; `companion-skills.md` is 23, so 11
 threshold, seven times the exposure.
 
 ### Changed — provenance replaces the guess
-- **Emitted markers now record what was emitted:** `<!-- gstack-git-hygiene-v9 emitted=162 -->`.
+- **Emitted markers now record what was emitted**, in a second comment beside the marker:
+  `<!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->`.
   The growth check subtracts instead of dividing, and fires when a section is more than
   ~20 lines above what the plugin actually wrote. It no longer cares what the block
   weighs today.

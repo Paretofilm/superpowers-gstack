@@ -283,9 +283,27 @@ def test_preserve_and_insert_tells_the_user_how_to_undo_it():
 
 
 def test_both_generators_record_the_emitted_line_count():
+    """Provenance rides in a SECOND comment beside the marker, never inside it.
+    Inside, `<!-- gstack-autonomy-v2 -->` stops being a substring of what was
+    written, and every reader that only knows the bare form — an older plugin
+    cache, lint E8 — reads the section as markerless."""
     setup = (REPO / "skills" / "setup-routing" / "SKILL.md").read_text()
     for text, who in ((ADAPT_SKILL, "adapt"), (setup, "setup-routing")):
-        assert "emitted=<N>" in text, f"{who} does not record provenance"
+        assert "`<N>` is `wc -l` of the block file you just read" in text, (
+            f"{who} does not say how to count `<N>`")
+        assert "<!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->" in text, (
+            f"{who} does not show provenance as a second comment beside the marker")
+
+
+def test_neither_generator_writes_provenance_inside_the_marker():
+    """The shape this release rejected. `<!-- gstack-x-vN emitted=N -->` is not a
+    superstring of `<!-- gstack-x-vN -->`, so a 2.48.0 cache takes the marker for
+    absent and either replaces the section or duplicates it."""
+    import re
+    setup = (REPO / "skills" / "setup-routing" / "SKILL.md").read_text()
+    bad = re.compile(r"<!-- gstack-[a-z-]+-v[\dN]+ +emitted=")
+    for text, who in ((ADAPT_SKILL, "adapt"), (setup, "setup-routing")):
+        assert not bad.search(text), f"{who} writes the attribute inside the marker"
 
 
 def test_block_files_never_carry_the_emitted_attribute():

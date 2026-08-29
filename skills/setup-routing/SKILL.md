@@ -287,19 +287,28 @@ let a raw `{{...}}` token reach the generated CLAUDE.md. If the `blocks/` direct
 is missing (older plugin cache), warn the user to run `/plugin update
 superpowers-gstack` and omit these sections.
 
-**Record what you emitted.** When you write a block into CLAUDE.md, append the block
-file's line count to the marker on the heading line, as ` emitted=<N>`:
+**Record what you emitted.** When you write a block into CLAUDE.md, add a SECOND HTML
+comment on that block's heading line, immediately after the version marker the block
+file itself carries, with nothing at all between the two:
 
 ```
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v9 emitted=162 -->
+<!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->
 ```
 
-`<N>` is `wc -l` of the block file you just read, before any placeholder substitution
-and before any heading-level demote — the count as it ships. This is the only fact that
-makes a later upgrade able to tell growth from a block that simply changed size, so do
-not estimate it and do not carry a stale value forward from the section you replaced.
-Block files themselves never carry `emitted=`; a constant baked into the source would
-lie the moment the block changed length.]
+Leave the version marker byte-for-byte as the block wrote it. Provenance is a separate
+comment precisely so that marker keeps matching for every reader that knows only the
+bare form: an older plugin cache meeting a file this release wrote finds its marker
+exactly where it expects it and skips the section as current, instead of reading it as
+markerless and appending a duplicate. Putting the attribute inside the marker breaks
+that; putting it on a line of its own adds a line to what the next run counts, and is
+a line a user tidying their own CLAUDE.md can delete.
+
+`<N>` is `wc -l` of the block file you just read — every line in the file, counted
+before any placeholder substitution and before any heading-level demote. This is the
+only fact that makes a later upgrade able to tell growth from a block that simply
+changed size, so do not estimate it and do not carry a stale value forward from the
+section you replaced. Block files themselves never carry `emitted=`; a constant baked
+into the source would lie the moment the block changed length.]
 
 [MODEL ROUTING — emit `blocks/model-routing-section.md` here verbatim, resolving
 `{{DOMAIN_SENSITIVITY}}` per `blocks/PLACEHOLDERS.md`. Omit the whole section if the

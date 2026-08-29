@@ -201,7 +201,7 @@ the same test process, because of an internal write-coalescing delay that
 step after every save-then-assert test, rather than trusting the save call
 itself, and it turned every one of those tests deterministic on the first try.
 
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v8 emitted=162 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v8 --><!-- emitted=162 -->
 
 This section captures how *this* team actually works with git day to day — it grew
 out of two incidents in the first three months of the project and has been amended

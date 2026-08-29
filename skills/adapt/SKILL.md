@@ -279,19 +279,28 @@ still works.
 
 **Shared block files.** Every "block to insert" below is single-sourced in the plugin at `skills/setup-routing/blocks/<name>.md` (sibling skill directory — from this skill's base directory: `../setup-routing/blocks/<name>.md`; via the cache glob: `~/.claude/plugins/cache/*/superpowers-gstack/*/skills/setup-routing/blocks/`). Read the named file and use its content as the verbatim block. Resolve `{{...}}` placeholders per `blocks/PLACEHOLDERS.md` before inserting — never let a raw `{{...}}` token reach the generated CLAUDE.md. If the blocks directory is missing (older plugin cache), warn the user to run `/plugin update superpowers-gstack` and skip the affected sections.
 
-**Record what you emitted.** When you write a block into CLAUDE.md, append the block
-file's line count to the marker on the heading line, as ` emitted=<N>`:
+**Record what you emitted.** When you write a block into CLAUDE.md, add a SECOND HTML
+comment on that block's heading line, immediately after the version marker the block
+file itself carries, with nothing at all between the two:
 
 ```
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v9 emitted=162 -->
+<!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->
 ```
 
-`<N>` is `wc -l` of the block file you just read, before any placeholder substitution
-and before any heading-level demote — the count as it ships. This is the only fact that
-makes a later upgrade able to tell growth from a block that simply changed size, so do
-not estimate it and do not carry a stale value forward from the section you replaced.
-Block files themselves never carry `emitted=`; a constant baked into the source would
-lie the moment the block changed length.
+Leave the version marker byte-for-byte as the block wrote it. Provenance is a separate
+comment precisely so that marker keeps matching for every reader that knows only the
+bare form: an older plugin cache meeting a file this release wrote finds its marker
+exactly where it expects it and skips the section as current, instead of reading it as
+markerless and appending a duplicate. Putting the attribute inside the marker breaks
+that; putting it on a line of its own adds a line to what the next run counts, and is
+a line a user tidying their own CLAUDE.md can delete.
+
+`<N>` is `wc -l` of the block file you just read — every line in the file, counted
+before any placeholder substitution and before any heading-level demote. This is the
+only fact that makes a later upgrade able to tell growth from a block that simply
+changed size, so do not estimate it and do not carry a stale value forward from the
+section you replaced. Block files themselves never carry `emitted=`; a constant baked
+into the source would lie the moment the block changed length.
 
 **Growth check — applies to every marker-managed section below, in cases 2 and 3.**
 A marker records who *created* a section, not who has written in it since. Before
@@ -323,8 +332,9 @@ Then run the diff — always, before deciding, because both triggers read it:
 diff "$TMP" <path-to-block>.md
 ```
 
-**Provenance (authoritative).** If the section's marker carries ` emitted=<N>`, the
-plugin wrote exactly `<N>` lines there. Count the section now; anything above `<N>` was
+**Provenance (authoritative).** If the section's heading line carries a second comment
+`<!-- emitted=<N> -->` after the version marker, the plugin wrote exactly `<N>` lines
+there. Count the section now; anything above `<N>` was
 added by someone else. Fire the gate when the section exceeds `<N>` by more than **~20**
 lines:
 
