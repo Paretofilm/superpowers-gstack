@@ -234,7 +234,29 @@ def test_the_growth_gate_has_a_second_trigger_for_small_blocks():
     gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check — applies"):]
     gate = gate[: gate.index("**Attribution check — applies")]
     assert "**Ratio (proxy).**" in gate and "**Volume (proxy).**" in gate
-    assert "either" in gate
+
+
+def test_the_gate_fires_on_the_UNION_of_its_triggers():
+    """The decisive word, pinned at the sentence that says it.
+
+    This assertion used to read `assert "either" in gate`, from when the gate had
+    two triggers and said "fires when **either** of these holds". The fix wave
+    that added the third trigger rewrote that sentence to "any", and the
+    assertion kept passing — "either" survives as a substring of "n**either**
+    proxy alone is enough" and "n**either** establishes authorship", both of
+    which sit in the same slice. A pin that went vacuous inside the wave that
+    changed what it pinned.
+
+    Turning the union into a conjunction ("fires ONLY when ALL THREE") makes the
+    gate unfirable: every section written before 2.49.0 carries no `emitted=` at
+    all, so the provenance trigger can never hold for them, so nothing can. That
+    inverts the additive precedence this release is built on, and before this
+    test it was a green one-word edit.
+    """
+    gate = _growth_gate()
+    assert "The gate fires when **any** of the three triggers below holds" in gate
+    assert "the first one to fire\nis enough" in gate, (
+        "the union has to be spelled out as first-to-fire, not left to 'any'")
 
 
 def test_header_warns_which_sections_are_plugin_owned():

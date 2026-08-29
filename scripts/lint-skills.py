@@ -182,6 +182,10 @@ ADAPT_GUARDS = [
     ("Step 5", "> `Session Continuity`: I cannot attribute this section to a past emitter",
      "the same report for Session Continuity's own handoff.md sniff test, which reaches "
      "the identical preserve-and-insert state by a different route"),
+    ("Step 5", "The gate fires when **any** of the three triggers below holds",
+     "the union that makes the gate additive — turned into a conjunction the gate "
+     "becomes unfirable, because every section written before 2.49.0 has no "
+     "`emitted=` at all and so can never satisfy all three"),
     ("Step 5", "When you write a block into CLAUDE.md, add a SECOND HTML",
      "the imperative that makes provenance exist at all — weakened to 'you MAY add' "
      "or deleted outright, every other guard on this branch still passes while no "

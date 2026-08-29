@@ -63,6 +63,16 @@ threshold, seven times the exposure.
   value forward from the section you replaced", the only textual guard against an old
   `emitted=` riding onto a new marker. Both are now E13 needles in `/adapt` and
   assertions across both generators; all four deletions are red.
+- **The gate's union could be turned into a conjunction with everything green.** "The
+  gate fires when **any** of the three triggers below holds" → "fires ONLY when ALL
+  THREE" left the lint at 0 errors and the whole suite passing, and it makes the gate
+  unfirable: nothing written before 2.49.0 carries an `emitted=`, so those sections can
+  never satisfy all three. The sentence *had* been pinned — as `assert "either" in gate`,
+  from when there were two triggers — and this release's own rewrite to "any" left the
+  assertion passing on "n**either** proxy alone is enough" elsewhere in the slice. A pin
+  gone vacuous inside the wave that changed what it pinned, which is the same class as
+  the four above. The union is now pinned at its own site, at lint and unit level; the
+  substring assertion is deleted.
 - **A section `/adapt` cannot attribute is no longer silently un-upgraded, on either
   path that reaches that state.** The shared Attribution check, and Session Continuity's
   own `handoff.md` sniff test when it lands on the same preserve-and-insert outcome, now
