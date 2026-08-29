@@ -327,3 +327,13 @@ def test_the_gate_thresholds_are_pinned():
     gate = gate[: gate.index("**Insert or upgrade the Autonomy")]
     assert "1.5×" in gate
     assert "~20" in gate
+
+
+def test_session_continuity_explains_a_preserve_the_same_way():
+    """Task 1 gave the shared Attribution check a report that says why a section was
+    not upgraded and what undoes it. Session Continuity reaches the same state by its
+    own route, and a user cannot tell which branch produced their two sections."""
+    rule = ADAPT_SKILL[ADAPT_SKILL.index("**Insert or upgrade the Session Continuity"):]
+    rule = rule[: rule.index("blocks/session-continuity.md")]
+    assert "merge by hand" not in rule, "still carries the pre-Task-1 phrasing"
+    assert "delete your copy and re-run" in rule

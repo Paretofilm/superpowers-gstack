@@ -491,7 +491,16 @@ The block to insert: read `blocks/plan-fidelity.md` (see **Shared block files** 
 
 1. **Heading present + marker matches `v3`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level (see the heading-level rule below). Run the **Growth check** above before replacing.
-3. **Heading present + marker absent** → the section is either a pre-2.36.0 emitted block or one the user wrote themselves, and unlike `Git hygiene & commit cadence` or `Autonomy and user interruption`, "Session Continuity" is a heading a project could plausibly own. Tell them apart before touching it: treat it as emitted ONLY if the section body mentions `docs/superpowers/handoff.md`. **If it does** → REPLACE as in case 2. Run the **Growth check** above before replacing. This is the upgrade that matters, because every pre-2.36.0 emitter wrote a sensor keyed only to the `## Mode: auto` Markdown marker, which `/superpowers-gstack:context-handoff` deletes the moment it writes YAML — so those projects re-ask the opt-in question after every single compact. **If it does not** → leave the user's section untouched, insert the block as a separate H2 section, and tell the user both now exist so they can merge by hand. Never silently overwrite a section you cannot attribute to a past emitter.
+3. **Heading present + marker absent** → the section is either a pre-2.36.0 emitted block or one the user wrote themselves, and unlike `Git hygiene & commit cadence` or `Autonomy and user interruption`, "Session Continuity" is a heading a project could plausibly own. Tell them apart before touching it: treat it as emitted ONLY if the section body mentions `docs/superpowers/handoff.md`. **If it does** → REPLACE as in case 2. Run the **Growth check** above before replacing. This is the upgrade that matters, because every pre-2.36.0 emitter wrote a sensor keyed only to the `## Mode: auto` Markdown marker, which `/superpowers-gstack:context-handoff` deletes the moment it writes YAML — so those projects re-ask the opt-in question after every single compact. **If it does not** → leave the user's section untouched, insert the block as a separate H2
+   section, and report it the way the **Attribution check** above reports a preserve:
+
+   > `Session Continuity`: I cannot attribute this section to a past emitter — its body does
+   > not mention `docs/superpowers/handoff.md`, which every emitted copy carries. I left it
+   > exactly as it was and put the current plugin version below it, so nothing of yours was
+   > touched. If it *is* an old plugin section, delete your copy and re-run `/adapt` and it
+   > will upgrade cleanly.
+
+   Never silently overwrite a section you cannot attribute to a past emitter.
 4. **Heading absent** → APPEND the block as H2.
 
 **Heading-level rule.** This is the general rule for every marker-managed section, stated once here: when the section you are replacing is rooted at H3, demote the block's first line to `###` **and** demote any `###` subsections it contains to `####`. Do not reason about whether a particular block "has subsections today" — that is a claim about a file, and it expires the moment someone adds one. Applying the demote unconditionally is a no-op for a block with no subsections and the fix for one that grows them. (The `gstack-routing` v1→v2 bump in 2.36.1 activated exactly this bug, which had sat unreachable for as long as its marker never moved.) The block is NOT exempt from matching the existing root level either. `setup-routing` before 2.36.0 emitted this section as `### Session Continuity` nested under `## Skill routing`; pasting the H2 block verbatim over an H3 root promotes it to H2 and silently reparents every following H3 sibling underneath it. So when the section being replaced is H3, demote the block's FIRST LINE to `###`, keeping whatever version marker the block file itself carries, and paste the remaining lines unchanged. Copy the marker from the block — never retype it from this instruction, which is how it goes stale the next time the block is versioned.
@@ -619,6 +628,10 @@ Report to the user:
 >    the section name, its line count against the block's, and the marker it is
 >    still on. Nothing was lost here — the upgrade simply was not applied]
 > - Omit this block entirely when nothing was deferred.
+>
+> (The Growth check reports here in this one-line form. The Attribution check and Session
+> Continuity's case 3 specify their own multi-line message instead — a preserve needs to
+> explain itself, where a deferral only needs to be counted.)
 >
 > **Snapshot:** `.gstack/CLAUDE.md.pre-adapt` holds CLAUDE.md exactly as it was
 > before this run. Restore the whole file with
