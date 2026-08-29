@@ -171,6 +171,8 @@ ADAPT_GUARDS = [
      "the label that keeps a deferral (nothing lost) out of the block that means loss"),
     ("Step 5", "cannot attribute this section to a past emitter",
      "the report line that turns a two-sections-now-exist state into an actionable one"),
+    ("Step 5", "optionally followed by ` emitted=<N>`",
+     "the rule that stops a post-2.49.0 marker being read as no marker at all"),
 ]
 
 # E13 ordering: a guard in the right step but the wrong place is still broken.
