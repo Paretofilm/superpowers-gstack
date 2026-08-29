@@ -182,7 +182,7 @@ def test_the_growth_gate_has_a_second_trigger_for_small_blocks():
     losable lines, of the 23-line companion-skills block 11."""
     gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check — applies"):]
     gate = gate[: gate.index("**Attribution check — applies")]
-    assert "**Ratio**" in gate and "**Volume**" in gate
+    assert "**Ratio (fallback).**" in gate and "**Volume (fallback).**" in gate
     assert "either" in gate
 
 
@@ -308,3 +308,22 @@ def test_every_scan_rule_tolerates_the_provenance_attribute():
 
 def test_the_tolerance_is_stated_once_in_prose_too():
     assert "optionally followed by ` emitted=<N>`" in ADAPT_SKILL
+
+
+def test_growth_check_prefers_provenance_over_the_ratio():
+    gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check"):]
+    gate = gate[: gate.index("**Insert or upgrade the Autonomy")]
+    assert "**Provenance (authoritative).**" in gate
+    assert "emitted=" in gate
+    # the ratio must still be reachable for sections written before 2.49.0
+    assert "1.5×" in gate and "no `emitted=`" in gate
+
+
+def test_the_gate_thresholds_are_pinned():
+    """A parked 2.48.0 finding: the test asserted only that the Ratio and Volume
+    labels existed, so 1.5x could become 15x and stay green. Tuning these is fine —
+    updating this test is how you record that you meant to."""
+    gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check"):]
+    gate = gate[: gate.index("**Insert or upgrade the Autonomy")]
+    assert "1.5×" in gate
+    assert "~20" in gate

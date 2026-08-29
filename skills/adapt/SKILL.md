@@ -330,12 +330,28 @@ Then run the diff — always, before deciding, because both triggers read it:
 diff "$TMP" <path-to-block>.md
 ```
 
+**Provenance (authoritative).** If the section's marker carries ` emitted=<N>`, the
+plugin wrote exactly `<N>` lines there. Count the section now; anything above `<N>` was
+added by someone else. Fire the gate when the section exceeds `<N>` by more than **~20**
+lines:
+
+```bash
+awk 'NR>=<start> && NR<=<end>' CLAUDE.md | wc -l     # what is there now
+```
+
+This is not a heuristic and it does not care what the block's current size is, so use it
+whenever it is available and ignore the two triggers below. A block that grew or shrank
+between releases moves the ratio; it cannot move `<N>`.
+
+**When there is no `emitted=`** — every section written before 2.49.0 — fall back to the
+two triggers below. They are proxies, and they are why provenance exists.
+
 The gate fires when **either** of these holds:
 
-- **Ratio** — the section is more than **1.5×** the block's line count.
-- **Volume** — more than ~20 of the section's lines carry material the block does not
-  have in any form. Not reworded block prose, which a version bump produces by the
-  dozen; lines whose subject matter is absent from the block entirely.
+- **Ratio (fallback).** — the section is more than **1.5×** the block's line count.
+- **Volume (fallback).** — more than ~20 of the section's lines carry material the block
+  does not have in any form. Not reworded block prose, which a version bump produces by
+  the dozen; lines whose subject matter is absent from the block entirely.
 
 Neither alone is enough, which is why there are two. Ratio scales with the block, so
 one threshold buys wildly different exposure: 1.5× of the 162-line `git-hygiene.md` is
@@ -381,10 +397,14 @@ plugin.
 
 The real test is a three-way compare against the block the section was *originally*
 emitted from, which separates project content from plugin drift instead of guessing.
-That needs the emitted block's length or hash recorded in the marker itself — a format
-change across all nine blocks and both generators. It is deferred until the first
-report of a section lost with both triggers quiet, or the next time a block shrinks
-between releases.
+Provenance closes the *length* half of that as of this release — `emitted=<N>` is the
+originally-emitted length itself, not a ratio against a block that may have grown or
+shrunk since. What it still cannot see is a same-length edit: replace ten lines of
+plugin prose with ten lines of a user's own and the count never moves. Closing that
+needs the emitted block's own content, or a hash of it, recorded in the marker — a
+further format change across all nine blocks and both generators. It is deferred until
+the first report of a section lost with all three triggers quiet, or the next time a
+block shrinks between releases.
 
 **Attribution check — applies to case 3 of the six sections below that replace on a
 missing marker.** Three do not need it: `Code reuse discipline` already preserves,

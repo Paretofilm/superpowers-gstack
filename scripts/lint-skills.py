@@ -173,6 +173,8 @@ ADAPT_GUARDS = [
      "the report line that turns a two-sections-now-exist state into an actionable one"),
     ("Step 5", "optionally followed by ` emitted=<N>`",
      "the rule that stops a post-2.49.0 marker being read as no marker at all"),
+    ("Step 5", "**Provenance (authoritative).**",
+     "the trigger that reads what the plugin actually wrote, not a ratio against a moving block"),
 ]
 
 # E13 ordering: a guard in the right step but the wrong place is still broken.
