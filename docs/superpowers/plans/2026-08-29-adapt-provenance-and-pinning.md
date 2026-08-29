@@ -573,6 +573,100 @@ to anchor on **STOP HERE.**, which is addressed to the agent."
 
 ---
 
+### Task 8: Close the same gap in Session Continuity
+
+Added during execution, from Task 1's review. `Session Continuity`'s case 3 implements the
+same "cannot attribute, preserve and insert" outcome independently of the shared Attribution
+check, and still carries the pre-Task-1 phrasing: *"tell the user both now exist so they can
+merge by hand."* Same state, same user problem, none of the explanation Task 1 added — so
+Task 1 closed the gap in one branch of the file and left its twin open.
+
+**Files:**
+- Modify: `skills/adapt/SKILL.md` — the Session Continuity rule's case 3, and one line in the
+  Step 6 report's Deferred block description
+- Test: `tests/unit/test_lint_adapt_guards.py`
+
+**Interfaces:**
+- Consumes: the report wording Task 1 introduced.
+- Produces: nothing later tasks read.
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+def test_session_continuity_explains_a_preserve_the_same_way():
+    """Task 1 gave the shared Attribution check a report that says why a section was
+    not upgraded and what undoes it. Session Continuity reaches the same state by its
+    own route, and a user cannot tell which branch produced their two sections."""
+    rule = ADAPT_SKILL[ADAPT_SKILL.index("**Insert or upgrade the Session Continuity"):]
+    rule = rule[: rule.index("blocks/session-continuity.md")]
+    assert "merge by hand" not in rule, "still carries the pre-Task-1 phrasing"
+    assert "delete your copy and re-run" in rule
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `pytest tests/unit/test_lint_adapt_guards.py -q`
+Expected: FAIL on the `merge by hand` assertion.
+
+- [ ] **Step 3: Replace the phrasing**
+
+In `skills/adapt/SKILL.md`, in the Session Continuity rule's case 3, find the branch that
+handles a section whose body does NOT mention `docs/superpowers/handoff.md` — the one ending
+*"tell the user both now exist so they can merge by hand. Never silently overwrite a section
+you cannot attribute to a past emitter."* Replace the reporting clause so it matches what the
+Attribution check now says, keeping the sniff-test logic and the final sentence intact:
+
+```markdown
+**If it does not** → leave the user's section untouched, insert the block as a separate H2
+section, and report it the way the **Attribution check** above reports a preserve:
+
+> `Session Continuity`: I cannot attribute this section to a past emitter — its body does
+> not mention `docs/superpowers/handoff.md`, which every emitted copy carries. I left it
+> exactly as it was and put the current plugin version below it, so nothing of yours was
+> touched. If it *is* an old plugin section, delete your copy and re-run `/adapt` and it
+> will upgrade cleanly.
+
+Never silently overwrite a section you cannot attribute to a past emitter.
+```
+
+- [ ] **Step 4: Note the format exception in the Deferred block**
+
+Task 1's review also observed that these blockquotes are five-line second-person prose while
+the Step 6 report's **Deferred** block documents a terse one-line-per-section format. There is
+no contradiction — they are different outputs — but nothing says so, and the next editor will
+have to work it out. Add one line to the Deferred block's description:
+
+```markdown
+> (The Growth check reports here in this one-line form. The Attribution check and Session
+> Continuity's case 3 specify their own multi-line message instead — a preserve needs to
+> explain itself, where a deferral only needs to be counted.)
+```
+
+- [ ] **Step 5: Verify**
+
+Run: `python3 scripts/lint-skills.py && pytest tests/unit -q`
+Expected: lint `0 error(s)`; one more test than before this task.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add skills/adapt/SKILL.md tests/unit/test_lint_adapt_guards.py
+git commit -m "fix(adapt): explain a Session Continuity preserve too
+
+Its case 3 reaches the same preserve-and-insert state as the shared
+Attribution check, by its own handoff.md sniff test, and still said only that
+both sections now exist and the user should merge by hand. A user cannot tell
+which branch produced their two sections, so they should not get two different
+qualities of explanation.
+
+Also notes, in the Deferred block, that a preserve specifies its own message
+while a deferral uses the terse one-line form -- they read as inconsistent
+until you see that one has to explain itself and the other only has to be
+counted."
+```
+
+---
+
 ### Task 7: Release
 
 - [ ] **Step 1: Bump the version**
