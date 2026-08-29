@@ -120,6 +120,15 @@ awk '/[Dd]eferred \(grown past its block/{f=1; next} f' "$WORK/run.log" \
   | head -20 | grep -qi "Native Apple development tools"
 assert "report names the deferred section under the Deferred block" $?
 
+# 5. The provenance trigger fired: a section at 1.23x the block — invisible to the
+#    ratio fallback — was caught because emitted=162 says the plugin wrote 162 lines
+#    and ~200 are there now.
+MISSING_PROV=0
+for n in 001 002 003 004 005; do
+  grep -q "PROV-SENTINEL-$n" "$WORK/CLAUDE.md" || { echo "  lost PROV-SENTINEL-$n"; MISSING_PROV=1; }
+done
+[ "$MISSING_PROV" -eq 0 ]; assert "provenance-marked section survives at 1.23x, below the ratio fallback" $?
+
 echo ""
 if [ ${#FAILURES[@]} -eq 0 ]; then
   echo "test_adapt_growth_gate: PASS"
