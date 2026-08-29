@@ -293,13 +293,6 @@ not estimate it and do not carry a stale value forward from the section you repl
 Block files themselves never carry `emitted=`; a constant baked into the source would
 lie the moment the block changed length.
 
-**Reading a marker.** An emitted marker is `<!-- gstack-<name>-vN -->`, optionally
-followed by ` emitted=<N>` before the closing `-->`. Every scan below must match both
-forms: sections written before 2.49.0 have no attribute, and a scan that accepts only
-the bare form would fail to recognise the sections this very release writes — turning
-every one of them into a case 4 "heading absent" and appending a duplicate block.
-Match the marker by its `gstack-<name>-v<digits>` prefix, never by the whole comment.
-
 **Growth check — applies to every marker-managed section below, in cases 2 and 3.**
 A marker records who *created* a section, not who has written in it since. Before
 replacing any section, compare its length against the block's:
@@ -442,7 +435,7 @@ that has drifted past its sentinel gets preserved instead of upgraded. A stale s
 costs one `/adapt` run after the user deletes it; a destroyed one costs whatever was
 in it.
 
-**Insert or upgrade the Autonomy and user interruption section.** This section applies to ALL projects (web and native equally — agents over-asking is platform-agnostic). Scan CLAUDE.md for the heading `^#{2,3} Autonomy and user interruption` and its version marker `<!-- gstack-autonomy-vN --> (optionally followed by emitted=<N>)`. Apply the same four-case logic:
+**Insert or upgrade the Autonomy and user interruption section.** This section applies to ALL projects (web and native equally — agents over-asking is platform-agnostic). Scan CLAUDE.md for the heading `^#{2,3} Autonomy and user interruption` and its version marker `<!-- gstack-autonomy-vN -->`. Apply the same four-case logic:
 
 1. **Heading present + marker matches `v2`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4 below.
@@ -451,7 +444,7 @@ in it.
 
 The block to insert: read `blocks/autonomy.md` (see **Shared block files** above) and insert its content verbatim.
 
-**Insert or upgrade the Git hygiene & commit cadence section.** This section applies to ALL projects (git is universal). Scan CLAUDE.md for heading `^#{2,3} Git hygiene` and its version marker `<!-- gstack-git-hygiene-vN --> (optionally followed by emitted=<N>)`. Apply the same four-case logic:
+**Insert or upgrade the Git hygiene & commit cadence section.** This section applies to ALL projects (git is universal). Scan CLAUDE.md for heading `^#{2,3} Git hygiene` and its version marker `<!-- gstack-git-hygiene-vN -->`. Apply the same four-case logic:
 
 1. **Heading present + marker matches `v9`** → skip (idempotent).
 2. **Heading present + marker `v1` or `v2` (older emitters — universalist convention rule, autonomy cross-ref missing, stash advice without WIP-branch caveat) OR different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. (The Git hygiene block has H4 subsections; "next heading" alone would stop at the first one and leave old v1 prose behind.) **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level so subsections do not sit at the same level as the root — same demote requirement as case 4 below.
@@ -460,7 +453,7 @@ The block to insert: read `blocks/autonomy.md` (see **Shared block files** above
 
 The block to insert: read `blocks/git-hygiene.md` (see **Shared block files** above) and insert its content verbatim.
 
-**Insert or upgrade the Multi-lens review section.** This section applies to ALL projects (review hygiene is universal). Scan CLAUDE.md for heading `^#{2,3} Multi-lens review` and its version marker `<!-- gstack-multi-lens-review-vN --> (optionally followed by emitted=<N>)`. Apply the same four-case logic:
+**Insert or upgrade the Multi-lens review section.** This section applies to ALL projects (review hygiene is universal). Scan CLAUDE.md for heading `^#{2,3} Multi-lens review` and its version marker `<!-- gstack-multi-lens-review-vN -->`. Apply the same four-case logic:
 
 1. **Heading present + marker matches the current version (`v5`)** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4 below. (The Multi-lens review block has H4 subsections; "next heading" alone would stop at the first one and leave old prose behind.)
@@ -469,7 +462,7 @@ The block to insert: read `blocks/git-hygiene.md` (see **Shared block files** ab
 
 The block to insert: read `blocks/multi-lens-review.md` (see **Shared block files** above) and insert its content verbatim.
 
-**Insert or upgrade the Code reuse discipline section.** This section applies to ALL projects (the agentic-duplication failure mode is platform-agnostic). Scan CLAUDE.md for heading `^#{2,3} Code reuse discipline` and its version marker `<!-- gstack-code-reuse-vN --> (optionally followed by emitted=<N>)`. Apply the four-case logic, but with a CRITICAL difference from the other marker-managed sections in case 3:
+**Insert or upgrade the Code reuse discipline section.** This section applies to ALL projects (the agentic-duplication failure mode is platform-agnostic). Scan CLAUDE.md for heading `^#{2,3} Code reuse discipline` and its version marker `<!-- gstack-code-reuse-vN -->`. Apply the four-case logic, but with a CRITICAL difference from the other marker-managed sections in case 3:
 
 1. **Heading present + marker matches `v2`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4 below. (The Code reuse block has subsections one level below the root; "next heading" alone would stop at the first subsection and leave old prose behind.)
@@ -478,7 +471,7 @@ The block to insert: read `blocks/multi-lens-review.md` (see **Shared block file
 
 The block to insert: read `blocks/code-reuse.md` (see **Shared block files** above) and insert its content verbatim.
 
-**Insert or upgrade the Keep the plan true to the code section.** This section applies to ALL projects (plan drift is not track-specific). Scan CLAUDE.md for heading `^#{2,3} Keep the plan true to the code` and its version marker `<!-- gstack-plan-fidelity-vN --> (optionally followed by emitted=<N>)`. Apply the same four-case logic:
+**Insert or upgrade the Keep the plan true to the code section.** This section applies to ALL projects (plan drift is not track-specific). Scan CLAUDE.md for heading `^#{2,3} Keep the plan true to the code` and its version marker `<!-- gstack-plan-fidelity-vN -->`. Apply the same four-case logic:
 
 1. **Heading present + marker matches `v2`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. (The block has H3 subsections; "next heading" alone would stop at the first one and leave old prose behind.) **If the existing root is H3**, demote every subsection in the replacement one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4.
@@ -487,7 +480,7 @@ The block to insert: read `blocks/code-reuse.md` (see **Shared block files** abo
 
 The block to insert: read `blocks/plan-fidelity.md` (see **Shared block files** above) and insert its content verbatim.
 
-**Insert or upgrade the Session Continuity section.** This section applies to ALL projects (context handoff is platform-agnostic). Scan CLAUDE.md for heading `^#{2,3} Session [Cc]ontinuity` and its version marker `<!-- gstack-session-continuity-vN --> (optionally followed by emitted=<N>)`. Apply the same four-case logic:
+**Insert or upgrade the Session Continuity section.** This section applies to ALL projects (context handoff is platform-agnostic). Scan CLAUDE.md for heading `^#{2,3} Session [Cc]ontinuity` and its version marker `<!-- gstack-session-continuity-vN -->`. Apply the same four-case logic:
 
 1. **Heading present + marker matches `v3`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level (see the heading-level rule below). Run the **Growth check** above before replacing.
@@ -515,8 +508,7 @@ CLAUDE.md. Check two things independently: (a) does any heading
 matching `^#{2,3} Track-aware routing \(dual-track\)` exist (H2 or
 H3 — `setup-routing` emits H3 as subsection, `adapt` historically
 emitted H2 as top-level), and (b) is there a version marker
-`<!-- gstack-routing-vN -->` (optionally followed by ` emitted=<N>`)
-on that heading line (currently `v2`).
+`<!-- gstack-routing-vN -->` on that heading line (currently `v2`).
 Four cases:
 
 1. **Heading present + marker matches current version (`v2`)** →
@@ -551,7 +543,7 @@ section's semantics change, not for cosmetic edits.
 
 The block to insert: read `blocks/track-routing.md` (see **Shared block files** above) and insert its content verbatim.
 
-**Insert or upgrade the Native Apple development tools section.** Only emit this section when `.gstack/track` exists and equals `ios`, `macos`, or `both` (skip entirely for web-only projects). Scan CLAUDE.md for the heading `^#{2,3} Native Apple development tools` and its version marker `<!-- gstack-xcode-tools-vN --> (optionally followed by emitted=<N>)`. Apply the same four-case logic as Track-aware routing above:
+**Insert or upgrade the Native Apple development tools section.** Only emit this section when `.gstack/track` exists and equals `ios`, `macos`, or `both` (skip entirely for web-only projects). Scan CLAUDE.md for the heading `^#{2,3} Native Apple development tools` and its version marker `<!-- gstack-xcode-tools-vN -->`. Apply the same four-case logic as Track-aware routing above:
 
 1. **Heading present + marker matches `v6`** → skip (idempotent).
 2. **Heading present + marker `v1`–`v5`** (v1 assumed XcodeBuildMCP universally; v2 added CLI fallback but missed capabilities; v3 hardcoded one team's `DEVELOPMENT_TEAM`; v4 was simulator-only and had no macOS build/launch path at all; v5 hardcoded an `iPhone 16` destination that Xcode no longer ships) → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. (The Native Apple tools block has H4 subsections; "next heading" alone would stop at the first one and leave old prose behind.) **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level so subsections do not sit at the same level as the root — same demote requirement as case 4 below. Auto-upgrade is what the marker pattern is for.
@@ -560,7 +552,7 @@ The block to insert: read `blocks/track-routing.md` (see **Shared block files** 
 
 The block to insert: read `blocks/xcode-tools.md` (see **Shared block files** above) and insert its content verbatim.
 
-**Insert or upgrade the Companion skills (discovery) section.** Only emit when `.gstack/track` exists and equals `ios`, `macos`, or `both` (skip for web-only projects). Scan CLAUDE.md for heading `^#{2,3} Companion skills` and its version marker `<!-- gstack-companion-skills-vN --> (optionally followed by emitted=<N>)`. Apply the same four-case logic:
+**Insert or upgrade the Companion skills (discovery) section.** Only emit when `.gstack/track` exists and equals `ios`, `macos`, or `both` (skip for web-only projects). Scan CLAUDE.md for heading `^#{2,3} Companion skills` and its version marker `<!-- gstack-companion-skills-vN -->`. Apply the same four-case logic:
 
 1. **Heading present + marker matches `v2`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4 below.

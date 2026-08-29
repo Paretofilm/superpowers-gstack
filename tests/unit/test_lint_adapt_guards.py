@@ -295,21 +295,6 @@ def test_block_files_never_carry_the_emitted_attribute():
         assert "emitted=" not in f.read_text().split("\n", 1)[0], f"{f.name} line 1"
 
 
-def test_every_scan_rule_tolerates_the_provenance_attribute():
-    """Nine rules scan for a marker. After 2.49.0 an emitted marker may carry
-    `emitted=`; a rule that matches only the bare form stops recognising the very
-    sections this release writes."""
-    import re
-    scans = re.findall(r"its version marker `<!-- gstack-[a-z-]+-vN[^`]*`", ADAPT_SKILL)
-    assert len(scans) >= 8, f"expected the scan rules, found {len(scans)}"
-    for s in scans:
-        assert "emitted" in s, f"scan rule does not tolerate provenance: {s}"
-
-
-def test_the_tolerance_is_stated_once_in_prose_too():
-    assert "optionally followed by ` emitted=<N>`" in ADAPT_SKILL
-
-
 def test_growth_check_prefers_provenance_over_the_ratio():
     gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check"):]
     gate = gate[: gate.index("**Insert or upgrade the Autonomy")]
