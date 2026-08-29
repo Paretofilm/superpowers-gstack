@@ -326,7 +326,8 @@ fire. Measured on this branch's own fixture (196-line section, 78-line block, tr
 and the line numbers came from that same file, so reading it there is the only
 self-consistent choice. The snapshot's job is Step 6's whole-file diff, not this.
 
-Then run the diff — always, before deciding, because both triggers read it:
+Then run the diff — always, before deciding. The Volume proxy is read off it, and so
+is the at-risk list you show the user when the gate fires:
 
 ```bash
 diff "$TMP" <path-to-block>.md
@@ -410,9 +411,11 @@ When the gate fires, do not replace the section silently:
    read it as "`--print` means proceed" — assuming that reachability is exactly what
    made this branch's first test harness report PASS while proving nothing.
 
-Both triggers are heuristics, and neither establishes authorship — a line count is not
-a byline. They are cheap proxies for "someone has been writing in here", chosen because
-they are computable from what the gate already reads. A section at 1.1× is usually a
+The two proxies are heuristics, and neither establishes authorship — a line count is
+not a byline. They are cheap stand-ins for "someone has been writing in here", chosen
+because they are computable from what the gate already reads. Provenance is not one of
+them: it is a measurement against a number the plugin wrote down, which is why it can
+only add a reason to stop and never subtract one. A section at 1.1× is usually a
 user fixing a typo in plugin prose; the run that motivated this gate was at 2.7× — a
 73-line block against a 198-line section, and the 125-line delta held an
 `-allowProvisioningUpdates` discovery, three lessons about running on a physical
