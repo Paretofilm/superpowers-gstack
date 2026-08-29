@@ -2,8 +2,9 @@
 #
 # tests/integration/test_adapt_growth_gate.sh
 #
-# Verifies that /adapt's growth check (2.48.0) refuses to silently replace a
-# marker-managed section that has grown past its block.
+# Verifies that /adapt's growth check refuses to silently replace a marker-managed
+# section that has grown past its block, by both routes it can notice: the Ratio
+# proxy (2.48.0) and the provenance delta against `emitted=` (2.49.0).
 #
 # The regression this guards is the QUIET one: a run that reports
 # "Nothing project-authored was removed." while the diff says otherwise. So the
@@ -11,6 +12,12 @@
 #
 # --print is non-interactive, so the gate's rule 4 (preserving branch) is the
 # path under test: the section must be left at its old version, not replaced.
+#
+# It also covers the two things the gate depends on but does not itself do: that
+# an emitted `emitted=<N>` equals `wc -l` of the block it came from (assertion
+# 10), and that an H3-rooted section is re-emitted at H3 WITH provenance
+# (assertion 11) — demote and provenance in one write, which no run had ever
+# performed before this fixture grew an H3 section.
 #
 # Cost: ~1-2 minutes and a few cents. Requires ANTHROPIC_API_KEY or an active
 # Claude Code session.
@@ -96,6 +103,67 @@ if ! LC_NUMERIC=C awk -v s="$SECTION_LINES" -v b="$BLOCK_LINES" 'BEGIN { exit !(
 fi
 echo "Fixture premise verified: section is $SECTION_LINES lines against a $BLOCK_LINES-line block (${RATIO}x, gate fires above 1.5x)."
 
+# Precondition, not an assertion: the SECOND fixture section exists to prove the
+# provenance trigger catches what the ratio cannot, so its premise has to hold in
+# both directions — under 1.5x (invisible to the Ratio proxy) and more than ~20
+# lines above its own emitted= count. Derive all three numbers from the real
+# files; a fixture edit that quietly breaks either half would leave the assertions
+# below testing a mechanism that never ran.
+PROV_BLOCK="$PLUGIN_DIR/skills/setup-routing/blocks/git-hygiene.md"
+PROV_START=$(grep -n '^## Git hygiene' "$FIXTURE" | head -1 | cut -d: -f1)
+PROV_END=$(awk -v start="$PROV_START" 'NR>start && /^## /{print NR-1; exit}' "$FIXTURE")
+[ -n "$PROV_END" ] || PROV_END=$(wc -l < "$FIXTURE")
+PROV_LINES=$((PROV_END - PROV_START + 1))
+PROV_BLOCK_LINES=$(wc -l < "$PROV_BLOCK" | tr -d ' ')
+PROV_EMITTED=$(sed -n "${PROV_START}p" "$FIXTURE" | sed -nE 's/.*<!-- emitted=([0-9]+) -->.*/\1/p')
+if [ -z "$PROV_EMITTED" ]; then
+  echo "SETUP ERROR: fixture's Git hygiene heading carries no <!-- emitted=N --> comment." >&2
+  echo "  Provenance is what this section exists to exercise. INCONCLUSIVE, not a pass." >&2
+  exit 2
+fi
+PROV_RATIO=$(LC_NUMERIC=C awk -v s="$PROV_LINES" -v b="$PROV_BLOCK_LINES" 'BEGIN { printf "%.2f", s / b }')
+if ! LC_NUMERIC=C awk -v s="$PROV_LINES" -v b="$PROV_BLOCK_LINES" 'BEGIN { exit !(s <= 1.5 * b) }'; then
+  echo "SETUP ERROR: Git hygiene fixture section is ${PROV_RATIO}x its block — at or above" >&2
+  echo "  1.5x the Ratio proxy would catch it too, so a survival cannot be credited to" >&2
+  echo "  provenance. INCONCLUSIVE, not a pass." >&2
+  exit 2
+fi
+if [ "$((PROV_LINES - PROV_EMITTED))" -le 20 ]; then
+  echo "SETUP ERROR: Git hygiene fixture section is $PROV_LINES lines against emitted=$PROV_EMITTED" >&2
+  echo "  — only $((PROV_LINES - PROV_EMITTED)) over, and the provenance trigger fires above ~20." >&2
+  echo "  INCONCLUSIVE, not a pass." >&2
+  exit 2
+fi
+echo "Provenance premise verified: Git hygiene section is $PROV_LINES lines, ${PROV_RATIO}x its" \
+     "$PROV_BLOCK_LINES-line block (under the 1.5x proxy) and $((PROV_LINES - PROV_EMITTED)) over emitted=$PROV_EMITTED (over ~20)."
+
+# Precondition, not an assertion: the H3-rooted section exercises the
+# heading-level rule (demote to ###) TOGETHER with provenance — a combination no
+# run had ever performed, on the population it matters most for: an H3 root means
+# a pre-2.34.0 adaptation. It only reaches that path in case 2 (marker present,
+# version different). If the fixture's marker ever catches up with the block's,
+# case 1 skips the section and assertion 11 passes having tested nothing — the
+# vacuous green this project has now shipped four times. Derive both markers.
+H3_BLOCK="$PLUGIN_DIR/skills/setup-routing/blocks/session-continuity.md"
+H3_BLOCK_LINES=$(wc -l < "$H3_BLOCK" | tr -d ' ')
+H3_BLOCK_MARKER=$(head -1 "$H3_BLOCK" | sed -nE 's/.*<!-- (gstack-[a-z-]+-v[0-9]+) -->.*/\1/p')
+H3_FIXTURE_MARKER=$(grep -E '^### Session Continuity' "$FIXTURE" | head -1 \
+  | sed -nE 's/.*<!-- (gstack-[a-z-]+-v[0-9]+) -->.*/\1/p')
+if [ -z "$H3_FIXTURE_MARKER" ] || [ -z "$H3_BLOCK_MARKER" ]; then
+  echo "SETUP ERROR: could not read the H3 section's marker from the fixture" >&2
+  echo "  ('$H3_FIXTURE_MARKER') or from $H3_BLOCK ('$H3_BLOCK_MARKER')." >&2
+  echo "  Assertion 11 would test nothing. INCONCLUSIVE, not a pass." >&2
+  exit 2
+fi
+if [ "$H3_FIXTURE_MARKER" = "$H3_BLOCK_MARKER" ]; then
+  echo "SETUP ERROR: the fixture's H3 section is already on $H3_BLOCK_MARKER, the block's" >&2
+  echo "  current marker — case 1 skips it, so the demote-plus-provenance path never runs." >&2
+  echo "  Put the fixture section on an older marker. INCONCLUSIVE, not a pass." >&2
+  exit 2
+fi
+echo "H3 premise verified: fixture section is on $H3_FIXTURE_MARKER, the block on" \
+     "$H3_BLOCK_MARKER ($H3_BLOCK_LINES lines) — case 2, so it demotes and re-emits."
+
 # 2. Every sentinel line survives. This is the assertion that matters: it reads
 #    the file, so a run that CLAIMS nothing was removed still fails here.
 MISSING=0
@@ -119,6 +187,115 @@ grep -qi "Removed (not plugin prose)" "$WORK/run.log"; assert "report contains t
 awk '/[Dd]eferred \(grown past its block/{f=1; next} f' "$WORK/run.log" \
   | head -20 | grep -qi "Native Apple development tools"
 assert "report names the deferred section under the Deferred block" $?
+
+# 6. The gate fired on a section at 1.23x its block — invisible to the Ratio proxy,
+#    so the old signal was blind to it. It does NOT establish WHICH trigger fired.
+#    Volume fires here on its own: this fixture's section shares almost nothing with
+#    git-hygiene.md (~160 of its lines are absent from the block entirely), and under
+#    the additive precedence any one trigger firing yields this same outcome. Reading
+#    a survival here as proof of provenance is the claim this comment used to make.
+#    Separating them needs a volume-neutral fixture — >20 over emitted=, ~0 absent
+#    from the block — which skills/adapt/SKILL.md records as deferred work.
+MISSING_PROV=0
+for n in 001 002 003 004 005; do
+  grep -q "PROV-SENTINEL-$n" "$WORK/CLAUDE.md" || { echo "  lost PROV-SENTINEL-$n"; MISSING_PROV=1; }
+done
+[ "$MISSING_PROV" -eq 0 ]; assert "provenance-marked section survives at 1.23x, below the ratio proxy" $?
+
+# 7-9. Survival alone does not prove the gate ran. There is a second route to
+#    those five lines being intact: if the marker were read as ABSENT, this
+#    fixture carries neither of git-hygiene's case-3 sentinels, so the
+#    Attribution check would preserve the section byte-for-byte and insert the
+#    current block BESIDE it — and assertion 6 would pass having proved nothing
+#    about provenance. These three separate the two outcomes. A deferral leaves
+#    exactly one section, still on its old marker, named in the Deferred block;
+#    a preserve-and-insert leaves two, one of them on v9.
+GITHYG_HEADINGS=$(grep -c '^#\{2,3\} Git hygiene' "$WORK/CLAUDE.md")
+[ "$GITHYG_HEADINGS" -eq 1 ]
+assert "exactly one Git hygiene section (a preserve-and-insert would leave two)" $?
+
+grep -q 'gstack-git-hygiene-v8' "$WORK/CLAUDE.md" && ! grep -q 'gstack-git-hygiene-v9' "$WORK/CLAUDE.md"
+assert "Git hygiene left at v8 — deferred, not upgraded and not duplicated at v9" $?
+
+awk '/[Dd]eferred \(grown past its block/{f=1; next} f' "$WORK/run.log" \
+  | head -20 | grep -qi "Git hygiene"
+assert "report names Git hygiene under the Deferred block" $?
+
+# 10. A generator wrote provenance, AND the number it wrote is right. The first
+#    cut of this assertion counted headings carrying `emitted=<anything>`, so
+#    emitted=0, a copied 162, any integer at all passed it — nothing on this
+#    branch checked that a generator counts correctly. That matters because a
+#    plausible inflated <N> sits inside the sanity band ("distrust an implausible
+#    <N>" only fires more than ~20 above the block) and silences the provenance
+#    trigger for that section from then on.
+#
+#    A heading whose marker matches a CURRENT block file was written this run, so
+#    its <N> must equal `wc -l` of that block — the definition both generators
+#    are given. Headings on older markers were NOT written this run (the
+#    fixture's seeded git-hygiene v8, anything the gate deferred) and are skipped
+#    rather than compared against a block they never came from.
+BLOCKS_DIR="$PLUGIN_DIR/skills/setup-routing/blocks"
+PROV_CHECKED=0
+PROV_BAD=0
+# heredoc, not a pipe: a `while read` on the right of a pipe runs in a subshell
+# and both counters would come back zero — which reads exactly like a pass.
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  marker=$(printf '%s\n' "$line" | sed -nE 's/.*<!-- (gstack-[a-z-]+-v[0-9]+) -->.*/\1/p')
+  got=$(printf '%s\n' "$line" | sed -nE 's/.*<!-- emitted=([0-9]+) -->.*/\1/p')
+  [ -n "$marker" ] && [ -n "$got" ] || continue
+  bf=""
+  for f in "$BLOCKS_DIR"/*.md; do
+    if head -1 "$f" | grep -q -- "<!-- $marker -->"; then bf="$f"; break; fi
+  done
+  [ -n "$bf" ] || continue
+  want=$(wc -l < "$bf" | tr -d ' ')
+  PROV_CHECKED=$((PROV_CHECKED + 1))
+  if [ "$got" != "$want" ]; then
+    echo "  emitted=$got on $marker, but $(basename "$bf") is $want lines"
+    PROV_BAD=$((PROV_BAD + 1))
+  fi
+done <<EOF
+$(grep -E '^#{2,3} .*<!-- gstack-[a-z-]+-v[0-9]+ --><!-- emitted=[0-9]+ -->' "$WORK/CLAUDE.md")
+EOF
+[ "$PROV_CHECKED" -ge 1 ]
+assert "a generator wrote emitted= on a section it emitted this run ($PROV_CHECKED checked)" $?
+[ "$PROV_BAD" -eq 0 ]
+assert "every emitted= written this run equals wc -l of its block ($PROV_BAD wrong of $PROV_CHECKED)" $?
+
+# 10b. Coverage, not just correctness. The loop above only sees headings that already
+#    match the strict adjacent-comment form; anything else is invisible, not wrong. So a
+#    generator that wrote provenance on one section and forgot the rest — the exact
+#    failure the feature exists to prevent — or wrote it with a space between the
+#    comments, passed 10 with "0 wrong". Every heading sitting at a block's CURRENT
+#    marker was necessarily written this run (no fixture section starts current), so
+#    each one must carry the strict form. Zero exceptions.
+PROV_MISSING=0
+for f in "$BLOCKS_DIR"/*.md; do
+  cur=$(head -1 "$f" | sed -nE 's/.*<!-- (gstack-[a-z-]+-v[0-9]+) -->.*/\1/p')
+  [ -n "$cur" ] || continue
+  grep -E "^#{2,3} .*<!-- $cur -->" "$WORK/CLAUDE.md" | while IFS= read -r h; do
+    printf '%s\n' "$h" | grep -qE "<!-- $cur --><!-- emitted=[0-9]+ -->" || \
+      { echo "  current-marker heading without strict provenance: $h"; exit 9; }
+  done
+  [ $? -eq 9 ] && PROV_MISSING=$((PROV_MISSING + 1))
+done
+[ "$PROV_MISSING" -eq 0 ]
+assert "every heading at a current marker carries provenance in the strict form ($PROV_MISSING without)" $?
+
+# 11. The H3 path, end to end — demote and provenance in the same write. The
+#    heading-level rule calls itself the general rule for every marker-managed
+#    section and was fixed this release to append provenance after the copied
+#    marker; a unit test and an E13 needle pin the sentence, but until now no run
+#    had ever performed the two together, because every fixture section was H2.
+#    An H3 root means a pre-2.34.0 adaptation: the oldest projects in the wild.
+H3_COUNT=$(grep -c -E '^#{2,3} Session Continuity' "$WORK/CLAUDE.md")
+H3_HEADING=$(grep -E '^#{2,3} Session Continuity' "$WORK/CLAUDE.md" | head -1)
+[ "$H3_COUNT" -eq 1 ] && printf '%s\n' "$H3_HEADING" | grep -qE '^### '
+assert "Session Continuity is still H3 after the upgrade ($H3_COUNT found: $H3_HEADING)" $?
+
+printf '%s\n' "$H3_HEADING" | grep -q -- "<!-- $H3_BLOCK_MARKER --><!-- emitted=$H3_BLOCK_LINES -->"
+assert "the demoted H3 heading carries $H3_BLOCK_MARKER AND emitted=$H3_BLOCK_LINES" $?
 
 echo ""
 if [ ${#FAILURES[@]} -eq 0 ]; then

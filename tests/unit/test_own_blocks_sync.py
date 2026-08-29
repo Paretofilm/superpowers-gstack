@@ -51,11 +51,51 @@ def test_conditional_and_placeholder_blocks_are_excluded():
 
 
 def test_rendered_region_is_byte_identical_to_the_blocks():
-    """The whole point: what this repo follows is what /adapt emits elsewhere."""
+    """The whole point: what this repo follows is what /adapt emits elsewhere.
+
+    Everything below the heading line is the block verbatim. The heading itself
+    is the block's heading as a GENERATOR writes it — with the provenance comment
+    appended — which is the same standard, not an exception to it.
+    """
     region = sync.render()
     for name in sync.UNIVERSAL:
-        body = (sync.BLOCKS / name).read_text().rstrip("\n")
+        raw = (sync.BLOCKS / name).read_text()
+        head, _, body = raw.rstrip("\n").partition("\n")
         assert body in region, f"{name} content not emitted verbatim"
+        # `head` itself IS a prefix of the emitted heading — that is the design.
+        # What must not appear is the heading as a whole LINE, i.e. bare.
+        assert f"{head}\n" not in region, (
+            f"{name} heading emitted bare — a generator writes provenance beside "
+            f"the marker, and this repo is supposed to eat its own cooking")
+
+
+def test_every_emitted_heading_carries_its_block_s_line_count():
+    """`emitted=<N>` is `wc -l` of the block file. Here that definition is
+    executable rather than prose, which is the one place it can be checked at all:
+    the generators are agents following an instruction, this is a script."""
+    import re
+    region = sync.render()
+    for name in sync.UNIVERSAL:
+        raw = (sync.BLOCKS / name).read_text()
+        head = raw.split("\n", 1)[0]
+        want = f"{head}<!-- emitted={raw.count(chr(10))} -->"
+        assert want in region, f"{name}: expected heading {want!r}"
+    # and never the shape that stops an older reader matching the marker
+    assert not re.search(r"<!-- gstack-[a-z-]+-v\d+ +emitted=", region)
+
+
+def test_provenance_leaves_the_bare_marker_matchable():
+    """The reason for a second comment rather than an attribute inside the first:
+    a reader that greps the bare marker — an older plugin cache, lint E8 — must
+    still find it byte-for-byte in what we wrote."""
+    import re
+    region = sync.render()
+    for name in sync.UNIVERSAL:
+        head = (sync.BLOCKS / name).read_text().split("\n", 1)[0]
+        m = re.search(r"<!-- gstack-[a-z-]+-v\d+ -->", head)
+        assert m, f"{name}: block heading carries no bare marker to begin with"
+        assert m.group(0) in region, (
+            f"{name}: bare marker {m.group(0)!r} no longer present in what we wrote")
 
 
 def test_splice_is_idempotent():

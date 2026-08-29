@@ -1,5 +1,169 @@
 # Changelog
 
+## [2.49.0] - 2026-08-29
+
+2.48.0 gave `/adapt` guards against destroying a project's own notes, and left one
+question answered by a guess: has this section grown since the plugin wrote it? It
+answered with a ratio against the block's *current* size, which moves for reasons that
+have nothing to do with the user. `git-hygiene.md` is 162 lines, so 81 lines of hand-
+written content could sit under a 1.5× gate; `companion-skills.md` is 23, so 11. Same
+threshold, seven times the exposure.
+
+### Changed — provenance replaces the guess
+- **Emitted headings now record what was emitted**, in a SECOND comment beside the
+  marker: `## Git hygiene & commit cadence <!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->`.
+  `<N>` is `wc -l` of the block file as it shipped, so the growth check subtracts
+  instead of dividing and fires when a section is more than ~20 lines above what the
+  plugin actually wrote. It no longer cares what the block weighs today.
+- **The attribute is beside the marker, never inside it, and that is the whole design.**
+  `<!-- gstack-git-hygiene-v9 emitted=162 -->` does not contain the string
+  `<!-- gstack-git-hygiene-v9 -->`, so every reader that knows only the bare form stops
+  matching: an older plugin cache reads a section this release wrote as markerless and
+  either replaces it or appends a duplicate beside it, and this repo's own lint stops
+  seeing marker headings at all. A second comment on the same line keeps the marker
+  literally present — an old cache skips the section as current and does nothing. On its
+  own line it would instead add a line to what the next run counts, and sit where a user
+  tidying their CLAUDE.md can delete it.
+- **The three triggers are checked together; provenance can only ADD a reason to stop.**
+  It is not authoritative and it is not exclusive. `<N>` is a number a past run wrote
+  and nothing verifies it, so an exclusive provenance trigger meant one wrong count
+  silenced ratio and volume too — worse than 2.48.0 for exactly the sections the feature
+  protects. A trigger that fires when it should not costs one question; one that stays
+  quiet costs the user their writing. An implausible `<N>` is distrusted outright when it
+  is at or ABOVE the section's current length — the plugin cannot have emitted more lines
+  than are there, so the count is wrong — or more than ~20 lines above the block file's
+  length today. (A `<N>` well *below* today's block is ordinary — that is just an older,
+  smaller block — and stays trusted.)
+- **The ratio and volume triggers remain**, relabelled as the proxies they are. All four
+  numbers in the gate — the provenance delta, the sanity band on `<N>`, and the two
+  proxy thresholds — are pinned by a test AT THEIR OWN SITES. The first cut of that test
+  sliced the whole gate and asserted the numbers occurred somewhere in it, which three
+  of them did more than once: 1.5 could become 15, and both ~20s could move, with the
+  test green. Measured, not reasoned about.
+- **`heading_text()` normalizes the two-comment form**, which the release that invented
+  it had not taught the normalizer to read: for a real emitted heading it returned
+  `session continuity <!-- gstack-session-continuity-v1 --><!-- emitted=66 -->`, because
+  the marker rule is anchored at end-of-line and provenance now sits to its right. E8's
+  marker branch reads the raw line and was never fooled, but its markerless branch
+  compares against this text — so an inline copy of a block heading carrying only
+  `<!-- emitted=N -->` passed the lint with 0 errors. Both comments strip now, and the
+  three real shapes are in `test_lint_heading_text.py`.
+- **Lint E14** keeps `emitted=` out of the source blocks, where it would be a constant
+  that goes stale on the next edit — and a stale provenance number is worse than none,
+  because the gate would trust it.
+- **The plugin now eats this cooking.** `scripts/sync-own-claude-md.py` writes provenance
+  into this repo's own CLAUDE.md, which is also the only place the `wc -l` definition is
+  executable rather than prose: the generators are agents following an instruction, that
+  script is a script, and a test checks every count against its block.
+
+### Fixed
+- **Four of `/adapt`'s content-loss guards could be deleted with the lint green.** Each
+  E13 needle matched a second copy of the same string elsewhere in the same step, so it
+  reported the copy rather than the site it names — including the mandatory diff
+  command, which the optional review below it re-runs inline. Two of the four duplicates
+  were created by this release. Every needle is now unique to its own site, all four
+  deletions are red, and the class itself is closed: a needle matching more than once in
+  its region is an error saying it has stopped pinning anything.
+- **This release's own load-bearing sentences had no guard.** The imperative that makes
+  provenance exist — "When you write a block into CLAUDE.md, add a SECOND HTML comment"
+  — could be weakened to "you MAY add", in either generator, with the lint and every
+  test green: the generator-pair test asserted how to count `<N>` and what the example
+  looks like, never that anything gets written. The same held for "do not carry a stale
+  value forward from the section you replaced", the only textual guard against an old
+  `emitted=` riding onto a new marker. Both are now E13 needles in `/adapt` and
+  assertions across both generators; all four deletions are red.
+- **The gate's union could be turned into a conjunction with everything green.** "The
+  gate fires when **any** of the three triggers below holds" → "fires ONLY when ALL
+  THREE" left the lint at 0 errors and the whole suite passing, and it makes the gate
+  unfirable: nothing written before 2.49.0 carries an `emitted=`, so those sections can
+  never satisfy all three. The sentence *had* been pinned — as `assert "either" in gate`,
+  from when there were two triggers — and this release's own rewrite to "any" left the
+  assertion passing on "n**either** proxy alone is enough" elsewhere in the slice. A pin
+  gone vacuous inside the wave that changed what it pinned, which is the same class as
+  the four above. The union is now pinned at its own site, at lint and unit level; the
+  substring assertion is deleted.
+- **A section `/adapt` cannot attribute is no longer silently un-upgraded, on either
+  path that reaches that state.** The shared Attribution check, and Session Continuity's
+  own `handoff.md` sniff test when it lands on the same preserve-and-insert outcome, now
+  both say which section, why, that nothing of theirs was touched, and that deleting
+  their copy and re-running `/adapt` upgrades it cleanly. Two sections sharing a heading
+  is a state the user has to resolve; they were being told only that it existed. The
+  Deferred report block was narrowed to match: it had claimed to carry these checks'
+  reports too, which are a different outcome reported inline where they fire, and it
+  asked for "the marker it is still on" — a preserve that never had one.
+- **Four smaller edges on the same release.** The Deferred report block asked for "the
+  marker it is still on", but the Growth check runs in cases 2 **and 3** and case 3 is
+  "marker absent" — the same defect the preserve branch had, one branch further along; it
+  now says to report the absence rather than invent a version. "Record what you emitted"
+  is scoped to blocks whose file carries a marker, so `model-routing-section.md`, which
+  has none, no longer reads as an instruction to write `## Model Routing <!-- emitted=N -->`.
+  The deferred-work paragraph names the one residual the sanity band leaves open: its ~20
+  and the trigger's ~20 stack, so an `<N>` overstated by up to ~20 buys ~40 lines of
+  growth watched only by Volume. And the generator-pair test derives the example's version
+  and line count from `git-hygiene.md` instead of naming v9/162 — the next bump used to be
+  cheapest to green by editing the test.
+- **The heading-level rule wrote no provenance.** It calls itself the general rule for
+  every marker-managed section and said to copy the marker from the block — and a block
+  file's marker never carries `emitted=`. So sections demoted to H3 were emitted without
+  it, and an H3 root means a pre-2.34.0 adaptation: the oldest projects in the wild,
+  with the most accumulated content inside plugin-managed headings.
+- **The Step 6 ordering rule anchors on structure, not on a question's wording, and now
+  fails closed when it can't run.** The first cut keyed on the text shown to the user; a
+  copy-edit would have disarmed it, after which the mandatory diff could have moved
+  below the optional review gate with the lint still green. Re-anchoring to
+  `**STOP HERE.**` (addressed to the agent, not the user) raised the bar but opened the
+  same hole one level down: the check read `if first in region and second in region`, so
+  editing either anchor away skipped the comparison instead of failing it. A missing
+  anchor is now its own error naming which one is gone — and so is an ordering entry
+  that names a step with no `### Step N` heading at all, the same fail-open shape found
+  a second time.
+- **The end-to-end report's block labels are written verbatim now.** A run under this
+  session's own Norwegian-output instruction rendered `## Fjernet (ikke plugin-prosa)`
+  where the integration test greps `Removed (not plugin prose)`. The skill said to write
+  that one sentinel exactly but not the two labels around it, so those were translated
+  as ordinary prose. All three are structural markers lint E13 pins and tooling greps;
+  the skill now says so, while the surrounding prose still follows the user's language.
+- **The fixture proving the growth check passed without exercising it, twice over.**
+  First, its provenance-bearing section carried the *current* marker, so the
+  idempotent-skip case took it before the growth check — which runs only in cases 2 and
+  3 — ever ran; the assertion would have passed with provenance absent from the plugin
+  entirely. The third vacuous green in this project's history. Fixed by putting the
+  section on an older marker. Second, even on that path, survival had another cause: had
+  the marker been read as absent, the fixture carries neither of git-hygiene's case-3
+  sentinels, so the Attribution check would have preserved the section and inserted the
+  block beside it — same five surviving lines, gate never consulted. The test now
+  separates the two outcomes (a deferral leaves exactly one section, still on its old
+  marker, named in the Deferred block; a preserve-and-insert leaves two, one of them
+  current) and asserts that a generator *wrote* provenance somewhere, rather than only
+  that the seeded fixture attribute survived.
+- **The integration test accepted any integer as provenance, and had never run the H3
+  path.** Its provenance assertion counted headings carrying `emitted=<anything>`, so
+  `emitted=0` and a plausible inflated count both passed — verified against the previous
+  assertion, which greens on `emitted=45` beside a 31-line block. Nothing on the branch
+  checked that a generator counts correctly, and an inflated `<N>` inside the sanity band
+  silences the provenance trigger for that section from then on. Each heading whose
+  marker matches a current block file is now compared against `wc -l` of that block;
+  headings on older markers were not written this run and are skipped. Separately, every
+  fixture section was H2, so the demote-plus-provenance combination this release fixed
+  had never been executed end to end — the fixture grew an H3-rooted `Session Continuity`
+  nested under `## Skill routing`, on an older marker, and the test asserts the re-emitted
+  heading is still `###` and carries the current marker with the block's own line count.
+- **What the fixture does and does not prove.** At 200 lines against `emitted=162` it is
+  38 over the ~20-line threshold, while 200/162 is 1.23× — under the 1.5× ratio proxy,
+  so this is a section the old signal was blind to. That proves provenance catches what
+  the ratio misses; it does not prove independence from the volume proxy, since both
+  fire on the same added prose under the same ~20-line threshold. In this fixture volume
+  fires on its own — the section shares almost nothing with `git-hygiene.md`, so ~160 of
+  its lines are absent from the block — and under additive precedence any trigger firing
+  produces the same outcome, so the assertions prove the gate fired, not which trigger
+  fired it. A volume-neutral fixture is constructible (volume counts only material
+  "absent from the block entirely", so a section that restates the block's own material
+  more verbosely is >20 over `<N>` and ~0 on volume) and is deferred; the skill's
+  deferred-work paragraph carries the trigger for building it.
+  Provenance's advantage over volume is cost and determinism, not sensitivity —
+  volume needs a diff and a judgement call about which lines "appear in the block";
+  provenance is subtraction on a number the plugin already wrote down.
+
 ## [2.48.0] - 2026-08-28
 
 `/adapt` could complete a re-adaptation correctly on every marker and still destroy a

@@ -9,8 +9,25 @@ is the point, not a nuisance.
 
 import importlib.util
 import pathlib
+import re
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
+
+
+def git_hygiene_provenance_example() -> str:
+    """The provenance example both generators must show, read off the block.
+
+    It was hardcoded as `<!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->`,
+    which makes the next bump of git-hygiene.md fail here — and the cheapest way
+    to green a test that names a stale number is to edit the number in the test,
+    leaving both generators showing an example that no longer matches anything.
+    Deriving it means the generators are what has to change.
+    """
+    text = (REPO / "skills" / "setup-routing" / "blocks" / "git-hygiene.md").read_text()
+    marker = re.search(r"<!-- (gstack-git-hygiene-v\d+) -->", text.split("\n", 1)[0])
+    assert marker, "git-hygiene.md's first line carries no version marker"
+    # `wc -l` is the newline count — the same definition the generators are given.
+    return f"<!-- {marker.group(1)} --><!-- emitted={text.count(chr(10))} -->"
 
 
 def load(name, rel):
@@ -47,6 +64,57 @@ def test_denylist_catches_the_unperformable_instruction():
 
 def test_every_adapt_guard_is_present():
     assert lint.check_adapt_guards(ADAPT_SKILL) == []
+
+
+def _splice_region(step, old, new, count=1):
+    """Rewrite one `### Step N` region of the skill text, leaving the rest alone.
+
+    Mutating the whole file would hit occurrences in other steps and prove the
+    wrong thing — the property under test is per-region.
+    """
+    region = lint.step_regions(ADAPT_SKILL)[step]
+    start = ADAPT_SKILL.index(region)
+    mutated_region = region.replace(old, new, count)
+    assert mutated_region != region, f"{old!r} not found in {step}"
+    return ADAPT_SKILL[:start] + mutated_region + ADAPT_SKILL[start + len(region):]
+
+
+def test_every_guard_needle_matches_exactly_once_in_its_region():
+    """The F1 class, closed structurally rather than three times over.
+
+    `cannot attribute this section to a past emitter` and
+    `Nothing project-authored was removed.` each occurred twice by 2.49.0 — the
+    second copy added by the branch that introduced the guard — and
+    `diff .gstack/CLAUDE.md.pre-adapt CLAUDE.md` had occurred twice since 2.48.0.
+    A needle matching twice reports the copy, not the site it names: delete the
+    guard and the lint stays green.
+    """
+    regions = lint.step_regions(ADAPT_SKILL)
+    for step, needle, why in lint.ADAPT_GUARDS:
+        assert regions[step].count(needle) == 1, (
+            f"{needle!r} matches {regions[step].count(needle)} times in {step} — "
+            f"it no longer pins {why}")
+
+
+def test_deleting_one_occurrence_of_any_guard_turns_the_lint_red():
+    """Not 'the words are gone from the file' — 'this site is gone'. Excision
+    tests remove whole regions; this removes exactly what the needle names, which
+    is the mutation a reword or a tidy-up actually performs."""
+    for step, needle, why in lint.ADAPT_GUARDS:
+        errs = lint.check_adapt_guards(_splice_region(step, needle, ""))
+        # the lint formats needles with !r, so compare against the same repr —
+        # a needle carrying a newline is not a substring of its own message.
+        assert any(repr(needle) in e for e in errs), (
+            f"deleting {needle!r} from {step} left E13 green")
+
+
+def test_a_needle_matching_twice_is_reported_rather_than_passing():
+    """The other half: a needle can also stop discriminating because someone
+    quotes the guard elsewhere in the same step. Silence there is the failure —
+    the check has to say the needle stopped pinning its site."""
+    step, needle, why = lint.ADAPT_GUARDS[0]
+    errs = lint.check_adapt_guards(_splice_region(step, needle, needle + "\n" + needle))
+    assert any("2 times" in e and repr(needle) in e for e in errs), errs
 
 
 def test_every_guard_needle_lives_in_the_step_that_owns_it():
@@ -182,8 +250,30 @@ def test_the_growth_gate_has_a_second_trigger_for_small_blocks():
     losable lines, of the 23-line companion-skills block 11."""
     gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check — applies"):]
     gate = gate[: gate.index("**Attribution check — applies")]
-    assert "**Ratio**" in gate and "**Volume**" in gate
-    assert "either" in gate
+    assert "**Ratio (proxy).**" in gate and "**Volume (proxy).**" in gate
+
+
+def test_the_gate_fires_on_the_UNION_of_its_triggers():
+    """The decisive word, pinned at the sentence that says it.
+
+    This assertion used to read `assert "either" in gate`, from when the gate had
+    two triggers and said "fires when **either** of these holds". The fix wave
+    that added the third trigger rewrote that sentence to "any", and the
+    assertion kept passing — "either" survives as a substring of "n**either**
+    proxy alone is enough" and "n**either** establishes authorship", both of
+    which sit in the same slice. A pin that went vacuous inside the wave that
+    changed what it pinned.
+
+    Turning the union into a conjunction ("fires ONLY when ALL THREE") makes the
+    gate unfirable: every section written before 2.49.0 carries no `emitted=` at
+    all, so the provenance trigger can never hold for them, so nothing can. That
+    inverts the additive precedence this release is built on, and before this
+    test it was a green one-word edit.
+    """
+    gate = " ".join(_growth_gate().split())  # reflow-proof: pin words, not the wrap column
+    assert "The gate fires when **any** of the three triggers below holds" in gate
+    assert "the first one to fire is enough" in gate, (
+        "the union has to be spelled out as first-to-fire, not left to 'any'")
 
 
 def test_header_warns_which_sections_are_plugin_owned():
@@ -273,3 +363,182 @@ def test_the_simulator_fallback_keeps_a_parenthesised_model_name_whole():
 def test_denylist_catches_a_hardcoded_simulator_model():
     line = "`xcodebuild -scheme X -destination 'platform=iOS Simulator,name=iPhone 16' build`"
     assert any(p.search(line) for p, _ in lint.DENYLIST)
+
+
+def test_preserve_and_insert_tells_the_user_how_to_undo_it():
+    """A user who sees two sections and no reason will not know that deleting one
+    and re-running /adapt is the whole fix."""
+    assert "cannot attribute this section to a past emitter" in ADAPT_SKILL
+    assert "delete your copy and re-run" in ADAPT_SKILL
+
+
+def test_both_generators_record_the_emitted_line_count():
+    """Provenance rides in a SECOND comment beside the marker, never inside it.
+    Inside, `<!-- gstack-autonomy-v2 -->` stops being a substring of what was
+    written, and every reader that only knows the bare form — an older plugin
+    cache, lint E8 — reads the section as markerless."""
+    setup = (REPO / "skills" / "setup-routing" / "SKILL.md").read_text()
+    for text, who in ((ADAPT_SKILL, "adapt"), (setup, "setup-routing")):
+        assert "`<N>` is `wc -l` of the block file you just read" in text, (
+            f"{who} does not say how to count `<N>`")
+        example = git_hygiene_provenance_example()
+        assert example in text, (
+            f"{who} does not show provenance as a second comment beside the marker "
+            f"with the numbers git-hygiene.md actually carries — expected {example}")
+
+
+def test_both_generators_are_TOLD_to_write_provenance():
+    """The two sentences the whole feature rests on, neither of which was pinned
+    anywhere until this fix.
+
+    The imperative is what makes provenance exist: weaken "add a SECOND HTML
+    comment" to "you MAY add" in either generator and the lint, all 41 guard tests
+    and the integration test stay green while nothing gets written. The
+    stale-value sentence is the only textual guard on the replace path — without
+    it a generator may carry the old section's `emitted=` onto the new marker,
+    and a `<N>` wrong by less than the sanity band silences the trigger for that
+    section forever.
+    """
+    setup = (REPO / "skills" / "setup-routing" / "SKILL.md").read_text()
+    for text, who in ((ADAPT_SKILL, "adapt"), (setup, "setup-routing")):
+        assert "When you write a block into CLAUDE.md, add a SECOND HTML" in text, (
+            f"{who} no longer TELLS the generator to write provenance")
+        assert "do not estimate it and do not carry a stale value forward" in text, (
+            f"{who} no longer forbids carrying a stale `emitted=` onto a new marker")
+
+
+def test_neither_generator_writes_provenance_inside_the_marker():
+    """The shape this release rejected. `<!-- gstack-x-vN emitted=N -->` is not a
+    superstring of `<!-- gstack-x-vN -->`, so a 2.48.0 cache takes the marker for
+    absent and either replaces the section or duplicates it."""
+    import re
+    setup = (REPO / "skills" / "setup-routing" / "SKILL.md").read_text()
+    bad = re.compile(r"<!-- gstack-[a-z-]+-v[\dN]+ +emitted=")
+    for text, who in ((ADAPT_SKILL, "adapt"), (setup, "setup-routing")):
+        assert not bad.search(text), f"{who} writes the attribute inside the marker"
+
+
+def test_block_files_never_carry_the_emitted_attribute():
+    """`emitted=` is written by a generator into a project's CLAUDE.md. In a block
+    file it would be a constant that lies the moment the block changes length."""
+    for f in sorted(BLOCKS.glob("*.md")):
+        assert "emitted=" not in f.read_text().split("\n", 1)[0], f"{f.name} line 1"
+
+
+def _growth_gate():
+    gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check"):]
+    return gate[: gate.index("**Insert or upgrade the Autonomy")]
+
+
+def test_growth_check_reads_provenance_alongside_the_two_proxies():
+    """Provenance may only ADD a reason to stop. The first cut made it exclusive —
+    "use it whenever it is available and ignore the two triggers below" — which
+    means one wrong `<N>` silences all three at once, and `<N>` is a number a past
+    run wrote with nothing verifying it. A trigger that fires when it should not
+    costs one question; one that stays quiet costs the user their writing."""
+    gate = _growth_gate()
+    assert "**Provenance (measured, not inferred).**" in gate
+    assert "emitted=" in gate
+    assert "it adds a\nreason to stop; it never removes one" in gate
+    assert "ignore the two triggers below" not in gate, "exclusive precedence is back"
+    # the proxies must still be reachable for sections written before 2.49.0
+    assert "1.5×" in gate and "no `emitted=`" in gate
+
+
+def test_the_heading_level_rule_writes_provenance_too():
+    """It calls itself "the general rule for every marker-managed section", and it
+    said to copy the marker from the block — which never carries `emitted=`. So the
+    H3 path wrote no provenance at all, and an H3 root is a pre-2.34.0 adaptation:
+    the oldest projects, with the most to lose."""
+    rule = ADAPT_SKILL[ADAPT_SKILL.index("**Heading-level rule.**"):]
+    rule = rule[: rule.index("blocks/session-continuity.md")]
+    assert "Copy the marker from the block" in rule
+    assert "append the provenance comment after it" in rule
+
+
+def test_an_implausible_emitted_count_is_distrusted():
+    """`emitted=212` on a 200-line section must not be able to silence the gate."""
+    gate = _growth_gate()
+    assert "**Distrust an implausible `<N>`.**" in gate
+    assert "at or below `<N>`" in gate
+
+
+def test_the_gate_thresholds_are_pinned():
+    """Each number pinned AT ITS OWN SITE, in the sentence that uses it.
+
+    The first cut of this test sliced the whole gate and asserted `"1.5×" in gate`
+    and `"~20" in gate`. The slice held `1.5×` three times and `~20` twice, so
+    Ratio's 1.5 could become 15, Volume's ~20 could become ~30, and Provenance's
+    ~20 could become ~50, each with this test green — verified by making all three
+    edits. A threshold is pinned when changing IT fails, not when some other
+    sentence still quotes the old number. Tuning any of them is fine; updating the
+    matching line here is how you record that you meant to.
+    """
+    gate = _growth_gate()
+
+    def between(start, end):
+        i = gate.index(start)
+        return gate[i : gate.index(end, i)]
+
+    prov = between("- **Provenance (measured, not inferred).**", "- **Ratio (proxy).**")
+    assert "now more than **~20** lines longer than `<N>`" in prov
+    assert "more than ~20 lines ABOVE the block" in prov, "the distrust band"
+
+    ratio = between("- **Ratio (proxy).**", "- **Volume (proxy).**")
+    assert "more than **1.5×** the block's line count" in ratio
+
+    volume = between("- **Volume (proxy).**", "A section with no `emitted=`")
+    assert "more than ~20 of the section's lines" in volume
+
+
+def test_session_continuity_explains_a_preserve_the_same_way():
+    """Task 1 gave the shared Attribution check a report that says why a section was
+    not upgraded and what undoes it. Session Continuity reaches the same state by its
+    own route, and a user cannot tell which branch produced their two sections."""
+    rule = ADAPT_SKILL[ADAPT_SKILL.index("**Insert or upgrade the Session Continuity"):]
+    rule = rule[: rule.index("blocks/session-continuity.md")]
+    assert "merge by hand" not in rule, "still carries the pre-Task-1 phrasing"
+    assert "delete your copy and re-run" in rule
+
+
+def test_step6_order_rule_does_not_depend_on_a_question_s_wording():
+    lint_src = (REPO / "scripts" / "lint-skills.py").read_text()
+    assert "Would you like me to run a comprehensive review" not in lint_src, (
+        "the order rule anchors on prose a copy-edit would break"
+    )
+
+
+def test_step6_order_check_fails_closed_when_its_anchor_is_gone():
+    """The check used to read `if first in region and second in region:` — when
+    an edit made either anchor disappear, the comparison was skipped rather than
+    flagged, so the guard's own removal read exactly like the guard passing. A
+    missing anchor must now be its own error, not silence."""
+    start = ADAPT_SKILL.index("### Step 6")
+    end = ADAPT_SKILL.index("### Step 7", start)
+    region = ADAPT_SKILL[start:end]
+    marker = "**STOP HERE.**"
+    assert region.count(marker) == 1
+    mutated_region = region.replace(marker, "**STOP.**")
+    assert mutated_region != region, "rename did not change the text"
+    mutated = ADAPT_SKILL[:start] + mutated_region + ADAPT_SKILL[end:]
+
+    errs = lint.check_adapt_guards(mutated)
+    assert any("ordering anchor" in e and repr(marker) in e for e in errs), errs
+
+
+def test_ordering_rule_naming_a_missing_step_is_not_silent():
+    """The `continue` on a missing region used to be justified by a comment
+    claiming the step was already reported upstream. It was not: that upstream
+    loop only scans the steps ADAPT_GUARDS names, so a step that appears solely
+    in ADAPT_GUARD_ORDER was skipped with no error at all. Simulated here by
+    knocking out the `### Step 6` heading an existing ordering entry depends on
+    — from the checker's point of view that step now "appears solely in
+    ADAPT_GUARD_ORDER", since ADAPT_GUARDS's own missing-heading loop reports it
+    too, but under a different message than the one this test pins."""
+    heading = "### Step 6: Verify and report"
+    assert ADAPT_SKILL.count(heading) == 1
+    mutated = ADAPT_SKILL.replace(heading, "### Step Six: Verify and report")
+    assert mutated != ADAPT_SKILL, "rename did not change the text"
+
+    errs = lint.check_adapt_guards(mutated)
+    assert any("ordering rule names 'Step 6'" in e for e in errs), errs

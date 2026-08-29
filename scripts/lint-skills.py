@@ -50,6 +50,10 @@ ERRORS (exit 1, CI-blocking):
       check real: bare substring needles left three of the four guards
       deletable with the lint still green.
 
+  E14 no block file carries the `emitted=` marker attribute. Generators write that
+      count into a project's CLAUDE.md at emit time; stored in the source it is a
+      constant that goes stale on the next edit, and the growth check would trust it.
+
 WARNINGS (reported, exit 0):
   W1  frontmatter description over budget (target <=30 words; hard cap comes
       with the Phase-3 description rewrites)
@@ -157,14 +161,51 @@ ADAPT_GUARDS = [
      "numbers to a shifted file, and truncation only lowers the ratio, so it fails OPEN"),
     ("Step 6", "3. **Diff against the snapshot and classify every removed line.**",
      "the MANDATORY diff — the optional review's re-check runs only if the user says yes"),
-    ("Step 6", "diff .gstack/CLAUDE.md.pre-adapt CLAUDE.md",
-     "the diff that replaces the unperformable mental one"),
+    ("Step 6", "\n   diff .gstack/CLAUDE.md.pre-adapt CLAUDE.md\n",
+     "the MANDATORY diff's own command, matched by its indented line rather than "
+     "bare — the optional review below re-runs the same command inline, and a bare "
+     "needle reported that copy after the mandatory one was deleted"),
     ("Step 6", "> **Removed (not plugin prose):**",
      "the only report block that can reveal a casualty — survivors lists cannot"),
-    ("Step 6", "Nothing project-authored was removed.",
-     "the sentinel that makes an empty Removed block mean 'checked', not 'skipped'"),
+    ("Step 6", ">   `Nothing project-authored was removed.`",
+     "the sentinel that makes an empty Removed block mean 'checked', not 'skipped' — "
+     "matched inside the report template, where it has to be written"),
+    ("Step 6", "**Write the three block labels verbatim, in English",
+     "the rule that keeps the three greppable labels out of the translation the rest "
+     "of the report gets; it quotes the sentinel, which is what stopped the needle "
+     "above from pinning the template"),
     ("Step 6", "> **Deferred (grown past its block, not upgraded):**",
      "the label that keeps a deferral (nothing lost) out of the block that means loss"),
+    ("Step 5", "> `<heading>`: I cannot attribute this section to a past emitter",
+     "the Attribution check's report line, which turns a two-sections-now-exist state "
+     "into an actionable one"),
+    ("Step 5", "> `Session Continuity`: I cannot attribute this section to a past emitter",
+     "the same report for Session Continuity's own handoff.md sniff test, which reaches "
+     "the identical preserve-and-insert state by a different route"),
+    ("Step 5", "The gate fires when **any** of the three triggers below holds",
+     "the union that makes the gate additive — turned into a conjunction the gate "
+     "becomes unfirable, because every section written before 2.49.0 has no "
+     "`emitted=` at all and so can never satisfy all three"),
+    ("Step 5", "When you write a block into CLAUDE.md, add a SECOND HTML",
+     "the imperative that makes provenance exist at all — weakened to 'you MAY add' "
+     "or deleted outright, every other guard on this branch still passes while no "
+     "generator writes an `emitted=` for them to check"),
+    ("Step 5", "do not estimate it and do not carry a stale value forward",
+     "the only textual guard on the replace path against a stale `emitted=` riding "
+     "onto a new marker — a wrong `<N>` inside the sanity band silences the trigger "
+     "for that section"),
+    ("Step 5", "**Provenance (measured, not inferred).**",
+     "the trigger that reads what the plugin actually wrote, not a ratio against a moving block"),
+    ("Step 5", "append the provenance comment after it",
+     "the heading-level rule's own provenance write — it calls itself the general rule "
+     "for every marker-managed section, and 'copy the marker from the block' cannot "
+     "produce an `emitted=` a block file never carries"),
+    ("Step 5", "**Distrust an implausible `<N>`.**",
+     "the sanity check on a count nothing verifies — without it one wrong number "
+     "silences the gate for that section"),
+    ("Step 5", "it adds a\nreason to stop; it never removes one",
+     "the precedence rule: provenance may only ever ADD a reason to stop, so a bad "
+     "`<N>` cannot switch off the two proxies that would still have caught the growth"),
 ]
 
 # E13 ordering: a guard in the right step but the wrong place is still broken.
@@ -174,7 +215,7 @@ ADAPT_GUARD_ORDER = [
      "**Growth check — applies to every marker-managed section",
      "the snapshot must be written before anything reads a 'before' state"),
     ("Step 6", "3. **Diff against the snapshot and classify every removed line.**",
-     "Would you like me to run a comprehensive review",
+     "**STOP HERE.**",
      "the mandatory diff must sit above the optional-review gate — below it, a user "
      "who declines the review never gets the classification the Removed block needs"),
 ]
@@ -205,6 +246,14 @@ def heading_text(line: str) -> str | None:
     if not s.startswith("#"):
         return None
     s = s.lstrip("#").strip()
+    # Provenance strips FIRST, because 2.49.0 writes it to the RIGHT of the
+    # marker: `## X <!-- gstack-x-v2 --><!-- emitted=31 -->`. With only the
+    # marker rule — anchored at `$` — that heading normalized to
+    # `x <!-- gstack-x-v2 --><!-- emitted=31 -->`, so the normalizer's contract
+    # and the shape the generators actually emit had drifted apart. E8's marker
+    # branch reads the raw line and was never fooled; its markerless branch
+    # compares against this text and would have been.
+    s = re.sub(r"\s*<!-- emitted=\d+ -->\s*$", "", s)
     s = re.sub(r"\s*<!-- gstack-[a-z-]+-v\d+ -->\s*$", "", s)
     return re.sub(r"\s*#+$", "", s).strip().lower()
 
@@ -258,17 +307,50 @@ def check_adapt_guards(text: str) -> list[str]:
             f"guards anchored to it cannot be located, so nothing pins them")
     for step, needle, why in ADAPT_GUARDS:
         region = regions.get(step)
-        if region is not None and needle not in region:
+        if region is None:
+            continue
+        hits = region.count(needle)
+        if hits == 0:
             errs.append(
                 f"E13 adapt/SKILL.md: {step} is missing content-loss guard "
                 f"{needle!r} — {why}")
+        elif hits > 1:
+            # A needle matching twice reports the copy, not the site it names:
+            # delete the guard and the other occurrence keeps the lint green.
+            # Three needles were in exactly that state at 2.49.0 — two of them
+            # put there by the very branch that reviewed them — and each was
+            # found by deleting an occurrence, never by reading.
+            errs.append(
+                f"E13 adapt/SKILL.md: {step} matches content-loss guard {needle!r} "
+                f"{hits} times, so it no longer pins {why} — deleting that guard "
+                f"would leave the lint green on the other copy. Re-point the needle "
+                f"at something unique to its own site")
     for step, first, second, why in ADAPT_GUARD_ORDER:
         region = regions.get(step)
-        if region and first in region and second in region:
-            if region.index(first) > region.index(second):
-                errs.append(
-                    f"E13 adapt/SKILL.md: in {step}, {first!r} appears after "
-                    f"{second!r} — {why}")
+        if not region:
+            # NOT already reported above: that loop only scans steps ADAPT_GUARDS
+            # names, so a step appearing solely in ADAPT_GUARD_ORDER is invisible
+            # to it — this has to say so itself, or extending the ordering list
+            # with a new step is a silent no-op the day it isn't also in ADAPT_GUARDS.
+            errs.append(
+                f"E13 adapt/SKILL.md: ordering rule names {step!r}, which has no "
+                f"`### {step}` heading — the rule cannot run, so it is reporting "
+                f"nothing rather than passing")
+            continue
+        if first not in region:
+            errs.append(
+                f"E13 adapt/SKILL.md: {step}'s ordering anchor {first!r} is gone — "
+                f"the order check cannot run, so it is reporting nothing rather "
+                f"than passing")
+        elif second not in region:
+            errs.append(
+                f"E13 adapt/SKILL.md: {step}'s ordering anchor {second!r} is gone — "
+                f"the order check cannot run, so it is reporting nothing rather "
+                f"than passing")
+        elif region.index(first) > region.index(second):
+            errs.append(
+                f"E13 adapt/SKILL.md: in {step}, {first!r} appears after "
+                f"{second!r} — {why}")
     return errs
 
 
@@ -618,6 +700,19 @@ def main() -> int:
     adapt_skill = SKILLS / "adapt" / "SKILL.md"
     if adapt_skill.is_file():
         errors.extend(check_adapt_guards(adapt_skill.read_text()))
+
+    # E14 block files never carry the emitted= attribute (2.49.0). The count is a
+    # fact about one emission, written by a generator into one project's CLAUDE.md.
+    # Baked into the block file it becomes a constant that goes stale the next time
+    # anyone edits the block — and a stale provenance number is worse than none,
+    # because the growth check would trust it.
+    if blocks_dir.is_dir():
+        for f in sorted(blocks_dir.glob("*.md")):
+            if "emitted=" in f.read_text().split("\n", 1)[0]:
+                errors.append(
+                    f"E14 {BLOCKS_DIR_REL}/{f.name}: line 1 carries `emitted=` — that "
+                    f"attribute is written per-emission by the generators, never stored "
+                    f"in the source block")
 
     for w in warnings:
         print(f"WARN  {w}")

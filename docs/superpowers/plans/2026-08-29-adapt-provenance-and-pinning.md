@@ -4,7 +4,7 @@
 
 **Goal:** Replace `/adapt`'s length-heuristic guess about who wrote a section with a fact the plugin records at emit time, and pin the two lint holes worth pinning.
 
-**Architecture:** The growth check currently infers authorship from a line-count ratio, which is a proxy for the thing it actually wants to know: *how much has this section grown since the plugin wrote it?* That number stops being a guess the moment the plugin records what it emitted. Each emitted marker gains an `emitted=<N>` attribute — the block's line count at emit time — so the next upgrade computes provable growth (`current − emitted`) instead of a ratio against a block whose size drifts between releases. Sections emitted before this change carry no attribute and fall back to the existing ratio-and-volume triggers, so nothing regresses. Two lint holes left parked at 2.48.0 get closed; one stays parked with its reason restated.
+**Architecture:** The growth check currently infers authorship from a line-count ratio, which is a proxy for the thing it actually wants to know: *how much has this section grown since the plugin wrote it?* That number stops being a guess the moment the plugin records what it emitted. Each emitted heading gains a SECOND comment beside its marker — `<!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->`, the block's line count at emit time — so the next upgrade computes provable growth (`current − emitted`) instead of a ratio against a block whose size drifts between releases. **Corrected during execution:** the first design put the attribute INSIDE the marker, which stops `<!-- gstack-git-hygiene-v9 -->` being a substring of what was written and so breaks every reader that knows only the bare form, including a 2.48.0 plugin cache and lint E8. A second comment on the same line keeps the marker literally present, adds no line to what the next run counts, and rides with a heading the user has reason to keep. Sections emitted before this change carry no attribute and are decided by the existing ratio and volume triggers, which run on every section either way — provenance only ever ADDS a reason to stop. Two lint holes left parked at 2.48.0 get closed; one stays parked with its reason restated.
 
 **Tech Stack:** Markdown instruction files (`skills/adapt/SKILL.md`, `skills/setup-routing/SKILL.md`, `skills/setup-routing/blocks/*.md`), Python 3 lint (`scripts/lint-skills.py`), pytest (`tests/unit/`).
 
@@ -15,7 +15,7 @@
 ## Global Constraints
 
 - **Lint green after every task.** `python3 scripts/lint-skills.py` exits 0. Two warnings are expected and are NOT errors: `W2 adapt` and `W2 swiftui-design-consultation`.
-- **Unit tests pass after every task.** `pytest tests/unit -q` — currently **249 passed**, ~26 s.
+- **Unit tests pass after every task.** `pytest tests/unit -q` — **249 passed** when this plan was written; 250 after Task 1. Counts below are measured, not predicted — if yours differs, say so rather than assuming the plan is right.
 - **The integration test costs real API credits.** Run it exactly once, in Task 5. Never in a loop.
 - **Lint E8 governs block files, not emitted sections.** Line 1 of every marker block must keep matching `^## .*<!-- gstack-[a-z-]+-v\d+ -->$`. **Block files keep the bare marker** — the `emitted=` attribute is added by the generators at write time and appears only in a project's CLAUDE.md. A block file carrying `emitted=` is a bug.
 - **E13 needles are contract strings.** Adding prose near one is safe; rewording the needle itself turns the lint red on purpose.
@@ -40,10 +40,10 @@ Measured on 2026-08-29 before writing this plan, so no task re-derives it:
 | File | Change | Responsibility after the change |
 |---|---|---|
 | `skills/setup-routing/SKILL.md` | Emit `emitted=<N>` when writing each marker | New projects record provenance from birth |
-| `skills/adapt/SKILL.md` | Emit `emitted=<N>`; tolerate it when scanning; add the authoritative growth trigger; report the preserve-and-insert outcome | The only file that both reads and writes provenance |
+| `skills/adapt/SKILL.md` | Emit `emitted=<N>` beside the marker; add the provenance growth trigger; report the preserve-and-insert outcome | The only file that both reads and writes provenance |
 | `scripts/lint-skills.py` | Two E13 needles; the Step 6 order rule re-anchored; a threshold-pinning check; a block-file purity check | Release gate |
 | `tests/unit/test_lint_adapt_guards.py` | Tests for each of the above | Proves each new rule can fail |
-| `tests/fixtures/adapt-growth/CLAUDE.md` | A second fixture section carrying `emitted=` | Exercises the authoritative trigger end to end |
+| `tests/fixtures/adapt-growth/CLAUDE.md` | A second fixture section carrying `emitted=` | Exercises the provenance trigger end to end |
 | `tests/integration/test_adapt_growth_gate.sh` | One added assertion | Proves the trigger fires on a real run |
 | `.claude-plugin/plugin.json`, `CHANGELOG.md` | 2.49.0 | Release gate |
 
@@ -76,7 +76,7 @@ def test_preserve_and_insert_tells_the_user_how_to_undo_it():
 - [ ] **Step 2: Run it to verify it fails**
 
 Run: `pytest tests/unit/test_lint_adapt_guards.py -q`
-Expected: FAIL — 1 failed, 15 passed.
+Expected: FAIL — 1 failed, the rest passing.
 
 - [ ] **Step 3: Rewrite the "Sentinel absent" bullet**
 
@@ -119,7 +119,7 @@ In `scripts/lint-skills.py`, add to `ADAPT_GUARDS`:
 - [ ] **Step 5: Verify both pass**
 
 Run: `python3 scripts/lint-skills.py && pytest tests/unit/test_lint_adapt_guards.py -q`
-Expected: lint `0 error(s)`; 16 passed.
+Expected: lint `0 error(s)`; 250 passed.
 
 - [ ] **Step 6: Commit**
 
@@ -149,7 +149,7 @@ silent one."
 - Test: `tests/unit/test_lint_adapt_guards.py`
 
 **Interfaces:**
-- Produces: the emitted-marker form `<!-- gstack-<name>-vN emitted=<N> -->`, consumed by Tasks 3 and 4. `<N>` is the block file's line count, counted the way `wc -l` counts it, excluding nothing.
+- Produces: the emitted-heading form `<!-- gstack-<name>-vN --><!-- emitted=<N> -->` — the attribute is a SECOND comment beside the marker, never inside it, so the bare marker stays matchable. Consumed by Task 4. `<N>` is the block file's line count, counted the way `wc -l` counts it, excluding nothing.
 - Lint E-numbers in use: E1–E8, E10–E13. This task adds **E14**.
 
 - [ ] **Step 1: Write the failing test**
@@ -178,11 +178,12 @@ Expected: FAIL on `test_both_generators_record_the_emitted_line_count` (the puri
 In **`skills/adapt/SKILL.md`**, append to the **Shared block files** paragraph:
 
 ````markdown
-**Record what you emitted.** When you write a block into CLAUDE.md, append the block
-file's line count to the marker on the heading line, as ` emitted=<N>`:
+**Record what you emitted.** When you write a block into CLAUDE.md, add a SECOND HTML
+comment on that block's heading line, immediately after the version marker the block
+file itself carries, with nothing at all between the two:
 
 ```
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v9 emitted=162 -->
+<!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->
 ```
 
 `<N>` is `wc -l` of the block file you just read, before any placeholder substitution
@@ -234,12 +235,17 @@ cp /tmp/autonomy.bak skills/setup-routing/blocks/autonomy.md && rm /tmp/autonomy
 python3 scripts/lint-skills.py 2>&1 | tail -1
 ```
 
-Expected: the mutated run prints an `E14` line and `1 error(s)`; the restored run prints `0 error(s)`. Paste both into your report — a guard nobody has seen fail is a guard nobody has tested.
+Expected: the mutated run prints an `E14` line, and `3 error(s)` in total — measured, not
+predicted. The same `sed` also breaks E8 (its marker regex needs `-->` immediately after the
+digits, which ` emitted=31` displaces) and cascades to E11, because `autonomy.md` is in
+`sync-own-claude-md.py`'s `UNIVERSAL` list, so this repo's own CLAUDE.md embeds it and goes
+stale. E14 firing is what the step proves; the other two are the blast radius of a
+deliberately malformed marker. The restored run prints `0 error(s)`. Paste both into your report — a guard nobody has seen fail is a guard nobody has tested.
 
 - [ ] **Step 6: Verify and commit**
 
 Run: `python3 scripts/lint-skills.py && pytest tests/unit -q`
-Expected: lint `0 error(s)`; 251 passed.
+Expected: lint `0 error(s)`; 252 passed.
 
 ```bash
 git add skills/adapt/SKILL.md skills/setup-routing/SKILL.md scripts/lint-skills.py tests/unit/test_lint_adapt_guards.py
@@ -256,9 +262,20 @@ source blocks, where it would be a constant that goes stale on the next edit."
 
 ---
 
-### Task 3: Read provenance when scanning, and keep matching sections that lack it
+### ~~Task 3: Read provenance when scanning, and keep matching sections that lack it~~ — SUPERSEDED, reverted
 
-An emitted marker now has two shapes. Every scan in `/adapt` must match both, or the first `/adapt` after this release stops recognising the sections it just wrote.
+**This whole task was implemented (`6dbd206`) and then reverted (`fd51526`).** Its premise
+was that an emitted marker now has two shapes, so nine scan rules had to tolerate both.
+Moving provenance out of the marker and into a second comment beside it removed the
+premise: the marker has exactly one shape again, and every scan that matched it before
+matches it now. Nothing below is maintained — the steps are kept only so the reverted
+commit is legible.
+
+The task also shipped a real defect worth recording: its per-rule phrasing described the
+attribute as following the closing `-->`, which is not where the generators put it, so a
+model reading one rule literally would look for something that never occurs. That is what
+escalated the reverted design from "inelegant" to "wrong", and it is the reason the shape
+changed rather than the wording.
 
 **Files:**
 - Modify: `skills/adapt/SKILL.md` — the nine `**Insert or upgrade …**` scan lines
@@ -315,11 +332,19 @@ Each of the nine rules contains a phrase of this shape:
 and its version marker `<!-- gstack-autonomy-vN -->`
 ```
 
-Change each to:
+Change each so the tolerance sits **inside** the same backtick span as the marker:
 
 ```
-and its version marker `<!-- gstack-autonomy-vN -->` (optionally followed by ` emitted=<N>`)
+and its version marker `<!-- gstack-autonomy-vN --> (optionally followed by ` emitted=<N>`)`
 ```
+
+**Why one span and not two.** Step 1's regex is
+`` r"its version marker `<!-- gstack-[a-z-]+-vN[^`]*`" `` — the `[^`]*` stops at the first
+closing backtick, so a parenthetical placed *after* the span never lands inside the match and
+the test stays red no matter how correct the prose reads. Verified with a standalone repro
+during execution: the obvious two-span form fails the test that is supposed to prove it.
+`Track-aware routing` keeps the two-span form — its wording does not match this regex anyway,
+and the E13 needle `optionally followed by ` emitted=<N>`` must survive somewhere verbatim.
 
 Substitute the correct marker name per section: `gstack-autonomy-vN`, `gstack-git-hygiene-vN`, `gstack-multi-lens-review-vN`, `gstack-code-reuse-vN`, `gstack-plan-fidelity-vN`, `gstack-session-continuity-vN`, `gstack-routing-vN`, `gstack-xcode-tools-vN`, `gstack-companion-skills-vN`. Read each rule in the live file — their wording is not uniform, and `Track-aware routing`'s is a multi-line indented list.
 
@@ -333,7 +358,7 @@ Substitute the correct marker name per section: `gstack-autonomy-vN`, `gstack-gi
 - [ ] **Step 6: Verify and commit**
 
 Run: `python3 scripts/lint-skills.py && pytest tests/unit -q`
-Expected: lint `0 error(s)`; 253 passed.
+Expected: lint `0 error(s)`; 254 passed.
 
 ```bash
 git add skills/adapt/SKILL.md scripts/lint-skills.py tests/unit/test_lint_adapt_guards.py
@@ -355,7 +380,7 @@ fired case 4, and appended a duplicate block below the original."
 
 **Interfaces:**
 - Consumes: `emitted=<N>` (Task 2), read via the tolerant scan (Task 3).
-- Produces: the contract string `**Provenance (authoritative).**`.
+- Produces: the contract string `**Provenance (measured, not inferred).**`. **Corrected during execution:** first written as `**Provenance (authoritative).**` with exclusive precedence; see Step 3.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -379,12 +404,30 @@ def test_the_gate_thresholds_are_pinned():
     assert "~20" in gate
 ```
 
+**Corrected during execution — this test did not pin anything.** The slice it takes holds
+`1.5×` three times and `~20` twice, so Ratio's 1.5→15, Volume's ~20→~30 and Provenance's
+~20→~50 each left it GREEN; all three were measured. Fixed by asserting each number inside
+the sentence that uses it, so changing that number is what fails. The parked hole this task
+claimed to close was reproduced in the fix itself, one level down — a substring test proves
+the words occur, never that the site they belong to is intact.
+
 - [ ] **Step 2: Run it to verify it fails**
 
 Run: `pytest tests/unit/test_lint_adapt_guards.py -q`
 Expected: FAIL on `test_growth_check_prefers_provenance_over_the_ratio` (the threshold test passes today — that is correct; it is the parked hole being closed, and it fails the moment someone edits a number without editing it).
 
-- [ ] **Step 3: Add the authoritative trigger**
+- [ ] **Step 3: Add the provenance trigger**
+
+**Corrected during execution.** As first written this step made provenance *exclusive* —
+"use it whenever it is available and ignore the two triggers below". `<N>` is a number a
+past run wrote and nothing verifies, so one wrong count then silenced all three triggers
+at once and made this release worse than 2.48.0 for that section. Shipped instead: all
+three triggers run every time, the gate fires when any holds, and an implausible `<N>` is
+distrusted outright. A trigger that fires when it should not costs one question; one that
+stays quiet costs the user their writing. The labels shipped as
+`**Provenance (measured, not inferred).**`, `**Ratio (proxy).**`, `**Volume (proxy).**` —
+"fallback" was wrong once the proxies always run. The block quoted below is the superseded
+draft.
 
 In `skills/adapt/SKILL.md`, inside the **Growth check**, insert this immediately before the existing Ratio trigger:
 
@@ -418,7 +461,7 @@ Then retitle the two existing triggers so the precedence is legible: `**Ratio (f
 - [ ] **Step 5: Verify and commit**
 
 Run: `python3 scripts/lint-skills.py && pytest tests/unit -q`
-Expected: lint `0 error(s)`; 255 passed.
+Expected: lint `0 error(s)`; 256 passed.
 
 ```bash
 git add skills/adapt/SKILL.md scripts/lint-skills.py tests/unit/test_lint_adapt_guards.py
@@ -454,7 +497,7 @@ The fixture's existing `Native Apple development tools` section stays exactly as
 Add a **second** grown section that carries provenance. Its heading:
 
 ```markdown
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v9 emitted=162 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v8 --><!-- emitted=162 -->
 ```
 
 Give it ~200 lines of realistic, unmistakably project-authored git conventions for this
@@ -464,11 +507,19 @@ release-tagging convention, why they never rebase a shared branch. Include five 
 Do not copy text from `skills/setup-routing/blocks/git-hygiene.md`: content matching the
 block is content the diff correctly reads as plugin prose, which blunts the test.
 
-Note the shape of this case: the marker is `v9`, the **current** version, so cases 2 and
-3 do not fire and only the provenance trigger can catch it. `emitted=162` against ~200
-present lines is ~38 over, comfortably past ~20. Against the ratio it is 200/162 = 1.23×
-— **below** the 1.5× fallback. That is the point: this section is invisible to the old
-signal and visible to the new one.
+Note the shape of this case, **as corrected during execution**. The first draft
+prescribed `v9`, the current version, reasoning that "cases 2 and 3 do not fire, so only
+the provenance trigger can catch it". That has it backwards: `v9` is case 1, which skips
+the section as idempotent *before* the Growth check runs at all. The five sentinel lines
+then survived because nothing touched them, and the assertion passed without the gate
+ever executing — the third vacuous green in this project's history. The marker must be
+`v8`, so case 2 fires and the gate actually runs.
+
+The numbers, measured rather than predicted: the section is 200 lines against a 162-line
+block. `emitted=162` puts it 38 over, comfortably past ~20. Against the ratio it is
+200/162 = 1.23× — **below** the 1.5× proxy. That is the point: this section is invisible
+to the old signal and visible to the new one. Survival alone does not prove that, though;
+see the assertions in Step 2.
 
 - [ ] **Step 2: Add the assertion**
 
@@ -554,7 +605,7 @@ Move Step 6's mandatory diff item below the `**STOP HERE.**` line in a temp copy
 - [ ] **Step 5: Verify and commit**
 
 Run: `python3 scripts/lint-skills.py && pytest tests/unit -q`
-Expected: lint `0 error(s)`; 256 passed.
+Expected: lint `0 error(s)`; 257 passed.
 
 ```bash
 git add scripts/lint-skills.py tests/unit/test_lint_adapt_guards.py
@@ -564,6 +615,100 @@ The rule keyed on the wording of a question shown to the user. A copy-edit
 would have made it inert, and the mandatory diff could then have moved below
 the optional gate while the lint stayed green. Parked at 2.48.0; the fix is
 to anchor on **STOP HERE.**, which is addressed to the agent."
+```
+
+---
+
+### Task 8: Close the same gap in Session Continuity
+
+Added during execution, from Task 1's review. `Session Continuity`'s case 3 implements the
+same "cannot attribute, preserve and insert" outcome independently of the shared Attribution
+check, and still carries the pre-Task-1 phrasing: *"tell the user both now exist so they can
+merge by hand."* Same state, same user problem, none of the explanation Task 1 added — so
+Task 1 closed the gap in one branch of the file and left its twin open.
+
+**Files:**
+- Modify: `skills/adapt/SKILL.md` — the Session Continuity rule's case 3, and one line in the
+  Step 6 report's Deferred block description
+- Test: `tests/unit/test_lint_adapt_guards.py`
+
+**Interfaces:**
+- Consumes: the report wording Task 1 introduced.
+- Produces: nothing later tasks read.
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+def test_session_continuity_explains_a_preserve_the_same_way():
+    """Task 1 gave the shared Attribution check a report that says why a section was
+    not upgraded and what undoes it. Session Continuity reaches the same state by its
+    own route, and a user cannot tell which branch produced their two sections."""
+    rule = ADAPT_SKILL[ADAPT_SKILL.index("**Insert or upgrade the Session Continuity"):]
+    rule = rule[: rule.index("blocks/session-continuity.md")]
+    assert "merge by hand" not in rule, "still carries the pre-Task-1 phrasing"
+    assert "delete your copy and re-run" in rule
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `pytest tests/unit/test_lint_adapt_guards.py -q`
+Expected: FAIL on the `merge by hand` assertion.
+
+- [ ] **Step 3: Replace the phrasing**
+
+In `skills/adapt/SKILL.md`, in the Session Continuity rule's case 3, find the branch that
+handles a section whose body does NOT mention `docs/superpowers/handoff.md` — the one ending
+*"tell the user both now exist so they can merge by hand. Never silently overwrite a section
+you cannot attribute to a past emitter."* Replace the reporting clause so it matches what the
+Attribution check now says, keeping the sniff-test logic and the final sentence intact:
+
+```markdown
+**If it does not** → leave the user's section untouched, insert the block as a separate H2
+section, and report it the way the **Attribution check** above reports a preserve:
+
+> `Session Continuity`: I cannot attribute this section to a past emitter — its body does
+> not mention `docs/superpowers/handoff.md`, which every emitted copy carries. I left it
+> exactly as it was and put the current plugin version below it, so nothing of yours was
+> touched. If it *is* an old plugin section, delete your copy and re-run `/adapt` and it
+> will upgrade cleanly.
+
+Never silently overwrite a section you cannot attribute to a past emitter.
+```
+
+- [ ] **Step 4: Note the format exception in the Deferred block**
+
+Task 1's review also observed that these blockquotes are five-line second-person prose while
+the Step 6 report's **Deferred** block documents a terse one-line-per-section format. There is
+no contradiction — they are different outputs — but nothing says so, and the next editor will
+have to work it out. Add one line to the Deferred block's description:
+
+```markdown
+> (The Growth check reports here in this one-line form. The Attribution check and Session
+> Continuity's case 3 specify their own multi-line message instead — a preserve needs to
+> explain itself, where a deferral only needs to be counted.)
+```
+
+- [ ] **Step 5: Verify**
+
+Run: `python3 scripts/lint-skills.py && pytest tests/unit -q`
+Expected: lint `0 error(s)`; one more test than before this task.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add skills/adapt/SKILL.md tests/unit/test_lint_adapt_guards.py
+git commit -m "fix(adapt): explain a Session Continuity preserve too
+
+Its case 3 reaches the same preserve-and-insert state as the shared
+Attribution check, by its own handoff.md sniff test, and still said only that
+both sections now exist and the user should merge by hand. A user cannot tell
+which branch produced their two sections, so they should not get two different
+qualities of explanation.
+
+Also notes, in the Deferred block, that a preserve specifies its own message
+while a deferral uses the terse one-line form -- they read as inconsistent
+until you see that one has to explain itself and the other only has to be
+counted."
 ```
 
 ---
@@ -581,7 +726,7 @@ Expected: FAIL with `E4 CHANGELOG.md: no entry for plugin.json version 2.49.0`.
 
 - [ ] **Step 3: Write the CHANGELOG entry**
 
-Insert under `# Changelog`:
+Insert under `# Changelog`. **The draft below is superseded** — the shipped entry in `CHANGELOG.md` describes the second-comment format, the additive precedence, and the corrected claim about what the threshold test pins. Kept here as the draft the fix wave revised, not as the text to write:
 
 ```markdown
 ## [2.49.0] - 2026-08-29
@@ -620,7 +765,7 @@ threshold, seven times the exposure.
 - [ ] **Step 4: Run the full gate**
 
 Run: `python3 scripts/lint-skills.py && pytest tests/unit -q`
-Expected: lint `0 error(s)` with the two known `W2` warnings; 256 passed. Do **not** re-run the integration test — Task 5 ran it.
+Expected: lint `0 error(s)` with the two known `W2` warnings; 257 passed. Do **not** re-run the integration test — Task 5 ran it.
 
 - [ ] **Step 5: Commit**
 
@@ -660,7 +805,14 @@ publishes 2.49.0 to the marketplace, so confirm that with the user before mergin
 
 **2. Placeholder scan.** No TBDs. `<N>`, `<start>`, `<end>`, `<heading>` and `<name>` are placeholders in the *emitted instruction*, filled by the agent at run time — not gaps in this plan.
 
-**3. Type consistency.** The attribute is spelled ` emitted=<N>` with one leading space in Tasks 2, 3, 4 and 5, and in the fixture's literal `emitted=162`. `**Provenance (authoritative).**`, `**Ratio (fallback).**` and `**Volume (fallback).**` appear identically in Task 4's prose, its test and the CHANGELOG. E-numbers: E14 is claimed once, in Task 2.
+**3. Type consistency.** **As shipped:** the attribute is a second comment,
+`<!-- emitted=<N> -->`, written immediately after the marker on the same line — in Task 2,
+Task 4 and the fixture's literal `emitted=162`. The trigger labels are
+`**Provenance (measured, not inferred).**`, `**Ratio (proxy).**` and `**Volume (proxy).**`,
+identical in the skill, its tests and the CHANGELOG. (This plan first specified
+` emitted=<N>` inside the marker and the labels `(authoritative)` / `(fallback)`; both were
+changed during execution for the reasons recorded in Tasks 2, 3 and 4.) E-numbers: E14 is
+claimed once, in Task 2.
 
 **4. Ordering.** Task 2 must precede 3 and 4 (they read what it writes). Task 3 must precede 5 (an intolerant scan would make the fixture's provenance section unreadable). Task 6 is independent. Task 7 is last.
 

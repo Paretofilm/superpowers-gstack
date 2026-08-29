@@ -279,6 +279,34 @@ still works.
 
 **Shared block files.** Every "block to insert" below is single-sourced in the plugin at `skills/setup-routing/blocks/<name>.md` (sibling skill directory — from this skill's base directory: `../setup-routing/blocks/<name>.md`; via the cache glob: `~/.claude/plugins/cache/*/superpowers-gstack/*/skills/setup-routing/blocks/`). Read the named file and use its content as the verbatim block. Resolve `{{...}}` placeholders per `blocks/PLACEHOLDERS.md` before inserting — never let a raw `{{...}}` token reach the generated CLAUDE.md. If the blocks directory is missing (older plugin cache), warn the user to run `/plugin update superpowers-gstack` and skip the affected sections.
 
+**Record what you emitted.** When you write a block into CLAUDE.md, add a SECOND HTML
+comment on that block's heading line, immediately after the version marker the block
+file itself carries, with nothing at all between the two:
+
+```
+<!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->
+```
+
+Leave the version marker byte-for-byte as the block wrote it. Provenance is a separate
+comment precisely so that marker keeps matching for every reader that knows only the
+bare form: an older plugin cache meeting a file this release wrote finds its marker
+exactly where it expects it and skips the section as current, instead of reading it as
+markerless and appending a duplicate. Putting the attribute inside the marker breaks
+that; putting it on a line of its own adds a line to what the next run counts, and is
+a line a user tidying their own CLAUDE.md can delete.
+
+This applies to a block whose file carries a version marker, which is what the second
+comment attaches to. `blocks/model-routing-section.md` carries none, so it gets no
+provenance: an `emitted=` with no marker beside it is a number no reader is looking for,
+and the growth check never runs on that section — Model Routing is replaced outright.
+
+`<N>` is `wc -l` of the block file you just read — every line in the file, counted
+before any placeholder substitution and before any heading-level demote. This is the
+only fact that makes a later upgrade able to tell growth from a block that simply
+changed size, so do not estimate it and do not carry a stale value forward from the
+section you replaced. Block files themselves never carry `emitted=`; a constant baked
+into the source would lie the moment the block changed length.
+
 **Growth check — applies to every marker-managed section below, in cases 2 and 3.**
 A marker records who *created* a section, not who has written in it since. Before
 replacing any section, compare its length against the block's:
@@ -303,20 +331,59 @@ fire. Measured on this branch's own fixture (196-line section, 78-line block, tr
 and the line numbers came from that same file, so reading it there is the only
 self-consistent choice. The snapshot's job is Step 6's whole-file diff, not this.
 
-Then run the diff — always, before deciding, because both triggers read it:
+Then run the diff — always, before deciding. The Volume proxy is read off it, and so
+is the at-risk list you show the user when the gate fires:
 
 ```bash
 diff "$TMP" <path-to-block>.md
 ```
 
-The gate fires when **either** of these holds:
+The gate fires when **any** of the three triggers below holds. Run all three every
+time — they are checked together, not in precedence order, and the first one to fire
+is enough.
 
-- **Ratio** — the section is more than **1.5×** the block's line count.
-- **Volume** — more than ~20 of the section's lines carry material the block does not
-  have in any form. Not reworded block prose, which a version bump produces by the
-  dozen; lines whose subject matter is absent from the block entirely.
+- **Provenance (measured, not inferred).** — the section's heading line carries a
+  second comment `<!-- emitted=<N> -->` after the version marker, and the section is
+  now more than **~20** lines longer than `<N>`. The plugin wrote exactly `<N>` lines
+  there, so everything above that came from somewhere else. This is the only one of
+  the three that is a measurement rather than a proxy: a block that grew or shrank
+  between releases moves the ratio, and it cannot move `<N>`.
 
-Neither alone is enough, which is why there are two. Ratio scales with the block, so
+  ```bash
+  awk 'NR>=<start> && NR<=<end>' CLAUDE.md | wc -l     # what is there now
+  ```
+
+  **Count the two sides the way each was counted.** `<N>` is `wc -l` of the block
+  file as it shipped; the number above is the section's lines in CLAUDE.md, heading
+  line through the last line before the next heading of equal-or-shallower level.
+  Placeholder substitution and a trailing blank line move the total by a line or
+  two, so the two counts are close rather than equal. The ~20-line threshold exists
+  partly to absorb that; do not tighten it to chase an exact match.
+
+  **Distrust an implausible `<N>`.** Nothing verifies it — it is a number a past run
+  wrote down. Ignore it, and decide on the other two triggers alone, when either the
+  section is at or below `<N>` (the plugin cannot have emitted more lines than are
+  there, so the count is wrong), or `<N>` is more than ~20 lines ABOVE the block
+  file's current length (blocks grow between releases far more often than they
+  shrink, so a `<N>` well over today's block is a miscount, not history). A `<N>`
+  well BELOW the block is ordinary — that is just an older, smaller block — and it
+  is fine.
+
+- **Ratio (proxy).** — the section is more than **1.5×** the block's line count.
+- **Volume (proxy).** — more than ~20 of the section's lines carry material the block
+  does not have in any form. Not reworded block prose, which a version bump produces by
+  the dozen; lines whose subject matter is absent from the block entirely.
+
+A section with no `emitted=` — everything written before 2.49.0 — has only the two
+proxies, and they are why provenance exists. Where provenance IS present it adds a
+reason to stop; it never removes one. That precedence is deliberate and it is not
+symmetric: a trigger that fires when it should not costs one question, and a trigger
+that stays quiet when it should not costs the user whatever they had written. An
+`emitted=` that is wrong by a little is the likeliest failure of this whole mechanism,
+and letting it silence two working proxies would make this release worse than the one
+before it for exactly the sections it was built to protect.
+
+Neither proxy alone is enough, which is why there are two. Ratio scales with the block, so
 one threshold buys wildly different exposure: 1.5× of the 162-line `git-hygiene.md` is
 81 losable lines, 1.5× of the 23-line `companion-skills.md` is 11 — a 7× difference
 from the same number. Volume is flat, so it catches the small-block case the ratio
@@ -349,9 +416,11 @@ When the gate fires, do not replace the section silently:
    read it as "`--print` means proceed" — assuming that reachability is exactly what
    made this branch's first test harness report PASS while proving nothing.
 
-Both triggers are heuristics, and neither establishes authorship — a line count is not
-a byline. They are cheap proxies for "someone has been writing in here", chosen because
-they are computable from what the gate already reads. A section at 1.1× is usually a
+The two proxies are heuristics, and neither establishes authorship — a line count is
+not a byline. They are cheap stand-ins for "someone has been writing in here", chosen
+because they are computable from what the gate already reads. Provenance is not one of
+them: it is a measurement against a number the plugin wrote down, which is why it can
+only add a reason to stop and never subtract one. A section at 1.1× is usually a
 user fixing a typo in plugin prose; the run that motivated this gate was at 2.7× — a
 73-line block against a 198-line section, and the 125-line delta held an
 `-allowProvisioningUpdates` discovery, three lessons about running on a physical
@@ -360,10 +429,21 @@ plugin.
 
 The real test is a three-way compare against the block the section was *originally*
 emitted from, which separates project content from plugin drift instead of guessing.
-That needs the emitted block's length or hash recorded in the marker itself — a format
-change across all nine blocks and both generators. It is deferred until the first
-report of a section lost with both triggers quiet, or the next time a block shrinks
-between releases.
+Provenance closes the *length* half of that as of this release — `emitted=<N>` is the
+originally-emitted length itself, not a ratio against a block that may have grown or
+shrunk since. What it still cannot see is a same-length edit: replace ten lines of
+plugin prose with ten lines of a user's own and the count never moves. Closing that
+needs the emitted block's own content, or a hash of it, recorded in the marker — a
+further format change across all nine blocks and both generators. It is deferred until
+the first report of a section lost with all three triggers quiet, or the next time a
+block shrinks between releases. Deferred alongside it: a **volume-neutral fixture** — a
+section that restates the block's own material more verbosely, so it is more than ~20
+lines over `<N>` while almost none of its lines are absent from the block. The fixture
+that exists is both, so the integration test proves the gate fired, not which trigger
+fired it; build the neutral one the first time provenance and Volume are suspected of
+disagreeing in the field. One residual is known and accepted: the sanity band's ~20 and
+the trigger's own ~20 stack, so an `<N>` overstated by up to ~20 buys roughly 40 lines
+of growth in which only Volume — the judgement-call proxy — is still watching.
 
 **Attribution check — applies to case 3 of the six sections below that replace on a
 missing marker.** Three do not need it: `Code reuse discipline` already preserves,
@@ -383,8 +463,17 @@ string only a past emitter would have written into that section. Before replacin
   case 2, still subject to the Growth check above.
 - **Sentinel absent** → you cannot attribute the section to a past emitter. Do NOT
   replace it. Leave it byte-for-byte intact, insert the plugin block as a separate H2
-  section immediately below it, and say in the report that both now exist and which
-  one is theirs, so they can merge by hand.
+  section immediately below it, and report the outcome in these terms:
+
+  > `<heading>`: I cannot attribute this section to a past emitter — it has no version
+  > marker and none of the phrases an older `/adapt` would have written. I left it
+  > exactly as it was and put the current plugin version below it, so nothing of yours
+  > was touched. If it *is* an old plugin section, delete your copy and re-run
+  > `/adapt` and it will upgrade cleanly.
+
+  Two sections sharing a heading is a state the user has to resolve, so tell them
+  which one is theirs and what resolves it. A report that only says "both now exist"
+  leaves them to work out both.
 
 This is `Code reuse discipline`'s case 3 and `Session Continuity`'s `handoff.md` test
 generalised, and it accepts one failure to avoid a worse one: an old emitted section
@@ -441,10 +530,19 @@ The block to insert: read `blocks/plan-fidelity.md` (see **Shared block files** 
 
 1. **Heading present + marker matches `v3`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level (see the heading-level rule below). Run the **Growth check** above before replacing.
-3. **Heading present + marker absent** → the section is either a pre-2.36.0 emitted block or one the user wrote themselves, and unlike `Git hygiene & commit cadence` or `Autonomy and user interruption`, "Session Continuity" is a heading a project could plausibly own. Tell them apart before touching it: treat it as emitted ONLY if the section body mentions `docs/superpowers/handoff.md`. **If it does** → REPLACE as in case 2. Run the **Growth check** above before replacing. This is the upgrade that matters, because every pre-2.36.0 emitter wrote a sensor keyed only to the `## Mode: auto` Markdown marker, which `/superpowers-gstack:context-handoff` deletes the moment it writes YAML — so those projects re-ask the opt-in question after every single compact. **If it does not** → leave the user's section untouched, insert the block as a separate H2 section, and tell the user both now exist so they can merge by hand. Never silently overwrite a section you cannot attribute to a past emitter.
+3. **Heading present + marker absent** → the section is either a pre-2.36.0 emitted block or one the user wrote themselves, and unlike `Git hygiene & commit cadence` or `Autonomy and user interruption`, "Session Continuity" is a heading a project could plausibly own. Tell them apart before touching it: treat it as emitted ONLY if the section body mentions `docs/superpowers/handoff.md`. **If it does** → REPLACE as in case 2. Run the **Growth check** above before replacing. This is the upgrade that matters, because every pre-2.36.0 emitter wrote a sensor keyed only to the `## Mode: auto` Markdown marker, which `/superpowers-gstack:context-handoff` deletes the moment it writes YAML — so those projects re-ask the opt-in question after every single compact. **If it does not** → leave the user's section untouched, insert the block as a separate H2
+   section, and report it the way the **Attribution check** above reports a preserve:
+
+   > `Session Continuity`: I cannot attribute this section to a past emitter — its body does
+   > not mention `docs/superpowers/handoff.md`, which every emitted copy carries. I left it
+   > exactly as it was and put the current plugin version below it, so nothing of yours was
+   > touched. If it *is* an old plugin section, delete your copy and re-run `/adapt` and it
+   > will upgrade cleanly.
+
+   Never silently overwrite a section you cannot attribute to a past emitter.
 4. **Heading absent** → APPEND the block as H2.
 
-**Heading-level rule.** This is the general rule for every marker-managed section, stated once here: when the section you are replacing is rooted at H3, demote the block's first line to `###` **and** demote any `###` subsections it contains to `####`. Do not reason about whether a particular block "has subsections today" — that is a claim about a file, and it expires the moment someone adds one. Applying the demote unconditionally is a no-op for a block with no subsections and the fix for one that grows them. (The `gstack-routing` v1→v2 bump in 2.36.1 activated exactly this bug, which had sat unreachable for as long as its marker never moved.) The block is NOT exempt from matching the existing root level either. `setup-routing` before 2.36.0 emitted this section as `### Session Continuity` nested under `## Skill routing`; pasting the H2 block verbatim over an H3 root promotes it to H2 and silently reparents every following H3 sibling underneath it. So when the section being replaced is H3, demote the block's FIRST LINE to `###`, keeping whatever version marker the block file itself carries, and paste the remaining lines unchanged. Copy the marker from the block — never retype it from this instruction, which is how it goes stale the next time the block is versioned.
+**Heading-level rule.** This is the general rule for every marker-managed section, stated once here: when the section you are replacing is rooted at H3, demote the block's first line to `###` **and** demote any `###` subsections it contains to `####`. Do not reason about whether a particular block "has subsections today" — that is a claim about a file, and it expires the moment someone adds one. Applying the demote unconditionally is a no-op for a block with no subsections and the fix for one that grows them. (The `gstack-routing` v1→v2 bump in 2.36.1 activated exactly this bug, which had sat unreachable for as long as its marker never moved.) The block is NOT exempt from matching the existing root level either. `setup-routing` before 2.36.0 emitted this section as `### Session Continuity` nested under `## Skill routing`; pasting the H2 block verbatim over an H3 root promotes it to H2 and silently reparents every following H3 sibling underneath it. So when the section being replaced is H3, demote the block's FIRST LINE to `###`, keeping whatever version marker the block file itself carries, and paste the remaining lines unchanged. Copy the marker from the block — never retype it from this instruction, which is how it goes stale the next time the block is versioned — and then append the provenance comment after it, exactly as **Record what you emitted** above requires. A demoted heading is still one this plugin emitted, and the block file's own marker never carries `emitted=`, so copying the marker is not enough on its own. Leaving it off here would strand provenance on exactly the oldest projects: an H3 root means a pre-2.34.0 adaptation, which is the population with the most accumulated content to lose and the one the growth gate most needs a real number for.
 
 The block to insert: read `blocks/session-continuity.md` (see **Shared block files** above) and insert its content verbatim, subject to the heading-level rule above.
 
@@ -548,6 +646,13 @@ After applying changes, verify:
    overwritten earlier in Step 5. If the snapshot is missing because CLAUDE.md did
    not exist before this run, say that instead — do not skip the item silently.
 
+**Write the three block labels verbatim, in English, even when the rest of the
+report is in the user's language.** `**Removed (not plugin prose):**`,
+`**Deferred (grown past its block, not upgraded):**` and the sentinel
+`Nothing project-authored was removed.` are structural markers that lint E13 pins
+and tooling greps — the prose inside and around them follows the user's language,
+the labels do not.
+
 Report to the user:
 
 > **Changes made:**
@@ -564,10 +669,16 @@ Report to the user:
 >   `Nothing project-authored was removed.`
 >
 > **Deferred (grown past its block, not upgraded):**
-> - [one line per section the Growth check or the Attribution check left alone:
->    the section name, its line count against the block's, and the marker it is
->    still on. Nothing was lost here — the upgrade simply was not applied]
+> - [one line per section the Growth check left at its old version: the section, its
+>    line count against the block, and the marker it is still on — or, when it has
+>    none, say so instead of inventing one. The Growth check runs in cases 2 **and
+>    3**, and case 3 is "marker absent": that section is deferred at no version at
+>    all, which is the fact the user needs]
 > - Omit this block entirely when nothing was deferred.
+>
+> (The Growth check reports here. The Attribution check and Session Continuity's case 3
+> report inline where they fire, in their own multi-line form — a preserve has to explain
+> itself, where a deferral only has to be counted.)
 >
 > **Snapshot:** `.gstack/CLAUDE.md.pre-adapt` holds CLAUDE.md exactly as it was
 > before this run. Restore the whole file with
