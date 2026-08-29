@@ -275,7 +275,15 @@ def check_adapt_guards(text: str) -> list[str]:
     for step, first, second, why in ADAPT_GUARD_ORDER:
         region = regions.get(step)
         if not region:
-            continue  # already reported above: no `### {step}` heading at all
+            # NOT already reported above: that loop only scans steps ADAPT_GUARDS
+            # names, so a step appearing solely in ADAPT_GUARD_ORDER is invisible
+            # to it — this has to say so itself, or extending the ordering list
+            # with a new step is a silent no-op the day it isn't also in ADAPT_GUARDS.
+            errs.append(
+                f"E13 adapt/SKILL.md: ordering rule names {step!r}, which has no "
+                f"`### {step}` heading — the rule cannot run, so it is reporting "
+                f"nothing rather than passing")
+            continue
         if first not in region:
             errs.append(
                 f"E13 adapt/SKILL.md: {step}'s ordering anchor {first!r} is gone — "

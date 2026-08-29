@@ -362,3 +362,21 @@ def test_step6_order_check_fails_closed_when_its_anchor_is_gone():
 
     errs = lint.check_adapt_guards(mutated)
     assert any("ordering anchor" in e and repr(marker) in e for e in errs), errs
+
+
+def test_ordering_rule_naming_a_missing_step_is_not_silent():
+    """The `continue` on a missing region used to be justified by a comment
+    claiming the step was already reported upstream. It was not: that upstream
+    loop only scans the steps ADAPT_GUARDS names, so a step that appears solely
+    in ADAPT_GUARD_ORDER was skipped with no error at all. Simulated here by
+    knocking out the `### Step 6` heading an existing ordering entry depends on
+    — from the checker's point of view that step now "appears solely in
+    ADAPT_GUARD_ORDER", since ADAPT_GUARDS's own missing-heading loop reports it
+    too, but under a different message than the one this test pins."""
+    heading = "### Step 6: Verify and report"
+    assert ADAPT_SKILL.count(heading) == 1
+    mutated = ADAPT_SKILL.replace(heading, "### Step Six: Verify and report")
+    assert mutated != ADAPT_SKILL, "rename did not change the text"
+
+    errs = lint.check_adapt_guards(mutated)
+    assert any("ordering rule names 'Step 6'" in e for e in errs), errs
