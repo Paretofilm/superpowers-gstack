@@ -1,5 +1,68 @@
 # Changelog
 
+## [2.49.0] - 2026-08-29
+
+2.48.0 gave `/adapt` guards against destroying a project's own notes, and left one
+question answered by a guess: has this section grown since the plugin wrote it? It
+answered with a ratio against the block's *current* size, which moves for reasons that
+have nothing to do with the user. `git-hygiene.md` is 162 lines, so 81 lines of hand-
+written content could sit under a 1.5× gate; `companion-skills.md` is 23, so 11. Same
+threshold, seven times the exposure.
+
+### Changed — provenance replaces the guess
+- **Emitted markers now record what was emitted:** `<!-- gstack-git-hygiene-v9 emitted=162 -->`.
+  The growth check subtracts instead of dividing, and fires when a section is more than
+  ~20 lines above what the plugin actually wrote. It no longer cares what the block
+  weighs today.
+- **The ratio and volume triggers remain**, retitled as the fallbacks they now are, for
+  every section written before this release. Both thresholds are pinned by a test —
+  tuning them is fine, and updating that test is how you record that you meant to.
+- **All nine scan rules match a marker by its prefix**, so a section this release writes
+  is not read by the next run as having no marker at all.
+- **Lint E14** keeps `emitted=` out of the source blocks, where it would be a constant
+  that goes stale on the next edit — and a stale provenance number is worse than none,
+  because the gate would trust it.
+
+### Fixed
+- **A section `/adapt` cannot attribute is no longer silently un-upgraded, on either
+  path that reaches that state.** The shared Attribution check, and Session Continuity's
+  own `handoff.md` sniff test when it lands on the same preserve-and-insert outcome, now
+  both say which section, why, that nothing of theirs was touched, and that deleting
+  their copy and re-running `/adapt` upgrades it cleanly. Two sections sharing a heading
+  is a state the user has to resolve; they were being told only that it existed. The
+  Deferred report block was narrowed to match: it had claimed to carry these checks'
+  reports too, which are a different outcome reported inline where they fire, and it
+  asked for "the marker it is still on" — a preserve that never had one.
+- **The Step 6 ordering rule anchors on structure, not on a question's wording, and now
+  fails closed when it can't run.** The first cut keyed on the text shown to the user; a
+  copy-edit would have disarmed it, after which the mandatory diff could have moved
+  below the optional review gate with the lint still green. Re-anchoring to
+  `**STOP HERE.**` (addressed to the agent, not the user) raised the bar but opened the
+  same hole one level down: the check read `if first in region and second in region`, so
+  editing either anchor away skipped the comparison instead of failing it. A missing
+  anchor is now its own error naming which one is gone — and so is an ordering entry
+  that names a step with no `### Step N` heading at all, the same fail-open shape found
+  a second time.
+- **The end-to-end report's block labels are written verbatim now.** A run under this
+  session's own Norwegian-output instruction rendered `## Fjernet (ikke plugin-prosa)`
+  where the integration test greps `Removed (not plugin prose)`. The skill said to write
+  that one sentinel exactly but not the two labels around it, so those were translated
+  as ordinary prose. All three are structural markers lint E13 pins and tooling greps;
+  the skill now says so, while the surrounding prose still follows the user's language.
+- **The fixture proving the growth check passed without exercising it.** Its
+  provenance-bearing section carried the *current* marker, so the idempotent-skip case
+  took it before the growth check — which runs only in cases 2 and 3 — ever ran; the
+  assertion would have passed with provenance absent from the plugin entirely. The third
+  vacuous green in this project's history. Fixed by putting the section on an older
+  marker, which puts it on the path the test claims to cover: at 200 lines against
+  `emitted=162` it is 38 over the ~20-line threshold, while 200/162 is 1.23× — under the
+  1.5× ratio fallback, so this is a section the old signal was blind to. That proves
+  provenance catches what the ratio fallback misses; it does not prove independence from
+  the volume fallback, since both fire on the same added prose under the same ~20-line
+  threshold. Provenance's advantage there is cost and determinism, not sensitivity:
+  volume needs a diff and a judgement call about which lines "appear in the block";
+  provenance is subtraction on a number the plugin already wrote down.
+
 ## [2.48.0] - 2026-08-28
 
 `/adapt` could complete a re-adaptation correctly on every marker and still destroy a
