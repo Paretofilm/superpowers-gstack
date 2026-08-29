@@ -55,6 +55,14 @@ threshold, seven times the exposure.
   were created by this release. Every needle is now unique to its own site, all four
   deletions are red, and the class itself is closed: a needle matching more than once in
   its region is an error saying it has stopped pinning anything.
+- **This release's own load-bearing sentences had no guard.** The imperative that makes
+  provenance exist — "When you write a block into CLAUDE.md, add a SECOND HTML comment"
+  — could be weakened to "you MAY add", in either generator, with the lint and every
+  test green: the generator-pair test asserted how to count `<N>` and what the example
+  looks like, never that anything gets written. The same held for "do not carry a stale
+  value forward from the section you replaced", the only textual guard against an old
+  `emitted=` riding onto a new marker. Both are now E13 needles in `/adapt` and
+  assertions across both generators; all four deletions are red.
 - **A section `/adapt` cannot attribute is no longer silently un-upgraded, on either
   path that reaches that state.** The shared Attribution check, and Session Continuity's
   own `handoff.md` sniff test when it lands on the same preserve-and-insert outcome, now

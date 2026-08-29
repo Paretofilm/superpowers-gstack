@@ -182,6 +182,14 @@ ADAPT_GUARDS = [
     ("Step 5", "> `Session Continuity`: I cannot attribute this section to a past emitter",
      "the same report for Session Continuity's own handoff.md sniff test, which reaches "
      "the identical preserve-and-insert state by a different route"),
+    ("Step 5", "When you write a block into CLAUDE.md, add a SECOND HTML",
+     "the imperative that makes provenance exist at all — weakened to 'you MAY add' "
+     "or deleted outright, every other guard on this branch still passes while no "
+     "generator writes an `emitted=` for them to check"),
+    ("Step 5", "do not estimate it and do not carry a stale value forward",
+     "the only textual guard on the replace path against a stale `emitted=` riding "
+     "onto a new marker — a wrong `<N>` inside the sanity band silences the trigger "
+     "for that section"),
     ("Step 5", "**Provenance (measured, not inferred).**",
      "the trigger that reads what the plugin actually wrote, not a ratio against a moving block"),
     ("Step 5", "append the provenance comment after it",

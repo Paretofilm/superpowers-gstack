@@ -346,6 +346,26 @@ def test_both_generators_record_the_emitted_line_count():
             f"{who} does not show provenance as a second comment beside the marker")
 
 
+def test_both_generators_are_TOLD_to_write_provenance():
+    """The two sentences the whole feature rests on, neither of which was pinned
+    anywhere until this fix.
+
+    The imperative is what makes provenance exist: weaken "add a SECOND HTML
+    comment" to "you MAY add" in either generator and the lint, all 41 guard tests
+    and the integration test stay green while nothing gets written. The
+    stale-value sentence is the only textual guard on the replace path — without
+    it a generator may carry the old section's `emitted=` onto the new marker,
+    and a `<N>` wrong by less than the sanity band silences the trigger for that
+    section forever.
+    """
+    setup = (REPO / "skills" / "setup-routing" / "SKILL.md").read_text()
+    for text, who in ((ADAPT_SKILL, "adapt"), (setup, "setup-routing")):
+        assert "When you write a block into CLAUDE.md, add a SECOND HTML" in text, (
+            f"{who} no longer TELLS the generator to write provenance")
+        assert "do not estimate it and do not carry a stale value forward" in text, (
+            f"{who} no longer forbids carrying a stale `emitted=` onto a new marker")
+
+
 def test_neither_generator_writes_provenance_inside_the_marker():
     """The shape this release rejected. `<!-- gstack-x-vN emitted=N -->` is not a
     superstring of `<!-- gstack-x-vN -->`, so a 2.48.0 cache takes the marker for
