@@ -332,31 +332,52 @@ Then run the diff — always, before deciding, because both triggers read it:
 diff "$TMP" <path-to-block>.md
 ```
 
-**Provenance (authoritative).** If the section's heading line carries a second comment
-`<!-- emitted=<N> -->` after the version marker, the plugin wrote exactly `<N>` lines
-there. Count the section now; anything above `<N>` was
-added by someone else. Fire the gate when the section exceeds `<N>` by more than **~20**
-lines:
+The gate fires when **any** of the three triggers below holds. Run all three every
+time — they are checked together, not in precedence order, and the first one to fire
+is enough.
 
-```bash
-awk 'NR>=<start> && NR<=<end>' CLAUDE.md | wc -l     # what is there now
-```
+- **Provenance (measured, not inferred).** — the section's heading line carries a
+  second comment `<!-- emitted=<N> -->` after the version marker, and the section is
+  now more than **~20** lines longer than `<N>`. The plugin wrote exactly `<N>` lines
+  there, so everything above that came from somewhere else. This is the only one of
+  the three that is a measurement rather than a proxy: a block that grew or shrank
+  between releases moves the ratio, and it cannot move `<N>`.
 
-This is not a heuristic and it does not care what the block's current size is, so use it
-whenever it is available and ignore the two triggers below. A block that grew or shrank
-between releases moves the ratio; it cannot move `<N>`.
+  ```bash
+  awk 'NR>=<start> && NR<=<end>' CLAUDE.md | wc -l     # what is there now
+  ```
 
-**When there is no `emitted=`** — every section written before 2.49.0 — fall back to the
-two triggers below. They are proxies, and they are why provenance exists.
+  **Count the two sides the way each was counted.** `<N>` is `wc -l` of the block
+  file as it shipped; the number above is the section's lines in CLAUDE.md, heading
+  line through the last line before the next heading of equal-or-shallower level.
+  Placeholder substitution and a trailing blank line move the total by a line or
+  two, so the two counts are close rather than equal. The ~20-line threshold exists
+  partly to absorb that; do not tighten it to chase an exact match.
 
-The gate fires when **either** of these holds:
+  **Distrust an implausible `<N>`.** Nothing verifies it — it is a number a past run
+  wrote down. Ignore it, and decide on the other two triggers alone, when either the
+  section is at or below `<N>` (the plugin cannot have emitted more lines than are
+  there, so the count is wrong), or `<N>` is more than ~20 lines ABOVE the block
+  file's current length (blocks grow between releases far more often than they
+  shrink, so a `<N>` well over today's block is a miscount, not history). A `<N>`
+  well BELOW the block is ordinary — that is just an older, smaller block — and it
+  is fine.
 
-- **Ratio (fallback).** — the section is more than **1.5×** the block's line count.
-- **Volume (fallback).** — more than ~20 of the section's lines carry material the block
+- **Ratio (proxy).** — the section is more than **1.5×** the block's line count.
+- **Volume (proxy).** — more than ~20 of the section's lines carry material the block
   does not have in any form. Not reworded block prose, which a version bump produces by
   the dozen; lines whose subject matter is absent from the block entirely.
 
-Neither alone is enough, which is why there are two. Ratio scales with the block, so
+A section with no `emitted=` — everything written before 2.49.0 — has only the two
+proxies, and they are why provenance exists. Where provenance IS present it adds a
+reason to stop; it never removes one. That precedence is deliberate and it is not
+symmetric: a trigger that fires when it should not costs one question, and a trigger
+that stays quiet when it should not costs the user whatever they had written. An
+`emitted=` that is wrong by a little is the likeliest failure of this whole mechanism,
+and letting it silence two working proxies would make this release worse than the one
+before it for exactly the sections it was built to protect.
+
+Neither proxy alone is enough, which is why there are two. Ratio scales with the block, so
 one threshold buys wildly different exposure: 1.5× of the 162-line `git-hygiene.md` is
 81 losable lines, 1.5× of the 23-line `companion-skills.md` is 11 — a 7× difference
 from the same number. Volume is flat, so it catches the small-block case the ratio

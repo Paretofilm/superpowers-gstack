@@ -233,7 +233,7 @@ def test_the_growth_gate_has_a_second_trigger_for_small_blocks():
     losable lines, of the 23-line companion-skills block 11."""
     gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check — applies"):]
     gate = gate[: gate.index("**Attribution check — applies")]
-    assert "**Ratio (fallback).**" in gate and "**Volume (fallback).**" in gate
+    assert "**Ratio (proxy).**" in gate and "**Volume (proxy).**" in gate
     assert "either" in gate
 
 
@@ -364,13 +364,31 @@ def test_block_files_never_carry_the_emitted_attribute():
         assert "emitted=" not in f.read_text().split("\n", 1)[0], f"{f.name} line 1"
 
 
-def test_growth_check_prefers_provenance_over_the_ratio():
+def _growth_gate():
     gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check"):]
-    gate = gate[: gate.index("**Insert or upgrade the Autonomy")]
-    assert "**Provenance (authoritative).**" in gate
+    return gate[: gate.index("**Insert or upgrade the Autonomy")]
+
+
+def test_growth_check_reads_provenance_alongside_the_two_proxies():
+    """Provenance may only ADD a reason to stop. The first cut made it exclusive —
+    "use it whenever it is available and ignore the two triggers below" — which
+    means one wrong `<N>` silences all three at once, and `<N>` is a number a past
+    run wrote with nothing verifying it. A trigger that fires when it should not
+    costs one question; one that stays quiet costs the user their writing."""
+    gate = _growth_gate()
+    assert "**Provenance (measured, not inferred).**" in gate
     assert "emitted=" in gate
-    # the ratio must still be reachable for sections written before 2.49.0
+    assert "it adds a\nreason to stop; it never removes one" in gate
+    assert "ignore the two triggers below" not in gate, "exclusive precedence is back"
+    # the proxies must still be reachable for sections written before 2.49.0
     assert "1.5×" in gate and "no `emitted=`" in gate
+
+
+def test_an_implausible_emitted_count_is_distrusted():
+    """`emitted=212` on a 200-line section must not be able to silence the gate."""
+    gate = _growth_gate()
+    assert "**Distrust an implausible `<N>`.**" in gate
+    assert "at or below `<N>`" in gate
 
 
 def test_the_gate_thresholds_are_pinned():

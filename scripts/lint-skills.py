@@ -182,8 +182,14 @@ ADAPT_GUARDS = [
     ("Step 5", "> `Session Continuity`: I cannot attribute this section to a past emitter",
      "the same report for Session Continuity's own handoff.md sniff test, which reaches "
      "the identical preserve-and-insert state by a different route"),
-    ("Step 5", "**Provenance (authoritative).**",
+    ("Step 5", "**Provenance (measured, not inferred).**",
      "the trigger that reads what the plugin actually wrote, not a ratio against a moving block"),
+    ("Step 5", "**Distrust an implausible `<N>`.**",
+     "the sanity check on a count nothing verifies — without it one wrong number "
+     "silences the gate for that section"),
+    ("Step 5", "it adds a\nreason to stop; it never removes one",
+     "the precedence rule: provenance may only ever ADD a reason to stop, so a bad "
+     "`<N>` cannot switch off the two proxies that would still have caught the growth"),
 ]
 
 # E13 ordering: a guard in the right step but the wrong place is still broken.
