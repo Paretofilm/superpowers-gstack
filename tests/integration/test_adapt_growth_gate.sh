@@ -2,8 +2,9 @@
 #
 # tests/integration/test_adapt_growth_gate.sh
 #
-# Verifies that /adapt's growth check (2.48.0) refuses to silently replace a
-# marker-managed section that has grown past its block.
+# Verifies that /adapt's growth check refuses to silently replace a marker-managed
+# section that has grown past its block, by both routes it can notice: the Ratio
+# proxy (2.48.0) and the provenance delta against `emitted=` (2.49.0).
 #
 # The regression this guards is the QUIET one: a run that reports
 # "Nothing project-authored was removed." while the diff says otherwise. So the
@@ -96,6 +97,40 @@ if ! LC_NUMERIC=C awk -v s="$SECTION_LINES" -v b="$BLOCK_LINES" 'BEGIN { exit !(
 fi
 echo "Fixture premise verified: section is $SECTION_LINES lines against a $BLOCK_LINES-line block (${RATIO}x, gate fires above 1.5x)."
 
+# Precondition, not an assertion: the SECOND fixture section exists to prove the
+# provenance trigger catches what the ratio cannot, so its premise has to hold in
+# both directions — under 1.5x (invisible to the Ratio proxy) and more than ~20
+# lines above its own emitted= count. Derive all three numbers from the real
+# files; a fixture edit that quietly breaks either half would leave the assertions
+# below testing a mechanism that never ran.
+PROV_BLOCK="$PLUGIN_DIR/skills/setup-routing/blocks/git-hygiene.md"
+PROV_START=$(grep -n '^## Git hygiene' "$FIXTURE" | head -1 | cut -d: -f1)
+PROV_END=$(awk -v start="$PROV_START" 'NR>start && /^## /{print NR-1; exit}' "$FIXTURE")
+[ -n "$PROV_END" ] || PROV_END=$(wc -l < "$FIXTURE")
+PROV_LINES=$((PROV_END - PROV_START + 1))
+PROV_BLOCK_LINES=$(wc -l < "$PROV_BLOCK" | tr -d ' ')
+PROV_EMITTED=$(sed -n "${PROV_START}p" "$FIXTURE" | sed -nE 's/.*<!-- emitted=([0-9]+) -->.*/\1/p')
+if [ -z "$PROV_EMITTED" ]; then
+  echo "SETUP ERROR: fixture's Git hygiene heading carries no <!-- emitted=N --> comment." >&2
+  echo "  Provenance is what this section exists to exercise. INCONCLUSIVE, not a pass." >&2
+  exit 2
+fi
+PROV_RATIO=$(LC_NUMERIC=C awk -v s="$PROV_LINES" -v b="$PROV_BLOCK_LINES" 'BEGIN { printf "%.2f", s / b }')
+if ! LC_NUMERIC=C awk -v s="$PROV_LINES" -v b="$PROV_BLOCK_LINES" 'BEGIN { exit !(s <= 1.5 * b) }'; then
+  echo "SETUP ERROR: Git hygiene fixture section is ${PROV_RATIO}x its block — at or above" >&2
+  echo "  1.5x the Ratio proxy would catch it too, so a survival cannot be credited to" >&2
+  echo "  provenance. INCONCLUSIVE, not a pass." >&2
+  exit 2
+fi
+if [ "$((PROV_LINES - PROV_EMITTED))" -le 20 ]; then
+  echo "SETUP ERROR: Git hygiene fixture section is $PROV_LINES lines against emitted=$PROV_EMITTED" >&2
+  echo "  — only $((PROV_LINES - PROV_EMITTED)) over, and the provenance trigger fires above ~20." >&2
+  echo "  INCONCLUSIVE, not a pass." >&2
+  exit 2
+fi
+echo "Provenance premise verified: Git hygiene section is $PROV_LINES lines, ${PROV_RATIO}x its" \
+     "$PROV_BLOCK_LINES-line block (under the 1.5x proxy) and $((PROV_LINES - PROV_EMITTED)) over emitted=$PROV_EMITTED (over ~20)."
+
 # 2. Every sentinel line survives. This is the assertion that matters: it reads
 #    the file, so a run that CLAIMS nothing was removed still fails here.
 MISSING=0
@@ -120,14 +155,43 @@ awk '/[Dd]eferred \(grown past its block/{f=1; next} f' "$WORK/run.log" \
   | head -20 | grep -qi "Native Apple development tools"
 assert "report names the deferred section under the Deferred block" $?
 
-# 5. The provenance trigger fired: a section at 1.23x the block — invisible to the
-#    ratio fallback — was caught because emitted=162 says the plugin wrote 162 lines
-#    and ~200 are there now.
+# 6. The provenance trigger fired: a section at 1.23x its block — invisible to the
+#    Ratio proxy — was caught because emitted=162 says the plugin wrote 162 lines
+#    and 200 are there now.
 MISSING_PROV=0
 for n in 001 002 003 004 005; do
   grep -q "PROV-SENTINEL-$n" "$WORK/CLAUDE.md" || { echo "  lost PROV-SENTINEL-$n"; MISSING_PROV=1; }
 done
-[ "$MISSING_PROV" -eq 0 ]; assert "provenance-marked section survives at 1.23x, below the ratio fallback" $?
+[ "$MISSING_PROV" -eq 0 ]; assert "provenance-marked section survives at 1.23x, below the ratio proxy" $?
+
+# 7-9. Survival alone does not prove the gate ran. There is a second route to
+#    those five lines being intact: if the marker were read as ABSENT, this
+#    fixture carries neither of git-hygiene's case-3 sentinels, so the
+#    Attribution check would preserve the section byte-for-byte and insert the
+#    current block BESIDE it — and assertion 6 would pass having proved nothing
+#    about provenance. These three separate the two outcomes. A deferral leaves
+#    exactly one section, still on its old marker, named in the Deferred block;
+#    a preserve-and-insert leaves two, one of them on v9.
+GITHYG_HEADINGS=$(grep -c '^#\{2,3\} Git hygiene' "$WORK/CLAUDE.md")
+[ "$GITHYG_HEADINGS" -eq 1 ]
+assert "exactly one Git hygiene section (a preserve-and-insert would leave two)" $?
+
+grep -q 'gstack-git-hygiene-v8' "$WORK/CLAUDE.md" && ! grep -q 'gstack-git-hygiene-v9' "$WORK/CLAUDE.md"
+assert "Git hygiene left at v8 — deferred, not upgraded and not duplicated at v9" $?
+
+awk '/[Dd]eferred \(grown past its block/{f=1; next} f' "$WORK/run.log" \
+  | head -20 | grep -qi "Git hygiene"
+assert "report names Git hygiene under the Deferred block" $?
+
+# 10. A generator actually WROTE provenance. Every assertion above reads an
+#    attribute the FIXTURE seeded, so all of them would pass unchanged if the
+#    "Record what you emitted" instruction were skipped on every section this
+#    run emitted. Count the marker headings carrying provenance, minus the
+#    seeded one, and require at least one.
+PROV_WRITTEN=$(grep -c -E '^#{2,3} .*<!-- gstack-[a-z-]+-v[0-9]+ --><!-- emitted=[0-9]+ -->' "$WORK/CLAUDE.md")
+PROV_SEEDED=$(grep -c -E '^#{2,3} Git hygiene.*<!-- emitted=' "$WORK/CLAUDE.md")
+[ "$((PROV_WRITTEN - PROV_SEEDED))" -ge 1 ]
+assert "a generator wrote emitted= on a section it emitted this run ($PROV_WRITTEN marked, $PROV_SEEDED seeded)" $?
 
 echo ""
 if [ ${#FAILURES[@]} -eq 0 ]; then
