@@ -62,9 +62,16 @@ def render() -> str:
     parts = [
         BEGIN,
         "",
-        "<!-- This repo eats its own dog food: the blocks below are byte-identical to",
-        "     what /adapt emits into every other project. Regenerate with",
-        "     `python3 scripts/sync-own-claude-md.py`; lint rule E11 fails if stale. -->",
+        # "the blocks are byte-identical" was true until 2.49.0, when this script
+        # started rewriting every heading to append provenance. The BODY is what
+        # is byte-identical; the heading carries one comment the block file does
+        # not. Do not write a literal HTML comment terminator in here — this text
+        # IS an HTML comment, and comments do not nest.
+        "<!-- This repo eats its own dog food: each block's BODY below is byte-identical",
+        "     to what /adapt emits into every other project, and each heading carries the",
+        "     same `emitted=` provenance comment a generator appends beside the marker.",
+        "     Regenerate with `python3 scripts/sync-own-claude-md.py`; lint rule E11",
+        "     fails if stale. -->",
         "",
     ]
     for name in UNIVERSAL:

@@ -29,8 +29,9 @@ threshold, seven times the exposure.
   and nothing verifies it, so an exclusive provenance trigger meant one wrong count
   silenced ratio and volume too — worse than 2.48.0 for exactly the sections the feature
   protects. A trigger that fires when it should not costs one question; one that stays
-  quiet costs the user their writing. An implausible `<N>` is distrusted outright: at or
-  below the section's current length, or more than ~20 lines above the block file's
+  quiet costs the user their writing. An implausible `<N>` is distrusted outright when it
+  is at or ABOVE the section's current length — the plugin cannot have emitted more lines
+  than are there, so the count is wrong — or more than ~20 lines above the block file's
   length today. (A `<N>` well *below* today's block is ordinary — that is just an older,
   smaller block — and stays trusted.)
 - **The ratio and volume triggers remain**, relabelled as the proxies they are. All four
