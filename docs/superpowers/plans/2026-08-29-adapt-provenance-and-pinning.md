@@ -15,7 +15,7 @@
 ## Global Constraints
 
 - **Lint green after every task.** `python3 scripts/lint-skills.py` exits 0. Two warnings are expected and are NOT errors: `W2 adapt` and `W2 swiftui-design-consultation`.
-- **Unit tests pass after every task.** `pytest tests/unit -q` — currently **249 passed**, ~26 s.
+- **Unit tests pass after every task.** `pytest tests/unit -q` — **249 passed** when this plan was written; 250 after Task 1. Counts below are measured, not predicted — if yours differs, say so rather than assuming the plan is right.
 - **The integration test costs real API credits.** Run it exactly once, in Task 5. Never in a loop.
 - **Lint E8 governs block files, not emitted sections.** Line 1 of every marker block must keep matching `^## .*<!-- gstack-[a-z-]+-v\d+ -->$`. **Block files keep the bare marker** — the `emitted=` attribute is added by the generators at write time and appears only in a project's CLAUDE.md. A block file carrying `emitted=` is a bug.
 - **E13 needles are contract strings.** Adding prose near one is safe; rewording the needle itself turns the lint red on purpose.
@@ -76,7 +76,7 @@ def test_preserve_and_insert_tells_the_user_how_to_undo_it():
 - [ ] **Step 2: Run it to verify it fails**
 
 Run: `pytest tests/unit/test_lint_adapt_guards.py -q`
-Expected: FAIL — 1 failed, 15 passed.
+Expected: FAIL — 1 failed, the rest passing.
 
 - [ ] **Step 3: Rewrite the "Sentinel absent" bullet**
 
@@ -119,7 +119,7 @@ In `scripts/lint-skills.py`, add to `ADAPT_GUARDS`:
 - [ ] **Step 5: Verify both pass**
 
 Run: `python3 scripts/lint-skills.py && pytest tests/unit/test_lint_adapt_guards.py -q`
-Expected: lint `0 error(s)`; 16 passed.
+Expected: lint `0 error(s)`; 250 passed.
 
 - [ ] **Step 6: Commit**
 
@@ -239,7 +239,7 @@ Expected: the mutated run prints an `E14` line and `1 error(s)`; the restored ru
 - [ ] **Step 6: Verify and commit**
 
 Run: `python3 scripts/lint-skills.py && pytest tests/unit -q`
-Expected: lint `0 error(s)`; 251 passed.
+Expected: lint `0 error(s)`; 252 passed.
 
 ```bash
 git add skills/adapt/SKILL.md skills/setup-routing/SKILL.md scripts/lint-skills.py tests/unit/test_lint_adapt_guards.py
@@ -333,7 +333,7 @@ Substitute the correct marker name per section: `gstack-autonomy-vN`, `gstack-gi
 - [ ] **Step 6: Verify and commit**
 
 Run: `python3 scripts/lint-skills.py && pytest tests/unit -q`
-Expected: lint `0 error(s)`; 253 passed.
+Expected: lint `0 error(s)`; 254 passed.
 
 ```bash
 git add skills/adapt/SKILL.md scripts/lint-skills.py tests/unit/test_lint_adapt_guards.py
@@ -418,7 +418,7 @@ Then retitle the two existing triggers so the precedence is legible: `**Ratio (f
 - [ ] **Step 5: Verify and commit**
 
 Run: `python3 scripts/lint-skills.py && pytest tests/unit -q`
-Expected: lint `0 error(s)`; 255 passed.
+Expected: lint `0 error(s)`; 256 passed.
 
 ```bash
 git add skills/adapt/SKILL.md scripts/lint-skills.py tests/unit/test_lint_adapt_guards.py
@@ -554,7 +554,7 @@ Move Step 6's mandatory diff item below the `**STOP HERE.**` line in a temp copy
 - [ ] **Step 5: Verify and commit**
 
 Run: `python3 scripts/lint-skills.py && pytest tests/unit -q`
-Expected: lint `0 error(s)`; 256 passed.
+Expected: lint `0 error(s)`; 257 passed.
 
 ```bash
 git add scripts/lint-skills.py tests/unit/test_lint_adapt_guards.py
@@ -620,7 +620,7 @@ threshold, seven times the exposure.
 - [ ] **Step 4: Run the full gate**
 
 Run: `python3 scripts/lint-skills.py && pytest tests/unit -q`
-Expected: lint `0 error(s)` with the two known `W2` warnings; 256 passed. Do **not** re-run the integration test — Task 5 ran it.
+Expected: lint `0 error(s)` with the two known `W2` warnings; 257 passed. Do **not** re-run the integration test — Task 5 ran it.
 
 - [ ] **Step 5: Commit**
 
