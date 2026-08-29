@@ -344,3 +344,21 @@ def test_step6_order_rule_does_not_depend_on_a_question_s_wording():
     assert "Would you like me to run a comprehensive review" not in lint_src, (
         "the order rule anchors on prose a copy-edit would break"
     )
+
+
+def test_step6_order_check_fails_closed_when_its_anchor_is_gone():
+    """The check used to read `if first in region and second in region:` — when
+    an edit made either anchor disappear, the comparison was skipped rather than
+    flagged, so the guard's own removal read exactly like the guard passing. A
+    missing anchor must now be its own error, not silence."""
+    start = ADAPT_SKILL.index("### Step 6")
+    end = ADAPT_SKILL.index("### Step 7", start)
+    region = ADAPT_SKILL[start:end]
+    marker = "**STOP HERE.**"
+    assert region.count(marker) == 1
+    mutated_region = region.replace(marker, "**STOP.**")
+    assert mutated_region != region, "rename did not change the text"
+    mutated = ADAPT_SKILL[:start] + mutated_region + ADAPT_SKILL[end:]
+
+    errs = lint.check_adapt_guards(mutated)
+    assert any("ordering anchor" in e and repr(marker) in e for e in errs), errs

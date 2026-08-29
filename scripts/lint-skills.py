@@ -274,11 +274,22 @@ def check_adapt_guards(text: str) -> list[str]:
                 f"{needle!r} — {why}")
     for step, first, second, why in ADAPT_GUARD_ORDER:
         region = regions.get(step)
-        if region and first in region and second in region:
-            if region.index(first) > region.index(second):
-                errs.append(
-                    f"E13 adapt/SKILL.md: in {step}, {first!r} appears after "
-                    f"{second!r} — {why}")
+        if not region:
+            continue  # already reported above: no `### {step}` heading at all
+        if first not in region:
+            errs.append(
+                f"E13 adapt/SKILL.md: {step}'s ordering anchor {first!r} is gone — "
+                f"the order check cannot run, so it is reporting nothing rather "
+                f"than passing")
+        elif second not in region:
+            errs.append(
+                f"E13 adapt/SKILL.md: {step}'s ordering anchor {second!r} is gone — "
+                f"the order check cannot run, so it is reporting nothing rather "
+                f"than passing")
+        elif region.index(first) > region.index(second):
+            errs.append(
+                f"E13 adapt/SKILL.md: in {step}, {first!r} appears after "
+                f"{second!r} — {why}")
     return errs
 
 
