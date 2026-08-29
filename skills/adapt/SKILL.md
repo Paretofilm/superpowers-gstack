@@ -383,8 +383,17 @@ string only a past emitter would have written into that section. Before replacin
   case 2, still subject to the Growth check above.
 - **Sentinel absent** → you cannot attribute the section to a past emitter. Do NOT
   replace it. Leave it byte-for-byte intact, insert the plugin block as a separate H2
-  section immediately below it, and say in the report that both now exist and which
-  one is theirs, so they can merge by hand.
+  section immediately below it, and report the outcome in these terms:
+
+  > `<heading>`: I cannot attribute this section to a past emitter — it has no version
+  > marker and none of the phrases an older `/adapt` would have written. I left it
+  > exactly as it was and put the current plugin version below it, so nothing of yours
+  > was touched. If it *is* an old plugin section, delete your copy and re-run
+  > `/adapt` and it will upgrade cleanly.
+
+  Two sections sharing a heading is a state the user has to resolve, so tell them
+  which one is theirs and what resolves it. A report that only says "both now exist"
+  leaves them to work out both.
 
 This is `Code reuse discipline`'s case 3 and `Session Continuity`'s `handoff.md` test
 generalised, and it accepts one failure to avoid a worse one: an old emitted section

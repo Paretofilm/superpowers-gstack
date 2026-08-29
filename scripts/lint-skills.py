@@ -165,6 +165,8 @@ ADAPT_GUARDS = [
      "the sentinel that makes an empty Removed block mean 'checked', not 'skipped'"),
     ("Step 6", "> **Deferred (grown past its block, not upgraded):**",
      "the label that keeps a deferral (nothing lost) out of the block that means loss"),
+    ("Step 5", "cannot attribute this section to a past emitter",
+     "the report line that turns a two-sections-now-exist state into an actionable one"),
 ]
 
 # E13 ordering: a guard in the right step but the wrong place is still broken.

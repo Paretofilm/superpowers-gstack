@@ -273,3 +273,10 @@ def test_the_simulator_fallback_keeps_a_parenthesised_model_name_whole():
 def test_denylist_catches_a_hardcoded_simulator_model():
     line = "`xcodebuild -scheme X -destination 'platform=iOS Simulator,name=iPhone 16' build`"
     assert any(p.search(line) for p, _ in lint.DENYLIST)
+
+
+def test_preserve_and_insert_tells_the_user_how_to_undo_it():
+    """A user who sees two sections and no reason will not know that deleting one
+    and re-running /adapt is the whole fix."""
+    assert "cannot attribute this section to a past emitter" in ADAPT_SKILL
+    assert "delete your copy and re-run" in ADAPT_SKILL
