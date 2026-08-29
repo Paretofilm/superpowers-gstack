@@ -49,6 +49,57 @@ def test_every_adapt_guard_is_present():
     assert lint.check_adapt_guards(ADAPT_SKILL) == []
 
 
+def _splice_region(step, old, new, count=1):
+    """Rewrite one `### Step N` region of the skill text, leaving the rest alone.
+
+    Mutating the whole file would hit occurrences in other steps and prove the
+    wrong thing — the property under test is per-region.
+    """
+    region = lint.step_regions(ADAPT_SKILL)[step]
+    start = ADAPT_SKILL.index(region)
+    mutated_region = region.replace(old, new, count)
+    assert mutated_region != region, f"{old!r} not found in {step}"
+    return ADAPT_SKILL[:start] + mutated_region + ADAPT_SKILL[start + len(region):]
+
+
+def test_every_guard_needle_matches_exactly_once_in_its_region():
+    """The F1 class, closed structurally rather than three times over.
+
+    `cannot attribute this section to a past emitter` and
+    `Nothing project-authored was removed.` each occurred twice by 2.49.0 — the
+    second copy added by the branch that introduced the guard — and
+    `diff .gstack/CLAUDE.md.pre-adapt CLAUDE.md` had occurred twice since 2.48.0.
+    A needle matching twice reports the copy, not the site it names: delete the
+    guard and the lint stays green.
+    """
+    regions = lint.step_regions(ADAPT_SKILL)
+    for step, needle, why in lint.ADAPT_GUARDS:
+        assert regions[step].count(needle) == 1, (
+            f"{needle!r} matches {regions[step].count(needle)} times in {step} — "
+            f"it no longer pins {why}")
+
+
+def test_deleting_one_occurrence_of_any_guard_turns_the_lint_red():
+    """Not 'the words are gone from the file' — 'this site is gone'. Excision
+    tests remove whole regions; this removes exactly what the needle names, which
+    is the mutation a reword or a tidy-up actually performs."""
+    for step, needle, why in lint.ADAPT_GUARDS:
+        errs = lint.check_adapt_guards(_splice_region(step, needle, ""))
+        # the lint formats needles with !r, so compare against the same repr —
+        # a needle carrying a newline is not a substring of its own message.
+        assert any(repr(needle) in e for e in errs), (
+            f"deleting {needle!r} from {step} left E13 green")
+
+
+def test_a_needle_matching_twice_is_reported_rather_than_passing():
+    """The other half: a needle can also stop discriminating because someone
+    quotes the guard elsewhere in the same step. Silence there is the failure —
+    the check has to say the needle stopped pinning its site."""
+    step, needle, why = lint.ADAPT_GUARDS[0]
+    errs = lint.check_adapt_guards(_splice_region(step, needle, needle + "\n" + needle))
+    assert any("2 times" in e and repr(needle) in e for e in errs), errs
+
+
 def test_every_guard_needle_lives_in_the_step_that_owns_it():
     """Region anchoring is the whole mechanism — assert it directly, so a needle
     quietly re-pointed at a step it does not belong to shows up here."""

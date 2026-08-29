@@ -161,16 +161,27 @@ ADAPT_GUARDS = [
      "numbers to a shifted file, and truncation only lowers the ratio, so it fails OPEN"),
     ("Step 6", "3. **Diff against the snapshot and classify every removed line.**",
      "the MANDATORY diff — the optional review's re-check runs only if the user says yes"),
-    ("Step 6", "diff .gstack/CLAUDE.md.pre-adapt CLAUDE.md",
-     "the diff that replaces the unperformable mental one"),
+    ("Step 6", "\n   diff .gstack/CLAUDE.md.pre-adapt CLAUDE.md\n",
+     "the MANDATORY diff's own command, matched by its indented line rather than "
+     "bare — the optional review below re-runs the same command inline, and a bare "
+     "needle reported that copy after the mandatory one was deleted"),
     ("Step 6", "> **Removed (not plugin prose):**",
      "the only report block that can reveal a casualty — survivors lists cannot"),
-    ("Step 6", "Nothing project-authored was removed.",
-     "the sentinel that makes an empty Removed block mean 'checked', not 'skipped'"),
+    ("Step 6", ">   `Nothing project-authored was removed.`",
+     "the sentinel that makes an empty Removed block mean 'checked', not 'skipped' — "
+     "matched inside the report template, where it has to be written"),
+    ("Step 6", "**Write the three block labels verbatim, in English",
+     "the rule that keeps the three greppable labels out of the translation the rest "
+     "of the report gets; it quotes the sentinel, which is what stopped the needle "
+     "above from pinning the template"),
     ("Step 6", "> **Deferred (grown past its block, not upgraded):**",
      "the label that keeps a deferral (nothing lost) out of the block that means loss"),
-    ("Step 5", "cannot attribute this section to a past emitter",
-     "the report line that turns a two-sections-now-exist state into an actionable one"),
+    ("Step 5", "> `<heading>`: I cannot attribute this section to a past emitter",
+     "the Attribution check's report line, which turns a two-sections-now-exist state "
+     "into an actionable one"),
+    ("Step 5", "> `Session Continuity`: I cannot attribute this section to a past emitter",
+     "the same report for Session Continuity's own handoff.md sniff test, which reaches "
+     "the identical preserve-and-insert state by a different route"),
     ("Step 5", "**Provenance (authoritative).**",
      "the trigger that reads what the plugin actually wrote, not a ratio against a moving block"),
 ]
@@ -266,10 +277,24 @@ def check_adapt_guards(text: str) -> list[str]:
             f"guards anchored to it cannot be located, so nothing pins them")
     for step, needle, why in ADAPT_GUARDS:
         region = regions.get(step)
-        if region is not None and needle not in region:
+        if region is None:
+            continue
+        hits = region.count(needle)
+        if hits == 0:
             errs.append(
                 f"E13 adapt/SKILL.md: {step} is missing content-loss guard "
                 f"{needle!r} — {why}")
+        elif hits > 1:
+            # A needle matching twice reports the copy, not the site it names:
+            # delete the guard and the other occurrence keeps the lint green.
+            # Three needles were in exactly that state at 2.49.0 — two of them
+            # put there by the very branch that reviewed them — and each was
+            # found by deleting an occurrence, never by reading.
+            errs.append(
+                f"E13 adapt/SKILL.md: {step} matches content-loss guard {needle!r} "
+                f"{hits} times, so it no longer pins {why} — deleting that guard "
+                f"would leave the lint green on the other copy. Re-point the needle "
+                f"at something unique to its own site")
     for step, first, second, why in ADAPT_GUARD_ORDER:
         region = regions.get(step)
         if not region:
