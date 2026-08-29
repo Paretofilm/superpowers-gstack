@@ -234,7 +234,12 @@ cp /tmp/autonomy.bak skills/setup-routing/blocks/autonomy.md && rm /tmp/autonomy
 python3 scripts/lint-skills.py 2>&1 | tail -1
 ```
 
-Expected: the mutated run prints an `E14` line and `1 error(s)`; the restored run prints `0 error(s)`. Paste both into your report — a guard nobody has seen fail is a guard nobody has tested.
+Expected: the mutated run prints an `E14` line, and `3 error(s)` in total — measured, not
+predicted. The same `sed` also breaks E8 (its marker regex needs `-->` immediately after the
+digits, which ` emitted=31` displaces) and cascades to E11, because `autonomy.md` is in
+`sync-own-claude-md.py`'s `UNIVERSAL` list, so this repo's own CLAUDE.md embeds it and goes
+stale. E14 firing is what the step proves; the other two are the blast radius of a
+deliberately malformed marker. The restored run prints `0 error(s)`. Paste both into your report — a guard nobody has seen fail is a guard nobody has tested.
 
 - [ ] **Step 6: Verify and commit**
 
