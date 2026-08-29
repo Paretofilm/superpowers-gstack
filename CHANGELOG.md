@@ -39,6 +39,14 @@ threshold, seven times the exposure.
   sliced the whole gate and asserted the numbers occurred somewhere in it, which three
   of them did more than once: 1.5 could become 15, and both ~20s could move, with the
   test green. Measured, not reasoned about.
+- **`heading_text()` normalizes the two-comment form**, which the release that invented
+  it had not taught the normalizer to read: for a real emitted heading it returned
+  `session continuity <!-- gstack-session-continuity-v1 --><!-- emitted=66 -->`, because
+  the marker rule is anchored at end-of-line and provenance now sits to its right. E8's
+  marker branch reads the raw line and was never fooled, but its markerless branch
+  compares against this text — so an inline copy of a block heading carrying only
+  `<!-- emitted=N -->` passed the lint with 0 errors. Both comments strip now, and the
+  three real shapes are in `test_lint_heading_text.py`.
 - **Lint E14** keeps `emitted=` out of the source blocks, where it would be a constant
   that goes stale on the next edit — and a stale provenance number is worse than none,
   because the gate would trust it.

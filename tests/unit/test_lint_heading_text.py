@@ -44,6 +44,21 @@ lint = load_lint()
             "## Session Continuity <!-- gstack-session-continuity-v1 -->",
             "carrying the version marker",
         ),
+        (
+            "## Session Continuity <!-- gstack-session-continuity-v1 --><!-- emitted=66 -->",
+            "the shape 2.49.0 generators actually write — marker plus provenance, "
+            "no space between the two comments",
+        ),
+        (
+            "  ### Session Continuity <!-- gstack-session-continuity-v1 --> <!-- emitted=66 -->",
+            "the same, demoted to H3, indented, with a space the spec forbids but "
+            "a hand-edit produces",
+        ),
+        (
+            "## Session Continuity <!-- emitted=66 -->",
+            "provenance with the marker hand-deleted — the copy E8's markerless "
+            "branch has to keep seeing",
+        ),
     ],
 )
 def test_heading_disguises_all_normalize(line, why):

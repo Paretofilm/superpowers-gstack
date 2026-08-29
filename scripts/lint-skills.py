@@ -246,6 +246,14 @@ def heading_text(line: str) -> str | None:
     if not s.startswith("#"):
         return None
     s = s.lstrip("#").strip()
+    # Provenance strips FIRST, because 2.49.0 writes it to the RIGHT of the
+    # marker: `## X <!-- gstack-x-v2 --><!-- emitted=31 -->`. With only the
+    # marker rule — anchored at `$` — that heading normalized to
+    # `x <!-- gstack-x-v2 --><!-- emitted=31 -->`, so the normalizer's contract
+    # and the shape the generators actually emit had drifted apart. E8's marker
+    # branch reads the raw line and was never fooled; its markerless branch
+    # compares against this text and would have been.
+    s = re.sub(r"\s*<!-- emitted=\d+ -->\s*$", "", s)
     s = re.sub(r"\s*<!-- gstack-[a-z-]+-v\d+ -->\s*$", "", s)
     return re.sub(r"\s*#+$", "", s).strip().lower()
 
