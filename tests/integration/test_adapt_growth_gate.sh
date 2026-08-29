@@ -155,9 +155,14 @@ awk '/[Dd]eferred \(grown past its block/{f=1; next} f' "$WORK/run.log" \
   | head -20 | grep -qi "Native Apple development tools"
 assert "report names the deferred section under the Deferred block" $?
 
-# 6. The provenance trigger fired: a section at 1.23x its block — invisible to the
-#    Ratio proxy — was caught because emitted=162 says the plugin wrote 162 lines
-#    and 200 are there now.
+# 6. The gate fired on a section at 1.23x its block — invisible to the Ratio proxy,
+#    so the old signal was blind to it. It does NOT establish WHICH trigger fired.
+#    Volume fires here on its own: this fixture's section shares almost nothing with
+#    git-hygiene.md (~160 of its lines are absent from the block entirely), and under
+#    the additive precedence any one trigger firing yields this same outcome. Reading
+#    a survival here as proof of provenance is the claim this comment used to make.
+#    Separating them needs a volume-neutral fixture — >20 over emitted=, ~0 absent
+#    from the block — which skills/adapt/SKILL.md records as deferred work.
 MISSING_PROV=0
 for n in 001 002 003 004 005; do
   grep -q "PROV-SENTINEL-$n" "$WORK/CLAUDE.md" || { echo "  lost PROV-SENTINEL-$n"; MISSING_PROV=1; }

@@ -431,7 +431,12 @@ plugin prose with ten lines of a user's own and the count never moves. Closing t
 needs the emitted block's own content, or a hash of it, recorded in the marker — a
 further format change across all nine blocks and both generators. It is deferred until
 the first report of a section lost with all three triggers quiet, or the next time a
-block shrinks between releases.
+block shrinks between releases. Deferred alongside it: a **volume-neutral fixture** — a
+section that restates the block's own material more verbosely, so it is more than ~20
+lines over `<N>` while almost none of its lines are absent from the block. The fixture
+that exists is both, so the integration test proves the gate fired, not which trigger
+fired it; build the neutral one the first time provenance and Volume are suspected of
+disagreeing in the field.
 
 **Attribution check — applies to case 3 of the six sections below that replace on a
 missing marker.** Three do not need it: `Code reuse discipline` already preserves,

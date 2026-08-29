@@ -119,10 +119,16 @@ threshold, seven times the exposure.
 - **What the fixture does and does not prove.** At 200 lines against `emitted=162` it is
   38 over the ~20-line threshold, while 200/162 is 1.23× — under the 1.5× ratio proxy,
   so this is a section the old signal was blind to. That proves provenance catches what
-  the ratio misses. It does not prove independence from the volume proxy: both fire on
-  the same added prose under the same ~20-line threshold, and no fixture can separate
-  them, because a section N lines longer than its block has at least N lines absent from
-  it. Provenance's advantage over volume is cost and determinism, not sensitivity —
+  the ratio misses; it does not prove independence from the volume proxy, since both
+  fire on the same added prose under the same ~20-line threshold. In this fixture volume
+  fires on its own — the section shares almost nothing with `git-hygiene.md`, so ~160 of
+  its lines are absent from the block — and under additive precedence any trigger firing
+  produces the same outcome, so the assertions prove the gate fired, not which trigger
+  fired it. A volume-neutral fixture is constructible (volume counts only material
+  "absent from the block entirely", so a section that restates the block's own material
+  more verbosely is >20 over `<N>` and ~0 on volume) and is deferred; the skill's
+  deferred-work paragraph carries the trigger for building it.
+  Provenance's advantage over volume is cost and determinism, not sensitivity —
   volume needs a diff and a judgement call about which lines "appear in the block";
   provenance is subtraction on a number the plugin already wrote down.
 
