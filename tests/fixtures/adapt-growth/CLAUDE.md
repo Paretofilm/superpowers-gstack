@@ -404,3 +404,14 @@ ad hoc internal build in the first place.
 ## Project conventions
 
 Swift 6 strict concurrency. SwiftData + CloudKit. No third-party dependencies.
+
+## Skill routing
+
+Routing table lives here. This project was adapted before 2.34.0, so the plugin's
+own sections were emitted as H3 subsections nested under this heading rather than
+as top-level H2 blocks.
+
+### Session Continuity <!-- gstack-session-continuity-v1 -->
+
+On session start or after /compact, read `docs/superpowers/handoff.md` and present
+a one-line summary of where you left off, then clear the file.

@@ -125,6 +125,18 @@ threshold, seven times the exposure.
   marker, named in the Deferred block; a preserve-and-insert leaves two, one of them
   current) and asserts that a generator *wrote* provenance somewhere, rather than only
   that the seeded fixture attribute survived.
+- **The integration test accepted any integer as provenance, and had never run the H3
+  path.** Its provenance assertion counted headings carrying `emitted=<anything>`, so
+  `emitted=0` and a plausible inflated count both passed — verified against the previous
+  assertion, which greens on `emitted=45` beside a 31-line block. Nothing on the branch
+  checked that a generator counts correctly, and an inflated `<N>` inside the sanity band
+  silences the provenance trigger for that section from then on. Each heading whose
+  marker matches a current block file is now compared against `wc -l` of that block;
+  headings on older markers were not written this run and are skipped. Separately, every
+  fixture section was H2, so the demote-plus-provenance combination this release fixed
+  had never been executed end to end — the fixture grew an H3-rooted `Session Continuity`
+  nested under `## Skill routing`, on an older marker, and the test asserts the re-emitted
+  heading is still `###` and carries the current marker with the block's own line count.
 - **What the fixture does and does not prove.** At 200 lines against `emitted=162` it is
   38 over the ~20-line threshold, while 200/162 is 1.23× — under the 1.5× ratio proxy,
   so this is a section the old signal was blind to. That proves provenance catches what

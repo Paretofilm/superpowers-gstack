@@ -13,6 +13,12 @@
 # --print is non-interactive, so the gate's rule 4 (preserving branch) is the
 # path under test: the section must be left at its old version, not replaced.
 #
+# It also covers the two things the gate depends on but does not itself do: that
+# an emitted `emitted=<N>` equals `wc -l` of the block it came from (assertion
+# 10), and that an H3-rooted section is re-emitted at H3 WITH provenance
+# (assertion 11) — demote and provenance in one write, which no run had ever
+# performed before this fixture grew an H3 section.
+#
 # Cost: ~1-2 minutes and a few cents. Requires ANTHROPIC_API_KEY or an active
 # Claude Code session.
 #
@@ -131,6 +137,33 @@ fi
 echo "Provenance premise verified: Git hygiene section is $PROV_LINES lines, ${PROV_RATIO}x its" \
      "$PROV_BLOCK_LINES-line block (under the 1.5x proxy) and $((PROV_LINES - PROV_EMITTED)) over emitted=$PROV_EMITTED (over ~20)."
 
+# Precondition, not an assertion: the H3-rooted section exercises the
+# heading-level rule (demote to ###) TOGETHER with provenance — a combination no
+# run had ever performed, on the population it matters most for: an H3 root means
+# a pre-2.34.0 adaptation. It only reaches that path in case 2 (marker present,
+# version different). If the fixture's marker ever catches up with the block's,
+# case 1 skips the section and assertion 11 passes having tested nothing — the
+# vacuous green this project has now shipped four times. Derive both markers.
+H3_BLOCK="$PLUGIN_DIR/skills/setup-routing/blocks/session-continuity.md"
+H3_BLOCK_LINES=$(wc -l < "$H3_BLOCK" | tr -d ' ')
+H3_BLOCK_MARKER=$(head -1 "$H3_BLOCK" | sed -nE 's/.*<!-- (gstack-[a-z-]+-v[0-9]+) -->.*/\1/p')
+H3_FIXTURE_MARKER=$(grep -E '^### Session Continuity' "$FIXTURE" | head -1 \
+  | sed -nE 's/.*<!-- (gstack-[a-z-]+-v[0-9]+) -->.*/\1/p')
+if [ -z "$H3_FIXTURE_MARKER" ] || [ -z "$H3_BLOCK_MARKER" ]; then
+  echo "SETUP ERROR: could not read the H3 section's marker from the fixture" >&2
+  echo "  ('$H3_FIXTURE_MARKER') or from $H3_BLOCK ('$H3_BLOCK_MARKER')." >&2
+  echo "  Assertion 11 would test nothing. INCONCLUSIVE, not a pass." >&2
+  exit 2
+fi
+if [ "$H3_FIXTURE_MARKER" = "$H3_BLOCK_MARKER" ]; then
+  echo "SETUP ERROR: the fixture's H3 section is already on $H3_BLOCK_MARKER, the block's" >&2
+  echo "  current marker — case 1 skips it, so the demote-plus-provenance path never runs." >&2
+  echo "  Put the fixture section on an older marker. INCONCLUSIVE, not a pass." >&2
+  exit 2
+fi
+echo "H3 premise verified: fixture section is on $H3_FIXTURE_MARKER, the block on" \
+     "$H3_BLOCK_MARKER ($H3_BLOCK_LINES lines) — case 2, so it demotes and re-emits."
+
 # 2. Every sentinel line survives. This is the assertion that matters: it reads
 #    the file, so a run that CLAIMS nothing was removed still fails here.
 MISSING=0
@@ -188,15 +221,61 @@ awk '/[Dd]eferred \(grown past its block/{f=1; next} f' "$WORK/run.log" \
   | head -20 | grep -qi "Git hygiene"
 assert "report names Git hygiene under the Deferred block" $?
 
-# 10. A generator actually WROTE provenance. Every assertion above reads an
-#    attribute the FIXTURE seeded, so all of them would pass unchanged if the
-#    "Record what you emitted" instruction were skipped on every section this
-#    run emitted. Count the marker headings carrying provenance, minus the
-#    seeded one, and require at least one.
-PROV_WRITTEN=$(grep -c -E '^#{2,3} .*<!-- gstack-[a-z-]+-v[0-9]+ --><!-- emitted=[0-9]+ -->' "$WORK/CLAUDE.md")
-PROV_SEEDED=$(grep -c -E '^#{2,3} Git hygiene.*<!-- emitted=' "$WORK/CLAUDE.md")
-[ "$((PROV_WRITTEN - PROV_SEEDED))" -ge 1 ]
-assert "a generator wrote emitted= on a section it emitted this run ($PROV_WRITTEN marked, $PROV_SEEDED seeded)" $?
+# 10. A generator wrote provenance, AND the number it wrote is right. The first
+#    cut of this assertion counted headings carrying `emitted=<anything>`, so
+#    emitted=0, a copied 162, any integer at all passed it — nothing on this
+#    branch checked that a generator counts correctly. That matters because a
+#    plausible inflated <N> sits inside the sanity band ("distrust an implausible
+#    <N>" only fires more than ~20 above the block) and silences the provenance
+#    trigger for that section from then on.
+#
+#    A heading whose marker matches a CURRENT block file was written this run, so
+#    its <N> must equal `wc -l` of that block — the definition both generators
+#    are given. Headings on older markers were NOT written this run (the
+#    fixture's seeded git-hygiene v8, anything the gate deferred) and are skipped
+#    rather than compared against a block they never came from.
+BLOCKS_DIR="$PLUGIN_DIR/skills/setup-routing/blocks"
+PROV_CHECKED=0
+PROV_BAD=0
+# heredoc, not a pipe: a `while read` on the right of a pipe runs in a subshell
+# and both counters would come back zero — which reads exactly like a pass.
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  marker=$(printf '%s\n' "$line" | sed -nE 's/.*<!-- (gstack-[a-z-]+-v[0-9]+) -->.*/\1/p')
+  got=$(printf '%s\n' "$line" | sed -nE 's/.*<!-- emitted=([0-9]+) -->.*/\1/p')
+  [ -n "$marker" ] && [ -n "$got" ] || continue
+  bf=""
+  for f in "$BLOCKS_DIR"/*.md; do
+    if head -1 "$f" | grep -q -- "<!-- $marker -->"; then bf="$f"; break; fi
+  done
+  [ -n "$bf" ] || continue
+  want=$(wc -l < "$bf" | tr -d ' ')
+  PROV_CHECKED=$((PROV_CHECKED + 1))
+  if [ "$got" != "$want" ]; then
+    echo "  emitted=$got on $marker, but $(basename "$bf") is $want lines"
+    PROV_BAD=$((PROV_BAD + 1))
+  fi
+done <<EOF
+$(grep -E '^#{2,3} .*<!-- gstack-[a-z-]+-v[0-9]+ --><!-- emitted=[0-9]+ -->' "$WORK/CLAUDE.md")
+EOF
+[ "$PROV_CHECKED" -ge 1 ]
+assert "a generator wrote emitted= on a section it emitted this run ($PROV_CHECKED checked)" $?
+[ "$PROV_BAD" -eq 0 ]
+assert "every emitted= written this run equals wc -l of its block ($PROV_BAD wrong of $PROV_CHECKED)" $?
+
+# 11. The H3 path, end to end — demote and provenance in the same write. The
+#    heading-level rule calls itself the general rule for every marker-managed
+#    section and was fixed this release to append provenance after the copied
+#    marker; a unit test and an E13 needle pin the sentence, but until now no run
+#    had ever performed the two together, because every fixture section was H2.
+#    An H3 root means a pre-2.34.0 adaptation: the oldest projects in the wild.
+H3_COUNT=$(grep -c -E '^#{2,3} Session Continuity' "$WORK/CLAUDE.md")
+H3_HEADING=$(grep -E '^#{2,3} Session Continuity' "$WORK/CLAUDE.md" | head -1)
+[ "$H3_COUNT" -eq 1 ] && printf '%s\n' "$H3_HEADING" | grep -qE '^### '
+assert "Session Continuity is still H3 after the upgrade ($H3_COUNT found: $H3_HEADING)" $?
+
+printf '%s\n' "$H3_HEADING" | grep -q -- "<!-- $H3_BLOCK_MARKER --><!-- emitted=$H3_BLOCK_LINES -->"
+assert "the demoted H3 heading carries $H3_BLOCK_MARKER AND emitted=$H3_BLOCK_LINES" $?
 
 echo ""
 if [ ${#FAILURES[@]} -eq 0 ]; then
