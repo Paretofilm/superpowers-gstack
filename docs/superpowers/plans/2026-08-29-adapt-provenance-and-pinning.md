@@ -320,11 +320,19 @@ Each of the nine rules contains a phrase of this shape:
 and its version marker `<!-- gstack-autonomy-vN -->`
 ```
 
-Change each to:
+Change each so the tolerance sits **inside** the same backtick span as the marker:
 
 ```
-and its version marker `<!-- gstack-autonomy-vN -->` (optionally followed by ` emitted=<N>`)
+and its version marker `<!-- gstack-autonomy-vN --> (optionally followed by ` emitted=<N>`)`
 ```
+
+**Why one span and not two.** Step 1's regex is
+`` r"its version marker `<!-- gstack-[a-z-]+-vN[^`]*`" `` — the `[^`]*` stops at the first
+closing backtick, so a parenthetical placed *after* the span never lands inside the match and
+the test stays red no matter how correct the prose reads. Verified with a standalone repro
+during execution: the obvious two-span form fails the test that is supposed to prove it.
+`Track-aware routing` keeps the two-span form — its wording does not match this regex anyway,
+and the E13 needle `optionally followed by ` emitted=<N>`` must survive somewhere verbatim.
 
 Substitute the correct marker name per section: `gstack-autonomy-vN`, `gstack-git-hygiene-vN`, `gstack-multi-lens-review-vN`, `gstack-code-reuse-vN`, `gstack-plan-fidelity-vN`, `gstack-session-continuity-vN`, `gstack-routing-vN`, `gstack-xcode-tools-vN`, `gstack-companion-skills-vN`. Read each rule in the live file — their wording is not uniform, and `Track-aware routing`'s is a multi-line indented list.
 
