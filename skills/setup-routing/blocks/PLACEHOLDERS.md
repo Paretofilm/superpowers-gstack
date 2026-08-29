@@ -29,3 +29,41 @@ The project's 10-character Apple Team ID. Resolve in this order:
    from the emitted example and note that stable signing requires a team ID.
 
 Never emit another project's or another user's team ID as a default.
+
+## `{{IOS_SIMULATOR}}` (xcode-tools.md — native tracks only)
+
+A simulator model that exists on this machine right now. Resolve with:
+
+    xcrun simctl list devices available | sed -nE 's/^ *(iPhone [0-9]+) \(.*/\1/p' | sort -uV | tail -1
+
+That returns the highest plain numbered model — `iPhone 17`, not `iPhone 17 Pro`. The
+plain model is the one most likely to exist on a collaborator's machine too, and the
+pattern earns that claim rather than asserting it: requiring ` (` immediately after the
+digits excludes every `Pro`, `Pro Max` and `e` variant, so the answer does not depend on
+the order `simctl` happens to list devices in. Do not simplify it back to a `grep -m1`
+over the raw list — that returns whichever variant is listed first, which on a normal
+machine is the Pro.
+
+If it returns nothing, this machine has no plain numbered iPhone. Fall back to whatever
+iPhone it does have:
+
+    xcrun simctl list devices available | sed -nE 's/^ *(iPhone .*) \([0-9A-Fa-f-]{36}\).*/\1/p' | head -1
+
+Anchor the fallback on the parenthesis holding the **UDID**, not on the first `(` in the
+line. A model name can itself contain parentheses: `iPhone SE (3rd generation)` is the
+device's real, exact name, and stopping at the first `(` yields `iPhone SE`, which no
+simulator is called — so `xcodebuild` answers "Unable to find a device matching the
+provided destination specifier" and the placeholder has emitted the very failure it
+exists to prevent. Verified against live `simctl` output: the UDID-anchored pattern
+returns `iPhone SE (3rd generation)` whole, and still returns `iPhone 17 Pro`,
+`iPhone 17e` and `iPhone Air` correctly.
+
+If that is empty too, no simulator runtimes are installed: emit `iPhone 17`, and say in
+the report that no simulator was found locally so the destination is a guess until a
+runtime is installed.
+
+Never hardcode a constant here. Xcode ships a rolling set of simulators and drops
+old ones: on the machine that motivated this placeholder (2026-08-27) no iPhone 16
+remained, and the emitted command failed as `xcodebuild: error: Unable to find a
+device matching the provided destination specifier` — which reads as a project
+misconfiguration rather than a stale device name.

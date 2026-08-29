@@ -232,6 +232,7 @@ Before writing the file, read the plugin version from `.claude-plugin/plugin.jso
 
 ```markdown
 <!-- superpowers-gstack: {version} -->
+<!-- Sections whose heading carries a gstack-<name>-vN marker are plugin-managed: /adapt replaces each one wholesale on upgrade. Put project-specific findings — the measurement you took, the flag that worked — in your own H2 section with no marker, and avoid the reserved headings /adapt owns. -->
 # [Project Name]
 
 ## Skill routing
