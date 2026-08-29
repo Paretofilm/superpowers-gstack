@@ -279,6 +279,20 @@ still works.
 
 **Shared block files.** Every "block to insert" below is single-sourced in the plugin at `skills/setup-routing/blocks/<name>.md` (sibling skill directory — from this skill's base directory: `../setup-routing/blocks/<name>.md`; via the cache glob: `~/.claude/plugins/cache/*/superpowers-gstack/*/skills/setup-routing/blocks/`). Read the named file and use its content as the verbatim block. Resolve `{{...}}` placeholders per `blocks/PLACEHOLDERS.md` before inserting — never let a raw `{{...}}` token reach the generated CLAUDE.md. If the blocks directory is missing (older plugin cache), warn the user to run `/plugin update superpowers-gstack` and skip the affected sections.
 
+**Record what you emitted.** When you write a block into CLAUDE.md, append the block
+file's line count to the marker on the heading line, as ` emitted=<N>`:
+
+```
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v9 emitted=162 -->
+```
+
+`<N>` is `wc -l` of the block file you just read, before any placeholder substitution
+and before any heading-level demote — the count as it ships. This is the only fact that
+makes a later upgrade able to tell growth from a block that simply changed size, so do
+not estimate it and do not carry a stale value forward from the section you replaced.
+Block files themselves never carry `emitted=`; a constant baked into the source would
+lie the moment the block changed length.
+
 **Growth check — applies to every marker-managed section below, in cases 2 and 3.**
 A marker records who *created* a section, not who has written in it since. Before
 replacing any section, compare its length against the block's:

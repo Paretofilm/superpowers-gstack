@@ -280,3 +280,16 @@ def test_preserve_and_insert_tells_the_user_how_to_undo_it():
     and re-running /adapt is the whole fix."""
     assert "cannot attribute this section to a past emitter" in ADAPT_SKILL
     assert "delete your copy and re-run" in ADAPT_SKILL
+
+
+def test_both_generators_record_the_emitted_line_count():
+    setup = (REPO / "skills" / "setup-routing" / "SKILL.md").read_text()
+    for text, who in ((ADAPT_SKILL, "adapt"), (setup, "setup-routing")):
+        assert "emitted=<N>" in text, f"{who} does not record provenance"
+
+
+def test_block_files_never_carry_the_emitted_attribute():
+    """`emitted=` is written by a generator into a project's CLAUDE.md. In a block
+    file it would be a constant that lies the moment the block changes length."""
+    for f in sorted(BLOCKS.glob("*.md")):
+        assert "emitted=" not in f.read_text().split("\n", 1)[0], f"{f.name} line 1"

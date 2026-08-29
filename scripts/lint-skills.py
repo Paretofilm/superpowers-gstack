@@ -50,6 +50,10 @@ ERRORS (exit 1, CI-blocking):
       check real: bare substring needles left three of the four guards
       deletable with the lint still green.
 
+  E14 no block file carries the `emitted=` marker attribute. Generators write that
+      count into a project's CLAUDE.md at emit time; stored in the source it is a
+      constant that goes stale on the next edit, and the growth check would trust it.
+
 WARNINGS (reported, exit 0):
   W1  frontmatter description over budget (target <=30 words; hard cap comes
       with the Phase-3 description rewrites)
@@ -620,6 +624,19 @@ def main() -> int:
     adapt_skill = SKILLS / "adapt" / "SKILL.md"
     if adapt_skill.is_file():
         errors.extend(check_adapt_guards(adapt_skill.read_text()))
+
+    # E14 block files never carry the emitted= attribute (2.49.0). The count is a
+    # fact about one emission, written by a generator into one project's CLAUDE.md.
+    # Baked into the block file it becomes a constant that goes stale the next time
+    # anyone edits the block — and a stale provenance number is worse than none,
+    # because the growth check would trust it.
+    if blocks_dir.is_dir():
+        for f in sorted(blocks_dir.glob("*.md")):
+            if "emitted=" in f.read_text().split("\n", 1)[0]:
+                errors.append(
+                    f"E14 {BLOCKS_DIR_REL}/{f.name}: line 1 carries `emitted=` — that "
+                    f"attribute is written per-emission by the generators, never stored "
+                    f"in the source block")
 
     for w in warnings:
         print(f"WARN  {w}")

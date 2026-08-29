@@ -285,7 +285,21 @@ verbatim, in this order:
 Resolve `{{...}}` placeholders per `blocks/PLACEHOLDERS.md` before writing — never
 let a raw `{{...}}` token reach the generated CLAUDE.md. If the `blocks/` directory
 is missing (older plugin cache), warn the user to run `/plugin update
-superpowers-gstack` and omit these sections.]
+superpowers-gstack` and omit these sections.
+
+**Record what you emitted.** When you write a block into CLAUDE.md, append the block
+file's line count to the marker on the heading line, as ` emitted=<N>`:
+
+```
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v9 emitted=162 -->
+```
+
+`<N>` is `wc -l` of the block file you just read, before any placeholder substitution
+and before any heading-level demote — the count as it ships. This is the only fact that
+makes a later upgrade able to tell growth from a block that simply changed size, so do
+not estimate it and do not carry a stale value forward from the section you replaced.
+Block files themselves never carry `emitted=`; a constant baked into the source would
+lie the moment the block changed length.]
 
 [MODEL ROUTING — emit `blocks/model-routing-section.md` here verbatim, resolving
 `{{DOMAIN_SENSITIVITY}}` per `blocks/PLACEHOLDERS.md`. Omit the whole section if the
