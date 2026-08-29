@@ -624,14 +624,13 @@ Report to the user:
 >   `Nothing project-authored was removed.`
 >
 > **Deferred (grown past its block, not upgraded):**
-> - [one line per section the Growth check or the Attribution check left alone:
->    the section name, its line count against the block's, and the marker it is
->    still on. Nothing was lost here — the upgrade simply was not applied]
+> - [one line per section the Growth check left at its old version: the section, its
+>    line count against the block, and the marker it is still on]
 > - Omit this block entirely when nothing was deferred.
 >
-> (The Growth check reports here in this one-line form. The Attribution check and Session
-> Continuity's case 3 specify their own multi-line message instead — a preserve needs to
-> explain itself, where a deferral only needs to be counted.)
+> (The Growth check reports here. The Attribution check and Session Continuity's case 3
+> report inline where they fire, in their own multi-line form — a preserve has to explain
+> itself, where a deferral only has to be counted.)
 >
 > **Snapshot:** `.gstack/CLAUDE.md.pre-adapt` holds CLAUDE.md exactly as it was
 > before this run. Restore the whole file with
