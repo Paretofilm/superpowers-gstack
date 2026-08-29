@@ -295,6 +295,11 @@ markerless and appending a duplicate. Putting the attribute inside the marker br
 that; putting it on a line of its own adds a line to what the next run counts, and is
 a line a user tidying their own CLAUDE.md can delete.
 
+This applies to a block whose file carries a version marker, which is what the second
+comment attaches to. `blocks/model-routing-section.md` carries none, so it gets no
+provenance: an `emitted=` with no marker beside it is a number no reader is looking for,
+and the growth check never runs on that section — Model Routing is replaced outright.
+
 `<N>` is `wc -l` of the block file you just read — every line in the file, counted
 before any placeholder substitution and before any heading-level demote. This is the
 only fact that makes a later upgrade able to tell growth from a block that simply
@@ -436,7 +441,9 @@ section that restates the block's own material more verbosely, so it is more tha
 lines over `<N>` while almost none of its lines are absent from the block. The fixture
 that exists is both, so the integration test proves the gate fired, not which trigger
 fired it; build the neutral one the first time provenance and Volume are suspected of
-disagreeing in the field.
+disagreeing in the field. One residual is known and accepted: the sanity band's ~20 and
+the trigger's own ~20 stack, so an `<N>` overstated by up to ~20 buys roughly 40 lines
+of growth in which only Volume — the judgement-call proxy — is still watching.
 
 **Attribution check — applies to case 3 of the six sections below that replace on a
 missing marker.** Three do not need it: `Code reuse discipline` already preserves,
@@ -663,7 +670,10 @@ Report to the user:
 >
 > **Deferred (grown past its block, not upgraded):**
 > - [one line per section the Growth check left at its old version: the section, its
->    line count against the block, and the marker it is still on]
+>    line count against the block, and the marker it is still on — or, when it has
+>    none, say so instead of inventing one. The Growth check runs in cases 2 **and
+>    3**, and case 3 is "marker absent": that section is deferred at no version at
+>    all, which is the fact the user needs]
 > - Omit this block entirely when nothing was deferred.
 >
 > (The Growth check reports here. The Attribution check and Session Continuity's case 3

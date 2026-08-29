@@ -303,6 +303,11 @@ markerless and appending a duplicate. Putting the attribute inside the marker br
 that; putting it on a line of its own adds a line to what the next run counts, and is
 a line a user tidying their own CLAUDE.md can delete.
 
+This applies to a block whose file carries a version marker, which is what the second
+comment attaches to. `blocks/model-routing-section.md` carries none, so it gets no
+provenance: an `emitted=` with no marker beside it is a number no reader is looking for,
+and the growth check never runs on that section — Model Routing is replaced outright.
+
 `<N>` is `wc -l` of the block file you just read — every line in the file, counted
 before any placeholder substitution and before any heading-level demote. This is the
 only fact that makes a later upgrade able to tell growth from a block that simply

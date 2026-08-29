@@ -91,6 +91,17 @@ threshold, seven times the exposure.
   Deferred report block was narrowed to match: it had claimed to carry these checks'
   reports too, which are a different outcome reported inline where they fire, and it
   asked for "the marker it is still on" — a preserve that never had one.
+- **Four smaller edges on the same release.** The Deferred report block asked for "the
+  marker it is still on", but the Growth check runs in cases 2 **and 3** and case 3 is
+  "marker absent" — the same defect the preserve branch had, one branch further along; it
+  now says to report the absence rather than invent a version. "Record what you emitted"
+  is scoped to blocks whose file carries a marker, so `model-routing-section.md`, which
+  has none, no longer reads as an instruction to write `## Model Routing <!-- emitted=N -->`.
+  The deferred-work paragraph names the one residual the sanity band leaves open: its ~20
+  and the trigger's ~20 stack, so an `<N>` overstated by up to ~20 buys ~40 lines of
+  growth watched only by Volume. And the generator-pair test derives the example's version
+  and line count from `git-hygiene.md` instead of naming v9/162 — the next bump used to be
+  cheapest to green by editing the test.
 - **The heading-level rule wrote no provenance.** It calls itself the general rule for
   every marker-managed section and said to copy the marker from the block — and a block
   file's marker never carries `emitted=`. So sections demoted to H3 were emitted without

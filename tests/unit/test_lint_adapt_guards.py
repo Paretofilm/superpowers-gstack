@@ -9,8 +9,25 @@ is the point, not a nuisance.
 
 import importlib.util
 import pathlib
+import re
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
+
+
+def git_hygiene_provenance_example() -> str:
+    """The provenance example both generators must show, read off the block.
+
+    It was hardcoded as `<!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->`,
+    which makes the next bump of git-hygiene.md fail here — and the cheapest way
+    to green a test that names a stale number is to edit the number in the test,
+    leaving both generators showing an example that no longer matches anything.
+    Deriving it means the generators are what has to change.
+    """
+    text = (REPO / "skills" / "setup-routing" / "blocks" / "git-hygiene.md").read_text()
+    marker = re.search(r"<!-- (gstack-git-hygiene-v\d+) -->", text.split("\n", 1)[0])
+    assert marker, "git-hygiene.md's first line carries no version marker"
+    # `wc -l` is the newline count — the same definition the generators are given.
+    return f"<!-- {marker.group(1)} --><!-- emitted={text.count(chr(10))} -->"
 
 
 def load(name, rel):
@@ -364,8 +381,10 @@ def test_both_generators_record_the_emitted_line_count():
     for text, who in ((ADAPT_SKILL, "adapt"), (setup, "setup-routing")):
         assert "`<N>` is `wc -l` of the block file you just read" in text, (
             f"{who} does not say how to count `<N>`")
-        assert "<!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->" in text, (
-            f"{who} does not show provenance as a second comment beside the marker")
+        example = git_hygiene_provenance_example()
+        assert example in text, (
+            f"{who} does not show provenance as a second comment beside the marker "
+            f"with the numbers git-hygiene.md actually carries — expected {example}")
 
 
 def test_both_generators_are_TOLD_to_write_provenance():
