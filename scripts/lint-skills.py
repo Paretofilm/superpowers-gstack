@@ -184,7 +184,7 @@ ADAPT_GUARD_ORDER = [
      "**Growth check — applies to every marker-managed section",
      "the snapshot must be written before anything reads a 'before' state"),
     ("Step 6", "3. **Diff against the snapshot and classify every removed line.**",
-     "Would you like me to run a comprehensive review",
+     "**STOP HERE.**",
      "the mandatory diff must sit above the optional-review gate — below it, a user "
      "who declines the review never gets the classification the Removed block needs"),
 ]

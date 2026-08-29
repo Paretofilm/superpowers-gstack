@@ -337,3 +337,10 @@ def test_session_continuity_explains_a_preserve_the_same_way():
     rule = rule[: rule.index("blocks/session-continuity.md")]
     assert "merge by hand" not in rule, "still carries the pre-Task-1 phrasing"
     assert "delete your copy and re-run" in rule
+
+
+def test_step6_order_rule_does_not_depend_on_a_question_s_wording():
+    lint_src = (REPO / "scripts" / "lint-skills.py").read_text()
+    assert "Would you like me to run a comprehensive review" not in lint_src, (
+        "the order rule anchors on prose a copy-edit would break"
+    )
