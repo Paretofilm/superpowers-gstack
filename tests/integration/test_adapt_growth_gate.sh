@@ -263,6 +263,26 @@ assert "a generator wrote emitted= on a section it emitted this run ($PROV_CHECK
 [ "$PROV_BAD" -eq 0 ]
 assert "every emitted= written this run equals wc -l of its block ($PROV_BAD wrong of $PROV_CHECKED)" $?
 
+# 10b. Coverage, not just correctness. The loop above only sees headings that already
+#    match the strict adjacent-comment form; anything else is invisible, not wrong. So a
+#    generator that wrote provenance on one section and forgot the rest — the exact
+#    failure the feature exists to prevent — or wrote it with a space between the
+#    comments, passed 10 with "0 wrong". Every heading sitting at a block's CURRENT
+#    marker was necessarily written this run (no fixture section starts current), so
+#    each one must carry the strict form. Zero exceptions.
+PROV_MISSING=0
+for f in "$BLOCKS_DIR"/*.md; do
+  cur=$(head -1 "$f" | sed -nE 's/.*<!-- (gstack-[a-z-]+-v[0-9]+) -->.*/\1/p')
+  [ -n "$cur" ] || continue
+  grep -E "^#{2,3} .*<!-- $cur -->" "$WORK/CLAUDE.md" | while IFS= read -r h; do
+    printf '%s\n' "$h" | grep -qE "<!-- $cur --><!-- emitted=[0-9]+ -->" || \
+      { echo "  current-marker heading without strict provenance: $h"; exit 9; }
+  done
+  [ $? -eq 9 ] && PROV_MISSING=$((PROV_MISSING + 1))
+done
+[ "$PROV_MISSING" -eq 0 ]
+assert "every heading at a current marker carries provenance in the strict form ($PROV_MISSING without)" $?
+
 # 11. The H3 path, end to end — demote and provenance in the same write. The
 #    heading-level rule calls itself the general rule for every marker-managed
 #    section and was fixed this release to append provenance after the copied

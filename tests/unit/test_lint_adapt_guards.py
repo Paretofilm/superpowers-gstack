@@ -270,9 +270,9 @@ def test_the_gate_fires_on_the_UNION_of_its_triggers():
     inverts the additive precedence this release is built on, and before this
     test it was a green one-word edit.
     """
-    gate = _growth_gate()
+    gate = " ".join(_growth_gate().split())  # reflow-proof: pin words, not the wrap column
     assert "The gate fires when **any** of the three triggers below holds" in gate
-    assert "the first one to fire\nis enough" in gate, (
+    assert "the first one to fire is enough" in gate, (
         "the union has to be spelled out as first-to-fire, not left to 'any'")
 
 
