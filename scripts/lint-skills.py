@@ -184,6 +184,10 @@ ADAPT_GUARDS = [
      "the identical preserve-and-insert state by a different route"),
     ("Step 5", "**Provenance (measured, not inferred).**",
      "the trigger that reads what the plugin actually wrote, not a ratio against a moving block"),
+    ("Step 5", "append the provenance comment after it",
+     "the heading-level rule's own provenance write — it calls itself the general rule "
+     "for every marker-managed section, and 'copy the marker from the block' cannot "
+     "produce an `emitted=` a block file never carries"),
     ("Step 5", "**Distrust an implausible `<N>`.**",
      "the sanity check on a count nothing verifies — without it one wrong number "
      "silences the gate for that section"),

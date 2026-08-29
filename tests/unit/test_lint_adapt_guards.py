@@ -384,6 +384,17 @@ def test_growth_check_reads_provenance_alongside_the_two_proxies():
     assert "1.5×" in gate and "no `emitted=`" in gate
 
 
+def test_the_heading_level_rule_writes_provenance_too():
+    """It calls itself "the general rule for every marker-managed section", and it
+    said to copy the marker from the block — which never carries `emitted=`. So the
+    H3 path wrote no provenance at all, and an H3 root is a pre-2.34.0 adaptation:
+    the oldest projects, with the most to lose."""
+    rule = ADAPT_SKILL[ADAPT_SKILL.index("**Heading-level rule.**"):]
+    rule = rule[: rule.index("blocks/session-continuity.md")]
+    assert "Copy the marker from the block" in rule
+    assert "append the provenance comment after it" in rule
+
+
 def test_an_implausible_emitted_count_is_distrusted():
     """`emitted=212` on a 200-line section must not be able to silence the gate."""
     gate = _growth_gate()
