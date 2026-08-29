@@ -608,6 +608,13 @@ After applying changes, verify:
    overwritten earlier in Step 5. If the snapshot is missing because CLAUDE.md did
    not exist before this run, say that instead — do not skip the item silently.
 
+**Write the three block labels verbatim, in English, even when the rest of the
+report is in the user's language.** `**Removed (not plugin prose):**`,
+`**Deferred (grown past its block, not upgraded):**` and the sentinel
+`Nothing project-authored was removed.` are structural markers that lint E13 pins
+and tooling greps — the prose inside and around them follows the user's language,
+the labels do not.
+
 Report to the user:
 
 > **Changes made:**
