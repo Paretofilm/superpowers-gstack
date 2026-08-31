@@ -1,5 +1,57 @@
 # Changelog
 
+## [2.50.0] - 2026-08-31
+
+GStack shipped three releases (v1.74–v1.76) since the last sync. The headline changes
+are: a spawned-subagent primitive that fixes Conductor-hosted `/ship` doc-sync, an
+eighth advisory `/review` lens for simplification, a reuse ladder in every skill, and a
+full CI/test audit. README and quick-reference updated to reflect the changed behaviors.
+
+### Changed — GStack v1.76.0.0 (spawned-subagent doc-sync fix)
+- **`/ship` on Conductor** now reliably produces its `## Documentation` PR section.
+  Previously, when the document-release subagent hit an AskUserQuestion gate it
+  classified itself as an interactive session, rendered a decision brief nobody could
+  answer, and stopped — dropping the section every time a gate fired (#2733). The fix:
+  `/ship` marks its subagent with `GSTACK_SESSION_KIND=spawned`; the preamble, AUQ
+  rules, and both AUQ hooks auto-choose the recommended (non-destructive) option
+  instead of writing prose to nobody. Auto-chosen decisions are returned in a
+  `decisions` array the parent prints to your console.
+- **Spawned sessions are faster**: the preamble skips the network update-check and the
+  first-task repo probe for `GSTACK_SESSION_KIND=spawned` sessions.
+- **If you build orchestrating skills**, prefix a subagent's `gstack-skill-start`
+  invocation with `GSTACK_SESSION_KIND=spawned ` and it behaves as a proper headless
+  worker: no consent prompts consumed, no telemetry questions, no prose briefs.
+
+### Changed — GStack v1.75.0.0 (simplification lens + reuse ladder)
+- **`/review` gains an eighth lens** — a simplification specialist (advisory only,
+  `[ADVISORY]` label, excluded from quality score). Flags unrequested structure:
+  hand-rolled stdlib, one-implementation abstractions, dead flexibility, dependencies
+  duplicating platform features. Closed five-tag vocabulary (`delete:` / `stdlib:` /
+  `native:` / `speculative:` / `shrink:`). On a lean diff it says "lean already —
+  nothing to cut." Force-flag: `--simplification`.
+- **`/autoplan` runs Eng last, always** — mandatory order is now CEO → Design → DX →
+  Eng, so the required shipping gate reviews the final amended plan instead of a stale
+  one. Clearly-wrong premises queue as User-Challenge items rather than stopping
+  mid-run. README quick-reference updated.
+- **`/retro` harvests shortcut debt markers** — accepting a Completeness ≤ 7 option on
+  a durable-scope call now logs the ceiling and upgrade trigger to the decision ledger
+  and marks each cut corner with `gstack-shortcut(dec-<id>)`; `/retro` Step 11.5
+  reads these back. README quick-reference note added.
+- **Reuse ladder** added to every tier-2+ skill: stop at the first rung that holds
+  (repo helper → stdlib → native platform → installed dependency) before building new
+  code.
+- **AskUserQuestion preamble** trimmed −236 B per skill (~9.7 KB across the corpus);
+  verified by a live two-arm A/B showing no format-element loss.
+- **Agents-digest** (`agents-digest/gstack-AGENTS.md`, 1,765 B) committed for
+  rules-reading hosts (Zed, Amp, Cursor) that lack a full gstack install.
+
+### Changed — GStack v1.74.0.0 (CI/test audit)
+- Full audit and overhaul of gstack's own test and CI system: three CI eval jobs that
+  ran zero tests and passed on every PR are fixed; four paid test files that could
+  never execute in any lane now run; nine make-pdf gates that silently skipped on Linux
+  are fixed; ~57 E2E files now run in a scheduled lane. Each fixed class has a tripwire
+  to prevent regression. No user-visible skill behavior changed.
+
 ## [2.49.0] - 2026-08-29
 
 2.48.0 gave `/adapt` guards against destroying a project's own notes, and left one
