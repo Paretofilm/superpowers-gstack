@@ -50,14 +50,18 @@ if os.path.isfile(progress):
         title = next((l[2:].strip() for l in lines if l.startswith("# ")), "progress.md")
         completed, next_item, section = 0, "", ""
         for line in lines:
-            if re.match(r"^##+\s", line):
+            # Only exactly-## headings switch sections; ###+ subdivide the
+            # current one and must not reset it to none.
+            if re.match(r"^##\s", line):
                 low = line.lower()
                 # Remaining-patterns first: "ufullførte"/"uncompleted" contain
                 # the done-substrings and would otherwise invert their meaning.
                 section = ("todo" if re.search(r"gjenst|remaining|ufullf|uncomplet|incomplet", low)
                            else "done" if re.search(r"fullf|completed", low) else "")
                 continue
-            if re.match(r"^\s*(?:\d+\.|[-*])\s+\S", line):
+            # Top-level items only (no leading indentation): indented bullets
+            # are sub-item notes under a phase, not phases.
+            if re.match(r"^(?:\d+\.|[-*])\s+\S", line):
                 # Items struck through or checked off are finished even when
                 # they still sit in the remaining section — real progress
                 # files mark done-out-of-order work exactly like that. Only

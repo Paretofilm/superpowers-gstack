@@ -26,7 +26,14 @@ both files current, startup blank, user trust gone.
   reach, so a transcript excerpt can never be committed by accident.
 - Both hooks: silent unless there is something to say, active only in repos with a
   `docs/superpowers/` directory, and every exit path is 0 — a hook must never fail
-  a session. 17 unit tests (`tests/unit/test_session_resume_hooks.py`).
+  a session. 26 unit tests (`tests/unit/test_session_resume_hooks.py`).
+- Hardened by the full multi-lens chain before ship: Codex found four real bugs
+  (isMeta skill bodies captured as the user's words; tool-heavy turns pushing the
+  user prompt outside a fixed tail window; `type:`-carrying files misread as legacy
+  handoffs; mid-text checkmarks finishing whole phases) and GLM-5.2 found four more
+  (message bodies overwriting capture-header metadata; "Ufullførte" classified as
+  done; sub-item bullets inflating the phase count; `###` sub-headings resetting the
+  section). All eight fixed with TDD before release.
 
 ## [2.49.0] - 2026-08-29
 

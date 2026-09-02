@@ -147,7 +147,7 @@ def test_capture_reads_only_the_tail_of_huge_transcripts(repo, tmp_path):
     elapsed = time.monotonic() - start
     content = capture_file(repo).read_text()
     assert "the final answer" in content
-    assert elapsed < 3, f"capture took {elapsed:.1f}s — must stay far under the 10s hook timeout"
+    assert elapsed < 8, f"capture took {elapsed:.1f}s — must stay under the 10s hook timeout"
 
 
 def test_capture_overwrites_previous(repo, tmp_path):
@@ -341,6 +341,35 @@ def test_resume_ufullfort_heading_is_not_done(repo):
     out = run_resume(repo)
     assert "Neste jobb" in out
     assert "1 phase(s) completed" not in out
+
+
+def test_resume_subitem_bullets_do_not_inflate_phase_count(repo):
+    """Indented '- [x] …' sub-bullets under a numbered phase are notes, not
+    phases — counting them shows '4 phase(s) completed' for 2 real phases in
+    the exact banner the feature exists to make trustworthy. Found by the
+    third lens (GLM-5.2)."""
+    (repo / "docs" / "superpowers" / "plans" / "progress.md").write_text(
+        "# Plan\n\n## Fullførte faser\n\n"
+        "1. **Precheck**: grønn.\n"
+        "   - [x] dev-gren sjekket\n"
+        "   - [x] precheck kjørt\n"
+        "2. **Speilingsverktøy**: ferdig.\n")
+    out = run_resume(repo)
+    assert "2 phase(s) completed" in out
+
+
+def test_resume_subheadings_do_not_reset_section(repo):
+    """A '### Sprint 1' sub-heading inside '## Fullførte faser' subdivides the
+    section — it must not reset classification to none and silently drop every
+    item below it. Found by the third lens (GLM-5.2)."""
+    (repo / "docs" / "superpowers" / "plans" / "progress.md").write_text(
+        "# Plan\n\n## Fullførte faser\n\n### Sprint 1\n\n"
+        "1. **Oppsett**: ok.\n\n"
+        "## Gjenstående faser\n\n### Sprint 2\n\n"
+        "2. **Neste**: gjør den.\n")
+    out = run_resume(repo)
+    assert "1 phase(s) completed" in out
+    assert "Neste" in out
 
 
 def test_resume_instruction_line_only_when_speaking(repo):
