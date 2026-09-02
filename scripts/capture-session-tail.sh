@@ -65,40 +65,54 @@ def clip(text):
 # blocks and fall through the empty-text check.
 # Only the tail is read: transcripts from long sessions reach hundreds of MB,
 # and a full parse would flirt with the 10s hook timeout (45MB ≈ 1.1s measured
-# 2026-09-02; linear). 256KB of tail always spans the closing exchange.
-TAIL_BYTES = 256 * 1024
-last_user = last_assistant = ""
-try:
-    with open(payload.get("transcript_path") or "", "rb") as f:
+# 2026-09-02; linear). The window WIDENS (256KB → 1MB → 4MB) until both halves
+# of the closing exchange are found: a tool-heavy final turn can put more than
+# one window of tool-result entries between the user's prompt and EOF.
+def parse_tail(path, window):
+    with open(path, "rb") as f:
         f.seek(0, 2)
         size = f.tell()
-        f.seek(max(0, size - TAIL_BYTES))
+        f.seek(max(0, size - window))
         text_lines = f.read().decode("utf-8", errors="replace").splitlines()
-        if size > TAIL_BYTES:
+        if size > window:
             text_lines = text_lines[1:]  # drop the line the seek cut in half
-        for line in text_lines:
-            try:
-                entry = json.loads(line)
-            except Exception:
-                continue
-            typ = entry.get("type")
-            if typ not in ("user", "assistant"):
-                continue
-            content = (entry.get("message") or {}).get("content")
-            if isinstance(content, str):
-                text = content
-            elif isinstance(content, list):
-                text = "\n".join(b.get("text", "") for b in content
-                                 if isinstance(b, dict) and b.get("type") == "text")
-            else:
-                continue
-            text = text.strip()
-            if not text:
-                continue
-            if typ == "user":
-                last_user = text
-            else:
-                last_assistant = text
+    user = assistant = ""
+    for line in text_lines:
+        try:
+            entry = json.loads(line)
+        except Exception:
+            continue
+        typ = entry.get("type")
+        if typ not in ("user", "assistant"):
+            continue
+        # Skill invocations land as type:"user" entries with isMeta:true
+        # carrying the expanded skill body — those are not the user's words.
+        if entry.get("isMeta"):
+            continue
+        content = (entry.get("message") or {}).get("content")
+        if isinstance(content, str):
+            text = content
+        elif isinstance(content, list):
+            text = "\n".join(b.get("text", "") for b in content
+                             if isinstance(b, dict) and b.get("type") == "text")
+        else:
+            continue
+        text = text.strip()
+        if not text:
+            continue
+        if typ == "user":
+            user = text
+        else:
+            assistant = text
+    return user, assistant, size <= window
+
+last_user = last_assistant = ""
+try:
+    transcript = payload.get("transcript_path") or ""
+    for window in (256 * 1024, 1024 * 1024, 4 * 1024 * 1024):
+        last_user, last_assistant, saw_whole_file = parse_tail(transcript, window)
+        if (last_user and last_assistant) or saw_whole_file:
+            break
 except Exception:
     pass
 

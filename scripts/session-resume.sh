@@ -58,8 +58,11 @@ if os.path.isfile(progress):
             if re.match(r"^\s*(?:\d+\.|[-*])\s+\S", line):
                 # Items struck through or checked off are finished even when
                 # they still sit in the remaining section — real progress
-                # files mark done-out-of-order work exactly like that.
-                finished = bool(re.search(r"~~.*~~|\[x\]|✅", line))
+                # files mark done-out-of-order work exactly like that. Only
+                # whole-item markers count (leading ~~ or [x]): a checkmark
+                # mid-text means partially done, and that IS the next phase.
+                finished = bool(re.match(r"^\s*(?:\d+\.|[-*])\s*(?:\[x\]|~~)",
+                                         line, re.IGNORECASE))
                 if section == "done":
                     completed += 1
                 elif section == "todo" and not next_item and not finished:
@@ -83,7 +86,10 @@ if os.path.isfile(handoff):
         front = m.group(1) if m else ""
         keys = dict(re.findall(r"^(\w+):\s*(.*)$", front, re.MULTILINE))
         next_step = keys.get("next_step", "").strip().strip('"').strip("'")
-        is_handoff = keys.get("type", "") == "handoff" or "session_end" in keys
+        # Legacy form (session_end + next_step) counts ONLY when type: is
+        # absent — `type: notes` beside those keys is a different artifact.
+        is_handoff = (keys.get("type") == "handoff"
+                      or ("type" not in keys and "session_end" in keys))
         if is_handoff and next_step:
             sections.append(f'  handoff.md next step:\n      "{next_step}"')
     except Exception:

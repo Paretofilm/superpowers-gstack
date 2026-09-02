@@ -160,6 +160,51 @@ def test_capture_overwrites_previous(repo, tmp_path):
     assert "first session" not in content
 
 
+def test_capture_skips_meta_user_entries(repo, tmp_path):
+    """Skill invocations land in the transcript as type:"user" entries with
+    isMeta:true carrying the expanded skill body — verified against a real
+    transcript 2026-09-02 (4 such entries). Capturing one as 'last user
+    message' would preserve skill instructions instead of the user's words.
+    Found by Codex review."""
+    p = tmp_path / "transcript.jsonl"
+    real = {"type": "user", "message": {"role": "user", "content": "fortsett med fase 4"}}
+    meta = {"type": "user", "isMeta": True,
+            "message": {"role": "user", "content": [{"type": "text",
+                        "text": "# Skill Title\nInstructions for the skill..."}]}}
+    asst = {"type": "assistant", "message": {"role": "assistant",
+            "content": [{"type": "text", "text": "Fase 4 er i gang."}]}}
+    p.write_text("\n".join(json.dumps(e) for e in (real, meta, asst)) + "\n")
+    run_capture(repo, payload(repo, p))
+    content = capture_file(repo).read_text()
+    assert "fortsett med fase 4" in content
+    assert "Instructions for the skill" not in content
+
+
+def test_capture_finds_user_message_beyond_first_tail_window(repo, tmp_path):
+    """A tool-heavy closing turn can put >256KB of tool-result entries between
+    the user's prompt and EOF; a fixed window then silently drops the user
+    half of the exchange. The scan must widen until it has both. Found by
+    Codex review."""
+    p = tmp_path / "transcript.jsonl"
+    filler = json.dumps({"type": "user",
+                         "message": {"role": "user",
+                                     "content": [{"type": "tool_result",
+                                                  "content": "x" * 2000}]}})
+    with p.open("w") as f:
+        f.write(json.dumps({"type": "user", "message": {
+            "role": "user", "content": "kjør hele testsuiten"}}) + "\n")
+        for _ in range(300):
+            f.write(filler + "\n")
+        f.write(json.dumps({"type": "assistant", "message": {
+            "role": "assistant", "content": [{"type": "text",
+                                              "text": "Suiten er grønn."}]}}) + "\n")
+    assert p.stat().st_size > 300_000
+    run_capture(repo, payload(repo, p))
+    content = capture_file(repo).read_text()
+    assert "kjør hele testsuiten" in content
+    assert "Suiten er grønn" in content
+
+
 # ----------------------------------------------------------------- resume ----
 
 def test_resume_silent_when_nothing_exists(repo):
@@ -242,6 +287,30 @@ def test_resume_ignores_incomplete_handoff(repo):
         "---\ntype: handoff\nmode: continuous\n---\n")
     out = run_resume(repo)
     assert out == ""
+
+
+def test_resume_rejects_handoff_with_foreign_type(repo):
+    """The legacy form (session_end + next_step, no type:) is only legacy when
+    type is ABSENT — `type: notes` beside those keys is a different artifact
+    and must not be presented as resumable. Found by Codex review against the
+    session-continuity contract."""
+    (repo / "docs" / "superpowers" / "handoff.md").write_text(
+        "---\ntype: notes\nsession_end: 2026-09-01T10:00:00+02:00\n"
+        "next_step: \"ikke en handoff\"\n---\n")
+    assert run_resume(repo) == ""
+
+
+def test_resume_partial_checkmark_does_not_finish_item(repo):
+    """`**Fase 3**: backend ✅, frontend pending` is half-done — a checkmark
+    mid-text must not mark the whole phase finished, or the banner skips the
+    real next phase. Only whole-item markers count (leading ~~ or [x]).
+    Found by Codex review."""
+    (repo / "docs" / "superpowers" / "plans" / "progress.md").write_text(
+        "# Plan\n\n## Gjenstående faser\n\n"
+        "3. **Delvis fase**: backend ✅, frontend pending\n"
+        "4. **Neste fase**: alt gjenstår.\n")
+    out = run_resume(repo)
+    assert "Delvis fase" in out
 
 
 def test_resume_shows_last_session_capture(repo, tmp_path):
