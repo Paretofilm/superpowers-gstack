@@ -28,6 +28,8 @@ A **separate, independent** `check-models` job (`scripts/check-new-models.py`) q
 
 The plugin ships a SessionStart hook (`hooks/hooks.json` → `scripts/check-plugin-version.sh`) that nudges `/adapt` when a project's generated CLAUDE.md lags the installed plugin version — every plugin user gets it automatically, and it exempts this repo. A second, maintainer-only hook (`scripts/notify-pending-updates.sh`, surfaces pending auto-update PRs) is opt-in via `./scripts/setup-hooks.sh`.
 
+Since 2.50.0 the plugin also ships a session-continuity hook pair: `scripts/capture-session-tail.sh` (SessionEnd) deterministically salvages the last user/assistant exchange plus a git snapshot into `<git-dir>/gstack-last-session.md` when a session ends — including `/clear`, where no model is available to write a handoff — and `scripts/session-resume.sh` (SessionStart, matcher `startup|clear`) prints a "Where this project left off" banner from `progress.md`, a complete `handoff.md`, and that capture, before the user types anything. Both are read-only toward `handoff.md` (classification/consumption stays with the Session Continuity rules below), silent when the sources are absent, and active only in repos with a `docs/superpowers/` directory.
+
 The update pipeline also keeps `skills/setup-routing/SKILL.md` and `skills/adapt/SKILL.md` in sync — if upstream adds, removes, or renames skills, the skill evaluation tables in both skills are updated automatically.
 
 ### Required secret
