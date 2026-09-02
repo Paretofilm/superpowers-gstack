@@ -1,5 +1,40 @@
 # Changelog
 
+## [2.50.0] - 2026-09-02
+
+A project with a rich `progress.md` and a complete `handoff.md` still opened in
+silence: the Session Continuity flow only speaks in the model's first reply, AFTER
+the user has typed something, and nothing at all salvaged what happened between the
+last handoff write and a `/clear`. Observed live in fagfilm-250822 on 2026-09-02 —
+both files current, startup blank, user trust gone.
+
+### Added — session-continuity hook pair
+- **`scripts/session-resume.sh`** (SessionStart, matcher `startup|clear`): prints a
+  "Where this project left off" banner at the moment the terminal opens — progress.md
+  title + completed-phase count + next open phase, a complete handoff's `next_step`,
+  and the last-session capture. SessionStart stdout is both shown to the user and
+  injected into the model's context, so the same banner serves both. Read-only:
+  handoff classification and consumption stay with the Session Continuity rules.
+  Items struck through or checked off inside the remaining section (`~~…~~ ✅`,
+  `[x]`) are skipped when picking "next" — real progress files mark
+  done-out-of-order work exactly like that.
+- **`scripts/capture-session-tail.sh`** (SessionEnd, all reasons): `/clear` fires
+  SessionEnd with the on-disk transcript still readable, but no model — so this is
+  a deterministic salvage, not a resumé: last user message, last assistant message
+  (truncated at 700 chars), git branch/HEAD/dirty-count. Written to
+  `<git-dir>/gstack-last-session.md` — inside `.git/`, where `git add -A` cannot
+  reach, so a transcript excerpt can never be committed by accident.
+- Both hooks: silent unless there is something to say, active only in repos with a
+  `docs/superpowers/` directory, and every exit path is 0 — a hook must never fail
+  a session. 26 unit tests (`tests/unit/test_session_resume_hooks.py`).
+- Hardened by the full multi-lens chain before ship: Codex found four real bugs
+  (isMeta skill bodies captured as the user's words; tool-heavy turns pushing the
+  user prompt outside a fixed tail window; `type:`-carrying files misread as legacy
+  handoffs; mid-text checkmarks finishing whole phases) and GLM-5.2 found four more
+  (message bodies overwriting capture-header metadata; "Ufullførte" classified as
+  done; sub-item bullets inflating the phase count; `###` sub-headings resetting the
+  section). All eight fixed with TDD before release.
+
 ## [2.49.0] - 2026-08-29
 
 2.48.0 gave `/adapt` guards against destroying a project's own notes, and left one
