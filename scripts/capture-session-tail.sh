@@ -63,10 +63,20 @@ def clip(text):
 # User content may be a plain string; assistant content is a block list where
 # only "text" blocks are prose. Tool results are type "user" with no text
 # blocks and fall through the empty-text check.
+# Only the tail is read: transcripts from long sessions reach hundreds of MB,
+# and a full parse would flirt with the 10s hook timeout (45MB ≈ 1.1s measured
+# 2026-09-02; linear). 256KB of tail always spans the closing exchange.
+TAIL_BYTES = 256 * 1024
 last_user = last_assistant = ""
 try:
-    with open(payload.get("transcript_path") or "", encoding="utf-8", errors="replace") as f:
-        for line in f:
+    with open(payload.get("transcript_path") or "", "rb") as f:
+        f.seek(0, 2)
+        size = f.tell()
+        f.seek(max(0, size - TAIL_BYTES))
+        text_lines = f.read().decode("utf-8", errors="replace").splitlines()
+        if size > TAIL_BYTES:
+            text_lines = text_lines[1:]  # drop the line the seek cut in half
+        for line in text_lines:
             try:
                 entry = json.loads(line)
             except Exception:

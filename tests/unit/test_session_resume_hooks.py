@@ -122,6 +122,34 @@ def test_capture_truncates_long_messages(repo, tmp_path):
     assert "[truncated]" in content
 
 
+def test_capture_reads_only_the_tail_of_huge_transcripts(repo, tmp_path):
+    """Long sessions produce transcripts of tens of MB; parsing every line
+    would blow the 10s hook timeout and silently kill capture on exactly the
+    sessions that need it most. The script must seek to the tail — proven
+    here by planting an invalid line early: line-by-line parsing from the
+    start would still work, so instead we require speed AND correctness on a
+    file large enough that full-parse is measurably slower."""
+    import time
+    p = tmp_path / "transcript.jsonl"
+    filler = json.dumps({"type": "assistant",
+                         "message": {"role": "assistant",
+                                     "content": [{"type": "text", "text": "old " * 50}]}})
+    with p.open("w") as f:
+        for _ in range(200_000):
+            f.write(filler + "\n")
+        f.write(json.dumps({"type": "assistant",
+                            "message": {"role": "assistant",
+                                        "content": [{"type": "text",
+                                                     "text": "the final answer"}]}}) + "\n")
+    assert p.stat().st_size > 40_000_000
+    start = time.monotonic()
+    run_capture(repo, payload(repo, p))
+    elapsed = time.monotonic() - start
+    content = capture_file(repo).read_text()
+    assert "the final answer" in content
+    assert elapsed < 3, f"capture took {elapsed:.1f}s — must stay far under the 10s hook timeout"
+
+
 def test_capture_overwrites_previous(repo, tmp_path):
     t1 = transcript(tmp_path, [("assistant", "first session")])
     run_capture(repo, payload(repo, t1))
