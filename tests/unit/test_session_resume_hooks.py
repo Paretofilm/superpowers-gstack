@@ -320,6 +320,29 @@ def test_resume_shows_last_session_capture(repo, tmp_path):
     assert "Fikset callback-URLene" in out
 
 
+def test_resume_meta_not_polluted_by_message_body(repo, tmp_path):
+    """A captured assistant message that STARTS with '- reason: …' would match
+    the same '- key: value' regex as the capture header, and dict() keeps the
+    last occurrence — the body line would overwrite the real reason. Meta must
+    be parsed from the header only (stop at the first '## '). Found by the
+    third lens (GLM-5.2)."""
+    t = transcript(tmp_path, [("assistant", "- reason: the test timed out")])
+    run_capture(repo, payload(repo, t))
+    out = run_resume(repo)
+    assert "(clear," in out  # the real header reason, not the body's
+
+
+def test_resume_ufullfort_heading_is_not_done(repo):
+    """'Ufullførte faser' (= uncompleted) contains the substring 'fullf' and
+    would be classified as the DONE section, inverting its meaning. Remaining-
+    patterns must win when both match. Found by the third lens (GLM-5.2)."""
+    (repo / "docs" / "superpowers" / "plans" / "progress.md").write_text(
+        "# Plan\n\n## Ufullførte faser\n\n1. **Neste jobb**: gjør den.\n")
+    out = run_resume(repo)
+    assert "Neste jobb" in out
+    assert "1 phase(s) completed" not in out
+
+
 def test_resume_instruction_line_only_when_speaking(repo):
     assert "agent" not in run_resume(repo).lower()
     (repo / "docs" / "superpowers" / "plans" / "progress.md").write_text(PROGRESS)

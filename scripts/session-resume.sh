@@ -52,8 +52,10 @@ if os.path.isfile(progress):
         for line in lines:
             if re.match(r"^##+\s", line):
                 low = line.lower()
-                section = ("done" if re.search(r"fullf|completed", low)
-                           else "todo" if re.search(r"gjenst|remaining", low) else "")
+                # Remaining-patterns first: "ufullførte"/"uncompleted" contain
+                # the done-substrings and would otherwise invert their meaning.
+                section = ("todo" if re.search(r"gjenst|remaining|ufullf|uncomplet|incomplet", low)
+                           else "done" if re.search(r"fullf|completed", low) else "")
                 continue
             if re.match(r"^\s*(?:\d+\.|[-*])\s+\S", line):
                 # Items struck through or checked off are finished even when
@@ -99,7 +101,14 @@ capture = os.path.join(gitdir, "gstack-last-session.md")
 if os.path.isfile(capture):
     try:
         lines = open(capture, encoding="utf-8", errors="replace").read().splitlines()
-        meta = dict(re.findall(r"^- (\w+): (.*)$", "\n".join(lines), re.MULTILINE))
+        # Meta comes from the header only: a captured message that itself
+        # starts with "- key: value" must not overwrite the real fields.
+        header = []
+        for line in lines:
+            if line.startswith("## "):
+                break
+            header.append(line)
+        meta = dict(re.findall(r"^- (\w+): (.*)$", "\n".join(header), re.MULTILINE))
         tail = ""
         for i, line in enumerate(lines):
             if line.startswith("## Last assistant message"):
