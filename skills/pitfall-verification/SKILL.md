@@ -222,6 +222,13 @@ the two things this skill used to leave to trust.
 
 If round 1 surfaces issues, fix them, then run round 2 on the patched artifact. If round 2 is clean, declare done. If round 2 still finds issues, surface them to the user — do not silently run round 3.
 
+**Re-run Stage 0 after the fixes.** The floor was computed from the artifact as it
+stood BEFORE the self-pitfall round, and fixes add code. A fix that introduces a
+`subprocess.` call, an `ALTER TABLE`, or a concurrency primitive raises the real tier
+of the change — but the floor is a snapshot, so the lens that new code most needs
+never runs on it. Re-run `classify-change.py` on the patched artifact and take the
+higher of the two floors. Escalation is always allowed; the snapshot is not a ceiling.
+
 ## Tier gate — which lenses run automatically
 
 The tier comes from Stage 0's computed floor, plus any escalation you can justify.

@@ -82,16 +82,72 @@ the diff-body call was unchecked, so a git failure silently dropped the content
 signals and the size proxy while the file list still produced a confident floor; and
 `text=True` decodes strictly, so a binary hunk killed the gate with a traceback
 instead of a tier. Fixed: a `degraded` flag that states the loss and refuses to hide
-it, and `errors="replace"` on the git calls. **Codex and the third house did not run
-— neither the `codex` CLI nor an OpenRouter key exists in this environment.** The
-high-stakes tier is therefore not satisfied; the external lenses are owed on a
-machine that has them.
+it, and `errors="replace"` on the git calls.
+
+The high-stakes tier was then satisfied in full on a machine with both external
+lenses. Every finding below failed in the same downward direction — a floor computed
+*lower* than the truth, which is the only direction that matters, because a low floor
+silently skips the lens that would have caught the bug.
+
+**Codex (lens 2)** found three, two of them P1:
+
+- **CamelCase and plurals defeated every high-stakes path signal.** The boundary
+  `([/_.-]|$)` requires a *separator* after the keyword — true for `snake_case` and
+  `kebab-case`, false for CamelCase, where the boundary is a capital. `AuthManager.swift`,
+  `authService.ts`, `Sources/App/SessionStore.swift`, `AudioEngine.swift`,
+  `WebSocketClient.swift`, `sessions/`, `tokens/` — all scored *nothing* and got only a
+  ship-worthy floor. 7 of 12 realistic names missed, including every Swift name, in a
+  repo whose mandate is explicitly dual-track web **and** native. Fixed with
+  `s?(?-i:(?![a-z]))`: a separator, end-of-string, a capital, or a plural all close the
+  word, while a longer lowercase word still does not, so `tokenizer` and `streamlit`
+  stay unmatched. The `(?-i:...)` scoping is load-bearing — these patterns compile with
+  `re.I`, which would otherwise make `[a-z]` match capitals and reject the very
+  CamelCase boundary the fix exists to accept.
+- **Stage 0 and Stage 3 disagreed about untracked files.** `classify-change.py` folds
+  them in; `third-lens-review.py:gather_content` ran plain `git diff`, which does not.
+  So the floor could be escalated *because of* a new file that the third house — the
+  lens that escalation just paid for — never saw, or that made it exit "nothing to
+  review". `third-lens-review.py` now folds them in the same way.
+- **`--diff`/`--files` precedence was inverted between the two scripts** (classify let
+  `--files` win, third-lens lets `--diff` win), so one argv could hand the two stages
+  different artifacts. classify now matches third-lens.
+
+**Third house — GLM-5.2 via OpenRouter (lens 3), `--role architecture`, $0.058** found
+five more:
+
+- **DEGRADED never reached the verdict header.** The skill tells the agent to copy
+  `verdict_header` into its verdict, and the degraded warning lived only in `reasons` —
+  so a run whose content and size signals never fired produced an audit line reading
+  `Tier floor: ship-worthy (signals: none)`, indistinguishable from a fully computed
+  clean result. The floor arriving lower than the truth through the *verdict surface*
+  rather than the classifier. The header now carries it.
+- **The floor is a Stage 0 snapshot, and fixes add code.** A self-pitfall fix that
+  introduces `subprocess.`, an `ALTER TABLE` or a concurrency primitive raises the real
+  tier — but the tier was locked before the fix, so the lens that new code most needs
+  never runs on it. Stage 0 is now re-run after the round, taking the higher floor.
+- **Untracked files masked a failed tracked diff.** Synthesised untracked hunks are
+  appended to the diff body, so a failed `git diff` plus one untracked file produced a
+  non-empty body and reported `degraded=False` — hiding the loss behind unrelated
+  content, which is the exact mask the flag exists to lift.
+- **`target["degraded"]` was absent in `--files` mode**, so a consumer reading it hit
+  `KeyError` depending on which flag the caller used. Now part of the contract in every
+  mode.
+- **`--diff-base` was silently dropped in `--files` mode.** Now warns.
+
+A re-read of the resolver during the same pass found one more: **`--diff-base X`
+without `--diff` fell through to auto mode**, which on a dirty tree classifies the
+working tree instead of the branch. Observed live — `--diff-base main` on this very
+branch reported `ship-worthy` off one stray untracked file, when the true floor was
+high-stakes. Naming a base is unambiguous intent, so it is now honoured with a warning.
 
 ### Tests
-27 new pytest cases (`tests/unit/test_classify_change.py`) covering every floor rule,
-the added-lines-only scan, untracked files, the degraded-scan report, binary diffs,
-and the contract in both directions — escalation accepted, downgrade refused.
-348 pytest total, lint 0 errors.
+55 pytest cases in `tests/unit/test_classify_change.py` (27 original + 28 added by the
+multi-lens findings), covering every floor rule, the added-lines-only scan, untracked
+files, the degraded-scan report, binary diffs, CamelCase/plural path signals in both
+directions (must-hit and must-not-hit), argv precedence, and — behaviourally, by
+running both scripts against one repo state — the "Stage 0 and Stage 3 read one
+artifact" claim that was previously asserted by grepping both files for the same flag
+strings. 378 pytest total, lint 0 errors.
 
 ## [2.50.0] - 2026-09-02
 

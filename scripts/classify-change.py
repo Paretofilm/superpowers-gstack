@@ -73,18 +73,36 @@ CHANGELOG_FILES = re.compile(r"(^|/)CHANGELOG[^/]*$", re.I)
 # --- high-stakes signals ------------------------------------------------------
 # Each entry maps a tier-table category to what can actually be seen mechanically.
 # Kept deliberately narrow: a signal that fires on everything gates nothing.
+#
+# Word boundaries, and why they are not just [/_.-]. A keyword ends at a separator
+# in snake_case and kebab-case, but CamelCase — the convention across Swift, Kotlin
+# and TypeScript — ends a word with a CAPITAL, and plurals end it with an 's'.
+# Requiring a separator therefore missed `AuthManager.swift`, `authService.ts`,
+# `sessions/`, `tokens/`, `AudioEngine.swift` and `WebSocketClient.swift`: they got
+# only a ship-worthy floor and skipped the third house. This repo is dual-track
+# (web AND native, CLAUDE.md), so missing every Swift name is missing half the
+# mandate. `s?(?![a-z])` accepts a separator, end-of-string, a capital, or a plural,
+# and still rejects a longer lowercase word — `tokenizer` and `streamlit` do NOT
+# match, which is what keeps the signal narrow.
+#
+# The `(?-i:...)` wrapper is load-bearing: these patterns compile with re.I, which
+# would make a bare `[a-z]` match capitals too, so the lookahead would reject the
+# CamelCase boundary it exists to accept. Scoping IGNORECASE off keeps "followed by
+# a lowercase letter" meaning exactly that.
+_B = r"s?(?-i:(?![a-z]))"
 HIGH_STAKES_PATH = [
     ("security", re.compile(
-        r"(^|/|_|-)(auth|authn|authz|login|signin|signup|session|oauth|jwt|token|secret"
-        r"|credential|password|keychain|crypto|cipher|permission|acl|rbac)([/_.-]|$)", re.I)),
+        r"(^|/|_|-)(auth|authn|authz|authentication|authorization|authorized|authenticate"
+        r"|login|signin|signup|session|oauth|jwt|token|secret"
+        r"|credential|password|keychain|crypto|cipher|permission|acl|rbac)" + _B, re.I)),
     ("migration", re.compile(
-        r"(^|/)(migrations?|alembic|prisma)/|(^|/|_|-)migrat|(^|/|_|-)schema([/_.-]|$)|\.sql$", re.I)),
+        r"(^|/)(migrations?|alembic|prisma)/|(^|/|_|-)migrat|(^|/|_|-)schema" + _B + r"|\.sql$", re.I)),
     ("public-contract", re.compile(
         r"openapi|swagger|\.proto$|\.graphql$|(^|/)schema\.json$|\.d\.ts$"
         r"|(^|/)Package\.swift$|(^|/)api/", re.I)),
     ("real-time-concurrency", re.compile(
-        r"(^|/|_|-)(audio|dsp|realtime|websocket|stream|scheduler|worker|queue|concurren)"
-        r"([/_.-]|$)", re.I)),
+        r"(^|/|_|-)(audio|dsp|realtime|websocket|stream|streaming|scheduler|worker|queue"
+        r"|concurren|concurrency|concurrent)" + _B, re.I)),
 ]
 HIGH_STAKES_CONTENT = [
     ("security", re.compile(
@@ -143,9 +161,14 @@ def resolve_target(args):
       neither           auto: dirty tree -> working tree vs HEAD;
                         clean tree -> merge-base with the default branch
     """
-    if args.files:
-        if args.diff:
-            eprint("WARN: --diff and --files both given; --files wins.")
+    # Precedence must match third-lens-review.py, which resolves --diff first and
+    # ignores --files. Winning the other way here would hand Stage 0 and Stage 3
+    # DIFFERENT artifacts for the same argv — the exact failure this script exists
+    # to prevent, arrived at through the argument parser instead of the tier.
+    if args.files and not args.diff:
+        if args.diff_base is not None:
+            eprint(f"WARN: --diff-base {args.diff_base} ignored in --files mode "
+                   "(files are read from disk, not from a ref).")
         paths, seen = [], set()
         for pat in args.files:
             matched = globmod.glob(pat, recursive=True)
@@ -163,11 +186,29 @@ def resolve_target(args):
                     text.append(fh.read())
             except OSError as e:
                 eprint(f"WARN: skipping {p}: {e}")
-        return ({"mode": "files", "base": None, "spec": f"files: {' '.join(args.files)}"},
+        # `degraded` is part of the target contract in every mode — a consumer
+        # reading target["degraded"] must not get a KeyError depending on which
+        # flag the caller used. Files mode reads current disk content, so it is
+        # never degraded.
+        return ({"mode": "files", "base": None, "degraded": False,
+                 "spec": f"files: {' '.join(args.files)}"},
                 paths, "\n".join(text))
 
+    if args.files and args.diff:
+        eprint("WARN: --diff and --files both given; --diff wins "
+               "(same precedence as third-lens-review.py).")
+
+    # `--diff-base X` without `--diff` used to fall through to auto mode silently,
+    # which on a dirty tree classifies the WORKING TREE instead of the branch — a
+    # downgrade, arrived at by typo. Observed live: `--diff-base main` on a branch
+    # whose real floor was high-stakes reported ship-worthy off one stray untracked
+    # file. Naming a base is unambiguous intent, so honour it.
+    if args.diff_base is not None and not args.diff and not args.files:
+        eprint(f"WARN: --diff-base {args.diff_base} given without --diff; assuming --diff.")
+        args.diff = True
+
     if args.diff:
-        base = args.diff_base
+        base = args.diff_base if args.diff_base is not None else "HEAD"
         spec = f"git diff {base}"
     else:
         dirty = git("status", "--porcelain").strip()
@@ -181,7 +222,8 @@ def resolve_target(args):
 
     names = git("diff", "--name-only", base, "--", check=True)
     files = [f for f in names.splitlines() if f.strip()]
-    diff_text = git("diff", base, "--")
+    tracked_diff = git("diff", base, "--")
+    diff_text = tracked_diff
 
     # A brand-new file is untracked, so `git diff` shows nothing for it — and a new
     # file is the single most review-worthy thing a change can contain. Fold the
@@ -213,7 +255,13 @@ def resolve_target(args):
     # content is binary): the content signals and the size proxy did not run. That
     # loses signal in the DOWNWARD direction, which is the one failure this gate
     # exists to prevent — so say so rather than reporting a floor built on nothing.
-    degraded = not diff_text.strip()
+    #
+    # Test the TRACKED diff, not the concatenation: synthesised untracked hunks are
+    # appended above, so a failed `git diff` plus one untracked file produced a
+    # non-empty diff_text and reported degraded=False — hiding the loss behind
+    # unrelated content, which is precisely the mask this flag exists to lift.
+    degraded = bool(files) and not tracked_diff.strip() and any(
+        f not in extra for f in files)
     return ({"mode": "diff", "base": base, "spec": spec, "degraded": degraded},
             files, diff_text)
 
@@ -301,10 +349,20 @@ def classify(files, diff_text, mode, degraded=False):
 
 
 def header(target, floor, signals):
-    """The one line the agent must copy into its verdict header."""
+    """The one line the agent must copy into its verdict header.
+
+    The DEGRADED state has to travel on THIS line, not only in `reasons`. The skill
+    tells the agent to copy the header into its verdict, so a degraded run whose
+    warning lived elsewhere produced an audit trail reading "Tier floor: ship-worthy
+    (signals: none)" — indistinguishable from a fully computed clean result, when the
+    content and size signals never ran at all. That is a floor reported lower than
+    the truth arriving through the verdict surface instead of the classifier.
+    """
     labels = ", ".join(sorted({s["label"] for s in signals})) or "none"
+    degraded = (" · DEGRADED (content + size signals did NOT run — escalate by hand)"
+                if target.get("degraded") else "")
     return (f"Target: {target['spec']} · Tier floor: {floor} "
-            f"(signals: {labels}) · computed by scripts/classify-change.py")
+            f"(signals: {labels}) · computed by scripts/classify-change.py{degraded}")
 
 
 def main():
@@ -313,7 +371,9 @@ def main():
     ap.add_argument("--files", nargs="*", default=[],
                     help="paths/globs to classify (same spelling as third-lens-review.py)")
     ap.add_argument("--diff", action="store_true", help="classify a git diff instead of files")
-    ap.add_argument("--diff-base", default="HEAD", help="git ref to diff against (default HEAD)")
+    # default None, not "HEAD", so resolve_target can tell "user named a base" from
+    # "user named nothing" and honour the former even without an explicit --diff.
+    ap.add_argument("--diff-base", default=None, help="git ref to diff against (default HEAD)")
     ap.add_argument("--assert-tier", choices=TIERS, default=None,
                     help="exit 1 if this claimed tier is BELOW the computed floor")
     ap.add_argument("--text", action="store_true", help="human-readable output instead of JSON")

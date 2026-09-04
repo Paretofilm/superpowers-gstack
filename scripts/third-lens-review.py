@@ -147,6 +147,26 @@ def gather_content(args):
                 eprint(f"ERROR: git diff failed: {out.stderr.strip()}")
                 sys.exit(6)
             text = out.stdout
+            # Fold in untracked, non-ignored files, exactly as classify-change.py
+            # does when it computes the tier floor. Without this the two stages
+            # disagree about what "the change" is: Stage 0 can escalate to
+            # high-stakes BECAUSE of a new file, and Stage 3 — the lens that
+            # escalation just paid for — never sees it, or exits "nothing to
+            # review" when the new file is the whole change.
+            try:
+                others = subprocess.run(
+                    ["git", "ls-files", "--others", "--exclude-standard"],
+                    capture_output=True, text=True, errors="replace", timeout=30)
+                for f in (others.stdout or "").splitlines():
+                    f = f.strip()
+                    if not f or os.path.getsize(f) > 1_000_000:
+                        continue
+                    with open(f, encoding="utf-8", errors="replace") as fh:
+                        body = fh.read()
+                    text += ("\n+++ b/%s\n" % f
+                             + "\n".join("+" + ln for ln in body.splitlines()) + "\n")
+            except (OSError, subprocess.TimeoutExpired) as e:
+                eprint(f"WARN: could not include untracked files: {e}")
             return f"# Git diff against {base}\n\n```diff\n{text}\n```\n" if text.strip() else ""
         except (FileNotFoundError, subprocess.TimeoutExpired) as e:
             eprint(f"ERROR: cannot run git diff: {e}")
