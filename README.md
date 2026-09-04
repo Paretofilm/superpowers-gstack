@@ -297,8 +297,8 @@ Review passed? → /qa → /cso → /ship
 | `/plan-design-review` | Validating design |
 | `/plan-devex-review` | Validating developer experience |
 | `/plan-tune` | Tune plan-skill question preferences (one-time, per-project) |
-| `/autoplan` | Chains all three reviews |
-| `/review` | Pre-merge code review |
+| `/autoplan` | Chains all three reviews; Eng review runs last, always |
+| `/review` | Pre-merge code review (8 lenses, incl. advisory simplification) |
 | `/qa <url>` | Browser-based testing |
 | `/cso` | Security audit |
 | `/design-review` | Visual audit |
@@ -313,7 +313,7 @@ Review passed? → /qa → /cso → /ship
 | `/landing-report` | Read-only PR queue + sibling-workspace dashboard |
 | `/setup-deploy` | Configure deploy platform (one-time) |
 | `/document-release` | Update docs |
-| `/retro` | Sprint retrospective |
+| `/retro` | Sprint retrospective; harvests shortcut-debt markers |
 | `/health` | Code quality dashboard |
 | `/context-save` | Save progress, save state |
 | `/context-restore` | Resume where left off |
@@ -324,7 +324,7 @@ Review passed? → /qa → /cso → /ship
 | `/guard` | Full safety: `/careful` + `/freeze` combined |
 | `/browse` | Headless browser |
 | `/open-gstack-browser` | Launch GStack Browser (Chromium + sidebar) |
-| `/pair-agent` | Pair a remote AI agent with your browser |
+| `/pair-agent` | Pair a remote AI agent with your browser; a re-pair with the same `--client` and a narrower `--restrict` revokes the old session immediately |
 | `/setup-browser-cookies` | Import cookies for authenticated tests |
 | `/benchmark` | Performance regression detection |
 | `/benchmark-models` | Cross-model benchmark |
