@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.51.2] - 2026-09-04
+
+Main took 2.51.1 for a verified upstream sync while this fix was in flight, so it
+ships as 2.51.2. 2.51.0 had merged at the commit before it; the defect is in the
+lens script, not the gate.
+
+### Fixed — `--dry-run` demanded the key it exists to help you not spend
+
+2.51.0's equivalence test — Stage 0 and Stage 3 resolve the *same* file set — drove
+`third-lens-review.py --dry-run` in a subprocess, and `main()` resolved the OpenRouter
+key before dispatching. A dry run calls nothing, so the key bought nothing: the test
+passed on a machine with a Keychain entry and failed on every runner without one. That
+test was since rewritten to call `gather_content` in-process, which fixes the test but
+leaves the defect it exposed.
+
+Estimating what a call *would* cost must not require the credential you are still
+deciding whether to spend. The key is now resolved lazily on the OpenRouter path (the
+`countersynthesis` CLI role already was), and pricing is fetched only when a key
+exists — a keyless dry run says it skipped pricing rather than implying the model id
+is wrong, which is what the old shared message would have claimed.
+
+### Tests
+Three: the dry run reaches its estimate with neither `resolve_key` nor `get_pricing`
+called, the spending path still resolves a key, and a keyed dry run still prints the
+cost estimate. 379 pytest total, lint 0 errors.
+
 ## [2.51.1] - 2026-09-04
 
 Upstream sync, done by verification rather than by auto-merge. Two auto-update PRs
