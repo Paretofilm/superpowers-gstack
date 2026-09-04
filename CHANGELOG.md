@@ -1,5 +1,98 @@
 # Changelog
 
+## [2.51.0] - 2026-09-04
+
+A comparison of `pitfall-verification` against the other review skills found that
+its unusual value — tier-gated multi-house orchestration with an adversarial
+synthesis — rested on three things the skill left to trust: the tier was
+self-reported by the model that had just written the code, the target was whatever
+happened to be in context, and the domain inference that produces the *non-generic*
+findings got one paragraph and "spend 15 seconds". This release makes the first two
+mechanical and builds out the third.
+
+### Added — `scripts/classify-change.py`: the tier gate stops being a self-report
+
+The gate that decides whether Codex and the third house run at all was prose, with
+no test asserting it, evaluated by the author of the change, late in a session where
+the cheapest answer is most tempting. `/autoimplement` has hard refusals; the review
+gate had none.
+
+The script computes a tier **floor** from the change itself and prints the target it
+resolved:
+
+- **Floor semantics.** The agent may escalate above the floor — it cannot see a
+  subtle protocol change or a data-loss path in ordinary-looking code — but never
+  below. `--assert-tier <tier>` exits 1 on a downgrade and names the signals that
+  would be skipped.
+- **What it keys on.** Instruction surface (`skills/`, `CLAUDE.md`, `.claude/`) is
+  runtime behaviour, never docs — the distinction a plugin repo lives on. A version
+  file or CHANGELOG change alone is ship-worthy. High-stakes fires on
+  `auth|session|token|crypto` paths, migrations and `.sql`,
+  `openapi`/`.proto`/`.graphql`/`Package.swift`, `audio|realtime|websocket|scheduler|queue`
+  paths, on introduced `subprocess.`/`eval(`/`shell=True`/`ALTER TABLE`/`DispatchQueue`
+  content, and on ≥8 changed files or ≥400 added lines — the mechanical proxy for
+  "architecture", chosen against the releases (2.41–2.44) whose provenance shows the
+  third house earning its place.
+- **Content signals read added lines only**, so deleting the last concurrency line
+  stops reporting concurrency, and an edit near an auth block is not an auth change.
+- **Untracked files are folded in.** `git diff` shows nothing for a new file, and a
+  new file is the most review-worthy thing a change can contain.
+- **Biased upward by construction.** Over-classifying costs ~$0.05 and two minutes;
+  under-classifying costs the lens that would have caught the bug. The script
+  therefore matches its own signal literals when reviewing itself — a pattern file
+  always self-matches. Documented, and visible under `--explain`.
+- Missing or failing script → the change is treated as ship-worthy at minimum and
+  the verdict says the floor was not computed. The gate fails toward more review.
+
+### Added — Stage 0 in `pitfall-verification`: the target is named, not inherited
+
+`/code-review` takes a PR, branch or path; Stage 3 takes `--files`/`--diff`. Stage 1
+took nothing and reviewed whatever was in context — in a long session, that is how
+you review the last phase while the model reviews the whole file. Stage 0 now
+resolves the target in the same spelling `third-lens-review.py` uses, so the first
+and third lenses read one artifact by construction. The classifier's `verdict_header`
+(target · floor · signals) is copied into both verdict formats, alongside the tier
+actually used and why it was escalated.
+
+### Changed — domain inference built out to the level `quality-review` specifies
+
+The seven generic code categories are what any competent model produces unprompted;
+the findings that justify the skill come from the domain-specific pitfalls inferred
+before the round. That step is now a procedure, not a warm-up: five ranked evidence
+sources (target paths, `git log` over those paths, `fix:` entries, existing test
+names, the error handling already present), an eight-domain table of what actually
+bites (auth/session, money, ETL, LLM pipeline, real-time/DSP, UI state, shell/infra,
+native), a requirement to write 3–5 `[domain]`-marked pitfalls down before running —
+a round producing zero of them is reported as not properly run — and a worked example
+at the bar, using the 2.44.0 field case where `$EXEC` never matched `EXECUTABLE_NAME`
+and the fallback `pkill -f "/Contents/MacOS/"` was *measured* against a live process
+list to show it matches `loginwindow` and `authd`.
+
+### Changed — `gstack-multi-lens-review` v5 → v6
+
+User projects get the rule too: the tier is computed, escalation is allowed,
+downgrade is not, and a missing script means ship-worthy at minimum. Left in prose,
+the tier is decided by the model that just wrote the code.
+
+### Review provenance
+Self-pitfall, run through this release's own Stage 0 (floor: high-stakes — 9 files,
++770 lines, plus the documented self-match on the signal literals), found two in the
+gate itself, both in the downward direction that the whole change exists to prevent:
+the diff-body call was unchecked, so a git failure silently dropped the content
+signals and the size proxy while the file list still produced a confident floor; and
+`text=True` decodes strictly, so a binary hunk killed the gate with a traceback
+instead of a tier. Fixed: a `degraded` flag that states the loss and refuses to hide
+it, and `errors="replace"` on the git calls. **Codex and the third house did not run
+— neither the `codex` CLI nor an OpenRouter key exists in this environment.** The
+high-stakes tier is therefore not satisfied; the external lenses are owed on a
+machine that has them.
+
+### Tests
+27 new pytest cases (`tests/unit/test_classify_change.py`) covering every floor rule,
+the added-lines-only scan, untracked files, the degraded-scan report, binary diffs,
+and the contract in both directions — escalation accepted, downgrade refused.
+348 pytest total, lint 0 errors.
+
 ## [2.50.0] - 2026-09-02
 
 A project with a rich `progress.md` and a complete `handoff.md` still opened in

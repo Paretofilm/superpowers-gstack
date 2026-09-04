@@ -23,6 +23,51 @@ For anything beyond a trivial change, one model is not enough — there is alway
 
 **Stages 2–4 run automatically. Do NOT stop after the self-pitfall rounds to ask the user whether to run Codex or the third lens — run them.** The whole point is that there is nothing extra to remember: invoking pitfall-verification on substantive work *is* the multi-model review. The only thing that skips stages 2–4 is the **trivial** tier (see "Tier gate" below) — a typo or doc fix gets the free self-pitfall pass and nothing else.
 
+## Stage 0 — name the target, compute the tier floor
+
+Two things must be settled before any lens runs, and neither may be decided by
+feel:
+
+**1. What is under review.** This skill used to inherit whatever happened to be in
+context. In a long session that is a real drift risk — you review the last phase,
+the model reviews the whole file, and nobody notices. Name the target explicitly,
+in the same spelling `third-lens-review.py` uses, so Stage 0 and Stage 3 read one
+artifact by construction rather than by hope.
+
+**2. Which tier it is.** The tier decides whether the expensive lenses run at all.
+Left to prose it was self-assessment by the model that had just written the code —
+the one place where the incentive to pick the cheapest outcome is strongest. The
+machine now computes a **floor**; you may escalate above it, never below.
+
+Locate the script self-relatively (this skill usually runs in the USER's project,
+where `scripts/` does not exist — derive it from this skill's base directory, shown
+when the skill loads):
+
+```bash
+CLASSIFY="<this skill's base directory>/../../scripts/classify-change.py"
+
+python3 "$CLASSIFY" --diff --diff-base main --explain   # a branch
+python3 "$CLASSIFY" --files "src/**/*.swift" --explain  # named files
+python3 "$CLASSIFY" --explain                           # auto: dirty tree, else merge-base
+```
+
+It prints the resolved target, the floor tier, and the signals that produced it.
+**Copy its `verdict_header` line into your verdict** — that is what makes the
+target and the tier auditable after the fact instead of a claim.
+
+- **Escalate freely.** The floor sees paths, added lines and size. It cannot see a
+  subtle protocol change or a data-loss path in ordinary-looking code. When you
+  judge the change higher than the floor, say so and run the higher tier.
+- **Never go below it.** Before running a tier lower than the header says, confirm
+  with `python3 "$CLASSIFY" --assert-tier <your tier>`; it exits 1 on a downgrade
+  and names the signals you would be skipping.
+- **Missing or failing script → treat the change as ship-worthy at minimum**, and
+  say in the verdict that the floor was not computed. The gate fails toward more
+  verification, never less.
+- The script contains its own signal patterns as literals, so a change touching
+  *it* matches its own security/migration signals. That is a floor doing its job
+  loudly, not a bug; `--explain` shows exactly which literal fired.
+
 ## When to invoke
 
 Automatically after completing:
@@ -84,15 +129,77 @@ For each pitfall on the relevant list:
 
 If a pitfall is not applicable to this domain, say so explicitly — do not silently skip it. Stating "N/A because this code never touches dates" is itself a verification signal.
 
-## Domain inference
+## Domain inference — the step that decides the round's quality
 
-The lists above are *generic-LLM-common*. Real pitfalls are often domain-specific. Before the round, spend 15 seconds asking:
+The lists above are *generic-LLM-common*: any competent model produces roughly that
+list unprompted, which is exactly why they find roughly what any model would have
+found anyway. **The findings that justify this skill come from the domain-specific
+pitfalls you infer before the round starts.** Treat this section as mandatory work,
+not a warm-up.
 
-- What kind of system is this? (auth? payments? ETL? LLM pipeline? UI? infra?)
-- What categories of bugs hit this kind of system most often?
-- What did *past* bugs in this codebase/team look like? (check git log, CHANGELOG, incident notes if accessible)
+### Step 1 — name the domain from evidence, not vibes
 
-Add those inferred pitfalls to the round before running.
+Cheap, concrete sources, in order of signal:
+
+1. **The target's own paths.** `auth/`, `migrations/`, `audio/`, `Views/` each name
+   a failure family before you read a line.
+2. **`git log --oneline -30 -- <the target's paths>`.** What has broken *here*
+   before is the highest-yield prior available, and it is two seconds away.
+3. **`fix:` entries in CHANGELOG / incident notes touching these files.** A team's
+   past bugs repeat far more than the generic list does.
+4. **The names of the tests that already exist.** A test suite is a list of bugs
+   somebody already paid for.
+5. **The error handling the code already has.** What a function defends against
+   tells you what bit its author — and what a *new* code path forgot to defend.
+
+Name the domain in one line, with the evidence. "LLM pipeline over user-supplied
+documents; last three `fix:` commits here were all JSON-parse failures" is a domain
+inference. "This is a web app" is not.
+
+### Step 2 — take the family's pitfalls
+
+| Domain | What actually bites here |
+|---|---|
+| **Auth / session** | token lifetime vs session lifetime, revocation that never propagates, refresh races, privileges cached across a role change, non-timing-safe compare, session fixation |
+| **Money / payments** | float arithmetic on currency, rounding direction and order vs tax, idempotency keys absent on retry, partial refunds, mixed currencies, replayed webhooks |
+| **Data pipeline / ETL** | partial batch failure leaving half-written state, at-least-once delivery producing duplicates, schema drift at the source, timezone-naive timestamps, backfill and incremental paths disagreeing |
+| **LLM pipeline** | markdown-fenced JSON, hallucinated or missing fields, prompt injection arriving through *retrieved* content, truncation mid-structure at the token budget, tests that assume determinism, cost per call at production volume |
+| **Real-time / audio / DSP** | allocation or locking on the render thread, priority inversion, buffer overrun silently dropped, sample-accurate requirements confused with perceptual tolerance, late events applied to a stale state |
+| **UI state** | state drift from the source of truth, cache stale after an external change, optimistic update with no rollback, double-submit, task outliving the view that owns it |
+| **Shell / infra scripting** | an unset variable expanding to empty *inside a destructive command*, unquoted paths and refs, exit status swallowed by a pipe, `set -e` not covering subshells or command substitution, a re-run that is not idempotent |
+| **Native mobile / desktop** | permission denied mid-flow, background/foreground transitions, work on the main thread, verifying against an installed copy instead of the built bundle, on-disk state that never migrates across versions |
+
+Domains combine. A SwiftUI app that calls a model is *both* LLM pipeline and UI
+state, and the interesting pitfalls usually live at the seam.
+
+### Step 3 — write the inferred pitfalls down before running
+
+List **3–5 domain-inferred pitfalls** ahead of the round, each marked `[domain]`,
+alongside the `[generic]` ones you take from the lists above. A round that produces
+zero `[domain]` pitfalls has not been run properly — say so in the verdict rather
+than passing it off as clean.
+
+### The bar for a finding (worked example)
+
+This is a real one, from this plugin's own 2.44.0 review — domain: shell/infra
+scripting, inferred from a plan whose phases were all bash:
+
+```
+[domain] Unset variable expanding to empty inside a destructive command.
+Risk surface: plan Phase 5, the fallback branch of the app-quit step.
+Verified: Phase 2 defines EXECUTABLE_NAME; Phase 5 reads $EXEC. The name never
+matches, so the fallback becomes `pkill -f "/Contents/MacOS/"` — an empty pattern
+against every process path. Measured against a live process list: it matches
+loginwindow, authd and CodeSigningHelper, not merely user apps. Followed literally,
+this phase logs the user out.
+NOT HANDLED → make every interpolated value fail closed before it can be empty:
+`"${EXECUTABLE_NAME:?}"`, and reconcile the two phases on one variable name.
+```
+
+That is the bar: the pitfall named, the exact risk surface, a verification that was
+actually *performed* (not assumed), the concrete consequence, and a fix that closes
+the class rather than the instance. A finding that could have been written without
+opening the file is not a finding.
 
 ## Output format
 
@@ -100,25 +207,41 @@ End the round with a compact verdict:
 
 ```
 Pitfall verification (round N/2):
-- [pitfall] → N/A | handled at file:line | NOT HANDLED — proposed fix
-- ...
+Target: <spec> · Tier floor: <tier> (signals: ...) · computed by scripts/classify-change.py
+Tier used: <floor, or higher + why escalated>
+Domain: <one line, with the evidence it came from>
+- [domain] <pitfall> → N/A | handled at file:line | NOT HANDLED — proposed fix
+- [generic] <pitfall> → ...
 
 Verdict: CLEAN | ISSUES FOUND (see above)
 ```
+
+The first two lines are the classifier's `verdict_header` and your tier decision.
+Both are copied, not composed — a target and a tier nobody can check afterwards are
+the two things this skill used to leave to trust.
 
 If round 1 surfaces issues, fix them, then run round 2 on the patched artifact. If round 2 is clean, declare done. If round 2 still finds issues, surface them to the user — do not silently run round 3.
 
 ## Tier gate — which lenses run automatically
 
-After the self-pitfall rounds, classify the change and run the rest of the chain **automatically** for its tier. Do not ask the user which lenses to run — the tier decides.
+The tier comes from Stage 0's computed floor, plus any escalation you can justify.
+Run the rest of the chain **automatically** for that tier. Do not ask the user which
+lenses to run — the tier decides, and the tier is now computed.
 
-| Tier | What it is | Lenses (all automatic) |
+| Tier | What the floor keys on | Lenses (all automatic) |
 |------|-----------|------------------------|
 | **Trivial** | docs, typo, comment-only, test-only-coverage, WIP checkpoint | Self-pitfall only — stop here |
 | **Ship-worthy** | bumps a version file, produces a CHANGELOG entry, `feat`/`fix`/`refactor` affecting runtime, or changes public contracts | Self-pitfall → **Codex** → synthesis |
 | **+ High-stakes** | a ship-worthy change that *also* touches **architecture / real-time / security / public contracts / migration logic** | …→ **third model house** → synthesis |
 
 In practice most substantive work is at least ship-worthy, so Codex runs by default — you no longer invoke it by hand. The third house adds itself on the high-stakes subset. Both fire **without a confirmation prompt**; cost is reported after each call, not gated before it.
+
+The floor's own reading of that table: instruction surface (`skills/`, `CLAUDE.md`,
+`.claude/`) is runtime behaviour and never counts as docs; a version-file or
+CHANGELOG change alone is ship-worthy; `auth|session|token|crypto` paths, migrations
+and `.sql`, `openapi`/`.proto`/`.graphql`/`Package.swift`, and `audio|realtime|
+websocket|scheduler|queue` paths are high-stakes, as are ≥8 changed files or ≥400
+added lines (the mechanical proxy for "architecture").
 
 ## Cost-ledger — adaptive lens routing (when enabled)
 
@@ -150,6 +273,7 @@ Do not dump raw findings. Fold Codex + third-house results into one verdict, **a
 
 ```
 Multi-lens verdict (tier: <trivial|ship-worthy|high-stakes>):
+- Target: <spec> · Tier floor: <tier> (signals: ...) · Tier used: <tier> [escalated because …]
 - Lenses run: self-pitfall [+ Codex] [+ <third-house model id>]
 - CONFIRMED (fix now): [P1/P2] <finding> — <file:line> → <fix> (survived refutation because …)
 - DISAGREEMENT → DECISION: <finding> → <explicit reasoned call>

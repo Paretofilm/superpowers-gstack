@@ -82,7 +82,7 @@ BODY_WARN_LINES = 500
 DENYLIST = [
     (re.compile(r"`sensitive`\s*="), "third-lens 'sensitive' role was removed in 2.18.0"),
     (re.compile(r"--role\s+sensitive|--sensitive\b"), "third-lens --sensitive flag was removed in 2.18.0"),
-    (re.compile(r"gstack-multi-lens-review-v[0-4]\b"), "stale multi-lens marker (current: v5+)"),
+    (re.compile(r"gstack-multi-lens-review-v[0-5]\b"), "stale multi-lens marker (current: v6+, 2.51.0)"),
     (re.compile(r"gstack-session-continuity-v[12]\b"), "stale session-continuity marker (current: v3+, 2.36.1)"),
     (re.compile(r"gstack-plan-fidelity-v1\b"), "stale plan-fidelity marker (current: v2+, 2.36.1)"),
     (re.compile(r"gstack-routing-v1\b"), "stale track-routing marker (current: v2+, 2.36.1)"),
