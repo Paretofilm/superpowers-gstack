@@ -219,22 +219,31 @@ DEFAULT_PROMPT = (
 
 
 def run_openrouter(system_prompt, user_msg, model, args, key):
-    """Run a review via OpenRouter HTTP API. Prints RAW OUTPUT + usage + balance."""
+    """Run a review via OpenRouter HTTP API. Prints RAW OUTPUT + usage + balance.
+
+    `key` is None for a dry run. Estimating what a call WOULD cost must not require
+    the credential you are still deciding whether to spend — and a key-gated dry run
+    also makes the "Stage 0 and Stage 3 resolve one artifact" contract untestable in
+    any environment without a key, which is every CI runner.
+    """
     # rough pre-flight token estimate (chars/4) for the cost note
     est_in = (len(system_prompt) + len(user_msg)) // 4
-    p_in, p_out = get_pricing(key, model)
     if args.dry_run:
         print(f"Model: {model}")
         print(f"Estimated input tokens: ~{est_in:,}")
+        p_in, p_out = get_pricing(key, model) if key else (None, None)
         if p_in is not None:
             est_cost = est_in * p_in + args.max_tokens * p_out
             print(f"Estimated max cost: ~${est_cost:.4f} "
                   f"(in ${p_in*1e6:.2f}/Mtok, out ${p_out*1e6:.2f}/Mtok, "
                   f"assuming full {args.max_tokens} output tokens)")
-        else:
+        elif key:
             print("Pricing unavailable for this model id — verify it exists on OpenRouter.")
+        else:
+            print("Pricing not fetched (no OpenRouter key here) — size estimate only.")
         return
 
+    p_in, p_out = get_pricing(key, model)
     payload = {
         "model": model,
         "messages": [
@@ -392,7 +401,9 @@ def main():
     user_msg = f"Review the following artifact:\n\n{content}"
 
     if transport == "openrouter":
-        key = resolve_key()  # lazy — CLI role needs no OpenRouter key (P1)
+        # Lazy twice over: the CLI role needs no OpenRouter key (P1), and a dry run
+        # needs none either — it calls nothing.
+        key = None if args.dry_run else resolve_key()
         run_openrouter(system_prompt, user_msg, target, args, key)
     else:
         run_codex(system_prompt, user_msg, target, args)

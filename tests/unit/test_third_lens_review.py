@@ -212,3 +212,53 @@ def test_main_cli_dry_run_skips_key(monkeypatch, capsys):
     monkeypatch.setattr(tlr, "resolve_key", boom)
     tlr.main()
     assert "codex CLI" in capsys.readouterr().out
+
+
+def test_main_openrouter_dry_run_needs_no_key(monkeypatch, capsys):
+    """A dry run estimates what a call WOULD cost — demanding the credential you are
+    still deciding whether to spend is backwards, and it made the Stage 0 / Stage 3
+    target contract untestable on any runner without a key (CI, this container)."""
+    monkeypatch.setattr("sys.argv",
+                        ["tlr", "--role", "architecture", "--files", "x", "--dry-run"])
+    monkeypatch.setattr(tlr, "gather_content", lambda args: "some artifact")
+
+    def boom(*a, **k):
+        raise AssertionError("resolve_key() must not be called on the OpenRouter dry-run path")
+    monkeypatch.setattr(tlr, "resolve_key", boom)
+
+    def no_pricing(*a, **k):
+        raise AssertionError("get_pricing() must not be called without a key")
+    monkeypatch.setattr(tlr, "get_pricing", no_pricing)
+
+    tlr.main()
+    out = capsys.readouterr().out
+    assert "Estimated input tokens" in out
+    assert "no OpenRouter key here" in out
+
+
+def test_main_openrouter_real_run_still_requires_a_key(monkeypatch):
+    """The dry-run exemption must not leak into the path that actually spends money."""
+    monkeypatch.setattr("sys.argv", ["tlr", "--role", "architecture", "--files", "x"])
+    monkeypatch.setattr(tlr, "gather_content", lambda args: "some artifact")
+    called = {}
+
+    def fake_key():
+        called["yes"] = True
+        return "k"
+    monkeypatch.setattr(tlr, "resolve_key", fake_key)
+    monkeypatch.setattr(tlr, "run_openrouter", lambda *a, **k: None)
+    tlr.main()
+    assert called.get("yes"), "the spending path must still resolve a key"
+
+
+def test_dry_run_with_a_key_still_reports_pricing(monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv",
+                        ["tlr", "--role", "architecture", "--files", "x", "--dry-run"])
+    monkeypatch.setattr(tlr, "gather_content", lambda args: "some artifact")
+    monkeypatch.setattr(tlr, "get_pricing", lambda key, model: (1e-6, 2e-6))
+
+    class Args:
+        dry_run = True
+        max_tokens = 16000
+    tlr.run_openrouter("sys", "usr", "z-ai/glm-5.2", Args(), "a-key")
+    assert "Estimated max cost" in capsys.readouterr().out

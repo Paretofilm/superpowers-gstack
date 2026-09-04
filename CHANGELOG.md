@@ -2,6 +2,20 @@
 
 ## [2.51.0] - 2026-09-04
 
+### Fixed — `--dry-run` demanded the key it exists to help you not spend
+
+The multi-lens pass added a test asserting the contract this release claims: Stage 0
+and Stage 3 resolve the *same* file set. It passed on a machine with a Keychain entry
+and failed everywhere else, because `third-lens-review.py` resolved the OpenRouter key
+before the dry run — which calls nothing. Estimating what a call *would* cost must not
+require the credential you are still deciding whether to spend, and the key gate also
+made the target contract untestable on every runner without a key, CI included. The key
+is now resolved lazily on the OpenRouter path too (the CLI role already was): a dry run
+prints the size estimate with pricing when a key happens to exist and says plainly that
+it skipped pricing when none does. The spending path still resolves a key, asserted by
+its own test.
+
+
 A comparison of `pitfall-verification` against the other review skills found that
 its unusual value — tier-gated multi-house orchestration with an adversarial
 synthesis — rested on three things the skill left to trust: the tier was
