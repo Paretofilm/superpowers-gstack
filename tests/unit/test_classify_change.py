@@ -381,10 +381,11 @@ def test_stage0_and_stage3_resolve_the_same_file_set(repo):
     stage0 = classify(repo, "--diff", "--diff-base", "main")
     assert set(stage0["target"]["files"]) == {"tracked.py", "brand_new.py"}
 
+    # gather_content is called in-process on purpose: every CLI path through
+    # third-lens-review.py wants an OpenRouter key, including --dry-run, so a
+    # subprocess check here would pass on a machine that has the key and fail in
+    # CI, which has none. The resolution logic is what this test is about.
     tlr = REPO / "scripts" / "third-lens-review.py"
-    p = subprocess.run([sys.executable, str(tlr), "--diff", "--diff-base", "main",
-                        "--dry-run"], cwd=repo, capture_output=True, text=True)
-    assert p.returncode == 0, p.stderr
     # Stage 3 must have seen the untracked file the floor was escalated from.
     body = subprocess.run([sys.executable, "-c",
                            "import sys;sys.path.insert(0,%r);" % str(tlr.parent) +
