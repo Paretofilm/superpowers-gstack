@@ -336,7 +336,7 @@ act on it — the point of the menu is that the answer is one click, not one les
 
 More than 5 commits in a row without testing the cumulative state → STOP and verify (build, run tests) before continuing. This is a legitimate category-5 stop per the Autonomy section — cumulative breakage is harder to diagnose than per-commit breakage. A session where NO commit was tested is committing "progress without verification": run the project's test suite, or document explicitly why testing is deferred.
 
-## Multi-lens review (ship-worthy changes) <!-- gstack-multi-lens-review-v5 --><!-- emitted=29 -->
+## Multi-lens review (ship-worthy changes) <!-- gstack-multi-lens-review-v6 --><!-- emitted=31 -->
 
 Substantive changes get multiple review lenses — different model houses catch what the others miss. **`pitfall-verification` orchestrates them automatically per tier — never invoke Codex or the third house by hand:**
 
@@ -346,6 +346,8 @@ Substantive changes get multiple review lenses — different model houses catch 
 4. **Third house** (auto on high-stakes: architecture / real-time / security / contracts / migration-logic): `/superpowers-gstack:third-lens-review` — a different model house, ending in an adversarial synthesis
 
 Stages 3–4 fire per tier with **no confirmation prompt**; trivial changes (docs/typo) get only the free self-pitfall pass. Cost is reported after each call, not gated before it.
+
+**The tier is computed, not guessed.** `scripts/classify-change.py` reads the change and prints a tier **floor** plus the resolved target (`--files` / `--diff --diff-base`, the same spelling `third-lens-review.py` takes). Escalate above the floor whenever you can justify it; never run a tier below it — `--assert-tier <tier>` exits non-zero on a downgrade and names the signals being skipped. If the script is missing or errors, treat the change as ship-worthy at minimum and say the floor was not computed. Left to self-assessment, the tier is decided by the model that just wrote the code, at the moment the cheapest answer is most tempting.
 
 ### What counts as ship-worthy (run Codex)
 
