@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.51.1] - 2026-09-04
+
+Upstream sync, done by verification rather than by auto-merge. Two auto-update PRs
+(#57 from 2026-08-24, #59 from 2026-08-31) had been open long enough to go stale:
+#57 wanted to bump to 2.48.0 and #59 to 2.50.0, both versions main had already used
+for unrelated work, and #59's `VERSIONS.md` claimed GStack 1.76.0.0 when 1.79.0.0 is
+what is actually installed. An auto-update PR that outlives one release cycle is
+wrong by construction, not merely behind. Both are closed; their real content was
+re-derived here and checked against what is on disk, which is the rule `VERSIONS.md`
+has carried since the six PRs closed on 2026-08-18 for disagreeing with all three
+upstreams.
+
+### Changed
+- `VERSIONS.md`: GStack 1.61.0.0 → **1.79.0.0**, Claude Code 2.1.234 → **2.1.261**,
+  Superpowers **6.3.0** (unchanged, re-verified). Read from
+  `~/.claude/skills/gstack/VERSION`, `npm view @anthropic-ai/claude-code version`, and
+  the installed plugin manifest — not from release notes.
+- README skill table, each line verified against the installed gstack 1.79.0.0 rather
+  than taken from the PR body: `/autoplan` runs Eng last (`autoplan/SKILL.md`),
+  `/review` has 8 lenses including advisory simplification (8 files in
+  `review/specialists/`), `/retro` harvests shortcut-debt markers (`retro/SKILL.md`),
+  and `/pair-agent` revokes the old session on a narrowing re-pair with the same
+  `--client` (`pair-agent/SKILL.md:701-706`).
+
 ## [2.51.0] - 2026-09-04
 
 A comparison of `pitfall-verification` against the other review skills found that
