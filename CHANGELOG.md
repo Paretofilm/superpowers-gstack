@@ -27,7 +27,6 @@ cost estimate. 379 pytest total, lint 0 errors.
 
 ## [2.51.0] - 2026-09-04
 
-
 A comparison of `pitfall-verification` against the other review skills found that
 its unusual value — tier-gated multi-house orchestration with an adversarial
 synthesis — rested on three things the skill left to trust: the tier was
