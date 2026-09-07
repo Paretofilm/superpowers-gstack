@@ -207,6 +207,7 @@ lever.
 | `/superpowers-gstack:macos-e2e-scaffold`     | haiku     |
 | `/superpowers-gstack:ios-e2e-scaffold`       | haiku     |
 | `/superpowers-gstack:ios-visual-explore`     | sonnet    |
+| `/superpowers-gstack:spec-drift`             | sonnet    |
 | `/superpowers-gstack:e2e-route`              | haiku     |
 | `/superpowers-gstack:context-handoff`        | haiku     |
 | `/superpowers-gstack:htmlify`                | haiku     |
