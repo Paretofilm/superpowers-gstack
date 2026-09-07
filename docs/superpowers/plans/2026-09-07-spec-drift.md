@@ -104,7 +104,7 @@ Alt som må være sant om «samme filbytes kjøres» ligger her, og ingenting av
 - Produces: `pin.json`-skjema `{"source", "sha256", "gstack_version", "pinned_at"}`; `gstack_version` leses fra `<upstream>/../../../VERSION` (`ship/sections/plan-completion.md` → gstack-roten), `"unknown"` om den mangler.
 - Standardverdier: `--upstream` = `~/.claude/skills/gstack/ship/sections/plan-completion.md`, `--pin-dir` = `<repo>/skills/spec-drift`.
 
-- [ ] **Step 1: Skriv den feilende testen**
+- [x] **Step 1: Skriv den feilende testen** — commit `5870d8e`
 
 Opprett `tests/unit/test_spec_drift_pin.py`:
 
@@ -283,12 +283,12 @@ def test_missing_upstream_is_could_not_run_not_clean(rig):
     assert "UPSTREAM MISSING" in p.stderr
 ```
 
-- [ ] **Step 2: Kjør testen og se den feile**
+- [x] **Step 2: Kjør testen og se den feile** — commit `5870d8e`
 
 Kjør: `pytest tests/unit/test_spec_drift_pin.py -q`
 Forventet: 10 failed — `FileNotFoundError` / exit-kode 2 fra `python3` fordi `scripts/spec-drift.py` ikke finnes.
 
-- [ ] **Step 3: Skriv scriptet**
+- [x] **Step 3: Skriv scriptet** — commit `5870d8e`
 
 Opprett `scripts/spec-drift.py` (gjør den kjørbar: `chmod +x scripts/spec-drift.py`):
 
@@ -508,17 +508,17 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 4: Kjør testen og se den bestå**
+- [x] **Step 4: Kjør testen og se den bestå** — commit `5870d8e`
 
 Kjør: `pytest tests/unit/test_spec_drift_pin.py -q`
 Forventet: `10 passed`.
 
-- [ ] **Step 5: Hele suiten og lint**
+- [x] **Step 5: Hele suiten og lint** — commit `5870d8e`
 
 Kjør: `pytest tests/unit scripts/cost-ledger -q` — forventet **388 passed** (378 + 10).
 Kjør: `python3 scripts/lint-skills.py` — forventet `0 error(s), 2 warning(s) across 17 skills`. (E7 skanner det nye scriptet; ingen denylistet streng finnes i det.)
 
-- [ ] **Step 6: Commit og push**
+- [x] **Step 6: Commit og push** — commit `5870d8e`
 
 ```bash
 git add scripts/spec-drift.py tests/unit/test_spec_drift_pin.py
@@ -559,7 +559,7 @@ git push -u origin feat/spec-drift
 - Produces: `python3 scripts/spec-drift.py verdict [--json TEXT]` (standard: les stdin, bruk siste ikke-tomme linje) → skriver `SPEC-DRIFT: CLEAN (exit 0) — done=… changed=… partial=… not_done=… unverifiable=… of N`, eller `DRIFT (exit 1)`, eller `COULD-NOT-RUN (exit 2)`; exit-kode = tallet i parentes.
 - Regler: `0` når `done + changed == total_items`; `2` når JSON mangler, mangler en av de seks nøklene, tellere ikke er heltall, `total_items <= 0`, eller PARTIAL-resten er negativ; ellers `1`.
 
-- [ ] **Step 1: Skriv den feilende testen**
+- [x] **Step 1: Skriv den feilende testen** — commit `d4231df`
 
 Opprett `tests/unit/test_spec_drift_verdict.py`:
 
@@ -646,12 +646,12 @@ def test_fenced_last_line_is_tolerated():
     assert rc == 0
 ```
 
-- [ ] **Step 2: Kjør testen og se den feile**
+- [x] **Step 2: Kjør testen og se den feile** — commit `d4231df`
 
 Kjør: `pytest tests/unit/test_spec_drift_verdict.py -q`
 Forventet: 15 failed — argparse avviser `verdict` («invalid choice»), exit 2 med feil melding, så alle assertions på `SPEC-DRIFT:`-linjen feiler. Ingen skal bestå: en test som er grønn her, er grønn av feil grunn.
 
-- [ ] **Step 3: Legg til `verdict` i scriptet**
+- [x] **Step 3: Legg til `verdict` i scriptet** — commit `d4231df`
 
 I `scripts/spec-drift.py`:
 
@@ -747,17 +747,17 @@ def cmd_verdict(a) -> int:
     v.set_defaults(fn=cmd_verdict)
 ```
 
-- [ ] **Step 4: Kjør testen og se den bestå**
+- [x] **Step 4: Kjør testen og se den bestå** — commit `d4231df`
 
 Kjør: `pytest tests/unit/test_spec_drift_verdict.py -q`
 Forventet: `15 passed`.
 
-- [ ] **Step 5: Hele suiten og lint**
+- [x] **Step 5: Hele suiten og lint** — commit `d4231df`
 
 Kjør: `pytest tests/unit scripts/cost-ledger -q` — forventet **419 passed** (404 + 15).
 Kjør: `python3 scripts/lint-skills.py` — forventet `0 error(s), 2 warning(s)`.
 
-- [ ] **Step 6: Commit og push**
+- [x] **Step 6: Commit og push** — commit `d4231df`
 
 ```bash
 git add scripts/spec-drift.py tests/unit/test_spec_drift_verdict.py
@@ -804,7 +804,7 @@ Her blir wrapperen til. Fasen er stor fordi lint-reglene binder delene sammen: `
 - Produces: `/superpowers-gstack:spec-drift <plan-path> [--base <ref>] [--section <path>]` og `/superpowers-gstack:spec-drift --repin [--section <path>]`. Utdata-rekkefølge på slutten av svaret: `Plan: … Base: …`, verdikt-linjen `SPEC-DRIFT: … (exit N)`, JSON på aller siste linje.
 - Produces: kontraktstrenger som testen pinner (kopier dem ordrett): `The plan path is an argument, never discovered.`, `never edits source code`, `Do not commit, push`, `run_in_background: false`, `## Re-pin mode`.
 
-- [ ] **Step 1: Skriv den feilende testen**
+- [x] **Step 1: Skriv den feilende testen** — commit `a18c175`
 
 Opprett `tests/unit/test_spec_drift_skill.py`:
 
@@ -896,12 +896,12 @@ def test_skill_is_routed_everywhere_the_lint_does_not_check():
         assert "superpowers-gstack:spec-drift" in (REPO / rel).read_text(), rel
 ```
 
-- [ ] **Step 2: Kjør testen og se den feile**
+- [x] **Step 2: Kjør testen og se den feile** — commit `a18c175`
 
 Kjør: `pytest tests/unit/test_spec_drift_skill.py -q`
 Forventet: samlingsfeil (`FileNotFoundError` på `skills/spec-drift/SKILL.md` ved import) — 1 error, 0 passed.
 
-- [ ] **Step 3: Skriv `skills/spec-drift/SKILL.md`**
+- [x] **Step 3: Skriv `skills/spec-drift/SKILL.md`** — commit `a18c175`
 
 Opprett katalogen og filen med nøyaktig dette innholdet:
 
@@ -1154,7 +1154,7 @@ If that also yields no JSON, do not guess a result — `SPEC-DRIFT: COULD-NOT-RU
   `garrytan/gstack`.
 ````
 
-- [ ] **Step 4: Lag pinnen fra disk**
+- [x] **Step 4: Lag pinnen fra disk** — commit `a18c175`
 
 ```bash
 python3 scripts/spec-drift.py repin
@@ -1170,7 +1170,7 @@ cat skills/spec-drift/pin.json
 
 Forventet: `PINNED …`, så `PIN OK sha256=… gstack=1.81.0.0 …` (eller den installerte versjonen), og `pin.json` med `source`, `sha256`, `gstack_version`, `pinned_at`.
 
-- [ ] **Step 5: Ruting i `CLAUDE.md`**
+- [x] **Step 5: Ruting i `CLAUDE.md`** — commit `a18c175`
 
 Sett inn dette punktet rett etter `verify-and-land`-punktet i «Key routing rules» (linje 114, punktet som begynner `- "I fixed it but I don't see it in the app"`):
 
@@ -1178,7 +1178,7 @@ Sett inn dette punktet rett etter `verify-and-land`-punktet i «Key routing rule
 - "Does this plan still match the code?", spec drift / plan drift, audit a plan on a branch that is not being shipped, mechanical plan check at a phase boundary → invoke /superpowers-gstack:spec-drift <plan-path> [--base <ref>]. Runs /ship Step 8's plan-completion section standalone — read from disk at run time and sha256-pinned (`--repin` shows the upstream diff and asks before accepting), explicit plan path (no discovery), explicit base (default `git diff <default-branch>...HEAD`; an older commit surfaces drift accumulated on main). Same report and last-line JSON as Step 8, plus exit 0 clean / 1 drift / 2 could not run. Report only — never edits code or the plan; write-back and a drift ledger are Fase 2 of the spec.
 ```
 
-- [ ] **Step 6: Rutingtabellene i de to generatorene**
+- [x] **Step 6: Rutingtabellene i de to generatorene** — commit `a18c175`
 
 Sett inn nøyaktig denne raden **rett etter** `ios-visual-explore`-raden i Utility-tabellen — i `skills/setup-routing/SKILL.md` (linje 171) **og** i `skills/adapt/SKILL.md` (linje 175). Samme tekst begge steder:
 
@@ -1186,7 +1186,7 @@ Sett inn nøyaktig denne raden **rett etter** `ios-visual-explore`-raden i Utili
 | `/superpowers-gstack:spec-drift` | Any project with plans in `docs/superpowers/plans/` — standalone "does this plan still match the code?" audit: runs `/ship` Step 8's plan-completion section from disk (hash-pinned) against an explicit plan and base, on any branch, shipped or not. Report + JSON + exit 0/1/2; never edits code. |
 ```
 
-- [ ] **Step 7: Model-routing-raden**
+- [x] **Step 7: Model-routing-raden** — commit `a18c175`
 
 I `skills/setup-routing/model-routing.md`, tabellen «Plugin-internal skills (superpowers-gstack)», sett inn rett etter `ios-visual-explore`-raden:
 
@@ -1196,7 +1196,7 @@ I `skills/setup-routing/model-routing.md`, tabellen «Plugin-internal skills (su
 
 Begrunnelse (skal ikke inn i filen): auditen er en general-purpose-subagent som leser plan og diff og dømmer per punkt — samme klasse arbeid som `quality-review`, som står på `sonnet`.
 
-- [ ] **Step 8: README**
+- [x] **Step 8: README** — commit `a18c175`
 
 I `README.md`: bytt `- **Claude Code Plugin** with sixteen skills:` (linje 32) med `- **Claude Code Plugin** with eighteen skills:` (tallet var allerede ett bak — det er 17 kataloger i `skills/` før denne, 18 etter). Sett så inn dette punktet rett etter `/ios-visual-explore`-punktet (linje 47):
 
@@ -1204,7 +1204,7 @@ I `README.md`: bytt `- **Claude Code Plugin** with sixteen skills:` (linje 32) m
   - `/spec-drift` — standalone "does this plan still match the code?" audit, invoked as `/superpowers-gstack:spec-drift <plan-path> [--base <ref>]`. Wraps `/ship` Step 8's plan-completion section: read from `~/.claude/skills/gstack/ship/sections/plan-completion.md` at run time, never copied, sha256-pinned in `skills/spec-drift/pin.json` (`--repin` shows the upstream diff and asks before accepting). Explicit plan path — no discovery heuristics — and explicit `--base` (an older commit surfaces drift that accumulated on the default branch). Same report and last-line JSON as Step 8 plus exit `0` clean / `1` drift / `2` could not run, so `/autoimplement` can call it at phase boundaries. Runs on branches that are never shipped. Report only; write-back and a drift ledger are Fase 2 of `docs/superpowers/specs/2026-09-07-spec-drift-design.md`.
 ```
 
-- [ ] **Step 9: Versjon, CHANGELOG, IDEAS**
+- [x] **Step 9: Versjon, CHANGELOG, IDEAS** — commit `a18c175`
 
 `.claude-plugin/plugin.json`: `"version": "2.51.1"` → `"version": "2.52.0"`.
 
@@ -1261,17 +1261,17 @@ med
 **Status.** Fase 1 implementert i 2.52.0 på `feat/spec-drift` (`skills/spec-drift/SKILL.md`, `scripts/spec-drift.py`); plan: `docs/superpowers/plans/2026-09-07-spec-drift.md`. Fase 2–3 fortsatt deferred — vurderes hver for seg etter at fase 1 har vært i drift (måleform: andel reelle funn etter ti kjøringer). Fullt designdokument med begrunnelse, motforestillinger og verifiseringsplan: `docs/superpowers/specs/2026-09-07-spec-drift-design.md`.
 ```
 
-- [ ] **Step 10: Kjør testen og se den bestå**
+- [x] **Step 10: Kjør testen og se den bestå** — commit `a18c175`
 
 Kjør: `pytest tests/unit/test_spec_drift_skill.py -q`
 Forventet: `9 passed`.
 
-- [ ] **Step 11: Hele suiten og lint**
+- [x] **Step 11: Hele suiten og lint** — commit `a18c175`
 
 Kjør: `pytest tests/unit scripts/cost-ledger -q` — forventet **442 passed** (433 + 9).
 Kjør: `python3 scripts/lint-skills.py` — forventet `0 error(s), 2 warning(s) across 18 skills`. Blir det rødt, er de sannsynlige årsakene: E3 (punktet i `CLAUDE.md` mangler eller staver `spec-drift` feil), E4 (CHANGELOG-overskriften matcher ikke `2.52.0` tegn for tegn), E2 (`spec-drift.py` staves annerledes i SKILL.md enn i `scripts/`), W1 som *error* skjer ikke, men sjekk at `description` er ≤ 30 ord (den er 28).
 
-- [ ] **Step 12: Commit og push**
+- [x] **Step 12: Commit og push** — commit `a18c175`
 
 ```bash
 git add skills/spec-drift/SKILL.md skills/spec-drift/pin.json skills/spec-drift/pin/plan-completion.md \
@@ -1323,7 +1323,7 @@ Dette er specens «Verifisering hvis fase 1 bygges», punkt 1–4, pluss den st�
 - Consumes: `/superpowers-gstack:spec-drift`, `scripts/spec-drift.py check`, `/ship` (gstack 1.81.0.0 eller nyere) — alle slik fase 3 etterlot dem.
 - Produces: en resultattabell i specen, og én stående test som skippes i CI og feiler lokalt når upstream-seksjonen har endret seg siden pinning.
 
-- [ ] **Step 1: Forutsetninger**
+- [x] **Step 1: Forutsetninger** — (denne commiten)
 
 ```bash
 git status --porcelain            # tomt
@@ -1336,7 +1336,7 @@ git fetch origin && git merge origin/main --no-edit   # så /ship sitt Step 3 ik
 
 Er `check` ikke `PIN OK`, oppdaterte gstack seg mellom fase 3 og nå: kjør `/superpowers-gstack:spec-drift --repin`, les diffen, aksepter, commit pinnen — og noter det i resultattabellen.
 
-- [ ] **Step 2: Fixture-planen — kjent stale ved konstruksjon**
+- [x] **Step 2: Fixture-planen — kjent stale ved konstruksjon** — commit `abc8841`
 
 Ekvivalensmålet trenger en plan med færre enn 50 punkter (Step 8 kapper ved 50, og *hvilke* 50 som velges ville selv vært støy) og med en kjent fasit. Denne planen har fem punkter som finnes på `feat/spec-drift` og fire fra fase 2–3 som ikke finnes — altså nøyaktig specens egen situasjon. Opprett `tests/fixtures/spec-drift/stale-plan.md`:
 
@@ -1376,7 +1376,7 @@ git commit -m "test(spec-drift): fixture plan for the Fase-1 equivalence run"
 git push
 ```
 
-- [ ] **Step 3: Hash-guard (specens punkt 4)**
+- [x] **Step 3: Hash-guard (specens punkt 4)** — commit `09e3b12`
 
 Én linje endret i en *lokal kopi* — den ekte filen røres ikke:
 
@@ -1397,7 +1397,7 @@ Forventet: skillen skriver scriptets stderr, så `SPEC-DRIFT: COULD-NOT-RUN (exi
 
 **Utført 2026-09-07 — avvik funnet og rettet før kjøring 1–6.** Via scriptet direkte: `PIN MISMATCH`, exit 2, som forventet. Via skillens Phase 1: `USAGE ERROR: unrecognized arguments: --upstream /…` — fortsatt exit 2 og ingen audit, men hash-guarden ble aldri kjørt. Årsak: `${SECTION:+--upstream "$SECTION"}` er *ett* ord under zsh (zsh orddeler ikke parameterekspansjoner, og Claude Codes Bash-verktøy kjører zsh på macOS), så argparse så ett ukjent argument; under bash er det to ord, og fase 3 sine tester leste bare teksten. Rettet i `fix(spec-drift): --section reaches the script as two words under zsh`: SKILL.md bruker `${SECTION:+--upstream} ${SECTION:+"$SECTION"}` på alle tre stedene (Phase 1, re-pin steg 1 og 4), verifisert som to ord under zsh 5.9, bash og sh og som ingenting når `SECTION` er tom; `test_section_override_reaches_the_script_as_two_words_in_every_shell` kjører `check`-linjen ordrett fra SKILL.md under hvert skall som finnes på maskinen (17 skill-tester, 450 i suiten). Step 3 kjørt på nytt gjennom den rettede linjen: `PIN MISMATCH`, exit 2, ingen audit dispatchet. Skillen ligger ikke i den installerte plugin-cachen (2.51.1), så «via skillen» i denne fasen betyr SKILL.md fra repoet kjørt som instruksjonene den er, med `SKILL_DIR` satt til `skills/spec-drift`.
 
-- [ ] **Step 4: Tre frittstående kjøringer (specens punkt 1 og 3)**
+- [x] **Step 4: Tre frittstående kjøringer (specens punkt 1 og 3)** — (denne commiten)
 
 Tre ganger, hver i en **ny** sesjon (`/clear` mellom), på `feat/spec-drift`:
 
@@ -1407,7 +1407,9 @@ Tre ganger, hver i en **ny** sesjon (`/clear` mellom), på `feat/spec-drift`:
 
 Noter per kjøring: `total_items`, mengden punkter dømt DONE, mengden dømt NOT DONE, eventuelle PARTIAL/CHANGED/UNVERIFIABLE, verdikt-linjen og exit-koden. Forventet: `total_items` 9, DONE = {1,2,3,4,5}, NOT DONE = {6,7,8,9}, `SPEC-DRIFT: DRIFT (exit 1)`. Dette er samtidig specens punkt 3: grenen shippes ikke, `/ship` kjøres ikke, auditen virker.
 
-- [ ] **Step 5: Tre `/ship`-kjøringer stoppet etter Step 8 (specens punkt 2)**
+**Utført 2026-09-07 — avvik fra oppskriften.** Ikke tre `/clear`-sesjoner: SKILL.md fra repoet (ikke plugin-cachen, som mangler skillen) ble kjørt som instruksjoner i én orkestratorsesjon — Phase 0 og 1 én gang, så tre uavhengige audit-subagenter dispatchet parallelt med Phase 2-prompten ordrett, hver med frisk kontekst, og `verdict` per JSON-linje. Alle tre: 9 punkter, DONE 1–5, NOT DONE 6–9, `SPEC-DRIFT: DRIFT (exit 1)`. Resultatene står i specen.
+
+- [x] **Step 5: Tre `/ship`-kjøringer stoppet etter Step 8 (specens punkt 2)** — (denne commiten)
 
 `/ship` sitt Step 8 kjører som subagent med frisk kontekst: den ser verken brukerens meldinger eller denne sesjonen, og dens innholdssøk leter kun i `~/.gstack/projects/<slug>`, `~/.claude/plans`, `~/.codex/plans` og `.gstack/plans` — aldri i `tests/fixtures/`. Å nevne stien i samtalen er derfor ikke nok (det var planens første, feilaktige antakelse; tredje lens fant den). Fixturen må ligge der Step 8 søker *først*, utenfor repoet så treet forblir rent, og inneholde grennavnets slug-form som Step 8 grepper etter. Slug-beregningen under er kopiert ordrett fra Step 8 sitt eget script, så stien blir den samme:
 
@@ -1429,7 +1431,9 @@ Etter tredje kjøring: `rm ~/.gstack/projects/"$_PLAN_SLUG"/spec-drift-stale-pla
 
 Forventet: `total_items` 9, samme DONE- og NOT DONE-mengder som i Step 4, i alle tre. Gir en kjøring `No plan file detected` eller `total_items` 0, fant ikke Step 8 kopien — det er et oppsettproblem (kjør `ls`/`grep`-linjen over igjen), ikke et datapunkt; kjøringen telles ikke. Skulle `/ship` bumpe versjon eller opprette PR likevel, avbryt og tilbakestill kun det (`git reset --hard` er **ikke** lov uten stash — se git-hygiene; bruk `git revert` på en eventuell commit).
 
-- [ ] **Step 6: Den stående alarmen (D8)**
+**Utført 2026-09-07 — avvik fra oppskriften.** `/ship` sine Step 0–7 ble ikke kjørt: sesjonen hadde et annet repo som arbeidsmappe (hvert bash-kall nullstilles dit), og Step 3 sin merge var allerede gjort i Step 1. I stedet ble Step 8 kjørt slik `/ship` sin forelder gjør det: seksjonen lest fra disk, subagent-prompten (fra «You are running a ship-workflow plan completion audit» til JSON-linjen) sendt ordrett med `<base>` = `main`, discovery uberørt, tre subagenter parallelt med frisk kontekst, port-logikken utført av forelderen med svar A. Alle tre skrev `PLAN_FILE:` med kopien i `~/.gstack/projects/Paretofilm-superpowers-gstack/` og dømte 9 punkter, DONE 1–5, NOT DONE 6–9. Kopien er fjernet. Den fulle pipelinen kjører Step 8 igjen ved landing, som sjuende datapunkt.
+
+- [x] **Step 6: Den stående alarmen (D8)** — (denne commiten)
 
 Opprett `tests/unit/test_spec_drift_upstream_alarm.py`:
 
@@ -1469,7 +1473,7 @@ def test_pin_matches_installed_gstack_when_present():
 
 Kjør: `pytest tests/unit/test_spec_drift_upstream_alarm.py -q` — forventet `1 passed` (pinnen fra fase 3 matcher). At den *kan* feile er allerede bevist i Step 3: testen kjører nøyaktig samme `check`-kommando som der ga exit 2 på den endrede kopien, bare uten `--upstream`-overstyringen.
 
-- [ ] **Step 7: Skriv resultatene der neste leser ser dem**
+- [x] **Step 7: Skriv resultatene der neste leser ser dem** — (denne commiten)
 
 Legg til nederst i `docs/superpowers/specs/2026-09-07-spec-drift-design.md`:
 
@@ -1496,7 +1500,7 @@ Fyll tabellen med de faktiske observasjonene — ikke med fasiten.
 
 **Feilgrenen — den eneste veien videre ved avvik.** Hvis noen av de seks kjøringene gir `total_items` ≠ 9, eller to kjøringer er uenige om ett punkts plass på DONE/NOT DONE-aksen, eller hash-guarden i Step 3 ikke nektet: **stopp her.** Ikke kryss av noe i planen, ikke skriv Step 8 sin commit. Skriv avviket inn i tabellen med kjøringsnummer og hva som var ulikt, og skriv under tabellen én setning om hva som er den sannsynlige årsaken (en overstyring subagenten ikke fulgte? et punkt fixturen formulerer tvetydig? en Step 8-regel wrapperen ikke bevarer?). Rett årsaken i en egen commit merket `fix(spec-drift): …`, og **kjør alle seks auditene på nytt** — ikke bare den som avvek — før tabellen fylles på nytt. Først når tabellen viser lik dom i 6/6 fortsetter Step 8. Et avvik på DONE/NOT DONE-aksen er en regresjon i wrapperen; `PARTIAL`↔`CHANGED` alene er støy og noteres i «Annet»-kolonnen uten å stoppe.
 
-- [ ] **Step 8: Oppdater planen, commit, push — kun etter 6/6**
+- [x] **Step 8: Oppdater planen, commit, push — kun etter 6/6** — (denne commiten)
 
 Kryss av fase 1–3 sine steg i denne planen med commit-SHA-ene fra `git log --oneline main..HEAD` (plan-fidelity: samme notasjon filen allerede bruker; fase 1–3 sine subagenter kan ikke gjøre det selv, planen står ikke i deres `Files:`-blokker). Fase 4 sine egne steg krysses av med markøren `(denne commiten)` i stedet for SHA — commiten som inneholder avkryssingen kan ikke inneholde sin egen SHA. Så, med tallene fra tabellen satt inn (ikke fra fasiten):
 

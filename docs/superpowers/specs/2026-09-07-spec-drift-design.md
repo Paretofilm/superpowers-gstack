@@ -282,3 +282,27 @@ bruker per lense («findings that survived synthesis»).
 Til slutt `superpowers-gstack:pitfall-verification` på diffen. Endringen avhenger av en
 upstream-kontrakt den ikke eier (Step 8 sin seksjon og JSON) og er dermed ship-worthy med
 Codex-lens; berører den i tillegg ledger-formatet i fase 2, går den til tredje hus.
+
+## Verifisering — resultat (fase 1, 2026-09-07)
+
+Plan under test: `tests/fixtures/spec-drift/stale-plan.md` (9 punkter; 5 finnes på `feat/spec-drift`, 4 er fase 2–3). Baseline `main` (= `origin/main`, `88a9c70`); HEAD under alle seks kjøringene `09e3b12`. gstack 1.81.0.0, pin sha256 `e329e5ef7699`.
+
+| Kjøring | Verktøy | total_items | DONE | NOT DONE | Annet | Exit |
+|---|---|---|---|---|---|---|
+| 1 | spec-drift | 9 | 1–5 | 6–9 | — | 1 |
+| 2 | spec-drift | 9 | 1–5 | 6–9 | — | 1 |
+| 3 | spec-drift | 9 | 1–5 | 6–9 | — | 1 |
+| 4 | /ship Step 8 | 9 | 1–5 | 6–9 | — | (port: A) |
+| 5 | /ship Step 8 | 9 | 1–5 | 6–9 | — | (port: A) |
+| 6 | /ship Step 8 | 9 | 1–5 | 6–9 | — | (port: A) |
+
+**Dom på DONE/NOT DONE-aksen:** lik i 6/6. Ingen PARTIAL, CHANGED eller UNVERIFIABLE i noen kjøring; hver kjøring siterte fil og linje per punkt (`scripts/spec-drift.py` subparsere, `skills/adapt/SKILL.md:176`, `test_one_changed_line_upstream_is_refused_and_named`, og for punkt 6–9 fravær av flagg, sti eller verdiktstreng i script og skill). Kjøring 1–3 endte med `SPEC-DRIFT: DRIFT (exit 1) — done=5 changed=0 partial=0 not_done=4 unverifiable=0 of 9`, beregnet av `verdict` fra JSON-linjen. Kjøring 4–6 skrev `PLAN_FILE: ~/.gstack/projects/Paretofilm-superpowers-gstack/spec-drift-stale-plan.md` fra Step 8 sitt eget innholdssøk, og porten (fire NOT DONE → prioritet 1) ble besvart med A. **Hash-guard (punkt 4):** én tilføyd linje i lokal kopi → `PIN MISMATCH` med begge hashene og `repin`-hintet, exit 2, ingen audit dispatchet — via scriptet direkte og via skillens Phase 1. Første forsøk via skillen avdekket at `${SECTION:+--upstream "$SECTION"}` er ett ord under zsh (skallet Claude Codes Bash-verktøy bruker), så `check` feilet med `USAGE ERROR` — fortsatt exit 2, men guarden var ikke kjørt; rettet i `09e3b12` før kjøring 1–6, med en test som kjører linjen ordrett under zsh, bash og sh. **Hull 3:** kjøring 1–3 gjort på en gren `/ship` aldri fullførte.
+
+**Slik kjøringene faktisk ble gjort (avvik fra oppskriften i planens fase 4):**
+
+- Skillen ligger ikke i den installerte plugin-cachen (2.51.1), så kjøring 1–3 kjørte `skills/spec-drift/SKILL.md` fra repoet som instruksjonene den er: Phase 0 og 1 én gang (deterministisk bash), deretter tre uavhengige audit-subagenter med Phase 2-prompten ordrett, og `verdict` per JSON-linje.
+- Kjøring 4–6 kjørte Step 8-seksjonen slik `/ship` sin forelder gjør det: seksjonen lest fra disk, subagent-prompten sendt ordrett med `<base>` = `main`, discovery uberørt, port-logikken utført av forelderen. `/ship` sine Step 0–7 ble ikke kjørt: sesjonen hadde et annet repo som arbeidsmappe, og Step 3 sin merge av `origin/main` var allerede gjort i Step 1. Den fulle pipelinen kjører Step 8 én gang til ved landing, som sjuende datapunkt.
+- Alle seks subagentene ble dispatchet parallelt fra én orkestratorsesjon, hver med frisk kontekst, i stedet for seks sekvensielle sesjoner. Én miljølinje ble lagt foran begge promptene (repo-sti og `cd`-prefiks), fordi subagentenes skall startet i et annet repo.
+- Forbehold: planen med fasiten for fixturen er selv del av `main...HEAD`, og to av Step 8-kjøringene leste den. Verdiktene siterte likevel per-punkt-bevis. Neste fixture bør ha fasiten utenfor diffen.
+
+**Ti-kjøringers-målet** (andel reelle funn) starter nå; føres her etter hvert.
