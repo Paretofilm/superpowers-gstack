@@ -352,6 +352,7 @@ def test_control_chars_in_the_diff_are_escaped_and_invisibles_warned(rig):
     upstream.write_text(SECTION.replace("line two", "line \x1b[2Jtwo " + chr(0x200B) + "there"))
     p = run("repin", *common(upstream, pin_dir), expect=3)
     assert "\x1b" not in p.stdout and "\\u001b" in p.stdout
+    assert chr(0x200B) not in p.stdout and "\\u200b" in p.stdout, "zero-width chars are escaped, not just warned about"
     assert "INVISIBLE CHARS" in p.stderr
 
 

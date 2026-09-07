@@ -42,6 +42,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from datetime import date
 from pathlib import Path
 
@@ -74,12 +75,14 @@ ANCHORS = (
 EXIT_OK, EXIT_CANNOT, EXIT_CONFIRM = 0, 2, 3
 SHA_PREFIX = 12   # chars of the digest printed as the --sha receipt; also the minimum --yes must carry
 
-# Terminal-control and bidi characters: escaped when the diff is shown, so a
-# malicious upstream cannot repaint the confirmation prompt the human reads.
+# Terminal-control, bidi and zero-width characters: escaped when the diff is
+# shown, so a malicious upstream can neither repaint the confirmation prompt the
+# human reads nor hide a change where no diff can render it.
 _BIDI = chr(0x202A) + "-" + chr(0x202E) + chr(0x2066) + "-" + chr(0x2069)   # bidi embedding/override/isolate controls
 _ZERO_WIDTH = chr(0x200B) + "-" + chr(0x200D) + chr(0xFEFF)                # zero-width space/joiners, BOM
-_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f" + _BIDI + "]")
-# Characters a diff cannot make visible at all: zero-width, BOM, bidi controls.
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f" + _BIDI + _ZERO_WIDTH + "]")
+# Characters worth a warning with line numbers even after escaping: a reader
+# skims a diff; an escaped zero-width joiner is easy to read past.
 _INVISIBLE = re.compile("[" + _ZERO_WIDTH + _BIDI + "]")
 
 
@@ -250,9 +253,17 @@ def cmd_check(a) -> int:
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_bytes(data)
-    os.replace(tmp, path)
+    """Write via a private temp file in the same directory, then os.replace — a
+    reader never sees a half-written file, and two concurrent writers cannot
+    share a temp name. A failed write leaves no temp behind."""
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def cmd_repin(a) -> int:
@@ -271,7 +282,8 @@ def cmd_repin(a) -> int:
     # for. A snapshot that merely equals upstream — because someone copied the
     # file over it, or a write failed between the two files — would otherwise
     # produce an empty diff and a receipt for bytes nobody read (red team, 2.52.0).
-    pin = load_pin(pin_dir) or {}
+    pin_loaded = load_pin(pin_dir)          # None: no file; {}: not a pin; dict: a pin
+    pin = pin_loaded or {}
     pin_sha = pin["sha256"] if pin_well_formed(pin) else ""
     snap = snapshot_path(pin_dir)
     baseline_note = ""
@@ -282,7 +294,8 @@ def cmd_repin(a) -> int:
     baseline_ok = bool(pin_sha) and sha256_bytes(snap_bytes) == pin_sha
     old_bytes = snap_bytes if baseline_ok else b""
     if not baseline_ok and not baseline_note:
-        baseline_note = ("NO PIN" if not pin_sha else
+        baseline_note = ("NO PIN" if pin_loaded is None else
+                         f"PIN CORRUPT: {PIN_NAME} is not a pin" if not pin_sha else
                          f"PIN CORRUPT: snapshot does not match {PIN_NAME}")
     try:
         old = old_bytes.decode(ENCODING).splitlines(keepends=True)
@@ -414,8 +427,12 @@ def main(argv=None) -> int:
         return a.fn(a)
     except BrokenPipeError:
         # stdout went away (| head, a closed CI pipe): the confirmation was not
-        # delivered, so this cannot count as shown. Silence the flush-at-exit too.
-        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        # delivered, so this cannot count as shown. Silence the flush-at-exit too;
+        # if even that fails, the exit code still has to be 2, not a traceback.
+        try:
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except OSError:
+            pass
         return EXIT_CANNOT
     except Exception as exc:  # last resort: the exit contract holds by construction
         print(f"INTERNAL: {type(exc).__name__}: {exc} — treat as could-not-run", file=sys.stderr)
