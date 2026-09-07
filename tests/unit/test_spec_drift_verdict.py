@@ -65,9 +65,13 @@ def test_partial_is_reported_in_the_breakdown():
 
 
 def test_only_the_last_line_counts():
-    """A JSON-looking line mid-report must not be mistaken for the contract."""
+    """A JSON-looking line mid-report must not be mistaken for the contract — in
+    BOTH directions: an early clean-looking line must never outrank a later
+    drift line (that is the false green), and vice versa."""
     rc, _ = verdict(step8(2, 0) + "\n" + step8(2, 2) + "\n")
     assert rc == 0
+    rc, _ = verdict(step8(2, 2) + "\n" + step8(2, 0) + "\n")
+    assert rc == 1, "a CLEAN line above the final DRIFT line must not win"
 
 
 def test_missing_or_malformed_json_is_could_not_run():
@@ -133,7 +137,8 @@ def test_a_restated_count_must_agree_with_the_derived_one():
     rc, out = verdict(json.dumps(obj) + "\n")
     assert rc == 2 and "contradicts" in out
     obj = json.loads(step8(3, 1, deferred=2))
-    obj["not_done"] = 2                     # agrees with deferred
+    obj["not_done"] = 7                     # not a contract key: ignored, whatever it says
+    obj["partial"] = 0                      # agrees with the derived remainder
     rc, _ = verdict(json.dumps(obj) + "\n")
     assert rc == 1
 

@@ -475,12 +475,15 @@ def cmd_verdict(a) -> int:
     if partial < 0:
         return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
                         f"counts add up to more than total_items={total}")
-    # A key that restates a count must agree with it: a model "correcting
-    # itself" with a second number is a contradiction, not a clarification.
-    for key, expected in (("partial", partial), ("not_done", deferred)):
-        if key in obj and obj[key] != expected:
-            return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
-                            f"{key}={obj[key]!r} contradicts the derived {expected}")
+    # Extra keys are ignored — Step 8's contract has six — except one: a
+    # `partial` that restates the derived remainder must agree with it. A model
+    # "correcting itself" with a second number is a contradiction, not a
+    # clarification. (`not_done` is deliberately not checked: it is not in the
+    # contract and its meaning is ambiguous, so enforcing one reading would
+    # refuse valid audits.)
+    if "partial" in obj and obj["partial"] != partial:
+        return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
+                        f"partial={obj['partial']!r} contradicts the derived {partial}")
     breakdown = (f"done={done} changed={changed} partial={partial} "
                  f"not_done={deferred} unverifiable={unver} of {total}")
     if done + changed == total:
