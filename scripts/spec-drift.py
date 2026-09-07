@@ -30,11 +30,15 @@ and exit 2 — never exit 0, never a Python traceback. One read of the upstream
 bytes feeds the hash, the anchor check, the diff, the receipt and the snapshot,
 so a file rewritten between two reads cannot be pinned half-old.
 
-Exit codes: 0 ok / unchanged; 2 could not run or refused (stderr names why:
-UPSTREAM MISSING, UPSTREAM UNREADABLE, NO PIN, PIN CORRUPT, PIN MISMATCH,
-ANCHORS MISSING, REPIN BLOCKED, REPIN REFUSED, PIN WRITE FAILED, PIN DIR INVALID,
-USAGE ERROR, INTERNAL); 3 repin needs confirmation (the receipt line is the LAST
-line of stdout — do not truncate it).
+Exit codes: 0 ok / unchanged / clean; 1 drift (verdict only — and only together
+with a `SPEC-DRIFT: DRIFT (exit 1)` line on stdout: a bare exit 1 is the
+interpreter itself failing, and a caller must read it as could-not-run); 2 could
+not run or refused (check/repin name why on stderr: UPSTREAM MISSING, UPSTREAM
+UNREADABLE, NO PIN, PIN CORRUPT, PIN MISMATCH, ANCHORS MISSING, REPIN BLOCKED,
+REPIN REFUSED, PIN WRITE FAILED, PIN DIR INVALID, USAGE ERROR, INTERNAL; verdict
+prints its `SPEC-DRIFT: COULD-NOT-RUN (exit 2)` line on stdout like its other two
+outcomes); 3 repin needs confirmation (the receipt line is the LAST line of
+stdout — do not truncate it).
 """
 from __future__ import annotations
 
@@ -76,7 +80,8 @@ ANCHORS = (
 )
 
 EXIT_OK, EXIT_DRIFT, EXIT_CANNOT, EXIT_CONFIRM = 0, 1, 2, 3
-JSON_KEYS = ("total_items", "done", "changed", "deferred", "unverifiable", "summary")
+COUNT_KEYS = ("total_items", "done", "changed", "deferred", "unverifiable")
+JSON_KEYS = COUNT_KEYS + ("summary",)
 SHA_PREFIX = 12   # chars of the digest printed as the --sha receipt; also the minimum --yes must carry
 
 # Terminal-control, bidi and zero-width characters: escaped when the diff is
@@ -404,54 +409,83 @@ class _Parser(argparse.ArgumentParser):
         raise SystemExit(EXIT_CANNOT)
 
 
+def _no_duplicate_keys(pairs):
+    """json.loads keeps the LAST value of a repeated key, so a line that says
+    `"done":2 … "done":4` would read as the green one. Refuse it instead."""
+    obj = {}
+    for key, value in pairs:
+        if key in obj:
+            raise ValueError(f"duplicate key {key!r}")
+        obj[key] = value
+    return obj
+
+
 def last_json_line(text: str) -> dict | None:
-    """The last non-empty line, parsed — or None. A trailing ``` fence is skipped."""
-    for line in reversed(text.splitlines()):
-        line = line.strip().strip("`")
+    """The last non-empty line, parsed as one JSON object — or None. Splits on
+    "\\n" only (JSON strings may carry U+2028 and friends raw), ignores zero-width
+    padding and a trailing ``` fence, and refuses duplicate keys."""
+    for line in reversed(text.split("\n")):
+        line = _INVISIBLE.sub("", line).strip().strip("`")
         if not line:
             continue
         try:
-            obj = json.loads(line)
-        except json.JSONDecodeError:
+            obj = json.loads(line, object_pairs_hook=_no_duplicate_keys)
+        except (ValueError, RecursionError):   # JSONDecodeError is a ValueError
             return None
         return obj if isinstance(obj, dict) else None
     return None
 
 
+def _verdict(label: str, code: int, reason: str) -> int:
+    """The one line a caller reads. Always stdout — the line IS the contract, and
+    the printed number is the number returned, by construction."""
+    print(f"SPEC-DRIFT: {label} (exit {code}) — {reason}")
+    return code
+
+
 def cmd_verdict(a) -> int:
-    text = a.json if a.json is not None else sys.stdin.read()
+    if a.json is not None:
+        text = a.json
+    elif sys.stdin.isatty():
+        return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
+                        "no --json and stdin is a terminal; pipe the JSON line in")
+    else:
+        # Bytes, decoded with a fixed handler: the verdict must not change with
+        # the caller's locale, and a stray byte on a line it never reads must not
+        # become an exception.
+        text = sys.stdin.buffer.read().decode(ENCODING, errors="replace")
     obj = last_json_line(text)
     if obj is None or any(k not in obj for k in JSON_KEYS):
-        print("SPEC-DRIFT: COULD-NOT-RUN (exit 2) — last line is not Step 8's JSON "
-              f"({', '.join(JSON_KEYS)})", file=sys.stderr)
-        return EXIT_CANNOT
-    counts = [obj[k] for k in JSON_KEYS[:5]]
+        return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
+                        f"last line is not Step 8's JSON ({', '.join(JSON_KEYS)})")
+    counts = {k: obj[k] for k in COUNT_KEYS}
     # The contract is integers. bool is an int subclass, and int() happily eats
     # "2" and 1.9 — each a way for a malformed line to read as CLEAN. Exact type.
-    if any(type(c) is not int for c in counts):
-        print("SPEC-DRIFT: COULD-NOT-RUN (exit 2) — counts are not integers", file=sys.stderr)
-        return EXIT_CANNOT
-    total, done, changed, deferred, unver = counts
+    if any(type(c) is not int for c in counts.values()):
+        return _verdict("COULD-NOT-RUN", EXIT_CANNOT, "counts are not integers")
+    total, done, changed, deferred, unver = (counts[k] for k in COUNT_KEYS)
     if total <= 0:
-        print("SPEC-DRIFT: COULD-NOT-RUN (exit 2) — plan has no actionable items "
-              "(a design doc? prose claims are Fase 3)", file=sys.stderr)
-        return EXIT_CANNOT
+        return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
+                        "plan has no actionable checklist items (a design doc? verdict "
+                        "scores checklist items only; prose claims are out of its scope)")
     if min(done, changed, deferred, unver) < 0:
         # A negative count can make done + changed == total look CLEAN.
-        print("SPEC-DRIFT: COULD-NOT-RUN (exit 2) — negative count in the JSON", file=sys.stderr)
-        return EXIT_CANNOT
+        return _verdict("COULD-NOT-RUN", EXIT_CANNOT, "negative count in the JSON")
     partial = total - done - changed - deferred - unver
     if partial < 0:
-        print(f"SPEC-DRIFT: COULD-NOT-RUN (exit 2) — counts add up to more than "
-              f"total_items={total}", file=sys.stderr)
-        return EXIT_CANNOT
+        return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
+                        f"counts add up to more than total_items={total}")
+    # A key that restates a count must agree with it: a model "correcting
+    # itself" with a second number is a contradiction, not a clarification.
+    for key, expected in (("partial", partial), ("not_done", deferred)):
+        if key in obj and obj[key] != expected:
+            return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
+                            f"{key}={obj[key]!r} contradicts the derived {expected}")
     breakdown = (f"done={done} changed={changed} partial={partial} "
                  f"not_done={deferred} unverifiable={unver} of {total}")
     if done + changed == total:
-        print(f"SPEC-DRIFT: CLEAN (exit 0) — {breakdown}")
-        return EXIT_OK
-    print(f"SPEC-DRIFT: DRIFT (exit 1) — {breakdown}")
-    return EXIT_DRIFT
+        return _verdict("CLEAN", EXIT_OK, breakdown)
+    return _verdict("DRIFT", EXIT_DRIFT, breakdown)
 
 
 def main(argv=None) -> int:
@@ -478,11 +512,14 @@ def main(argv=None) -> int:
                                       help="sha256 prefix printed by the diff run; required with --yes")
     v = sub.add_parser("verdict")
     v.add_argument("--json", default=None,
-                   help="JSON text (default: read stdin and use the last non-empty line)")
+                   help="text whose last non-empty line is Step 8's JSON object "
+                        "(default: read that text from stdin)")
     v.set_defaults(fn=cmd_verdict)
     a = p.parse_args(argv)
     try:
-        return a.fn(a)
+        rc = a.fn(a)
+        sys.stdout.flush()   # inside the try: an EPIPE at interpreter shutdown would exit 120
+        return rc
     except BrokenPipeError:
         # stdout went away (| head, a closed CI pipe): the confirmation was not
         # delivered, so this cannot count as shown. Silence the flush-at-exit too;

@@ -770,6 +770,15 @@ malformed, inconsistent, or reports zero actionable items."
 git push
 ```
 
+**Utført (commit `d4231df`, 15 tester, 419 i suiten) — og deretter rettet etter review.** `/review` (Testing, Maintainability, Simplification, Claude-adversarial; Codex-adversarial falt bort på spend cap) og pitfall (tredje lens) ga 17 funn på `verdict`, alle rettet i `fix(spec-drift): review findings on Phase 2`. Koden i repoet avviker fra blokkene over på disse punktene:
+
+- **Dupliserte nøkler avvises** (`_no_duplicate_keys` som `object_pairs_hook`): `json.loads` beholder siste verdi, så `"done":2 … "done":4` leste som CLEAN — det eneste falske grønne noen lense fant.
+- **Restaterte tellere må stemme:** en `partial`- eller `not_done`-nøkkel som motsier de utledede tallene gir `COULD-NOT-RUN`.
+- **Én linje på stdout for alle tre utfall** via `_verdict(label, code, reason)`, der tallet i teksten er konstanten som returneres. `COUNT_KEYS`/`JSON_KEYS` erstatter `JSON_KEYS[:5]`.
+- **Robust inndata:** `last_json_line` splitter kun på `\n` (JSON tillater U+2028 rått i strenger), fjerner zero-width-padding, og fanger `ValueError`/`RecursionError` med navngitt token i stedet for `INTERNAL`; stdin leses som bytes og dekodes med `errors="replace"` så verdiktet ikke avhenger av kallerens locale; TTY-stdin uten `--json` avvises i stedet for å henge; `sys.stdout.flush()` inne i `try` så SIGPIPE ved avslutning ikke gir exit 120.
+- **Docstring** dekker exit 1 og regelen om at exit 1 uten `DRIFT`-linjen er tolkens egen feil (kallers ansvar, se fase 3). Meldingen om designdokumenter nevner ikke lenger «Fase 3».
+- **Tester:** 15 → 29 (`tests/unit/test_spec_drift_verdict.py`); suiten 419 → **433**. Tallene i fase 3–4 under er justert tilsvarende.
+
 ---
 
 ## Phase 3: Skillen, rutingen og release 2.52.0
@@ -958,7 +967,8 @@ real process status runs that same command on the final JSON line:
 python3 "$SKILL_DIR/../../scripts/spec-drift.py" verdict <<'JSON'
 <the JSON line the skill ended with>
 JSON
-echo "exit=$?"     # 0 / 1 / 2 — no prose parsed anywhere
+echo "exit=$?"     # 0 / 1 / 2 — no prose parsed anywhere; exit 1 counts only
+                   # alongside the `SPEC-DRIFT: DRIFT (exit 1)` line on stdout
 ```
 
 Fail closed: when in doubt the answer is 2, never 0. This skill never edits source code,
@@ -1119,10 +1129,15 @@ If that also yields no JSON, do not guess a result — `SPEC-DRIFT: COULD-NOT-RU
    <the JSON line>
    JSON
    ```
-   It prints the `SPEC-DRIFT: … (exit N)` line with a breakdown
+   It prints the `SPEC-DRIFT: … (exit N)` line on stdout with a breakdown
    (`done= changed= partial= not_done= unverifiable= of N`) and exits N. If the
    object arrived pretty-printed over several lines, collapse it to one line
-   first — the contract is one line, and `verdict` reads exactly one.
+   first — the contract is one line, and `verdict` reads exactly one. Read the
+   code and the line together: exit 1 means DRIFT only when the
+   `SPEC-DRIFT: DRIFT (exit 1)` line is there. A bare exit 1 with no
+   `SPEC-DRIFT:` line is the Python interpreter itself failing (a missing
+   interpreter, a syntax error under an old Python) and is
+   `COULD-NOT-RUN (exit 2)`, never drift.
 3. End the response with, in this order: `Plan: <PLAN_PATH>  Base: <BASE_REF>`,
    the verdict line, and the JSON as the very last line — so a caller such as
    `/superpowers-gstack:autoimplement` can take the code from the verdict line
@@ -1225,7 +1240,7 @@ will never be shipped, or against a baseline older than the branch. Design:
   Fail closed: empty diff, unreadable plan, zero actionable items and pin
   mismatch are all exit 2, never 0.
 - Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
-  README. 50 unit tests across `test_spec_drift_pin.py`,
+  README. 64 unit tests across `test_spec_drift_pin.py`,
   `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` — the last one is
   omission tests: Step 8 text pasted into SKILL.md, a discovery heuristic brought
   back, or the check moved after the dispatch each turn the suite red.
@@ -1253,7 +1268,7 @@ Forventet: `9 passed`.
 
 - [ ] **Step 11: Hele suiten og lint**
 
-Kjør: `pytest tests/unit scripts/cost-ledger -q` — forventet **428 passed** (419 + 9).
+Kjør: `pytest tests/unit scripts/cost-ledger -q` — forventet **442 passed** (433 + 9).
 Kjør: `python3 scripts/lint-skills.py` — forventet `0 error(s), 2 warning(s) across 18 skills`. Blir det rødt, er de sannsynlige årsakene: E3 (punktet i `CLAUDE.md` mangler eller staver `spec-drift` feil), E4 (CHANGELOG-overskriften matcher ikke `2.52.0` tegn for tegn), E2 (`spec-drift.py` staves annerledes i SKILL.md enn i `scripts/`), W1 som *error* skjer ikke, men sjekk at `description` er ≤ 30 ord (den er 28).
 
 - [ ] **Step 12: Commit og push**
@@ -1301,7 +1316,7 @@ Dette er specens «Verifisering hvis fase 1 bygges», punkt 1–4, pluss den st�
 ```bash
 git status --porcelain            # tomt
 git log --oneline main..HEAD      # fase 1–3-commitene (pluss spec/IDEAS/plan-commitene) synlige
-bash tests/run.sh --unit          # specens egen kommando: 428 passed (= pytest tests/unit scripts/cost-ledger -q)
+bash tests/run.sh --unit          # specens egen kommando: 442 passed (= pytest tests/unit scripts/cost-ledger -q)
 python3 scripts/lint-skills.py    # 0 error(s)
 python3 scripts/spec-drift.py check   # PIN OK
 git fetch origin && git merge origin/main --no-edit   # så /ship sitt Step 3 ikke lager en merge-commit midt i kjøringene
@@ -1497,7 +1512,7 @@ Specen avslutter «Verifisering» med `superpowers-gstack:pitfall-verification` 
 
 Tier-gulvet beregnes av `scripts/classify-change.py` (instruksjonsflate under `skills/` er runtime, så gulvet er minst ship-worthy → Codex kjører). Funn som overlever synthesen rettes i en ny commit (`fix(spec-drift): …` — aldri `--amend` på pushet historikk), etterfulgt av `bash tests/run.sh --unit` og `python3 scripts/lint-skills.py`, og pitfall kjøres én gang til på den nye diffen. Et funn som viser at en av de seks auditene ville dømt annerledes, sender deg tilbake til Step 7 sin feilgren. Først når verdiktet er `CLEAN` er fasen ferdig.
 
-Fase 4 er ferdig når tabellen står i specen med lik dom i 6/6, Step 9 er `CLEAN`, og `bash tests/run.sh --unit` viser **429 passed** lokalt (428 + 1; i CI 428 passed + 1 skipped). Landing er neste beslutning, ikke en del av denne fasen: `/ship` — den fulle pipelinen — kjører Step 8 en gang til på veien, som et sjuende datapunkt.
+Fase 4 er ferdig når tabellen står i specen med lik dom i 6/6, Step 9 er `CLEAN`, og `bash tests/run.sh --unit` viser **443 passed** lokalt (442 + 1; i CI 442 passed + 1 skipped). Landing er neste beslutning, ikke en del av denne fasen: `/ship` — den fulle pipelinen — kjører Step 8 en gang til på veien, som et sjuende datapunkt.
 
 ---
 
@@ -1526,4 +1541,4 @@ Fase 4 er ferdig når tabellen står i specen med lik dom i 6/6, Step 9 er `CLEA
 
 **Navnekonsistens på tvers av faser:** `scripts/spec-drift.py` med subkommandoene `check`, `repin [--yes]`, `verdict [--json]` og flaggene `--upstream`, `--pin-dir` — samme stavemåte i fase 1, 2, 3 (SKILL.md, testene) og 4. Exit-koder: `0/1/2` for skillen og `verdict`; `2` for `check`-avvik; `3` for `repin` uten `--yes` — `3` lekker aldri ut av skillen (SKILL.md oversetter den til «show the diff»). Pin-filer: `skills/spec-drift/pin.json` og `skills/spec-drift/pin/plan-completion.md` — samme stier i scriptets `DEFAULT_PIN_DIR`/`SNAPSHOT_NAME`, i SKILL.md «Re-pin mode», i `test_pin_and_snapshot_are_committed_together` og i fase 4 sin alarmtest. JSON-nøkler: `total_items, done, changed, deferred, unverifiable, summary` — identiske i `JSON_KEYS`, i SKILL.md override 6 og i begge tester som pinner dem. Kontraktstrenger testene leter etter finnes ordrett i SKILL.md: `The plan path is an argument, never discovered.`, `never edits source code`, `Do not commit, push`, `run_in_background: false`, `## Re-pin mode`, `spec-drift.py" check`, `spec-drift.py" repin`, `repin --yes`, `spec-drift.py" verdict`.
 
-**Testtall** (CI-kommandoen `pytest tests/unit scripts/cost-ledger -q`): 378 → 388 (fase 1 som planlagt, +10) → 404 (review-rettelsene på fase 1, +16) → 419 (fase 2, +15) → 428 (fase 3, +9) → 429 lokalt / 428 + 1 skipped i CI (fase 4, +1).
+**Testtall** (CI-kommandoen `pytest tests/unit scripts/cost-ledger -q`): 378 → 388 (fase 1 som planlagt, +10) → 404 (review-rettelsene på fase 1, +16) → 419 (fase 2 som planlagt, +15) → 433 (review-rettelsene på fase 2, +14) → 442 (fase 3, +9) → 443 lokalt / 442 + 1 skipped i CI (fase 4, +1).

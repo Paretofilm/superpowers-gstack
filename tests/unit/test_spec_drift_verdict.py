@@ -7,6 +7,7 @@ judgement call the model makes differently on each run.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -20,7 +21,22 @@ SCRIPT = REPO / "scripts" / "spec-drift.py"
 def verdict(text: str):
     p = subprocess.run([sys.executable, str(SCRIPT), "verdict"],
                        capture_output=True, text=True, input=text)
+    out = p.stdout + p.stderr
+    assert "Traceback" not in out and "INTERNAL" not in out, \
+        f"the verdict line is the contract; a traceback or an INTERNAL fallback is not it:\n{out}"
+    return p.returncode, out
+
+
+def verdict_json(text: str, stdin: str = ""):
+    p = subprocess.run([sys.executable, str(SCRIPT), "verdict", "--json", text],
+                       capture_output=True, text=True, input=stdin)
     return p.returncode, p.stdout + p.stderr
+
+
+def verdict_bytes(data: bytes, **env):
+    p = subprocess.run([sys.executable, str(SCRIPT), "verdict"], capture_output=True,
+                       input=data, env={**os.environ, **env})
+    return p.returncode, (p.stdout + p.stderr).decode("utf-8", "replace")
 
 
 def step8(total, done, changed=0, deferred=0, unverifiable=0):
@@ -78,3 +94,95 @@ def test_inconsistent_counts_are_could_not_run(line, why):
 def test_fenced_last_line_is_tolerated():
     rc, _ = verdict("```json\n" + step8(1, 1) + "\n```\n")
     assert rc == 0
+
+
+@pytest.mark.parametrize("line,why", [
+    ('{"total_items": ' + "1" * 5000 + ', "done": 1, "changed": 0, "deferred": 0, "unverifiable": 0, "summary": ""}',
+     "an int literal past sys.get_int_max_str_digits() is a ValueError, not a JSONDecodeError"),
+    ("[" * 100_000 + "]" * 100_000, "a deeply nested last line is a RecursionError"),
+    (step8(1, 1)[:-1] + ', "summary": ' + "[" * 100_000 + "]" * 100_000 + "}", "same, inside a value"),
+])
+def test_pathological_last_line_is_named_could_not_run(line, why):
+    rc, out = verdict("PLAN COMPLETION AUDIT\n" + line + "\n")
+    assert rc == 2 and "SPEC-DRIFT: COULD-NOT-RUN (exit 2)" in out, why
+
+
+@pytest.mark.parametrize("text,why", [
+    ("[1, 2]\n", "valid JSON, but a list — not Step 8's object"),
+    ("42\n", "valid JSON scalar"),
+    ("null\n", "valid JSON null — `k not in None` would be a TypeError without the dict guard"),
+    (json.dumps(json.loads(step8(1, 1)), indent=2) + "\n", "pretty-printed JSON: the last line is `}`"),
+])
+def test_non_object_or_multiline_json_is_named_could_not_run(text, why):
+    rc, out = verdict(text)
+    assert rc == 2 and "SPEC-DRIFT: COULD-NOT-RUN (exit 2)" in out, why
+
+
+def test_duplicate_keys_are_a_contradiction_not_a_correction():
+    """json.loads keeps the last value: a line that says done=2 of 4 and later
+    done=4 would read as CLEAN — the one input that hands the caller a false green."""
+    line = ('{"total_items":4,"done":2,"changed":0,"deferred":2,"unverifiable":0,'
+            '"summary":"x","done":4,"deferred":0}')
+    rc, out = verdict(line + "\n")
+    assert rc == 2 and "COULD-NOT-RUN" in out
+
+
+def test_a_restated_count_must_agree_with_the_derived_one():
+    obj = json.loads(step8(3, 3))
+    obj["partial"] = 2                      # contradicts the derived 0
+    rc, out = verdict(json.dumps(obj) + "\n")
+    assert rc == 2 and "contradicts" in out
+    obj = json.loads(step8(3, 1, deferred=2))
+    obj["not_done"] = 2                     # agrees with deferred
+    rc, _ = verdict(json.dumps(obj) + "\n")
+    assert rc == 1
+
+
+def test_json_flag_is_the_input_and_stdin_is_ignored():
+    rc, out = verdict_json("```json\n" + step8(2, 1, changed=1) + "\n```\n", stdin=step8(2, 0))
+    assert rc == 0 and "SPEC-DRIFT: CLEAN (exit 0)" in out
+    rc, out = verdict_json("not json", stdin=step8(2, 2))
+    assert rc == 2 and "COULD-NOT-RUN" in out, "a clean line on stdin must not rescue --json"
+    rc, out = verdict_json("")
+    assert rc == 2 and "COULD-NOT-RUN" in out, "--json '' is empty input, not 'read stdin'"
+
+
+def test_verdict_does_not_depend_on_the_callers_locale():
+    """One stray non-UTF-8 byte on a line the verdict never reads must give the
+    same answer under every stdin codec setting — the gate is mechanical."""
+    data = b"\xff garbage line\n" + step8(1, 1).encode() + b"\n"
+    results = {enc: verdict_bytes(data, PYTHONIOENCODING=enc)
+               for enc in ("utf-8:strict", "utf-8:surrogateescape", "ascii")}
+    assert {rc for rc, _ in results.values()} == {0}, results
+    for _, out in results.values():
+        assert "Traceback" not in out and "INTERNAL" not in out, out
+
+
+def test_unicode_line_separators_inside_a_string_are_not_line_breaks():
+    """str.splitlines() splits on U+2028/U+2029/U+0085, which JSON permits raw inside
+    a string; only "\\n" ends the line. A trailing line of zero-width padding is
+    not a line either."""
+    obj = json.loads(step8(2, 2)); obj["summary"] = "a" + chr(0x2028) + "b" + chr(0x85) + "c"
+    rc, out = verdict(json.dumps(obj, ensure_ascii=False) + "\n" + chr(0x200B) + "\n")
+    assert rc == 0 and "CLEAN" in out
+
+
+def test_the_verdict_line_is_on_stdout_for_every_outcome():
+    """A caller capturing stdout for the SPEC-DRIFT line must get it on exit 2 too."""
+    for text, code in (("garbage\n", 2), (step8(2, 1), 1), (step8(2, 2), 0)):
+        p = subprocess.run([sys.executable, str(SCRIPT), "verdict"],
+                           capture_output=True, text=True, input=text)
+        assert p.returncode == code
+        assert f"SPEC-DRIFT: " in p.stdout and f"(exit {code})" in p.stdout, (text, p.stdout, p.stderr)
+
+
+def test_terminal_stdin_is_refused_not_hung():
+    """No --json and a TTY on stdin used to block forever with no prompt."""
+    master, slave = os.openpty()
+    try:
+        p = subprocess.run([sys.executable, str(SCRIPT), "verdict"], stdin=slave,
+                           capture_output=True, text=True, timeout=10)
+    finally:
+        os.close(master)
+        os.close(slave)
+    assert p.returncode == 2 and "COULD-NOT-RUN" in p.stdout and "terminal" in p.stdout
