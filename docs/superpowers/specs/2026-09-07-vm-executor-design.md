@@ -7,11 +7,23 @@ fagfilm-encoder som referanseprosjekt.*
 
 ## Status
 
-- **Fase 0 (riggen)** implementeres 2026-09-07 i `~/Developer/virtual-mac`: generalisering av
-  `bin/vm-e2e`, prosjekt-hook, `vm-stop`, `vm-e2e-flake`, installasjon på `PATH`.
-- **Fase 1–3** er ikke påbegynt. Ingen fil under `skills/` i denne plugin-en er rørt; riggen
-  skal gå mot ekte arbeid noen dager før rutingen legges om, slik riggens egne dokumenter
-  anbefaler.
+- **Fase 0 (riggen) er fullført 2026-09-07** — `virtual-mac` commit `caba98e` på branch
+  `feat/generalize-vm-e2e` (repoet har ingen remote), og referanseprosjektets hook
+  `scripts/vm-guest-prepare.sh` i fagfilm-encoder commit `33103cc` på
+  `feat/vm-guest-prepare-hook` (pushet). Verifisert på endelig kode: fagfilm `E2ESmoke`
+  16 tester / 7 utført / 9 hoppet over / 0 feil (identisk med vertens baseline), swiftconfig
+  uten testplan via `--only-testing` 9/7/2/0, `vm-e2e-flake` × 2 komplett og konsistent på
+  begge gjester. 74 enhetstester i riggen; fire lenser (self-pitfall × 2, Codex, GLM-5.2).
+- **Kontrakten plugin-en skal bygge mot** er den som står under «Kontrakten mellom lag 2 og
+  lag 1» og «Resultatkontrakt», nå implementert: `vm-e2e` på PATH (`bin/install`), JSON på
+  stdout, `executed = total − skipped`, null utførte tester er feil, `--dry-run` for
+  ruting uten VM.
+- **Fase 1–3 er ikke påbegynt.** Ingen fil under `skills/` er endret. Riggen skal gå mot
+  ekte arbeid noen dager først, som riggens egne dokumenter anbefaler.
+- Lærdom fra fase 0 som fase 1 bør ta med: norsk desimalkomma i tall fra `awk` (bruk
+  `LC_ALL=C`), `xargs` substituerer ikke `{}` i omdirigeringer, `grep -q` under `pipefail`
+  gir 141 ved treff, og testsuiter som kaller `vm-stop` må ha egen `VM_POOL` så de aldri
+  stopper ekte gjester.
 
 ## Kontekst
 
