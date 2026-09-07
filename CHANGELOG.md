@@ -23,7 +23,7 @@ will never be shipped, or against a baseline older than the branch. Design:
   `total_items` only).
 - **Hash-pinned** (`skills/spec-drift/pin.json` + a byte snapshot used only to
   show diffs). `scripts/spec-drift.py check` exits 2 on any mismatch and the skill
-  refuses to run; `repin` prints the unified diff, checks eight structural
+  refuses to run; `repin` prints the unified diff, checks nine structural
   anchors and records a receipt, and writing requires `--yes --sha <receipt>`
   from that same run — refused if upstream changed in between, blocked while
   an anchor the overrides depend on is missing. gstack updates weekly, so the pin will break often — that is the point:
@@ -34,7 +34,7 @@ will never be shipped, or against a baseline older than the branch. Design:
   Fail closed: empty diff, unreadable plan, zero actionable items and pin
   mismatch are all exit 2, never 0.
 - Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
-  README. 81 unit tests across `test_spec_drift_pin.py`,
+  README. 100 unit tests across `test_spec_drift_pin.py`,
   `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` and
   `test_spec_drift_upstream_alarm.py` — the skill tests are omission tests: Step 8
   text pasted into SKILL.md, a discovery heuristic brought back, or the check
@@ -51,6 +51,29 @@ will never be shipped, or against a baseline older than the branch. Design:
 - Not in this release, by design: write-back into the plan and the drift ledger
   (Fase 2), the spec-blind inventory agent, prose-claim extraction and the
   security category (Fase 3).
+
+### Fixed — findings from the `/ship` review lenses on this same change
+- **`verdict` repaired hostile input instead of refusing it.** Invisible
+  characters were stripped from the whole JSON line before parsing, so a key
+  nobody typed became one the contract accepts: `"do<ZWSP>ne"` parsed as `"done"`
+  and scored `CLEAN (exit 0)`. Reproduced, then closed — padding is still stripped
+  from the line's edges, an invisible inside the object refuses the line. A guard
+  that normalises attacker-shaped input is not fail-closed.
+- **Three Bidi_Control characters were outside the escape set.** LRM (U+200E),
+  RLM (U+200F) and ALM (U+061C) are invisible in a terminal but sat outside both
+  `_BIDI` and `_ZERO_WIDTH`, so a crafted upstream reached the re-pin confirmation
+  diff unescaped *and* unflagged by the invisible-character warning — the one
+  thing the surrounding comment promises cannot happen.
+- **Override 8: the audit no longer runs a validator script the audited branch
+  defines.** Step 8 scans `package.json` for `validate-*` / `lint-wiki` /
+  `check-docs` and invokes what it finds. That is sound under `/ship`, which ships
+  your own branch after its suite has run with the same privileges; it is not
+  sound here, where the whole point is auditing branches nobody is shipping. The
+  phrase moved from the tests' "never paste this" list to the "the skill keys on
+  this wording" list and became the ninth anchor, so upstream renaming the step
+  breaks the check instead of silently restoring the execute path.
+- `RECEIPT WRITE FAILED` joined the module docstring's list of named exit-2
+  reasons, which had omitted the one refusal it did not enumerate.
 
 ### Changed
 - `skills/setup-routing/blocks/plan-fidelity.md` v2 → **v3**: the paragraph every

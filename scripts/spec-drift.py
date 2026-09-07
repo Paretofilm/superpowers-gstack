@@ -35,7 +35,8 @@ with a `SPEC-DRIFT: DRIFT (exit 1)` line on stdout: a bare exit 1 is the
 interpreter itself failing, and a caller must read it as could-not-run); 2 could
 not run or refused (check/repin name why on stderr: UPSTREAM MISSING, UPSTREAM
 UNREADABLE, NO PIN, PIN CORRUPT, PIN MISMATCH, ANCHORS MISSING, REPIN BLOCKED,
-REPIN REFUSED, PIN WRITE FAILED, PIN DIR INVALID, USAGE ERROR, INTERNAL; verdict
+RECEIPT WRITE FAILED, REPIN REFUSED, PIN WRITE FAILED, PIN DIR INVALID, USAGE
+ERROR, INTERNAL; verdict
 prints its `SPEC-DRIFT: COULD-NOT-RUN (exit 2)` line on stdout like its other two
 outcomes); 3 repin needs confirmation (the receipt line is the LAST line of
 stdout — do not truncate it).
@@ -78,6 +79,11 @@ ANCHORS = (
     ("Include in PR body", r"Include in PR body"),
     ("Parent processing", r"Parent processing"),
     ('"total_items"', r'"total_items"'),
+    # Override 8 suppresses this step: /ship may run a repo's own validator script
+    # because it ships that repo's branch, but this skill audits branches nobody
+    # is shipping. If upstream renames the step, the override stops suppressing
+    # anything and the audit silently regains the right to execute repo code.
+    ("Validator detection", r"Validator detection"),
 )
 
 EXIT_OK, EXIT_DRIFT, EXIT_CANNOT, EXIT_CONFIRM = 0, 1, 2, 3
@@ -91,12 +97,23 @@ SHA_PREFIX = 12   # chars of the digest printed as the --sha receipt; also the m
 # 0x20 except tab and newline — carriage return included: splitlines keeps a
 # bare \r at the end of its line, and a terminal then returns to column 0 and
 # lets the next diff line overwrite the one the reader just saw.
-_BIDI = chr(0x202A) + "-" + chr(0x202E) + chr(0x2066) + "-" + chr(0x2069)   # bidi embedding/override/isolate controls
-_ZERO_WIDTH = chr(0x200B) + "-" + chr(0x200D) + chr(0xFEFF)                # zero-width space/joiners, BOM
+# The bidi set is Unicode's Bidi_Control property, not a hand-picked subset:
+# LRM/RLM/ALM are weaker than the overrides (they reorder neutral runs rather
+# than repainting arbitrary text) but they are equally invisible, so leaving
+# them out let a crafted upstream through the confirmation diff both unescaped
+# and unflagged — exactly what the comment above promises it cannot do.
+_BIDI = (chr(0x202A) + "-" + chr(0x202E) + chr(0x2066) + "-" + chr(0x2069)  # embedding/override/isolate
+         + chr(0x061C))                                                     # ALM
+_ZERO_WIDTH = chr(0x200B) + "-" + chr(0x200F) + chr(0xFEFF)                # ZW space/joiners, LRM, RLM, BOM
 _CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f\x80-\x9f" + _BIDI + _ZERO_WIDTH + "]")
 # Characters worth a warning with line numbers even after escaping: a reader
 # skims a diff; an escaped zero-width joiner is easy to read past.
 _INVISIBLE = re.compile("[" + _ZERO_WIDTH + _BIDI + "]")
+# PADDING ONLY — the edges of a line, never its interior. Stripping invisibles
+# from the whole line REPAIRS hostile input instead of refusing it: a model (or
+# whoever shaped its output) writing "do​ne" would have the key normalised
+# to "done" and the line scored CLEAN. Verified reproducible, 2.52.0.
+_INVISIBLE_PAD = re.compile(r"^[\s`" + _ZERO_WIDTH + _BIDI + r"]+|[\s`" + _ZERO_WIDTH + _BIDI + r"]+$")
 
 
 def default_upstream() -> Path | None:
@@ -442,11 +459,17 @@ def last_json_line(text: str) -> dict | None:
     "\\n" only (JSON strings may carry U+2028 and friends raw), ignores zero-width
     padding and a trailing ``` fence, and refuses duplicate keys. Text with bare
     "\\r" line endings is therefore one line and parses as nothing — fail closed,
-    by design; a trailing "\\r" after the JSON (CRLF) is whitespace to json."""
+    by design; a trailing "\\r" after the JSON (CRLF) is whitespace to json.
+
+    Padding is stripped from the EDGES only. An invisible character inside the
+    object refuses the line rather than being deleted out of it — deleting it
+    would turn a key nobody typed into one the contract accepts."""
     for line in reversed(text.split("\n")):
-        line = _INVISIBLE.sub("", line).strip().strip("`")
+        line = _INVISIBLE_PAD.sub("", line)
         if not line:
             continue
+        if _INVISIBLE.search(line):
+            return None
         try:
             obj = json.loads(line, object_pairs_hook=_no_duplicate_keys)
         except (ValueError, RecursionError):   # JSONDecodeError is a ValueError
@@ -476,7 +499,8 @@ def cmd_verdict(a) -> int:
     obj = last_json_line(text)
     if obj is None or any(k not in obj for k in JSON_KEYS):
         return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
-                        f"last line is not Step 8's JSON ({', '.join(JSON_KEYS)})")
+                        "last line is not Step 8's JSON, or carries invisible characters "
+                        f"inside it ({', '.join(JSON_KEYS)})")
     counts = {k: obj[k] for k in COUNT_KEYS}
     # The contract is integers. bool is an int subclass, and int() happily eats
     # "2" and 1.9 — each a way for a malformed line to read as CLEAN. Exact type.

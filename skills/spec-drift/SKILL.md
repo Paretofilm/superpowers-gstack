@@ -168,7 +168,8 @@ given, or the receipt will not match the file `--yes` hashes.
 2. The anchors are checked mechanically (the `ANCHORS` table in
    `spec-drift.py`: `## Step 8: Plan Completion Audit`, `## Step 8.1`,
    `### Plan File Discovery`, `### Gate Logic`, `<base>`, `Include in PR body`,
-   `Parent processing`, `"total_items"`, in that order). What the script cannot
+   `Parent processing`, `"total_items"`, `Validator detection` — the first four
+   in that order). What the script cannot
    judge is meaning: read the diff against the overrides in Phase 2 below and
    say, in one or two sentences, whether any override now contradicts what the
    section says — a renamed verdict, a new gate, a changed JSON key. If one
@@ -247,6 +248,15 @@ Single-quote <PLAN_PATH> and <SECTION_PATH> in every shell command you run.
 7. Step 8's 50-item cap does not apply: extract and classify every item. If
    the plan has more than 50, total_items is still the full count, and any
    item you could not classify is UNVERIFIABLE — never a silently shorter list.
+8. "Validator detection": do not run it. Step 8 may invoke a `validate-*` /
+   `lint-wiki` / `check-docs` script it finds in a repo's `package.json`. That is
+   sound where /ship uses it — there you are shipping your own branch and its
+   test suite has already run with the same privileges — but this skill audits
+   branches nobody is shipping, including ones you did not write, with no suite
+   having run first. Executing a script the audited branch itself defines would
+   hand that branch the reviewer's shell during a run whose whole contract is
+   "report only". Judge such an item by reading the file instead; if that cannot
+   settle it, UNVERIFIABLE, naming the validator the user may choose to run.
 ```
 
 Wait for it (Step 8's own budget: about ten minutes). "Parseable" means: the

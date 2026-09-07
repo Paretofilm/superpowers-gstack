@@ -42,12 +42,14 @@ UPSTREAM_PATH = "~/" + str(MOD.UPSTREAM_REL)
 # Text that exists only in the upstream section. Present in SKILL.md, it means
 # Step 8 was pasted in; absent from the snapshot, the guard has gone vacuous.
 STEP8_ONLY = ("Path concreteness rule", "Be conservative with DONE", "_PLAN_SLUG=", "VAS-449",
-              "Validator detection", "### Actionable Item Extraction", "### Verification Mode",
+              "### Actionable Item Extraction", "### Verification Mode",
               "### Cross-Reference Against Diff", "### Output Format", "CONTENT-SHAPE")
 # Upstream wording the skill's OWN logic keys on. If a re-pin accepts a section
 # that rewords one of these, the matching rule in SKILL.md silently stops firing.
+# "Validator detection" moved here from STEP8_ONLY in 2.52.0: override 8 names it
+# to suppress it, so the skill now depends on the wording rather than avoiding it.
 UPSTREAM_DEPENDENCIES = ("Showing top 50 of", "### Gate Logic", "### Plan File Discovery",
-                         "Include in PR body", "Parent processing")
+                         "Include in PR body", "Parent processing", "Validator detection")
 
 
 def section(start: str, end: str | None = None) -> str:
@@ -92,7 +94,9 @@ def test_skill_has_no_plan_discovery_heuristics():
 def test_dispatch_prompt_carries_every_override_in_order():
     """The overrides ARE the wrapper. Each one dropped re-enables an upstream
     behaviour: discovery (2), a grandchild dispatch (1), a blocking gate (4), an
-    edit (5), a missing JSON line (6), an unchecked read (0)."""
+    edit (5), a missing JSON line (6), an unchecked read (0), and — the one that
+    is a privilege boundary rather than a scope one — executing a validator
+    script the audited branch itself defines (8)."""
     p = prompt_block()
     needles = [
         "0. Before you read the section, run `python3 <SCRIPT_PATH> check`",
@@ -103,9 +107,12 @@ def test_dispatch_prompt_carries_every_override_in_order():
         "5. Report only. Do not commit, push, edit the plan, or edit any file.",
         "6. Your LAST line is the JSON object Step 8 specifies",
         "7. Step 8's 50-item cap does not apply",
+        '8. "Validator detection": do not run it.',
     ]
     pos = [p.index(n) for n in needles]
     assert pos == sorted(pos)
+    assert "would\n   hand that branch the reviewer's shell" in p, \
+        "override 8 must say WHY it differs from /ship, or a future edit will 'restore parity'"
     assert "stop where `## Step 8.1` begins" in p
     assert "no content search, no freshness fallback" in p
     assert "PARTIAL items count in total_items only" in p and "Add no other keys" in p, \

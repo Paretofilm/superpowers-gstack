@@ -32,6 +32,7 @@ SECTION = (
     "### Gate Logic\n"
     "Use `<base>`. **Include in PR body (Step 8):** ... **Parent processing:** ...\n"
     '`{"total_items":N,"done":N}`\n'
+    "**Validator detection.** ... scan the target repo's `package.json` ...\n"
     "\n## Step 8.1: Plan Verification\n"
     "line three\n"
 )
@@ -409,3 +410,58 @@ def test_carriage_return_in_the_diff_is_escaped(rig):
     upstream.write_text(SECTION.replace("line two", "line visible\rHIDDEN two"), newline="")
     p = run("repin", *common(upstream, pin_dir), expect=3)
     assert "\\u000d" in p.stdout, "the CR must be shown, not executed by the terminal"
+
+
+def test_oversized_upstream_is_refused_by_both_commands(rig):
+    """MAX_UPSTREAM_BYTES is the one guard between a botched gstack sync — or a
+    hostile file dropped at the pinned path — and reading it all into memory to
+    hash, decode and diff. It had no test at any size."""
+    upstream, pin_dir = rig
+    accept(upstream, pin_dir)
+    upstream.write_bytes(b"x" * (4 * 1024 * 1024 + 1))
+    for cmd in ("check", "repin"):
+        p = run(cmd, *common(upstream, pin_dir), expect=2)
+        assert "UPSTREAM UNREADABLE" in p.stderr and "larger than" in p.stderr, cmd
+
+
+def test_receipt_write_failure_is_named_not_a_traceback(rig, tmp_path):
+    """Its sibling PIN WRITE FAILED is tested; this branch was neither tested nor
+    listed among the docstring's named exit-2 reasons, so it could regress twice
+    over without anything noticing."""
+    upstream, _ = rig
+    blocked = tmp_path / "pin_dir_is_actually_a_file"
+    blocked.write_text("not a directory")
+    p = run("repin", "--upstream", str(upstream), "--pin-dir", str(blocked), expect=2)
+    assert "RECEIPT WRITE FAILED" in p.stderr
+
+
+def test_repin_preserves_the_committed_files_permissions(rig):
+    """_atomic_write reads the OLD file's mode before replacing it, because mkstemp
+    creates 0600 and a committed, world-readable file must not flip to owner-only
+    on every repin. Every other test writes a file that did not exist yet — the
+    0o644 fallback — so hardcoding 0o644 would pass all of them."""
+    upstream, pin_dir = rig
+    accept(upstream, pin_dir)
+    pin_json, snap = pin_dir / "pin.json", pin_dir / "pin" / "plan-completion.md"
+    os.chmod(pin_json, 0o640)
+    os.chmod(snap, 0o640)
+    upstream.write_text(SECTION.replace("line two", "line two, reworded upstream"))
+    accept(upstream, pin_dir)
+    assert pin_json.stat().st_mode & 0o777 == 0o640
+    assert snap.stat().st_mode & 0o777 == 0o640
+
+
+@pytest.mark.parametrize("cp,name", [(0x200E, "LRM"), (0x200F, "RLM"), (0x061C, "ALM")])
+def test_bidi_marks_are_escaped_and_warned_like_the_overrides(rig, cp, name):
+    """Security lens, 2.52.0: LRM/RLM/ALM are Bidi_Control and invisible in a
+    terminal, but sat outside both _BIDI and _ZERO_WIDTH — so a crafted upstream
+    reached the confirmation diff unescaped AND unflagged, which is exactly what
+    the code's own comment promises cannot happen."""
+    ch, esc = chr(cp), f"\\u{cp:04x}"
+    upstream, pin_dir = rig
+    accept(upstream, pin_dir)
+    upstream.write_text(SECTION.replace("line two", f"line {ch}two"))
+    p = run("repin", *common(upstream, pin_dir), expect=3)
+    assert ch not in p.stdout, f"{name} reached the diff unescaped"
+    assert esc in p.stdout, f"{name} should render as {esc}"
+    assert "INVISIBLE CHARS" in p.stderr, name

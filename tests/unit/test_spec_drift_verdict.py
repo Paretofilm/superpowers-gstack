@@ -213,3 +213,31 @@ def test_a_restated_partial_must_be_an_integer(restated):
             f'"summary":"- [x]","partial":{restated}}}')
     rc, out = verdict(line)
     assert rc == 2 and "partial is not an integer" in out
+
+
+@pytest.mark.parametrize("ch,name", [
+    ("​", "ZWSP"), ("‍", "ZWJ"), ("﻿", "BOM"),
+    ("‎", "LRM"), ("‏", "RLM"), ("؜", "ALM"), ("⁦", "LRI"),
+])
+def test_an_invisible_inside_the_object_is_refused_not_repaired(ch, name):
+    """Codex, 2.52.0: invisibles were stripped from the WHOLE line before parsing,
+    so a key nobody typed became one the contract accepts — `"do<ZWSP>ne"` parsed
+    as `"done"` and scored CLEAN (exit 0). Reproduced before the fix. A guard that
+    repairs attacker-shaped input is not fail-closed; refuse the line instead."""
+    rc, out = verdict(step8(1, 1).replace('"done"', f'"do{ch}ne"'))
+    assert rc == 2 and "COULD-NOT-RUN" in out, name
+
+
+def test_an_invisible_inside_a_string_value_is_refused_too():
+    """The interior rule is positional, not per-field: verdict cannot tell a
+    legitimate invisible in `summary` from a planted one, and it is a guard."""
+    rc, out = verdict(step8(1, 1).replace('"- [x] ..."', '"- [x] a​b"'))
+    assert rc == 2 and "COULD-NOT-RUN" in out
+
+
+@pytest.mark.parametrize("pad", ["​", "﻿", "‎", " ​\t", "⁦⁩"])
+def test_invisible_padding_around_the_object_is_still_tolerated(pad):
+    """The carve-out the fix above must not swallow: models pad their last line.
+    Edges are stripped, the interior is refused — that distinction is the fix."""
+    rc, out = verdict(pad + step8(2, 2) + pad)
+    assert rc == 0 and "CLEAN" in out
