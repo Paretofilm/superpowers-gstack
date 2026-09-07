@@ -252,10 +252,11 @@ reply ends with one JSON object carrying the six keys — on one line, spread
 over several, or inside a ``` fence all count; collapse it to a single line
 before Phase 3. If the reply has no such object, or the subagent fails
 outright, do what Step 8 itself prescribes, once: stop the subagent's task
-first (a late result must never race the fallback), then run the same Step 8
-inline in your own context with the same overrides. If that also yields no
-JSON, do not guess a result — `SPEC-DRIFT: COULD-NOT-RUN (exit 2)` and the
-refusal JSON.
+first with the TaskStop tool if it was dispatched asynchronously and is still
+running (a late result must never race the fallback; a synchronous one has
+already returned), then run the same Step 8 inline in your own context with
+the same overrides. If that also yields no JSON, do not guess a result —
+`SPEC-DRIFT: COULD-NOT-RUN (exit 2)` and the refusal JSON.
 
 ## Phase 3 — verdict and output
 

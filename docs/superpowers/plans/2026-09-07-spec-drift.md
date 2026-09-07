@@ -1301,7 +1301,7 @@ git push
 - **Red Team** (mot den committede versjonen) la til: Step 8 sitt 50-punkts-tak oppheves i overstyring 7 (80 punkter der de første 50 er DONE ga ellers falsk CLEAN), og Phase 3 behandler et `Showing top 50 of` i rapporten som COULD-NOT-RUN; subagenten får `$BASE_SHA` (40 hex) i stedet for ref-navnet, fordi git tillater `$( )` og `;` i grennavn og en remotes standardgren er tekst remoten kontrollerer; datagrensen dekker også verdikt-linjer, JSON og `SPEC-DRIFT:` inne i planen, subagenten rapporterer hvor mange punkter den ignorerte etter Step 8 sine regler, og siterer stier med enkle anførselstegn.
 - **Utenfor skillen:** `blocks/plan-fidelity.md` v2 → v3 (blokken i alle prosjekters CLAUDE.md sa at ingen audit finnes på u-shippede grener; nå navngir den skillen), `gstack-plan-fidelity-v2` i lint-denylisten, `CLAUDE.md` sin own-blocks-region synkronisert; `VERSIONS.md` GStack 1.81.0.0; scriptets «vei ut» navngir sin resolvede sti i stedet for `scripts/spec-drift.py`.
 - **CHANGELOG** teller ikke lenger overstyringer og beskriver `--yes --sha <receipt>`; IDEAS uten grenreferanse; pin-filene får modus 0644 (`_atomic_write` bevarer målets modus).
-- **Tester:** 9 → 15 (`tests/unit/test_spec_drift_skill.py`), nå med konstanter utledet fra scriptet (`ANCHORS`, `JSON_KEYS`, `UPSTREAM_REL`), alle sju overstyringer pinnet i rekkefølge, enkeltsitering, `--yes --sha` etter spørsmålet, det committede snapshotet gjennom scriptets egen `check`, omisjons-nålene verifisert mot snapshotet, rutingrader i riktig tabell, README-tallet mot antall kataloger. Suiten 442 → **448**. Tallene i fase 4 under er justert tilsvarende.
+- **Tester:** 9 → 16 (`tests/unit/test_spec_drift_skill.py`), nå med konstanter utledet fra scriptet (`ANCHORS`, `JSON_KEYS`, `UPSTREAM_REL`), alle sju overstyringer pinnet i rekkefølge, enkeltsitering, `--yes --sha` etter spørsmålet, det committede snapshotet gjennom scriptets egen `check`, omisjons-nålene verifisert mot snapshotet, rutingrader i riktig tabell, README-tallet mot antall kataloger. Suiten 442 → **449**. Tallene i fase 4 under er justert tilsvarende.
 
 ---
 
@@ -1328,7 +1328,7 @@ Dette er specens «Verifisering hvis fase 1 bygges», punkt 1–4, pluss den st�
 ```bash
 git status --porcelain            # tomt
 git log --oneline main..HEAD      # fase 1–3-commitene (pluss spec/IDEAS/plan-commitene) synlige
-bash tests/run.sh --unit          # specens egen kommando: 448 passed (= pytest tests/unit scripts/cost-ledger -q)
+bash tests/run.sh --unit          # specens egen kommando: 449 passed (= pytest tests/unit scripts/cost-ledger -q)
 python3 scripts/lint-skills.py    # 0 error(s)
 python3 scripts/spec-drift.py check   # PIN OK
 git fetch origin && git merge origin/main --no-edit   # så /ship sitt Step 3 ikke lager en merge-commit midt i kjøringene
@@ -1524,7 +1524,7 @@ Specen avslutter «Verifisering» med `superpowers-gstack:pitfall-verification` 
 
 Tier-gulvet beregnes av `scripts/classify-change.py` (instruksjonsflate under `skills/` er runtime, så gulvet er minst ship-worthy → Codex kjører). Funn som overlever synthesen rettes i en ny commit (`fix(spec-drift): …` — aldri `--amend` på pushet historikk), etterfulgt av `bash tests/run.sh --unit` og `python3 scripts/lint-skills.py`, og pitfall kjøres én gang til på den nye diffen. Et funn som viser at en av de seks auditene ville dømt annerledes, sender deg tilbake til Step 7 sin feilgren. Først når verdiktet er `CLEAN` er fasen ferdig.
 
-Fase 4 er ferdig når tabellen står i specen med lik dom i 6/6, Step 9 er `CLEAN`, og `bash tests/run.sh --unit` viser **449 passed** lokalt (448 + 1; i CI 448 passed + 1 skipped). Landing er neste beslutning, ikke en del av denne fasen: `/ship` — den fulle pipelinen — kjører Step 8 en gang til på veien, som et sjuende datapunkt.
+Fase 4 er ferdig når tabellen står i specen med lik dom i 6/6, Step 9 er `CLEAN`, og `bash tests/run.sh --unit` viser **450 passed** lokalt (449 + 1; i CI 449 passed + 1 skipped). Landing er neste beslutning, ikke en del av denne fasen: `/ship` — den fulle pipelinen — kjører Step 8 en gang til på veien, som et sjuende datapunkt.
 
 ---
 
@@ -1553,4 +1553,4 @@ Fase 4 er ferdig når tabellen står i specen med lik dom i 6/6, Step 9 er `CLEA
 
 **Navnekonsistens på tvers av faser:** `scripts/spec-drift.py` med subkommandoene `check`, `repin [--yes]`, `verdict [--json]` og flaggene `--upstream`, `--pin-dir` — samme stavemåte i fase 1, 2, 3 (SKILL.md, testene) og 4. Exit-koder: `0/1/2` for skillen og `verdict`; `2` for `check`-avvik; `3` for `repin` uten `--yes` — `3` lekker aldri ut av skillen (SKILL.md oversetter den til «show the diff»). Pin-filer: `skills/spec-drift/pin.json` og `skills/spec-drift/pin/plan-completion.md` — samme stier i scriptets `DEFAULT_PIN_DIR`/`SNAPSHOT_NAME`, i SKILL.md «Re-pin mode», i `test_pin_and_snapshot_are_committed_together` og i fase 4 sin alarmtest. JSON-nøkler: `total_items, done, changed, deferred, unverifiable, summary` — identiske i `JSON_KEYS`, i SKILL.md override 6 og i begge tester som pinner dem. Kontraktstrenger testene leter etter finnes ordrett i SKILL.md: `The plan path is an argument, never discovered.`, `never edits source code`, `Do not commit, push`, `run_in_background: false`, `## Re-pin mode`, `spec-drift.py" check`, `spec-drift.py" repin`, `repin --yes`, `spec-drift.py" verdict`.
 
-**Testtall** (CI-kommandoen `pytest tests/unit scripts/cost-ledger -q`): 378 → 388 (fase 1 som planlagt, +10) → 404 (review-rettelsene på fase 1, +16) → 419 (fase 2 som planlagt, +15) → 433 (review-rettelsene på fase 2, +14) → 442 (fase 3 som planlagt, +9) → 448 (review-rettelsene på fase 3, +6) → 449 lokalt / 448 + 1 skipped i CI (fase 4, +1).
+**Testtall** (CI-kommandoen `pytest tests/unit scripts/cost-ledger -q`): 378 → 388 (fase 1 som planlagt, +10) → 404 (review-rettelsene på fase 1, +16) → 419 (fase 2 som planlagt, +15) → 433 (review-rettelsene på fase 2, +14) → 442 (fase 3 som planlagt, +9) → 449 (review-rettelsene på fase 3, +7) → 450 lokalt / 449 + 1 skipped i CI (fase 4, +1).

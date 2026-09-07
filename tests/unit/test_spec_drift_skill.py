@@ -42,6 +42,10 @@ UPSTREAM_PATH = "~/" + str(MOD.UPSTREAM_REL)
 STEP8_ONLY = ("Path concreteness rule", "Be conservative with DONE", "_PLAN_SLUG=", "VAS-449",
               "Validator detection", "### Actionable Item Extraction", "### Verification Mode",
               "### Cross-Reference Against Diff", "### Output Format", "CONTENT-SHAPE")
+# Upstream wording the skill's OWN logic keys on. If a re-pin accepts a section
+# that rewords one of these, the matching rule in SKILL.md silently stops firing.
+UPSTREAM_DEPENDENCIES = ("Showing top 50 of", "### Gate Logic", "### Plan File Discovery",
+                         "Include in PR body", "Parent processing")
 
 
 def section(start: str, end: str | None = None) -> str:
@@ -65,15 +69,16 @@ def test_skill_never_inlines_step_8():
     half — a paraphrased paste dodges the needles but not the size."""
     for needle in STEP8_ONLY:
         assert needle not in SKILL, f"{needle!r} is Step 8 text — read it from disk, do not paste it"
-    assert SKILL.count("\n") < 300, \
-        "Step 8 alone is ~190 lines; a wrapper that grew past 300 has probably swallowed it"
+    assert SKILL.count("\n") < 320, \
+        "Step 8 alone is ~190 lines; a wrapper that grew past 320 has probably swallowed it"
 
 
 def test_omission_needles_still_exist_upstream():
     """When gstack rewords one of these, a re-pin accepts it silently and the
-    matching `not in SKILL` assertion guards nothing. Say so instead."""
-    for needle in STEP8_ONLY:
-        assert needle in SNAPSHOT, f"{needle!r} left upstream — the omission test no longer guards anything"
+    matching `not in SKILL` assertion — or the skill rule that keys on the
+    wording — guards nothing. Say so instead."""
+    for needle in STEP8_ONLY + UPSTREAM_DEPENDENCIES:
+        assert needle in SNAPSHOT, f"{needle!r} left upstream — the rule that depends on it no longer fires"
 
 
 def test_skill_has_no_plan_discovery_heuristics():

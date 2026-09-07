@@ -34,7 +34,7 @@ will never be shipped, or against a baseline older than the branch. Design:
   Fail closed: empty diff, unreadable plan, zero actionable items and pin
   mismatch are all exit 2, never 0.
 - Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
-  README. 70 unit tests across `test_spec_drift_pin.py`,
+  README. 71 unit tests across `test_spec_drift_pin.py`,
   `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` — the last one is
   omission tests: Step 8 text pasted into SKILL.md, a discovery heuristic brought
   back, or the check moved after the dispatch each turn the suite red.
