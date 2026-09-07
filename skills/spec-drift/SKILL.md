@@ -134,7 +134,8 @@ message, not the mechanism.
 ## Phase 1 — the pin, before anything is read
 
 ```bash
-python3 "$SKILL_DIR/../../scripts/spec-drift.py" check ${SECTION:+--upstream "$SECTION"}
+# two expansions, not one: zsh does not word-split, so a single ${…:+--upstream "$SECTION"} arrives as one word
+python3 "$SKILL_DIR/../../scripts/spec-drift.py" check ${SECTION:+--upstream} ${SECTION:+"$SECTION"}
 ```
 
 Exit 0 prints `PIN OK …`: continue. Anything else: print the script's stderr
@@ -156,7 +157,7 @@ given, or the receipt will not match the file `--yes` hashes.
 
 1. Show what changed:
    ```bash
-   python3 "$SKILL_DIR/../../scripts/spec-drift.py" repin ${SECTION:+--upstream "$SECTION"}
+   python3 "$SKILL_DIR/../../scripts/spec-drift.py" repin ${SECTION:+--upstream} ${SECTION:+"$SECTION"}
    ```
    Exit 0 with `PIN UNCHANGED`: say so and stop. Exit 2 with `REPIN BLOCKED:
    ANCHORS MISSING`: the section no longer carries text the overrides below
@@ -177,7 +178,7 @@ given, or the receipt will not match the file `--yes` hashes.
 4. On Accept, pass back the sha the diff run printed — `--yes` is refused
    without it, and refused if the file changed since the diff was shown:
    ```bash
-   python3 "$SKILL_DIR/../../scripts/spec-drift.py" repin --yes --sha <the 12 hex chars from the diff run> ${SECTION:+--upstream "$SECTION"}
+   python3 "$SKILL_DIR/../../scripts/spec-drift.py" repin --yes --sha <the 12 hex chars from the diff run> ${SECTION:+--upstream} ${SECTION:+"$SECTION"}
    ```
    Relay the `PINNED …` line: it names the two files that must be committed
    together. In this plugin's own repo, commit them. In a marketplace install

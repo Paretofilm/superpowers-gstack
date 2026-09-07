@@ -1395,6 +1395,8 @@ Forventet: `PIN MISMATCH` på stderr med begge hashene og `repin`-hintet, `exit=
 
 Forventet: skillen skriver scriptets stderr, så `SPEC-DRIFT: COULD-NOT-RUN (exit 2)`, og **ingen** subagent dispatches. Noter utfallet.
 
+**Utført 2026-09-07 — avvik funnet og rettet før kjøring 1–6.** Via scriptet direkte: `PIN MISMATCH`, exit 2, som forventet. Via skillens Phase 1: `USAGE ERROR: unrecognized arguments: --upstream /…` — fortsatt exit 2 og ingen audit, men hash-guarden ble aldri kjørt. Årsak: `${SECTION:+--upstream "$SECTION"}` er *ett* ord under zsh (zsh orddeler ikke parameterekspansjoner, og Claude Codes Bash-verktøy kjører zsh på macOS), så argparse så ett ukjent argument; under bash er det to ord, og fase 3 sine tester leste bare teksten. Rettet i `fix(spec-drift): --section reaches the script as two words under zsh`: SKILL.md bruker `${SECTION:+--upstream} ${SECTION:+"$SECTION"}` på alle tre stedene (Phase 1, re-pin steg 1 og 4), verifisert som to ord under zsh 5.9, bash og sh og som ingenting når `SECTION` er tom; `test_section_override_reaches_the_script_as_two_words_in_every_shell` kjører `check`-linjen ordrett fra SKILL.md under hvert skall som finnes på maskinen (17 skill-tester, 450 i suiten). Step 3 kjørt på nytt gjennom den rettede linjen: `PIN MISMATCH`, exit 2, ingen audit dispatchet. Skillen ligger ikke i den installerte plugin-cachen (2.51.1), så «via skillen» i denne fasen betyr SKILL.md fra repoet kjørt som instruksjonene den er, med `SKILL_DIR` satt til `skills/spec-drift`.
+
 - [ ] **Step 4: Tre frittstående kjøringer (specens punkt 1 og 3)**
 
 Tre ganger, hver i en **ny** sesjon (`/clear` mellom), på `feat/spec-drift`:

@@ -13,7 +13,9 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -156,7 +158,8 @@ def test_repin_is_reachable_and_needs_the_sha_receipt_after_the_question():
     assert "REPIN BLOCKED" in repin and "PIN UNCHANGED" in repin
     for name, _ in MOD.ANCHORS:
         assert name in repin, f"anchor {name!r} is in the script but not in the skill's list"
-    assert repin.count('--upstream "$SECTION"') >= 3, "step 4 must hash the same file the diff run showed"
+    assert repin.count('${SECTION:+--upstream} ${SECTION:+"$SECTION"}') == 2, \
+        "step 1 and step 4 must hash the same file the diff run showed"
     assert "marketplace install" in repin
 
 
@@ -228,3 +231,27 @@ def test_readme_skill_count_matches_the_directories():
     assert m, "the README's skill count line moved"
     dirs = sum(1 for d in (REPO / "skills").iterdir() if (d / "SKILL.md").is_file())
     assert words[m.group(1)] == dirs, f"README says {m.group(1)}, skills/ has {dirs}"
+
+
+def test_section_override_reaches_the_script_as_two_words_in_every_shell():
+    """Found live in the Fase-1 verification (2026-09-07): Claude Code's Bash
+    tool runs zsh on macOS, and zsh does not word-split an expansion, so
+    `${SECTION:+--upstream "$SECTION"}` reached argparse as ONE unknown argument.
+    `--section` then failed with USAGE ERROR — still exit 2, but the hash guard
+    it exists to exercise never ran. Run the skill's own `check` line, verbatim,
+    under every shell on this machine; `check` sees the snapshot only if the
+    two words arrive separately."""
+    assert '${SECTION:+--upstream "$SECTION"}' not in SKILL, "one word under zsh"
+    assert SKILL.count('${SECTION:+--upstream} ${SECTION:+"$SECTION"}') == 3
+    line = next(l.strip() for l in SKILL.splitlines()
+                if l.strip().startswith('python3 "$SKILL_DIR/../../scripts/spec-drift.py" check'))
+    env = {**os.environ, "SKILL_DIR": str(SKILL_DIR),
+           "SECTION": str(SKILL_DIR / "pin" / "plan-completion.md")}
+    ran = 0
+    for shell in ("zsh", "bash", "sh"):
+        if not shutil.which(shell):
+            continue
+        p = subprocess.run([shell, "-c", line], env=env, capture_output=True, text=True)
+        assert p.returncode == 0 and p.stdout.startswith("PIN OK"), f"{shell}: {p.stderr or p.stdout}"
+        ran += 1
+    assert ran, "no shell to run the line under"
