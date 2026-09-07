@@ -397,3 +397,15 @@ def test_write_failure_is_named_not_a_traceback(rig):
     p = run("repin", "--yes", "--sha", shown_sha(p), *common(upstream, pin_dir), expect=2)
     assert "PIN WRITE FAILED" in p.stderr
     assert not (pin_dir / "pin.json").exists()
+
+
+def test_carriage_return_in_the_diff_is_escaped(rig):
+    """Codex, Fase-1 verification: a bare \\r survived visible(). splitlines keeps
+    it at the end of its line, and a terminal then returns to column 0 and lets
+    the next diff line overwrite the one the reader just saw — the review the
+    receipt vouches for would have been of a repainted diff. Asserted on the
+    escaped form: subprocess's universal newlines would hide a raw \\r."""
+    upstream, pin_dir = rig
+    upstream.write_text(SECTION.replace("line two", "line visible\rHIDDEN two"), newline="")
+    p = run("repin", *common(upstream, pin_dir), expect=3)
+    assert "\\u000d" in p.stdout, "the CR must be shown, not executed by the terminal"

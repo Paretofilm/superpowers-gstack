@@ -87,10 +87,13 @@ SHA_PREFIX = 12   # chars of the digest printed as the --sha receipt; also the m
 
 # Terminal-control, bidi and zero-width characters: escaped when the diff is
 # shown, so a malicious upstream can neither repaint the confirmation prompt the
-# human reads nor hide a change where no diff can render it.
+# human reads nor hide a change where no diff can render it. Everything below
+# 0x20 except tab and newline — carriage return included: splitlines keeps a
+# bare \r at the end of its line, and a terminal then returns to column 0 and
+# lets the next diff line overwrite the one the reader just saw.
 _BIDI = chr(0x202A) + "-" + chr(0x202E) + chr(0x2066) + "-" + chr(0x2069)   # bidi embedding/override/isolate controls
 _ZERO_WIDTH = chr(0x200B) + "-" + chr(0x200D) + chr(0xFEFF)                # zero-width space/joiners, BOM
-_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f" + _BIDI + _ZERO_WIDTH + "]")
+_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f\x80-\x9f" + _BIDI + _ZERO_WIDTH + "]")
 # Characters worth a warning with line numbers even after escaping: a reader
 # skims a diff; an escaped zero-width joiner is easy to read past.
 _INVISIBLE = re.compile("[" + _ZERO_WIDTH + _BIDI + "]")
@@ -467,6 +470,11 @@ def cmd_verdict(a) -> int:
     # "2" and 1.9 — each a way for a malformed line to read as CLEAN. Exact type.
     if any(type(c) is not int for c in counts.values()):
         return _verdict("COULD-NOT-RUN", EXIT_CANNOT, "counts are not integers")
+    # Step 8 specifies summary as a markdown string. null, a list or an object
+    # there means the line was not produced by the audit — fail closed, like
+    # every other malformed shape, rather than score its counts.
+    if type(obj["summary"]) is not str:
+        return _verdict("COULD-NOT-RUN", EXIT_CANNOT, "summary is not a string")
     total, done, changed, deferred, unver = (counts[k] for k in COUNT_KEYS)
     if total <= 0:
         return _verdict("COULD-NOT-RUN", EXIT_CANNOT,

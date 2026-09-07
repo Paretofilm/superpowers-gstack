@@ -141,7 +141,8 @@ def test_phase0_pastes_user_values_single_quoted():
         assert line in p0
     assert re.search(r"contains a single quote, refuse with exit 2", p0)
     assert "--end-of-options" in p0 and "--is-inside-work-tree" in p0
-    assert "os.path.abspath" in p0, "the subagent has its own cwd; a relative plan path fails there"
+    assert p0.count("os.path.abspath") == 2, \
+        "the subagent has its own cwd; a relative plan OR section path fails there (Codex, Fase-1 verification)"
     assert "git status --porcelain" in p0, "uncommitted work is invisible to a commit diff — say so"
 
 

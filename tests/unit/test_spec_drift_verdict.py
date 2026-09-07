@@ -191,3 +191,14 @@ def test_terminal_stdin_is_refused_not_hung():
         os.close(master)
         os.close(slave)
     assert p.returncode == 2 and "COULD-NOT-RUN" in p.stdout and "terminal" in p.stdout
+
+
+@pytest.mark.parametrize("summary", ["null", "[]", '{"a":1}', "7", "true"])
+def test_summary_must_be_a_string(summary):
+    """Codex, Fase-1 verification: valid counts with a non-string summary read as
+    CLEAN. Step 8 specifies a markdown string; anything else is not the audit's
+    line, and the contract fails closed on every other malformed shape."""
+    line = ('{"total_items":4,"done":4,"changed":0,"deferred":0,"unverifiable":0,'
+            f'"summary":{summary}}}')
+    rc, out = verdict(line)
+    assert rc == 2 and "SPEC-DRIFT: COULD-NOT-RUN (exit 2)" in out and "summary is not a string" in out
