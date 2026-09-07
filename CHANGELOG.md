@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.51.2] - 2026-09-07
+
+Upstream sync for GStack v1.81.0.0 (Aside browser-first) and v1.80.0.0 (setup
+robustness). No skills were added or removed; the skill roster is unchanged.
+
+### Changed
+- `VERSIONS.md`: GStack **1.79.0.0 → 1.81.0.0**, re-verified today. Superpowers
+  6.3.0 and Claude Code 2.1.261 unchanged.
+- README GStack command table: updated `/qa`, `/browse`, `/make-pdf`, and
+  `/devex-review` descriptions to reflect the Aside-first, bundled-fallback model
+  introduced in v1.81.0.0. Added a new FAQ entry explaining that Aside is optional
+  — every browsing skill falls back to gstack's bundled Chromium when Aside is
+  absent, and prints which engine it used.
+- No skill evaluation tables changed: no skills were added, removed, or renamed
+  in v1.80.0.0 or v1.81.0.0 (`Skills removed: 0` per the upstream changelog).
+
+### GStack v1.81.0.0 summary (2026-09-06)
+Aside AI browser (macOS 15+) is now the first driver for all ten browsing skills
+(`/qa`, `/qa-only`, `/design-review`, `/scrape`, `/benchmark`, `/canary`, `/browse`,
+`/devex-review`, `/land-and-deploy` post-deploy check, `/design-consultation`
+competitor research) and for the PDF/diagram renderer (`/make-pdf`, `/diagram`,
+`/design-html` viewport screenshots, `/office-hours` sketches). When Aside is not
+running, every skill falls back step-for-step to gstack's bundled Chromium (`$B`)
+and reports `ENGINE=aside|browse`. Web research now goes through Aside's agent
+first, WebSearch second, in-distribution knowledge third. One shared contract
+(`scripts/resolvers/aside.ts`) governs all ten skills. Linux and Windows users and
+anyone without Aside see no behavior change from v1.80.
+
+### GStack v1.80.0.0 summary (2026-09-04)
+`./setup` no longer aborts when Chromium cannot be installed: the Playwright step
+is best-effort, bounded by `GSTACK_PLAYWRIGHT_INSTALL_TIMEOUT` (default 600 s),
+and skippable with `GSTACK_SKIP_PLAYWRIGHT=1`. Skills always register regardless
+of browser availability. `/freeze` now enforces its boundary correctly when
+`GSTACK_HOME` is set. `./setup` and `gstack-relink` no longer delete or overwrite
+skills they did not create — ownership is proven via symlink target or the
+`.gstack-owned` marker, never assumed from a name match.
+
 ## [2.51.1] - 2026-09-04
 
 Upstream sync, done by verification rather than by auto-merge. Two auto-update PRs

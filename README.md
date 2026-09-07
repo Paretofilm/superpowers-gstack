@@ -299,13 +299,13 @@ Review passed? → /qa → /cso → /ship
 | `/plan-tune` | Tune plan-skill question preferences (one-time, per-project) |
 | `/autoplan` | Chains all three reviews; Eng review runs last, always |
 | `/review` | Pre-merge code review (8 lenses, incl. advisory simplification) |
-| `/qa <url>` | Browser-based testing |
+| `/qa <url>` | Browser-based testing (runs in Aside on macOS; bundled browser fallback) |
 | `/cso` | Security audit |
 | `/design-review` | Visual audit |
 | `/design-consultation` | Design system from scratch |
 | `/design-shotgun` | Generate multiple design variants |
 | `/design-html` | Finalize design as production HTML/CSS |
-| `/devex-review` | Live developer experience audit |
+| `/devex-review` | Live developer experience audit (runs in Aside on macOS) |
 | `/investigate` | Bug root cause (QA/production) |
 | `/ship` | Create PR and deploy |
 | `/land-and-deploy` | Merge and verify |
@@ -322,13 +322,13 @@ Review passed? → /qa → /cso → /ship
 | `/freeze` | Restrict edits to one directory |
 | `/unfreeze` | Clear the freeze boundary mid-session |
 | `/guard` | Full safety: `/careful` + `/freeze` combined |
-| `/browse` | Headless browser |
+| `/browse` | Drive a real browser through Aside (bundled Chromium fallback when Aside is absent) |
 | `/open-gstack-browser` | Launch GStack Browser (Chromium + sidebar) |
 | `/pair-agent` | Pair a remote AI agent with your browser; a re-pair with the same `--client` and a narrower `--restrict` revokes the old session immediately |
 | `/setup-browser-cookies` | Import cookies for authenticated tests |
 | `/benchmark` | Performance regression detection |
 | `/benchmark-models` | Cross-model benchmark |
-| `/make-pdf` | Markdown to publication-quality PDFs |
+| `/make-pdf` | Markdown to publication-quality PDFs (Aside first, bundled browser fallback) |
 | `/learn` | Save cross-session learnings |
 | `/setup-gbrain` | Onboard cross-session memory (gbrain) |
 | `/codex` | OpenAI Codex CLI second opinion |
@@ -425,6 +425,9 @@ No. Built for [Claude Code](https://claude.ai/code) only.
 
 **What project types does this support?**
 Web apps, APIs, mobile, CLI tools, libraries, data pipelines, monorepos, Claude Code plugins, and more. The setup skill tailors routing to your project.
+
+**Does `/qa`, `/browse`, or `/make-pdf` require Aside?**
+No. On macOS with [Aside](https://aside.com) (macOS 15+) open, these skills run inside your real browser sessions — no cookie export, no CAPTCHA handoff. When Aside is absent (Linux, Windows, or Aside not running), every skill falls back automatically to gstack's bundled Chromium and tells you which engine it used. Nothing stops working without Aside.
 
 ## Keywords
 
