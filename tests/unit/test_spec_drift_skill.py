@@ -243,8 +243,10 @@ def test_section_override_reaches_the_script_as_two_words_in_every_shell():
     two words arrive separately."""
     assert '${SECTION:+--upstream "$SECTION"}' not in SKILL, "one word under zsh"
     assert SKILL.count('${SECTION:+--upstream} ${SECTION:+"$SECTION"}') == 3
-    line = next(l.strip() for l in SKILL.splitlines()
-                if l.strip().startswith('python3 "$SKILL_DIR/../../scripts/spec-drift.py" check'))
+    lines = [l.strip() for l in SKILL.splitlines()
+             if l.strip().startswith('python3 "$SKILL_DIR/../../scripts/spec-drift.py" check')]
+    assert len(lines) == 1, f"expected exactly one Phase 1 check line, found {len(lines)}"
+    line = lines[0]
     env = {**os.environ, "SKILL_DIR": str(SKILL_DIR),
            "SECTION": str(SKILL_DIR / "pin" / "plan-completion.md")}
     ran = 0

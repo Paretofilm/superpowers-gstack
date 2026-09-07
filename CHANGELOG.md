@@ -34,10 +34,20 @@ will never be shipped, or against a baseline older than the branch. Design:
   Fail closed: empty diff, unreadable plan, zero actionable items and pin
   mismatch are all exit 2, never 0.
 - Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
-  README. 71 unit tests across `test_spec_drift_pin.py`,
-  `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` — the last one is
-  omission tests: Step 8 text pasted into SKILL.md, a discovery heuristic brought
-  back, or the check moved after the dispatch each turn the suite red.
+  README. 73 unit tests across `test_spec_drift_pin.py`,
+  `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` and
+  `test_spec_drift_upstream_alarm.py` — the skill tests are omission tests: Step 8
+  text pasted into SKILL.md, a discovery heuristic brought back, or the check
+  moved after the dispatch each turn the suite red; the alarm test fails on any
+  maintainer machine where gstack has changed the section since the pin (skipped
+  in CI).
+- **Verified against `/ship` Step 8** (spec, «Verifisering — resultat»): six
+  audits of a 9-item fixture plan — three through this skill, three through
+  Step 8's own prompt and discovery — agree 6/6 on the DONE / NOT DONE axis, and
+  one added line in a local copy of the section is refused with both hashes
+  named. The run also caught that `${SECTION:+--upstream "$SECTION"}` is a
+  single word under zsh, the shell Claude Code's Bash tool uses on macOS; the
+  skill now expands it as two words.
 - Not in this release, by design: write-back into the plan and the drift ledger
   (Fase 2), the spec-blind inventory agent, prose-claim extraction and the
   security category (Fase 3).
