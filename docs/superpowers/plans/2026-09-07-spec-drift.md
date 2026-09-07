@@ -16,16 +16,17 @@
 
 Alle fasers krav inkluderer implisitt denne seksjonen.
 
-- **Repo og gren:** `~/Developer/superpowers-gstack`, gren `feat/spec-drift` (finnes; to commits foran `main` med specen og IDEAS-entryen). Ikke lag ny gren.
+- **Repo og gren:** `~/Developer/superpowers-gstack`, gren `feat/spec-drift` (finnes; tre commits foran `main`: specen, IDEAS-entryen og denne planen). Ikke lag ny gren.
+- **Alle kommandoer kjøres fra repo-roten.** Stiene i planen er relative til `~/Developer/superpowers-gstack`. Kjører sesjonen eller subagenten med en annen arbeidsmappe, prefiks hvert Bash-kall med `cd /Users/kjetilge/Developer/superpowers-gstack &&` — en `pytest tests/unit` fra feil mappe finner ingenting og rapporterer det som grønt.
 - **Lint grønn etter hver fase.** `python3 scripts/lint-skills.py` må avslutte med `0 error(s)`. To advarsler er forventet og er ikke feil: `W2 adapt` og `W2 swiftui-design-consultation`.
-- **Enhetstester grønne etter hver fase.** `pytest tests/unit -q` — **352 passed** målt 2026-09-07 på `feat/spec-drift` før fase 1. Tallene under er målt-og-forventet, ikke lovet; avviker ditt tall, si det i stedet for å anta at planen har rett.
+- **Enhetstester grønne etter hver fase.** `pytest tests/unit scripts/cost-ledger -q` — nøyaktig CI-kommandoen fra `.github/workflows/lint.yml` (`bash tests/run.sh --unit` kjører den samme). **378 passed, 10 warnings** målt 2026-09-07 på `feat/spec-drift` før fase 1 (352 i `tests/unit`, 26 i `scripts/cost-ledger`). Tallene under er målt-og-forventet, ikke lovet; avviker ditt tall, si det i stedet for å anta at planen har rett. `pytest tests/unit -q` alene er ikke gaten — den hopper over cost-ledger-suiten CI kjører.
 - **CI installerer kun pytest.** `scripts/spec-drift.py` bruker bare standardbiblioteket (`argparse`, `difflib`, `hashlib`, `json`, `pathlib`).
 - **Harde krav fra specen (gjelder alle faser):**
   - Skillen **leser** `plan-completion.md` fra disk ved kjøring og utfører seksjonen. Teksten kopieres aldri inn i `SKILL.md`, upstream patches aldri, og `/ship` antas aldri å kjenne til skillen.
   - Hash-pin som feiler høyt ved avvik; `--repin` viser diffen og krever bekreftelse; pinnen er committet i skillen (`skills/spec-drift/`), ikke per maskin.
   - Plan-sti er et eksplisitt argument. Ingen discovery-heuristikk (ingen grep etter grennavn, ingen «nyeste fil siste 24 timer»).
   - Baseline er et argument; standard er `git diff <base>...HEAD` der `<base>` er repoets standardgren.
-  - Utdata: samme menneskelesbare rapport som Step 8, samme JSON på siste linje (`total_items`, `done`, `changed`, `deferred`, `unverifiable`, `summary`), exit-kode `0` rent / `1` drift / `2` kunne ikke kjøre.
+  - Utdata: samme menneskelesbare rapport som Step 8, samme JSON på siste linje (`total_items`, `done`, `changed`, `deferred`, `unverifiable`, `summary`), exit-kode `0` rent / `1` drift / `2` kunne ikke kjøre. **Hva «exit-kode» betyr for en Markdown-skill:** en skill kan ikke returnere en prosess-status. Kontrakten er derfor strukturert tekst — verdikt-linjen `SPEC-DRIFT: … (exit N)` rett over JSON-en, beregnet av `scripts/spec-drift.py verdict`, aldri dømt — pluss én mekanisk kommando: en kaller som trenger en ekte prosess-exit-kode kjører `verdict` på JSON-linjen og får 0/1/2. Ingen prosaparsing i noe ledd.
   - Skillen redigerer aldri kildekode, planen eller upstream-seksjonen.
 - **Lint-regler som treffer en ny skill:** E1 (frontmatter, `name` = katalognavn, `description` finnes), E2 (`$SKILL_DIR/../../scripts/<fil>` må finnes i repoet; `superpowers-gstack:<navn>` må finnes), E3 (`spec-drift` må nevnes i `CLAUDE.md`), E4 (versjon ↔ CHANGELOG), E7 (denylist skanner også `scripts/*.py`), W1 (`description` ≤ 30 ord). Merk at E1 feiler på en katalog under `skills/` uten `SKILL.md` — derfor opprettes `skills/spec-drift/` først i fase 3.
 - **Versjon:** `.claude-plugin/plugin.json` `2.51.1` → `2.52.0` i fase 3, med matchende `## [2.52.0]`-entry i `CHANGELOG.md`.
@@ -38,7 +39,7 @@ Alle fasers krav inkluderer implisitt denne seksjonen.
 
 ### D1. Pinnen er sha256 **pluss** et committet byte-snapshot
 
-Specen sier «`--repin` viser diffen». En hash alene kan ikke vise en diff — den kan bare si «ulik». Snapshotet `skills/spec-drift/pin/plan-completion.md` er en byte-identisk kopi av upstream-filen slik den var da den ble pinnet, og brukes **kun** til å vise diffen. Den utføres aldri: skillen leser alltid upstream-stien. `check` verifiserer begge retninger — upstream-hash == `pin.json` og snapshot-hash == `pin.json` — så pin og snapshot kan ikke drive fra hverandre. gstack er MIT-lisensiert; `pin.json` navngir kilden.
+Specen sier «`--repin` viser diffen». En hash alene kan ikke vise en diff — den kan bare si «ulik». Snapshotet `skills/spec-drift/pin/plan-completion.md` er en byte-identisk kopi av upstream-filen slik den var da den ble pinnet, og brukes **kun** til å vise diffen. Den utføres aldri: skillen leser alltid upstream-stien. `check` verifiserer begge retninger — upstream-hash == `pin.json` og snapshot-hash == `pin.json` — så pin og snapshot kan ikke drive fra hverandre. I tillegg verifiserer både `check` og `repin` åtte **tekstankere** — overskriftene og strengene overstyringene i SKILL.md navngir (`## Step 8:`, `## Step 8.1`, `### Plan File Discovery`, `### Gate Logic`, `<base>`, `Include in PR body`, `Parent processing`, `"total_items"`) — slik at et upstream-omdøp som beholder alt annet ikke kan pinnes: en pin som passerer hash-en men mangler et anker ville fått wrapperen til å kjøre Step 8.1 med, eller finne ingen Gate Logic å overstyre. gstack er MIT-lisensiert; `pin.json` navngir kilden.
 
 ### D2. Hele filen pinnes, ikke bare Step 8-regionen
 
@@ -50,7 +51,7 @@ Step 8 sin egen begrunnelse for subagent-dispatch er frisk kontekst. Forelderen 
 
 ### D4. Gate Logic sine spørsmål kjøres ikke frittstående — exit-koden erstatter dem
 
-Step 8 stiller AskUserQuestion ved NOT DONE og per punkt ved UNVERIFIABLE fordi noe skal *shippes*. Frittstående skal `autoimplement` kunne kalle skillen mekanisk ved fasegrenser. Per-punkt-bekreftelse *med hukommelse* er fase 2 sin ledger; i fase 1 er rapporten + exit-koden hele svaret.
+Step 8 stiller AskUserQuestion ved NOT DONE og per punkt ved UNVERIFIABLE fordi noe skal *shippes*. Frittstående skal `autoimplement` kunne kalle skillen mekanisk ved fasegrenser. Per-punkt-bekreftelse *med hukommelse* er fase 2 sin ledger; i fase 1 er rapporten + exit-koden hele svaret. «Exit-koden» til en Markdown-skill er nødvendigvis en tekstkontrakt (verdikt-linjen, beregnet av `verdict`); prosess-exit-koden finnes i `scripts/spec-drift.py verdict`, som enhver kaller kan kjøre på JSON-linjen. Det er den eksplisitte definisjonen — ikke en antakelse om at Skill-verktøyet propagerer en status det ikke har.
 
 ### D5. PARTIAL teller som drift (exit 1), selv om `/ship` ikke blokkerer på det
 
@@ -97,8 +98,8 @@ Alt som må være sant om «samme filbytes kjøres» ligger her, og ingenting av
 - Test: `tests/unit/test_spec_drift_pin.py`
 
 **Interfaces:**
-- Produces: `python3 scripts/spec-drift.py check [--upstream PATH] [--pin-dir DIR]` → exit `0` (`PIN OK …` på stdout) eller `2` (`UPSTREAM MISSING` / `NO PIN` / `PIN CORRUPT` / `PIN MISMATCH` på stderr, alle navngir veien ut).
-- Produces: `python3 scripts/spec-drift.py repin [--upstream PATH] [--pin-dir DIR] [--yes]` → uten `--yes`: unified diff på stdout + `REPIN REQUIRES CONFIRMATION`, exit `3`; med `--yes`: skriver `<pin-dir>/pin.json` og `<pin-dir>/pin/plan-completion.md`, exit `0`; ingen endring: `PIN UNCHANGED`, exit `0`.
+- Produces: `python3 scripts/spec-drift.py check [--upstream PATH] [--pin-dir DIR]` → exit `0` (`PIN OK …` på stdout) eller `2` (`UPSTREAM MISSING` / `UPSTREAM UNREADABLE` / `NO PIN` / `PIN CORRUPT` / `PIN MISMATCH` / `ANCHORS MISSING` på stderr, alle navngir veien ut). `PIN CORRUPT` dekker også en `pin.json` som er gyldig JSON av feil form (liste, streng, `sha256` som ikke er streng) — aldri en Python-traceback med exit 1. `ANCHORS MISSING` navngir hvilke av de åtte ankrene (D1) upstream-teksten mangler.
+- Produces: `python3 scripts/spec-drift.py repin [--upstream PATH] [--pin-dir DIR] [--yes --sha HEX]` → uten `--yes`: unified diff på stdout, så `ANCHORS: all present` + `REPIN REQUIRES CONFIRMATION … re-run with --yes --sha <12 tegn>`, exit `3`; mangler et anker: `REPIN BLOCKED: ANCHORS MISSING: …` på stderr, exit `2` (fiks SKILL.md sine overstyringer først — det finnes ingenting å akseptere); med `--yes --sha <prefiks av sha256 diffen viste>`: skriver `<pin-dir>/pin.json` og `<pin-dir>/pin/plan-completion.md`, exit `0`; `--yes` uten `--sha`, eller med en `--sha` som ikke matcher upstream *nå*, eller når et anker mangler: `REPIN REFUSED`, exit `2` (aksepten er bundet til bytene som ble vist — en auto-oppdatering mellom diff og `--yes` kan ikke pinnes ulest); ingen endring: `PIN UNCHANGED`, exit `0`.
 - Produces: `pin.json`-skjema `{"source", "sha256", "gstack_version", "pinned_at"}`; `gstack_version` leses fra `<upstream>/../../../VERSION` (`ship/sections/plan-completion.md` → gstack-roten), `"unknown"` om den mangler.
 - Standardverdier: `--upstream` = `~/.claude/skills/gstack/ship/sections/plan-completion.md`, `--pin-dir` = `<repo>/skills/spec-drift`.
 
@@ -117,6 +118,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -126,7 +128,18 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "spec-drift.py"
 
-SECTION = "## Step 8: Plan Completion Audit\n\nline two\nline three\n"
+# A miniature of the upstream section. It carries every anchor the wrapper's
+# overrides name (ANCHORS in the script), so the anchor check has something to pass.
+SECTION = (
+    "## Step 8: Plan Completion Audit\n\n"
+    "> ### Plan File Discovery\n"
+    "line two\n"
+    "### Gate Logic\n"
+    "Use `<base>`. **Include in PR body (Step 8):** ... **Parent processing:** ...\n"
+    '`{"total_items":N,"done":N}`\n'
+    "\n## Step 8.1: Plan Verification\n"
+    "line three\n"
+)
 
 
 def run(*args, expect, stdin=None):
@@ -135,6 +148,17 @@ def run(*args, expect, stdin=None):
     assert p.returncode == expect, (
         f"exit {p.returncode} (wanted {expect})\nstdout: {p.stdout}\nstderr: {p.stderr}")
     return p
+
+
+def shown_sha(diff_run) -> str:
+    """The sha the diff run tells the user to pass back with --yes."""
+    return re.search(r"--yes --sha ([0-9a-f]{12})", diff_run.stdout).group(1)
+
+
+def accept(upstream, pin_dir):
+    """The two-step accept the skill performs: show the diff, then --yes bound to it."""
+    p = run("repin", *common(upstream, pin_dir), expect=3)
+    return run("repin", "--yes", "--sha", shown_sha(p), *common(upstream, pin_dir), expect=0)
 
 
 @pytest.fixture()
@@ -170,7 +194,7 @@ def test_repin_shows_the_diff_and_refuses_without_yes(rig):
 
 def test_repin_yes_writes_pin_and_snapshot_and_check_passes(rig):
     upstream, pin_dir = rig
-    run("repin", "--yes", *common(upstream, pin_dir), expect=0)
+    accept(upstream, pin_dir)
     pin = json.loads((pin_dir / "pin.json").read_text())
     assert pin["sha256"] == hashlib.sha256(SECTION.encode()).hexdigest()
     assert pin["gstack_version"] == "9.9.9.9"
@@ -183,7 +207,7 @@ def test_one_changed_line_upstream_is_refused_and_named(rig):
     """Spec, Verifisering 4: change one line in a local copy of the section — the
     wrapper must refuse to run and name the hash mismatch."""
     upstream, pin_dir = rig
-    run("repin", "--yes", *common(upstream, pin_dir), expect=0)
+    accept(upstream, pin_dir)
     upstream.write_text(SECTION.replace("line two", "line two, reworded upstream"))
     p = run("check", *common(upstream, pin_dir), expect=2)
     assert "PIN MISMATCH" in p.stderr
@@ -194,24 +218,65 @@ def test_one_changed_line_upstream_is_refused_and_named(rig):
 
 def test_repin_is_a_noop_when_nothing_changed(rig):
     upstream, pin_dir = rig
-    run("repin", "--yes", *common(upstream, pin_dir), expect=0)
+    accept(upstream, pin_dir)
     p = run("repin", *common(upstream, pin_dir), expect=0)
     assert "PIN UNCHANGED" in p.stdout
+
+
+def test_repin_yes_is_bound_to_the_bytes_the_diff_showed(rig):
+    """Between the diff and the --yes, a weekly gstack update can rewrite the file.
+    Accepting whatever is on disk at --yes time would pin bytes nobody read."""
+    upstream, pin_dir = rig
+    shown = shown_sha(run("repin", *common(upstream, pin_dir), expect=3))
+    p = run("repin", "--yes", "--sha", shown[:4], *common(upstream, pin_dir), expect=2)
+    assert "REPIN REFUSED" in p.stderr, "a 4-char prefix is a guess, not the receipt the diff run printed"
+    upstream.write_text(SECTION + "changed after the diff was shown\n")
+    p = run("repin", "--yes", "--sha", shown, *common(upstream, pin_dir), expect=2)
+    assert "REPIN REFUSED" in p.stderr
+    assert not (pin_dir / "pin.json").exists(), "nothing may be written on a refused accept"
+    p = run("repin", "--yes", *common(upstream, pin_dir), expect=2)   # no --sha at all
+    assert "REPIN REFUSED" in p.stderr
 
 
 def test_snapshot_that_disagrees_with_pin_json_is_refused(rig):
     """pin.json and the snapshot are one artefact; edit one without the other and
     --repin's diff would lie about what was accepted."""
     upstream, pin_dir = rig
-    run("repin", "--yes", *common(upstream, pin_dir), expect=0)
+    accept(upstream, pin_dir)
     (pin_dir / "pin" / "plan-completion.md").write_text(SECTION + "tampered\n")
     p = run("check", *common(upstream, pin_dir), expect=2)
     assert "PIN CORRUPT" in p.stderr
 
 
+def test_pin_json_of_the_wrong_shape_is_corrupt_not_a_traceback(rig):
+    """Valid JSON that is not the pin's shape used to reach `.get`/slicing and die
+    with a Python traceback — exit 1, which nothing above treats as 'refused'."""
+    upstream, pin_dir = rig
+    accept(upstream, pin_dir)
+    for wrong in ("[]", '"a string"', '{"sha256": 5}', "{not json"):
+        (pin_dir / "pin.json").write_text(wrong)
+        p = run("check", *common(upstream, pin_dir), expect=2)
+        assert "PIN CORRUPT" in p.stderr, wrong
+        assert "Traceback" not in p.stderr, wrong
+
+
+def test_repin_refuses_a_section_that_lost_an_anchor(rig):
+    """The overrides name Step 8's structure. A section that dropped an anchor can
+    still hash fine after a blind accept — and then the wrapper would run Step 8.1
+    too, or find no Gate Logic to override. So the anchor check is mechanical."""
+    upstream, pin_dir = rig
+    upstream.write_text(SECTION.replace("### Gate Logic", "### Decision Logic"))
+    p = run("repin", *common(upstream, pin_dir), expect=2)
+    assert "ANCHORS MISSING" in p.stderr and "### Gate Logic" in p.stderr
+    sha = hashlib.sha256(upstream.read_bytes()).hexdigest()[:12]
+    p = run("repin", "--yes", "--sha", sha, *common(upstream, pin_dir), expect=2)
+    assert "ANCHORS MISSING" in p.stderr
+    assert not (pin_dir / "pin.json").exists()
+
+
 def test_missing_upstream_is_could_not_run_not_clean(rig):
     upstream, pin_dir = rig
-    run("repin", "--yes", *common(upstream, pin_dir), expect=0)
+    accept(upstream, pin_dir)
     upstream.unlink()
     p = run("check", *common(upstream, pin_dir), expect=2)
     assert "UPSTREAM MISSING" in p.stderr
@@ -220,7 +285,7 @@ def test_missing_upstream_is_could_not_run_not_clean(rig):
 - [ ] **Step 2: Kjør testen og se den feile**
 
 Kjør: `pytest tests/unit/test_spec_drift_pin.py -q`
-Forventet: 7 failed — `FileNotFoundError` / exit-kode 2 fra `python3` fordi `scripts/spec-drift.py` ikke finnes.
+Forventet: 10 failed — `FileNotFoundError` / exit-kode 2 fra `python3` fordi `scripts/spec-drift.py` ikke finnes.
 
 - [ ] **Step 3: Skriv scriptet**
 
@@ -264,11 +329,28 @@ DEFAULT_UPSTREAM = (Path.home() / ".claude" / "skills" / "gstack"
 SNAPSHOT_NAME = "plan-completion.md"   # lives in <pin-dir>/pin/
 PIN_NAME = "pin.json"
 
+# Text the wrapper's overrides name. A section that hashes fine but lost one of
+# these would make the skill run Step 8.1 too, or find no Gate Logic to override.
+ANCHORS = (
+    "## Step 8: Plan Completion Audit",
+    "## Step 8.1",
+    "### Plan File Discovery",
+    "### Gate Logic",
+    "<base>",
+    "Include in PR body",
+    "Parent processing",
+    '"total_items"',
+)
+
 EXIT_OK, EXIT_CANNOT, EXIT_CONFIRM = 0, 2, 3
 
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def missing_anchors(text: str) -> list[str]:
+    return [a for a in ANCHORS if a not in text]
 
 
 def gstack_version(upstream: Path) -> str:
@@ -278,13 +360,17 @@ def gstack_version(upstream: Path) -> str:
 
 
 def load_pin(pin_dir: Path) -> dict | None:
+    """None when there is no pin file; {} when the file is not a pin-shaped object
+    (unparseable, or valid JSON of another shape) — the caller reports PIN CORRUPT
+    for {} rather than letting `.get` or a slice raise into an exit-1 traceback."""
     p = pin_dir / PIN_NAME
     if not p.is_file():
         return None
     try:
-        return json.loads(p.read_text())
-    except json.JSONDecodeError:
+        obj = json.loads(p.read_text())
+    except (json.JSONDecodeError, OSError):
         return {}
+    return obj if isinstance(obj, dict) else {}
 
 
 def cmd_check(a) -> int:
@@ -297,17 +383,27 @@ def cmd_check(a) -> int:
     pin = load_pin(pin_dir)
     if pin is None:
         print(f"NO PIN: {pin_dir / PIN_NAME} does not exist — review the section with "
-              f"`python3 scripts/spec-drift.py repin`, then accept it with --yes",
+              f"`python3 scripts/spec-drift.py repin`, then accept it with --yes --sha",
               file=sys.stderr)
         return EXIT_CANNOT
-    pinned = pin.get("sha256", "")
+    pinned = pin.get("sha256")
+    pinned = pinned if isinstance(pinned, str) else ""
     snap = pin_dir / "pin" / SNAPSHOT_NAME
-    if not pinned or not snap.is_file() or sha256(snap) != pinned:
+    try:
+        snap_ok = bool(pinned) and snap.is_file() and sha256(snap) == pinned
+    except OSError:
+        snap_ok = False
+    if not snap_ok:
         print(f"PIN CORRUPT: {snap} does not match {PIN_NAME} sha256 {pinned[:12] or '?'} — "
               f"pin.json and its snapshot are committed together; re-run repin",
               file=sys.stderr)
         return EXIT_CANNOT
-    actual = sha256(upstream)
+    try:
+        actual = sha256(upstream)
+        text = upstream.read_text()
+    except OSError as exc:
+        print(f"UPSTREAM UNREADABLE: {upstream}: {exc}", file=sys.stderr)
+        return EXIT_CANNOT
     if actual != pinned:
         print("PIN MISMATCH: the upstream section changed shape.\n"
               f"  upstream  {upstream}\n"
@@ -316,6 +412,12 @@ def cmd_check(a) -> int:
               f"  gstack    {gstack_version(upstream)} installed\n"
               "Verify the wrapper's overrides still fit the section, then: "
               "python3 scripts/spec-drift.py repin", file=sys.stderr)
+        return EXIT_CANNOT
+    missing = missing_anchors(text)
+    if missing:
+        print(f"ANCHORS MISSING: {', '.join(missing)} — the pinned section no longer carries "
+              "text the wrapper's overrides name; fix skills/spec-drift/SKILL.md, then re-pin",
+              file=sys.stderr)
         return EXIT_CANNOT
     print(f"PIN OK sha256={actual[:12]} gstack={pin.get('gstack_version')} upstream={upstream}")
     return EXIT_OK
@@ -327,21 +429,47 @@ def cmd_repin(a) -> int:
         print(f"UPSTREAM MISSING: {upstream}", file=sys.stderr)
         return EXIT_CANNOT
     snap = pin_dir / "pin" / SNAPSHOT_NAME
-    old = snap.read_text().splitlines(keepends=True) if snap.is_file() else []
-    new = upstream.read_text().splitlines(keepends=True)
+    try:
+        old = snap.read_text().splitlines(keepends=True) if snap.is_file() else []
+        new_text = upstream.read_text()
+        current = sha256(upstream)
+    except OSError as exc:
+        print(f"UPSTREAM UNREADABLE: {exc}", file=sys.stderr)
+        return EXIT_CANNOT
+    new = new_text.splitlines(keepends=True)
     diff = list(difflib.unified_diff(old, new, fromfile=f"pinned/{SNAPSHOT_NAME}",
                                      tofile=str(upstream)))
     pin = load_pin(pin_dir) or {}
-    if not diff and pin.get("sha256") == sha256(upstream):
+    missing = missing_anchors(new_text)
+    if not diff and pin.get("sha256") == current and not missing:
         print("PIN UNCHANGED: upstream matches the pin — nothing to do")
         return EXIT_OK
     if not a.yes:
         sys.stdout.writelines(diff)
         added = sum(1 for l in diff if l.startswith("+") and not l.startswith("+++"))
         removed = sum(1 for l in diff if l.startswith("-") and not l.startswith("---"))
-        print(f"\nREPIN REQUIRES CONFIRMATION: +{added} -{removed} lines. Read the diff above, "
-              "verify the wrapper's overrides still match, then re-run with --yes")
+        if missing:
+            print(f"\nREPIN BLOCKED: ANCHORS MISSING: {', '.join(missing)} — the wrapper's "
+                  "overrides name text that no longer exists upstream; fix "
+                  "skills/spec-drift/SKILL.md before re-pinning", file=sys.stderr)
+            return EXIT_CANNOT
+        print("\nANCHORS: all present")
+        print(f"REPIN REQUIRES CONFIRMATION: +{added} -{removed} lines. Read the diff above, "
+              f"verify the wrapper's overrides still match, then re-run with --yes --sha {current[:12]}")
         return EXIT_CONFIRM
+    if missing:
+        print(f"REPIN REFUSED: ANCHORS MISSING: {', '.join(missing)}", file=sys.stderr)
+        return EXIT_CANNOT
+    # --yes is bound to the bytes the diff run showed. Between that run and this
+    # one a weekly gstack update can rewrite the file; accepting whatever is on
+    # disk now would pin bytes nobody read.
+    # At least the 12 chars the diff run printed: a 1-char "prefix" matches 1/16
+    # of all digests, which is a guess, not a receipt.
+    if not a.sha or len(a.sha) < 12 or not current.startswith(a.sha):
+        print(f"REPIN REFUSED: --yes must carry the --sha printed by the diff run, 12+ hex chars "
+              f"(upstream is now {current[:12]}, got {a.sha or 'nothing'}). "
+              "Re-run repin without --yes and read the diff again.", file=sys.stderr)
+        return EXIT_CANNOT
     snap.parent.mkdir(parents=True, exist_ok=True)
     snap.write_bytes(upstream.read_bytes())
     digest = sha256(upstream)
@@ -369,6 +497,8 @@ def main(argv=None) -> int:
         s.set_defaults(fn=fn)
     sub.choices["repin"].add_argument("--yes", action="store_true",
                                       help="accept the diff shown by a previous run and write the pin")
+    sub.choices["repin"].add_argument("--sha", default=None,
+                                      help="sha256 prefix printed by the diff run; required with --yes")
     a = p.parse_args(argv)
     return a.fn(a)
 
@@ -380,11 +510,11 @@ if __name__ == "__main__":
 - [ ] **Step 4: Kjør testen og se den bestå**
 
 Kjør: `pytest tests/unit/test_spec_drift_pin.py -q`
-Forventet: `7 passed`.
+Forventet: `10 passed`.
 
 - [ ] **Step 5: Hele suiten og lint**
 
-Kjør: `pytest tests/unit -q` — forventet **359 passed** (352 + 7).
+Kjør: `pytest tests/unit scripts/cost-ledger -q` — forventet **388 passed** (378 + 10).
 Kjør: `python3 scripts/lint-skills.py` — forventet `0 error(s), 2 warning(s) across 17 skills`. (E7 skanner det nye scriptet; ingen denylistet streng finnes i det.)
 
 - [ ] **Step 6: Commit og push**
@@ -483,9 +613,18 @@ def test_missing_or_malformed_json_is_could_not_run():
         assert "COULD-NOT-RUN" in out
 
 
-def test_inconsistent_counts_are_could_not_run():
-    rc, _ = verdict(step8(2, 2, changed=1))    # three verdicts for two items
-    assert rc == 2
+@pytest.mark.parametrize("line,why", [
+    (step8(2, 2, changed=1), "three verdicts for two items"),
+    (step8(2, 3, changed=-1), "a negative count that makes done+changed add up to total"),
+    (step8(1, True), "a boolean where a count belongs (int(True) == 1)"),
+    (step8(2, 1.9, changed=1), "a float that int() would truncate into a CLEAN"),
+    (step8(2, "2"), "a numeric string — the contract is integers, not whatever int() accepts"),
+])
+def test_inconsistent_counts_are_could_not_run(line, why):
+    """Assert the message too: argparse rejecting an unknown subcommand is ALSO
+    exit 2, so a bare exit-code check passes before verdict exists at all."""
+    rc, out = verdict(line)
+    assert rc == 2 and "COULD-NOT-RUN" in out, why
 
 
 def test_fenced_last_line_is_tolerated():
@@ -496,7 +635,7 @@ def test_fenced_last_line_is_tolerated():
 - [ ] **Step 2: Kjør testen og se den feile**
 
 Kjør: `pytest tests/unit/test_spec_drift_verdict.py -q`
-Forventet: 11 failed — argparse avviser `verdict` («invalid choice»), exit 2 med feil melding, så alle assertions på `SPEC-DRIFT:`-linjen feiler.
+Forventet: 15 failed — argparse avviser `verdict` («invalid choice»), exit 2 med feil melding, så alle assertions på `SPEC-DRIFT:`-linjen feiler. Ingen skal bestå: en test som er grønn her, er grønn av feil grunn.
 
 - [ ] **Step 3: Legg til `verdict` i scriptet**
 
@@ -554,14 +693,20 @@ def cmd_verdict(a) -> int:
         print("SPEC-DRIFT: COULD-NOT-RUN (exit 2) — last line is not Step 8's JSON "
               f"({', '.join(JSON_KEYS)})", file=sys.stderr)
         return EXIT_CANNOT
-    try:
-        total, done, changed, deferred, unver = (int(obj[k]) for k in JSON_KEYS[:5])
-    except (TypeError, ValueError):
+    counts = [obj[k] for k in JSON_KEYS[:5]]
+    # The contract is integers. bool is an int subclass, and int() happily eats
+    # "2" and 1.9 — each a way for a malformed line to read as CLEAN. Exact type.
+    if any(type(c) is not int for c in counts):
         print("SPEC-DRIFT: COULD-NOT-RUN (exit 2) — counts are not integers", file=sys.stderr)
         return EXIT_CANNOT
+    total, done, changed, deferred, unver = counts
     if total <= 0:
         print("SPEC-DRIFT: COULD-NOT-RUN (exit 2) — plan has no actionable items "
               "(a design doc? prose claims are Fase 3)", file=sys.stderr)
+        return EXIT_CANNOT
+    if min(done, changed, deferred, unver) < 0:
+        # A negative count can make done + changed == total look CLEAN.
+        print("SPEC-DRIFT: COULD-NOT-RUN (exit 2) — negative count in the JSON", file=sys.stderr)
         return EXIT_CANNOT
     partial = total - done - changed - deferred - unver
     if partial < 0:
@@ -591,11 +736,11 @@ def cmd_verdict(a) -> int:
 - [ ] **Step 4: Kjør testen og se den bestå**
 
 Kjør: `pytest tests/unit/test_spec_drift_verdict.py -q`
-Forventet: `11 passed`.
+Forventet: `15 passed`.
 
 - [ ] **Step 5: Hele suiten og lint**
 
-Kjør: `pytest tests/unit -q` — forventet **370 passed** (359 + 11).
+Kjør: `pytest tests/unit scripts/cost-ledger -q` — forventet **403 passed** (388 + 15).
 Kjør: `python3 scripts/lint-skills.py` — forventet `0 error(s), 2 warning(s)`.
 
 - [ ] **Step 6: Commit og push**
@@ -664,14 +809,20 @@ UPSTREAM_PATH = "~/.claude/skills/gstack/ship/sections/plan-completion.md"
 
 def test_skill_reads_the_upstream_section_from_disk():
     assert UPSTREAM_PATH in SKILL
+    assert "<SECTION_PATH>" in SKILL and "Read this file in full" in SKILL, \
+        "the dispatched subagent must be told to read the section, not handed a copy"
 
 
 def test_skill_never_inlines_step_8():
     """Phrases that exist only in the upstream section. Any of them in SKILL.md
-    means the text was copied — and the hash pin now guards a copy."""
+    means the text was copied — and the hash pin now guards a copy. The line
+    budget is the structural half of the same guard: a paraphrased paste dodges
+    the needles but not the size."""
     for needle in ("Path concreteness rule", "Be conservative with DONE",
                    "_PLAN_SLUG=", "VAS-449", "Validator detection"):
         assert needle not in SKILL, f"{needle!r} is Step 8 text — read it from disk, do not paste it"
+    assert SKILL.count("\n") < 300, \
+        "Step 8 alone is ~190 lines; a wrapper that grew past 300 has probably swallowed it"
 
 
 def test_skill_has_no_plan_discovery_heuristics():
@@ -784,6 +935,18 @@ verdict line just above the JSON:
 | `SPEC-DRIFT: DRIFT (exit 1)` | any PARTIAL, NOT DONE or UNVERIFIABLE item | 1 |
 | `SPEC-DRIFT: COULD-NOT-RUN (exit 2)` | pin mismatch, unreadable plan, empty diff, no actionable items, no JSON | 2 |
 
+**What "exit" means for a Markdown skill.** A skill cannot return a process
+status. The verdict line *is* this skill's exit code — structured text, computed
+by `spec-drift.py verdict`, never judged from the report. A caller that needs a
+real process status runs that same command on the final JSON line:
+
+```bash
+python3 "$SKILL_DIR/../../scripts/spec-drift.py" verdict <<'JSON'
+<the JSON line the skill ended with>
+JSON
+echo "exit=$?"     # 0 / 1 / 2 — no prose parsed anywhere
+```
+
 Fail closed: when in doubt the answer is 2, never 0. This skill never edits source code,
 the plan, or the upstream section — it reports. Write-back into the plan and a
 drift ledger are Fase 2 of the spec
@@ -798,26 +961,36 @@ drift ledger are Fase 2 of the spec
 | Not a git repository | `COULD-NOT-RUN (exit 2) — the audit is a diff; there is no diff without git`. Stop. |
 | Plan is not under `docs/superpowers/plans/` and not named `progress.md` | Warn once: design docs carry prose, not actionable items, and will come back `COULD-NOT-RUN` (prose claims are Fase 3). Continue anyway. |
 
-Resolve the base and make sure there is a diff to audit against:
+Resolve the base and make sure there is a diff to audit against. Paste the two
+user-supplied values inside **single quotes**, verbatim; if a value itself
+contains a single quote, refuse with exit 2 rather than escaping it:
 
 ```bash
-PLAN="<plan-path>"
-BASE="<--base value, or empty>"
+PLAN='<plan-path>'                 # single-quoted verbatim — a $( ), backtick or $ in a path is inert
+BASE='<--base value, or empty>'
+[ -f "$PLAN" ] || { echo "plan '$PLAN' is not a readable file"; exit 2; }
 if [ -z "$BASE" ]; then
-  BASE=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/||')
-  [ -z "$BASE" ] && for c in origin/main origin/master main master; do
-    git rev-parse -q --verify "$c" >/dev/null && BASE=$c && break
+  HEAD_REF=$(git symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null | sed 's|^refs/remotes/||')
+  for c in "$HEAD_REF" origin/main origin/master main master; do
+    [ -n "$c" ] && git rev-parse -q --verify --end-of-options "$c^{commit}" >/dev/null 2>&1 && BASE=$c && break
   done
 fi
-git rev-parse -q --verify "$BASE" >/dev/null || { echo "base '$BASE' is not a ref"; exit 2; }
-[ -n "$(git diff "$BASE...HEAD" --stat)" ] || { echo "empty diff $BASE...HEAD — pass --base <older-commit>"; exit 2; }
+git rev-parse -q --verify --end-of-options "$BASE^{commit}" >/dev/null 2>&1 || { echo "base '$BASE' is not a commit"; exit 2; }
+[ -n "$(git diff --stat "$BASE...HEAD" 2>/dev/null)" ] || { echo "empty diff $BASE...HEAD — pass --base <older-commit>"; exit 2; }
 echo "PLAN=$PLAN BASE=$BASE"
 ```
 
-Keep the ref that verified (`origin/main`, not `main`): in a fresh clone the
-remote-tracking ref exists and the local one may not. An empty diff is exit 2,
-not "everything NOT DONE": on the default branch with the default base there is
-nothing to audit against, and the fix is an older `--base`.
+Every candidate is verified as a commit before it is used — a dangling
+`origin/HEAD` falls through to the next candidate instead of ending the run —
+and the ref that verified is kept as written (`origin/main`, not `main`): in a
+fresh clone the remote-tracking ref exists and the local one may not.
+`--end-of-options` keeps a value beginning with `-` from being read as a flag.
+An empty diff is exit 2, not "everything NOT DONE": on the default branch with
+the default base there is nothing to audit against, and the fix is an older
+`--base`. Note what `exit 2` inside a block does: it ends that one Bash call.
+It does not end the skill — you do, by printing the `SPEC-DRIFT: COULD-NOT-RUN
+(exit 2)` verdict line and stopping. The number is the message, not the
+mechanism.
 
 ## Phase 1 — the pin, before anything is read
 
@@ -842,19 +1015,26 @@ auto-updates weekly. Re-pinning is deliberate, in steps, and never blind:
    ```bash
    python3 "$SKILL_DIR/../../scripts/spec-drift.py" repin   # add --upstream when --section was given
    ```
-   Exit 0 with `PIN UNCHANGED`: say so and stop. Exit 3: the unified diff is on
-   stdout — show it to the user in full, not summarised.
-2. Read the diff against the overrides in Phase 2 below and say, in one or two
-   sentences, whether each override still points at text that exists: the
-   `## Step 8:` heading, the "Plan File Discovery" subsection, `<base>`, the
-   "Gate Logic" subsection, and the last-line JSON with its six keys. If one no
-   longer does, say which — that needs a fix to this file, not a re-pin.
+   Exit 0 with `PIN UNCHANGED`: say so and stop. Exit 2 with `REPIN BLOCKED:
+   ANCHORS MISSING`: the section no longer carries text the overrides below
+   name — that needs a fix to this file first, not a re-pin; say which anchors
+   and stop. Exit 3: the unified diff is on stdout, followed by `ANCHORS: all
+   present` — show the diff to the user in full, not summarised.
+2. The anchors are checked mechanically (the eight strings in `ANCHORS` in
+   `spec-drift.py`: the Step 8 and 8.1 headings, Plan File Discovery, Gate
+   Logic, `<base>`, Include in PR body, Parent processing, `"total_items"`).
+   What the script cannot judge is meaning: read the diff against the overrides
+   in Phase 2 below and say, in one or two sentences, whether any override now
+   contradicts what the section says — a renamed verdict, a new gate, a changed
+   JSON key. If one does, say which — that is also a fix to this file, not a
+   re-pin.
 3. Ask with `AskUserQuestion`: accept the new section as the pinned one?
    Options: **Accept** (recommended when every override still fits) / **Not
    now**. End your message at this question.
-4. On Accept:
+4. On Accept, pass back the sha the diff run printed — `--yes` is refused
+   without it, and refused if the file changed since the diff was shown:
    ```bash
-   python3 "$SKILL_DIR/../../scripts/spec-drift.py" repin --yes
+   python3 "$SKILL_DIR/../../scripts/spec-drift.py" repin --yes --sha <the 12 hex chars from the diff run>
    ```
    then remind the user that `skills/spec-drift/pin.json` and
    `skills/spec-drift/pin/plan-completion.md` must be committed together — the
@@ -907,8 +1087,10 @@ If that also yields no JSON, do not guess a result — `SPEC-DRIFT: COULD-NOT-RU
 
 ## Phase 3 — verdict and output
 
-1. Print the subagent's human-readable report (`PLAN COMPLETION AUDIT …
-   COMPLETION: …`) verbatim.
+1. Separate the subagent's reply into two parts: the JSON line at its end, and
+   everything above it. Print the part above — the human-readable report
+   (`PLAN COMPLETION AUDIT … COMPLETION: …`) — verbatim. Do not print the JSON
+   here; it appears exactly once, as the last line of your response (step 3).
 2. Compute the exit code from the JSON line — never by reading the report:
    ```bash
    python3 "$SKILL_DIR/../../scripts/spec-drift.py" verdict <<'JSON'
@@ -916,7 +1098,9 @@ If that also yields no JSON, do not guess a result — `SPEC-DRIFT: COULD-NOT-RU
    JSON
    ```
    It prints the `SPEC-DRIFT: … (exit N)` line with a breakdown
-   (`done= changed= partial= not_done= unverifiable= of N`) and exits N.
+   (`done= changed= partial= not_done= unverifiable= of N`) and exits N. If the
+   object arrived pretty-printed over several lines, collapse it to one line
+   first — the contract is one line, and `verdict` reads exactly one.
 3. End the response with, in this order: `Plan: <PLAN_PATH>  Base: <BASE_REF>`,
    the verdict line, and the JSON as the very last line — so a caller such as
    `/superpowers-gstack:autoimplement` can take the code from the verdict line
@@ -939,10 +1123,10 @@ If that also yields no JSON, do not guess a result — `SPEC-DRIFT: COULD-NOT-RU
 python3 scripts/spec-drift.py repin
 ```
 
-Forventet: exit 3 og hele seksjonen som `+`-linjer (det finnes ingen tidligere pin). Les gjennom og bekreft at de fem ankrene overstyringene i SKILL.md navngir finnes i teksten: `## Step 8: Plan Completion Audit`, `### Plan File Discovery`, `<base>`, `### Gate Logic`, og JSON-linjen med `total_items`, `done`, `changed`, `deferred`, `unverifiable`, `summary`. Sjekk også `shasum -a 256 ~/.claude/skills/gstack/ship/sections/plan-completion.md` mot `e329e5ef76991a…` fra Global Constraints — er den ulik, har gstack oppdatert seg siden planen ble skrevet; ankrene over er da det du verifiserer ekstra nøye. Deretter:
+Forventet: exit 3 og hele seksjonen som `+`-linjer (det finnes ingen tidligere pin), så `ANCHORS: all present` og `re-run with --yes --sha <12 hex-tegn>`. Får du `REPIN BLOCKED: ANCHORS MISSING` i stedet, har upstream endret struktur siden planen ble skrevet: stopp, og rett overstyringene i SKILL.md (Step 3) før du pinner. Les så gjennom diffen og bekreft at overstyringene fortsatt stemmer *i mening* — verdikt-navnene, JSON-linjen med `total_items`, `done`, `changed`, `deferred`, `unverifiable`, `summary`. Sjekk også `shasum -a 256 ~/.claude/skills/gstack/ship/sections/plan-completion.md` mot `e329e5ef76991a…` fra Global Constraints — er den ulik, har gstack oppdatert seg siden planen ble skrevet; ankrene over er da det du verifiserer ekstra nøye. Deretter, med sha-en diffkjøringen skrev ut:
 
 ```bash
-python3 scripts/spec-drift.py repin --yes
+python3 scripts/spec-drift.py repin --yes --sha <de 12 hex-tegnene fra forrige kommando>
 python3 scripts/spec-drift.py check
 cat skills/spec-drift/pin.json
 ```
@@ -1019,7 +1203,7 @@ will never be shipped, or against a baseline older than the branch. Design:
   Fail closed: empty diff, unreadable plan, zero actionable items and pin
   mismatch are all exit 2, never 0.
 - Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
-  README. 27 unit tests across `test_spec_drift_pin.py`,
+  README. 34 unit tests across `test_spec_drift_pin.py`,
   `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` — the last one is
   omission tests: Step 8 text pasted into SKILL.md, a discovery heuristic brought
   back, or the check moved after the dispatch each turn the suite red.
@@ -1047,7 +1231,7 @@ Forventet: `9 passed`.
 
 - [ ] **Step 11: Hele suiten og lint**
 
-Kjør: `pytest tests/unit -q` — forventet **379 passed** (370 + 9).
+Kjør: `pytest tests/unit scripts/cost-ledger -q` — forventet **412 passed** (403 + 9).
 Kjør: `python3 scripts/lint-skills.py` — forventet `0 error(s), 2 warning(s) across 18 skills`. Blir det rødt, er de sannsynlige årsakene: E3 (punktet i `CLAUDE.md` mangler eller staver `spec-drift` feil), E4 (CHANGELOG-overskriften matcher ikke `2.52.0` tegn for tegn), E2 (`spec-drift.py` staves annerledes i SKILL.md enn i `scripts/`), W1 som *error* skjer ikke, men sjekk at `description` er ≤ 30 ord (den er 28).
 
 - [ ] **Step 12: Commit og push**
@@ -1094,8 +1278,8 @@ Dette er specens «Verifisering hvis fase 1 bygges», punkt 1–4, pluss den st�
 
 ```bash
 git status --porcelain            # tomt
-git log --oneline main..HEAD      # fase 1–3-commitene (pluss spec/IDEAS-commitene) synlige
-pytest tests/unit -q              # 379 passed
+git log --oneline main..HEAD      # fase 1–3-commitene (pluss spec/IDEAS/plan-commitene) synlige
+bash tests/run.sh --unit          # specens egen kommando: 412 passed (= pytest tests/unit scripts/cost-ledger -q)
 python3 scripts/lint-skills.py    # 0 error(s)
 python3 scripts/spec-drift.py check   # PIN OK
 git fetch origin && git merge origin/main --no-edit   # så /ship sitt Step 3 ikke lager en merge-commit midt i kjøringene
@@ -1112,8 +1296,9 @@ Ekvivalensmålet trenger en plan med færre enn 50 punkter (Step 8 kapper ved 50
 
 Fixture for the Fase-1 equivalence run — see Phase 4 of
 `docs/superpowers/plans/2026-09-07-spec-drift.md`. Audited against `main...HEAD`
-on `feat/spec-drift`. Do not "fix" the items below to make an audit pass; the
-point of this file is its verdicts.
+on branch `feat/spec-drift` (branch slug `feat-spec-drift`, repo
+`superpowers-gstack`). The nine checkbox items below are the whole content; the
+value of this file is the verdicts they produce, so they stay as written.
 
 ### Fase 1 — Wrapper
 
@@ -1134,7 +1319,7 @@ point of this file is its verdicts.
 - [ ] Add a `--whole-tree` mode with verdicts PRESENT / ABSENT / UNVERIFIABLE
 ```
 
-Overskriftene er med vilje `### Fase N —`, ikke `## Phase N:` — det siste er `autoimplement` sitt fase-regex, og en fixture som matcher det ville blitt lest som fire ekstra faser i *denne* planen. Fasit: punkt 1–5 DONE, punkt 6–9 NOT DONE, `total_items` 9. Commit fixturen før kjøringene, ellers refuserer `/ship` på uren tre:
+Overskriftene er med vilje `### Fase N —`, ikke `## Phase N:` — det siste er `autoimplement` sitt fase-regex, og en fixture som matcher det ville blitt lest som fire ekstra faser i *denne* planen. Forordet er bevisst uten imperativer («do not …», «keep …»): Step 8 trekker ut imperative setninger som handlingspunkter, og et tiende punkt ville ødelagt fasiten. Forordet navngir grennavnet i *slug-form* (`feat-spec-drift`) og repo-navnet ordrett, fordi Step 8 sitt innholdssøk grepper etter nettopp de to strengene (`$BRANCH` med `/` byttet til `-`, og `$REPO`) — se Step 5. Fasit: punkt 1–5 DONE, punkt 6–9 NOT DONE, `total_items` 9. Commit fixturen før kjøringene, ellers refuserer `/ship` på uren tre:
 
 ```bash
 git add tests/fixtures/spec-drift/stale-plan.md
@@ -1147,7 +1332,7 @@ git push
 Én linje endret i en *lokal kopi* — den ekte filen røres ikke:
 
 ```bash
-SCRATCH=$(mktemp -d)
+SCRATCH=$(mktemp -d) && : "${SCRATCH:?mktemp failed}"
 cp ~/.claude/skills/gstack/ship/sections/plan-completion.md "$SCRATCH/plan-completion.md"
 printf '\n<!-- spec-drift hash-guard test: one extra line -->\n' >> "$SCRATCH/plan-completion.md"
 python3 scripts/spec-drift.py check --upstream "$SCRATCH/plan-completion.md"; echo "exit=$?"
@@ -1173,14 +1358,25 @@ Noter per kjøring: `total_items`, mengden punkter dømt DONE, mengden dømt NOT
 
 - [ ] **Step 5: Tre `/ship`-kjøringer stoppet etter Step 8 (specens punkt 2)**
 
-`/ship` sitt Step 8 finner planen via samtalekontekst — dets innholdssøk leter i `~/.gstack/projects/<slug>`, `~/.claude/plans`, `~/.codex/plans` og `.gstack/plans`, aldri i dette repoets kataloger. Derfor, tre ganger, hver i en ny sesjon:
+`/ship` sitt Step 8 kjører som subagent med frisk kontekst: den ser verken brukerens meldinger eller denne sesjonen, og dens innholdssøk leter kun i `~/.gstack/projects/<slug>`, `~/.claude/plans`, `~/.codex/plans` og `.gstack/plans` — aldri i `tests/fixtures/`. Å nevne stien i samtalen er derfor ikke nok (det var planens første, feilaktige antakelse; tredje lens fant den). Fixturen må ligge der Step 8 søker *først*, utenfor repoet så treet forblir rent, og inneholde grennavnets slug-form som Step 8 grepper etter. Slug-beregningen under er kopiert ordrett fra Step 8 sitt eget script, så stien blir den samme:
 
-1. Skriv først, som vanlig melding: `Planen for denne grenen er tests/fixtures/spec-drift/stale-plan.md.`
-2. Kjør `/ship`. La den gå gjennom Step 0–7 (base-deteksjon, pre-flight, merge av base, tester, dekningsaudit). Svar nøkternt på det den spør om underveis, uten å endre filer.
-3. Når blokken `PLAN COMPLETION AUDIT … COMPLETION: …` og JSON-linjen fra Step 8 vises: noter de samme feltene som i Step 4.
-4. Step 8 sin port spør om NOT DONE-punktene (A/B/C). Velg **A) Stop** — det avslutter `/ship` uten versjonsbump, CHANGELOG-skriving eller PR.
+```bash
+_PLAN_SLUG=$(git remote get-url origin 2>/dev/null | sed 's|.*[:/]\([^/]*/[^/]*\)\.git$|\1|;s|.*[:/]\([^/]*/[^/]*\)$|\1|' | tr '/' '-' | tr -cd 'a-zA-Z0-9._-') || true
+_PLAN_SLUG="${_PLAN_SLUG:-$(basename "$PWD" | tr -cd 'a-zA-Z0-9._-')}"
+mkdir -p ~/.gstack/projects/"$_PLAN_SLUG"
+cp tests/fixtures/spec-drift/stale-plan.md ~/.gstack/projects/"$_PLAN_SLUG"/spec-drift-stale-plan.md
+ls -t ~/.gstack/projects/"$_PLAN_SLUG"/*.md | xargs grep -l "feat-spec-drift" | head -1   # må skrive ut kopien
+```
 
-Forventet: `total_items` 9, samme DONE- og NOT DONE-mengder som i Step 4, i alle tre. Skulle `/ship` bumpe versjon eller opprette PR likevel, avbryt og tilbakestill kun det (`git reset --hard` er **ikke** lov uten stash — se git-hygiene; bruk `git revert` på en eventuell commit).
+Den siste linjen er Step 8 sitt eget søk; skriver den ut en annen fil, er det den `/ship` kommer til å auditere — flytt eller vent, ikke fortsett. Så, tre ganger, hver i en ny sesjon:
+
+1. Kjør `/ship`. La den gå gjennom Step 0–7 (base-deteksjon, pre-flight, merge av base, tester, dekningsaudit). Svar nøkternt på det den spør om underveis, uten å endre filer.
+2. Når blokken `PLAN COMPLETION AUDIT … COMPLETION: …` og JSON-linjen fra Step 8 vises: noter de samme feltene som i Step 4, **pluss** `PLAN_FILE:`-linjen subagenten skrev (beviset på at den auditerte kopien av fixturen og ikke noe annet).
+3. Step 8 sin port spør om NOT DONE-punktene (A/B/C). Velg **A) Stop** — det avslutter `/ship` uten versjonsbump, CHANGELOG-skriving eller PR.
+
+Etter tredje kjøring: `rm ~/.gstack/projects/"$_PLAN_SLUG"/spec-drift-stale-plan.md`, ellers finner neste ekte `/ship` i dette repoet fixturen i stedet for den virkelige planen.
+
+Forventet: `total_items` 9, samme DONE- og NOT DONE-mengder som i Step 4, i alle tre. Gir en kjøring `No plan file detected` eller `total_items` 0, fant ikke Step 8 kopien — det er et oppsettproblem (kjør `ls`/`grep`-linjen over igjen), ikke et datapunkt; kjøringen telles ikke. Skulle `/ship` bumpe versjon eller opprette PR likevel, avbryt og tilbakestill kun det (`git reset --hard` er **ikke** lov uten stash — se git-hygiene; bruk `git revert` på en eventuell commit).
 
 - [ ] **Step 6: Den stående alarmen (D8)**
 
@@ -1245,28 +1441,41 @@ Plan under test: `tests/fixtures/spec-drift/stale-plan.md` (9 punkter; 5 finnes 
 **Ti-kjøringers-målet** (andel reelle funn) starter nå; føres her etter hvert.
 ```
 
-Fyll tabellen med de faktiske observasjonene — ikke med fasiten. Et avvik på DONE/NOT DONE-aksen er en regresjon i wrapperen og skal skrives inn som det, med kjøringsnummer, før fasen lukkes.
+Fyll tabellen med de faktiske observasjonene — ikke med fasiten.
 
-- [ ] **Step 8: Oppdater planen, commit, push**
+**Feilgrenen — den eneste veien videre ved avvik.** Hvis noen av de seks kjøringene gir `total_items` ≠ 9, eller to kjøringer er uenige om ett punkts plass på DONE/NOT DONE-aksen, eller hash-guarden i Step 3 ikke nektet: **stopp her.** Ikke kryss av noe i planen, ikke skriv Step 8 sin commit. Skriv avviket inn i tabellen med kjøringsnummer og hva som var ulikt, og skriv under tabellen én setning om hva som er den sannsynlige årsaken (en overstyring subagenten ikke fulgte? et punkt fixturen formulerer tvetydig? en Step 8-regel wrapperen ikke bevarer?). Rett årsaken i en egen commit merket `fix(spec-drift): …`, og **kjør alle seks auditene på nytt** — ikke bare den som avvek — før tabellen fylles på nytt. Først når tabellen viser lik dom i 6/6 fortsetter Step 8. Et avvik på DONE/NOT DONE-aksen er en regresjon i wrapperen; `PARTIAL`↔`CHANGED` alene er støy og noteres i «Annet»-kolonnen uten å stoppe.
 
-Kryss av fase 4 sine steg i denne planen med commit-SHA-er der de finnes (plan-fidelity: samme notasjon filen allerede bruker). Så:
+- [ ] **Step 8: Oppdater planen, commit, push — kun etter 6/6**
+
+Kryss av fase 1–3 sine steg i denne planen med commit-SHA-ene fra `git log --oneline main..HEAD` (plan-fidelity: samme notasjon filen allerede bruker; fase 1–3 sine subagenter kan ikke gjøre det selv, planen står ikke i deres `Files:`-blokker). Fase 4 sine egne steg krysses av med markøren `(denne commiten)` i stedet for SHA — commiten som inneholder avkryssingen kan ikke inneholde sin egen SHA. Så, med tallene fra tabellen satt inn (ikke fra fasiten):
 
 ```bash
 git add tests/unit/test_spec_drift_upstream_alarm.py \
         docs/superpowers/specs/2026-09-07-spec-drift-design.md \
         docs/superpowers/plans/2026-09-07-spec-drift.md
-git commit -m "test(spec-drift): Fase-1 verification — 3/3 equivalence with /ship Step 8, hash-guard, maintainer alarm
+git commit -m "test(spec-drift): Fase-1 verification — <6>/6 equivalence with /ship Step 8, hash-guard, maintainer alarm
 
 Six audits of a 9-item fixture plan (five present on the branch, four
-Fase-2/3 items absent): the standalone skill and /ship's own Step 8
-agree on the DONE / NOT DONE axis in every run. One added line in a
-local copy of the section is refused with both hashes named and no
-audit dispatched. A standing test now fails on any maintainer machine
-where gstack has changed the section since the pin (skipped in CI)."
+Fase-2/3 items absent): the standalone skill (<3> runs) and /ship's own
+Step 8 (<3> runs) agree on the DONE / NOT DONE axis in <6>/6 runs
+(<other: PARTIAL/CHANGED noise, if any>). One added line in a local copy
+of the section is refused with both hashes named and no audit
+dispatched. A standing test now fails on any maintainer machine where
+gstack has changed the section since the pin (skipped in CI)."
 git push
 ```
 
-Fase 4 er ferdig når tabellen står i specen og `pytest tests/unit -q` viser **380 passed** lokalt (379 + 1; i CI 379 passed + 1 skipped). Landing er neste beslutning, ikke en del av denne fasen: `/ship` — den fulle pipelinen — kjører Step 8 en gang til på veien, som et sjuende datapunkt.
+- [ ] **Step 9: Specens siste krav — pitfall-verification på hele diffen**
+
+Specen avslutter «Verifisering» med `superpowers-gstack:pitfall-verification` på diffen. `autoimplement` kjørte den per fase på fase 1–3; fase 4 sine endringer og helheten `main...HEAD` har ingen sett samlet. Kjør:
+
+```
+/superpowers-gstack:pitfall-verification --diff --diff-base main
+```
+
+Tier-gulvet beregnes av `scripts/classify-change.py` (instruksjonsflate under `skills/` er runtime, så gulvet er minst ship-worthy → Codex kjører). Funn som overlever synthesen rettes i en ny commit (`fix(spec-drift): …` — aldri `--amend` på pushet historikk), etterfulgt av `bash tests/run.sh --unit` og `python3 scripts/lint-skills.py`, og pitfall kjøres én gang til på den nye diffen. Et funn som viser at en av de seks auditene ville dømt annerledes, sender deg tilbake til Step 7 sin feilgren. Først når verdiktet er `CLEAN` er fasen ferdig.
+
+Fase 4 er ferdig når tabellen står i specen med lik dom i 6/6, Step 9 er `CLEAN`, og `bash tests/run.sh --unit` viser **413 passed** lokalt (412 + 1; i CI 412 passed + 1 skipped). Landing er neste beslutning, ikke en del av denne fasen: `/ship` — den fulle pipelinen — kjører Step 8 en gang til på veien, som et sjuende datapunkt.
 
 ---
 
@@ -1286,12 +1495,13 @@ Fase 4 er ferdig når tabellen står i specen og `pytest tests/unit -q` viser **
 | `autoimplement` kan kalle mekanisk | verdikt-linje + JSON sist; exit beregnet av script |
 | Rører aldri upstream, redigerer aldri kildekode | SKILL.md Phase 1 («never edit the upstream file»), override 5, «What this skill is not»; `test_skill_reports_only` |
 | Ingen ny tier-gate, ingen overlapp med pitfall/brainstorming | SKILL.md «What this skill is not» |
-| Verifisering 1–4, tre kjøringer av hver, lik dom på DONE/NOT DONE | Fase 4 Step 3–5 og resultattabellen |
-| Lint grønn inkl. routing coverage; `bash tests/run.sh --unit` | Hver fase; fase 3 ruting i fem filer |
+| Verifisering 1–4, tre kjøringer av hver, lik dom på DONE/NOT DONE | Fase 4 Step 3–5, resultattabellen og feilgrenen i Step 7 |
+| Lint grønn inkl. routing coverage; `bash tests/run.sh --unit` | Hver fase kjører CI-kommandoen (samme suite som `tests/run.sh --unit`); fase 4 Step 1 kjører specens kommando ordrett; fase 3 ruting i fem filer |
+| «Til slutt pitfall-verification på diffen» | Fase 4 Step 9 (hele `main...HEAD`; per-fase-kjøringene er `autoimplement` sine) |
 | Ti-kjøringers-måling | Notert som startpunkt i resultatseksjonen (fase 4 Step 7) — selve målingen ligger utenfor planen |
 
 **Placeholder-skann:** Ingen «TBD»/«TODO»/«fyll inn». `<YYYY-MM-DD>`, `<versjon>`, `<12 tegn>` og `…` i fase 4 Step 7 er celler som skal fylles med *målte* verdier — det er poenget med steget, ikke en utsettelse. `<plan-path>`, `<base>`, `<SECTION_PATH>`, `<PLAN_PATH>`, `<BASE_REF>` i SKILL.md er skillens egne substitusjonsplasser og skal stå slik i filen.
 
 **Navnekonsistens på tvers av faser:** `scripts/spec-drift.py` med subkommandoene `check`, `repin [--yes]`, `verdict [--json]` og flaggene `--upstream`, `--pin-dir` — samme stavemåte i fase 1, 2, 3 (SKILL.md, testene) og 4. Exit-koder: `0/1/2` for skillen og `verdict`; `2` for `check`-avvik; `3` for `repin` uten `--yes` — `3` lekker aldri ut av skillen (SKILL.md oversetter den til «show the diff»). Pin-filer: `skills/spec-drift/pin.json` og `skills/spec-drift/pin/plan-completion.md` — samme stier i scriptets `DEFAULT_PIN_DIR`/`SNAPSHOT_NAME`, i SKILL.md «Re-pin mode», i `test_pin_and_snapshot_are_committed_together` og i fase 4 sin alarmtest. JSON-nøkler: `total_items, done, changed, deferred, unverifiable, summary` — identiske i `JSON_KEYS`, i SKILL.md override 6 og i begge tester som pinner dem. Kontraktstrenger testene leter etter finnes ordrett i SKILL.md: `The plan path is an argument, never discovered.`, `never edits source code`, `Do not commit, push`, `run_in_background: false`, `## Re-pin mode`, `spec-drift.py" check`, `spec-drift.py" repin`, `repin --yes`, `spec-drift.py" verdict`.
 
-**Testtall:** 352 → 359 (fase 1, +7) → 370 (fase 2, +11) → 379 (fase 3, +9) → 380 lokalt / 379 + 1 skipped i CI (fase 4, +1).
+**Testtall** (CI-kommandoen `pytest tests/unit scripts/cost-ledger -q`): 378 → 388 (fase 1, +10) → 403 (fase 2, +15) → 412 (fase 3, +9) → 413 lokalt / 412 + 1 skipped i CI (fase 4, +1).
