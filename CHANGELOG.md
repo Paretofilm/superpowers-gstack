@@ -34,7 +34,7 @@ will never be shipped, or against a baseline older than the branch. Design:
   Fail closed: empty diff, unreadable plan, zero actionable items and pin
   mismatch are all exit 2, never 0.
 - Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
-  README. 100 unit tests across `test_spec_drift_pin.py`,
+  README. 103 unit tests across `test_spec_drift_pin.py`,
   `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` and
   `test_spec_drift_upstream_alarm.py` — the skill tests are omission tests: Step 8
   text pasted into SKILL.md, a discovery heuristic brought back, or the check
@@ -74,6 +74,30 @@ will never be shipped, or against a baseline older than the branch. Design:
   breaks the check instead of silently restoring the execute path.
 - `RECEIPT WRITE FAILED` joined the module docstring's list of named exit-2
   reasons, which had omitted the one refusal it did not enumerate.
+- **A re-pin receipt could certify a diff nobody received.** stdout is buffered,
+  so `repin | head` failed at flush *after* the receipt was already on disk —
+  and `--yes` would then accept never-shown bytes, with the `--sha` lifted from
+  `check`'s own output. Reproduced, then closed: the whole message is flushed
+  first, and a delivery failure writes no receipt (`DIFF NOT DELIVERED`, exit 2).
+- **The invisible-character set is now Unicode's format category (Cf) whole**,
+  not a hand-picked subset of it — two review rounds each found one more member
+  the subset had missed. A test asserts the enumeration equals what
+  `unicodedata` reports, so it cannot drift from the standard silently, and
+  astral format characters (tag characters U+E0020–E007F) now escape as
+  `\Uxxxxxxxx` rather than a 5-digit escape no convention defines.
+- The ninth anchor is line-anchored to the actual `**Validator detection.**`
+  step rather than the bare phrase, so upstream moving the step while the words
+  survive in a cross-reference cannot leave override 8 suppressing nothing.
+- The dispatch prompt now extends its single-quoting rule to paths taken **from
+  the plan**: the plan is a file in the branch under audit, so a path it names is
+  attacker-shaped input in a way `<PLAN_PATH>` is not.
+
+Known and documented, not fixed here: `check` verifies the section's bytes and
+the subagent then reads that path itself, so a swap between the two is possible —
+narrowed by having the subagent re-run `check` immediately before its own read,
+but not closed. Closing it means handing the subagent verified bytes instead of a
+path, which is the one thing the omission tests forbid, since an inlined copy is
+what drifts. Fase 2.
 
 ### Changed
 - `skills/setup-routing/blocks/plan-fidelity.md` v2 → **v3**: the paragraph every

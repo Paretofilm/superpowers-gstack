@@ -465,3 +465,49 @@ def test_bidi_marks_are_escaped_and_warned_like_the_overrides(rig, cp, name):
     assert ch not in p.stdout, f"{name} reached the diff unescaped"
     assert esc in p.stdout, f"{name} should render as {esc}"
     assert "INVISIBLE CHARS" in p.stderr, name
+
+
+def test_format_set_is_exactly_unicode_category_cf():
+    """Two review rounds each found one more invisible character the hand-picked
+    set had missed (LRM/RLM/ALM, then U+2060 WORD JOINER). The set is now the
+    whole Cf category, enumerated as ranges for speed — this test is what keeps
+    the enumeration honest, and what will tell a future reader exactly which
+    codepoints to add when Python ships a newer Unicode."""
+    import unicodedata
+    invisible = module()._INVISIBLE
+    cf = {c for c in range(0x110000) if unicodedata.category(chr(c)) == "Cf"}
+    missing = sorted(c for c in cf if not invisible.fullmatch(chr(c)))
+    extra = sorted(c for c in range(0x110000)
+                   if invisible.fullmatch(chr(c)) and unicodedata.category(chr(c)) != "Cf")
+    assert not missing, (f"Unicode {unicodedata.unidata_version} has Cf characters _FORMAT "
+                         f"does not cover: {[hex(c) for c in missing]}")
+    assert not extra, f"_FORMAT covers non-Cf characters: {[hex(c) for c in extra]}"
+
+
+def test_a_diff_that_never_reached_stdout_leaves_no_receipt(rig):
+    """The receipt certifies that a human SAW the diff. stdout is buffered, so a
+    closed pipe (`repin | head`) failed at flush AFTER the receipt was already on
+    disk — and --yes would then accept never-shown bytes, with the --sha lifted
+    from `check`'s output. Codex, 2.52.0; reproduced before the fix."""
+    upstream, pin_dir = rig
+    accept(upstream, pin_dir)
+    upstream.write_text(SECTION.replace("line two", "line two, changed upstream"))
+    p = subprocess.Popen([sys.executable, str(SCRIPT), "repin", *common(upstream, pin_dir)],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p.stdout.close()          # the reader goes away before the diff is flushed
+    p.stderr.read()
+    assert p.wait() == 2, "an undelivered diff is not a confirmation"
+    assert not (pin_dir / ".repin-receipt").is_file(), \
+        "a receipt for a diff nobody saw re-authorises --yes"
+
+
+def test_an_astral_format_character_is_escaped_readably(rig):
+    """Tag characters (U+E0020-E007F) are the astral half of the invisible
+    problem. `\\u{:04x}` would render U+E0020 as a 5-digit escape no convention
+    defines; above the BMP the escape is `\\U` + 8 digits, like Python's own."""
+    upstream, pin_dir = rig
+    accept(upstream, pin_dir)
+    upstream.write_text(SECTION.replace("line two", "line \U000e0020two"))
+    p = run("repin", *common(upstream, pin_dir), expect=3)
+    assert "\U000e0020" not in p.stdout and r"\U000e0020" in p.stdout
+    assert "INVISIBLE CHARS" in p.stderr

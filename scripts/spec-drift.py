@@ -83,7 +83,10 @@ ANCHORS = (
     # because it ships that repo's branch, but this skill audits branches nobody
     # is shipping. If upstream renames the step, the override stops suppressing
     # anything and the audit silently regains the right to execute repo code.
-    ("Validator detection", r"Validator detection"),
+    # Line-anchored to the actual step, not the bare phrase: upstream could
+    # otherwise rename or move the step while the words survive in a cross-
+    # reference, and the override would stop suppressing anything silently.
+    ("Validator detection", r"^(> )?\*\*Validator detection\.\*\*"),
 )
 
 EXIT_OK, EXIT_DRIFT, EXIT_CANNOT, EXIT_CONFIRM = 0, 1, 2, 3
@@ -97,23 +100,28 @@ SHA_PREFIX = 12   # chars of the digest printed as the --sha receipt; also the m
 # 0x20 except tab and newline — carriage return included: splitlines keeps a
 # bare \r at the end of its line, and a terminal then returns to column 0 and
 # lets the next diff line overwrite the one the reader just saw.
-# The bidi set is Unicode's Bidi_Control property, not a hand-picked subset:
-# LRM/RLM/ALM are weaker than the overrides (they reorder neutral runs rather
-# than repainting arbitrary text) but they are equally invisible, so leaving
-# them out let a crafted upstream through the confirmation diff both unescaped
-# and unflagged — exactly what the comment above promises it cannot do.
-_BIDI = (chr(0x202A) + "-" + chr(0x202E) + chr(0x2066) + "-" + chr(0x2069)  # embedding/override/isolate
-         + chr(0x061C))                                                     # ALM
-_ZERO_WIDTH = chr(0x200B) + "-" + chr(0x200F) + chr(0xFEFF)                # ZW space/joiners, LRM, RLM, BOM
-_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f\x80-\x9f" + _BIDI + _ZERO_WIDTH + "]")
+# The invisible set is Unicode's format category (Cf) whole, not a hand-picked
+# subset of it. Two review rounds each found one more character the subset had
+# missed (LRM/RLM/ALM, then U+2060 WORD JOINER); a guard whose membership is
+# decided by whoever last thought about it is not a guard. Enumerated as ranges
+# rather than derived from unicodedata at import (that is a 1.1M-codepoint scan
+# on every run) — test_format_set_is_exactly_unicode_category_cf proves the
+# enumeration equals the category, so it cannot drift from the standard silently.
+_FORMAT = (
+    "­؀-؅؜۝܏࢐࢑࣢᠎"
+    "​-‏‪-‮⁠-⁤⁦-⁯﻿￹-￻"
+    "\U000110bd\U000110cd\U00013430-\U0001343f\U0001bca0-\U0001bca3"
+    "\U0001d173-\U0001d17a\U000e0001\U000e0020-\U000e007f"
+)
+_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f\x80-\x9f" + _FORMAT + "]")
 # Characters worth a warning with line numbers even after escaping: a reader
 # skims a diff; an escaped zero-width joiner is easy to read past.
-_INVISIBLE = re.compile("[" + _ZERO_WIDTH + _BIDI + "]")
+_INVISIBLE = re.compile("[" + _FORMAT + "]")
 # PADDING ONLY — the edges of a line, never its interior. Stripping invisibles
 # from the whole line REPAIRS hostile input instead of refusing it: a model (or
 # whoever shaped its output) writing "do​ne" would have the key normalised
 # to "done" and the line scored CLEAN. Verified reproducible, 2.52.0.
-_INVISIBLE_PAD = re.compile(r"^[\s`" + _ZERO_WIDTH + _BIDI + r"]+|[\s`" + _ZERO_WIDTH + _BIDI + r"]+$")
+_INVISIBLE_PAD = re.compile(r"^[\s`" + _FORMAT + r"]+|[\s`" + _FORMAT + r"]+$")
 
 
 def default_upstream() -> Path | None:
@@ -174,7 +182,10 @@ def read_upstream(upstream: Path) -> tuple[bytes, str, str]:
 
 
 def visible(line: str) -> str:
-    return _CONTROL.sub(lambda m: f"\\u{ord(m.group()):04x}", line)
+    def escape(m) -> str:
+        c = ord(m.group())
+        return f"\\u{c:04x}" if c <= 0xFFFF else f"\\U{c:08x}"
+    return _CONTROL.sub(escape, line)
 
 
 def missing_anchors(text: str) -> list[str]:
@@ -375,15 +386,26 @@ def cmd_repin(a) -> int:
             print(f"\nWARNING: INVISIBLE CHARS (zero-width, BOM or bidi controls) at line(s) "
                   f"{', '.join(map(str, invisible[:10]))} — a diff cannot show them; inspect the "
                   "bytes before accepting", file=sys.stderr)
+        print("\nANCHORS: all present")
+        print(f"REPIN REQUIRES CONFIRMATION: +{added} -{removed} lines. Read the diff above, "
+              f"verify the wrapper's overrides still match, then re-run with --yes --sha {short(current)}")
+        # The receipt certifies that a human SAW this diff, so it must not reach
+        # disk until the whole message has actually left the process. stdout is
+        # buffered: `repin | head` fails at flush, which used to happen AFTER the
+        # receipt was written — leaving --yes able to accept never-shown bytes
+        # with a --sha lifted from `check`'s output. Codex, 2.52.0; reproduced.
+        try:
+            sys.stdout.flush()
+        except (BrokenPipeError, OSError) as exc:
+            print(f"DIFF NOT DELIVERED: stdout closed before the diff was shown ({exc}) — "
+                  "no receipt written; re-run with stdout attached", file=sys.stderr)
+            return EXIT_CANNOT
         try:
             pin_dir.mkdir(parents=True, exist_ok=True)
             _atomic_write(receipt_path(pin_dir), (current + "\n").encode(ENCODING))
         except OSError as exc:
             print(f"RECEIPT WRITE FAILED: {receipt_path(pin_dir)}: {exc}", file=sys.stderr)
             return EXIT_CANNOT
-        print("\nANCHORS: all present")
-        print(f"REPIN REQUIRES CONFIRMATION: +{added} -{removed} lines. Read the diff above, "
-              f"verify the wrapper's overrides still match, then re-run with --yes --sha {short(current)}")
         return EXIT_CONFIRM
     if missing:
         print(f"REPIN REFUSED: ANCHORS MISSING: {', '.join(missing)}", file=sys.stderr)
