@@ -31,6 +31,7 @@ Alle fasers krav inkluderer implisitt denne seksjonen.
 - **Lint-regler som treffer en ny skill:** E1 (frontmatter, `name` = katalognavn, `description` finnes), E2 (`$SKILL_DIR/../../scripts/<fil>` må finnes i repoet; `superpowers-gstack:<navn>` må finnes), E3 (`spec-drift` må nevnes i `CLAUDE.md`), E4 (versjon ↔ CHANGELOG), E7 (denylist skanner også `scripts/*.py`), W1 (`description` ≤ 30 ord). Merk at E1 feiler på en katalog under `skills/` uten `SKILL.md` — derfor opprettes `skills/spec-drift/` først i fase 3.
 - **Versjon:** `.claude-plugin/plugin.json` `2.51.1` → `2.52.0` i fase 3, med matchende `## [2.52.0]`-entry i `CHANGELOG.md`.
 - **Git-hygiene:** stage eksplisitte stier (aldri `git add -A`), aldri `--no-verify`, commit-format `<type>(spec-drift): <sammendrag>`. Push etter hver fase-commit (`git push -u origin feat/spec-drift` første gang, deretter `git push`).
+- **Kvitteringsfilen:** en diff-kjøring av `repin` skriver `skills/spec-drift/.repin-receipt` (sha256 av bytene den viste); `--yes` krever at den finnes og matcher, og sletter den. Filen er gitignorert (`skills/spec-drift/.repin-receipt` i `.gitignore`) og skal aldri committes — den er per maskin med vilje, fordi den beviser at *denne* maskinen viste diffen.
 - **Upstream-fakta ved planlegging (2026-09-07):** gstack `1.81.0.0` installert som git-klone i `~/.claude/skills/gstack` (MIT, Garry Tan). `ship/sections/plan-completion.md` er 331 linjer, sha256 `e329e5ef76991a02f0248931974667106ee1ad8ec4a324651efa3c6d1291df2f`. Pinnen i fase 3 lages fra disk, ikke fra dette tallet — tallet er der for at implementøren skal *oppdage* om gstack oppdaterte seg mellom plan og implementasjon, og i så fall lese diffen før pinning.
 
 ---
@@ -530,6 +531,19 @@ a weekly gstack update is read, not waved through."
 git push -u origin feat/spec-drift
 ```
 
+**Utført (commit `5870d8e`, 10 tester, 388 i suiten) — og deretter rettet etter review.** `autoimplement` kjørte `/review` på fasen: tre spesialister, Claude-adversarial, Codex-adversarial (Codex' strukturerte pass falt bort på spend cap) og Red Team. Review-commiten `fix(spec-drift): review findings on Phase 1` endrer scriptet og testene slik at de **avviker fra blokkene over** på disse punktene — blokkene står som de ble utført, koden i repoet er fasit:
+
+- **Én lesning.** `read_upstream()` leser bytene én gang; hash, ankersjekk, diff, kvittering og snapshot utledes fra samme bytes (tre spesialister og begge adversarielle lensene fant at `--yes` leste filen på nytt etter `--sha`-sjekken).
+- **Kvitteringsfil.** Diff-kjøringen skriver `.repin-receipt`; `--yes` krever den (Codex: `check` skriver også ut de 12 tegnene, så `--sha` alene beviste ikke at noen så en diff). `--sha` må være minst `SHA_PREFIX` = 12 tegn.
+- **Atomiske skrivinger** via `os.replace`, alt i `try/except OSError` → `PIN WRITE FAILED`, exit 2.
+- **Skjema-validering** av `pin.json` (`PIN_KEYS`: alle fire felt ikke-tomme strenger), `UnicodeDecodeError`/`RecursionError`/`ValueError` fanget, størrelsestak 4 MB, `BrokenPipeError` → exit 2.
+- **Ankere** er nå `(navn, regex)` med linjeforankrede overskrifter (valgfritt `> `-prefiks) og krav om at Step 8 kommer før Step 8.1.
+- **«Uendret»** betyr det samme i `repin` som i `check`: snapshot-bytes *og* `pin.json` lik upstream-bytes (en CRLF-snapshot ga før `PIN UNCHANGED` exit 0 og `PIN CORRUPT` samtidig).
+- **Visning:** kontrolltegn i diffen escapes, usynlige tegn (zero-width, BOM, bidi) varsles, CRLF↔LF navngis; `VERSION`-innhold saneres (første linje, `[\w.+-]{1,40}`).
+- **Hjelpere:** `short()`, `snapshot_path()`, `receipt_path()`, `gstack_version()` går opp til tre nivåer i stedet for `parents[2]`; `--pin-dir` får `expanduser()`. `sub.choices["repin"]` beholdes med vilje: det er fase 2 sitt innsettingsanker.
+- **Red Team-runden** (mot den committede versjonen) la til: diff-grunnlaget er snapshotet *bare* når det matcher `pin.json` — ellers vises hele seksjonen som nye linjer (et snapshot som bare *er lik* upstream ga tom diff, kvittering og blindaksept); tom `--pin-dir` avvises (`PIN DIR INVALID`), `--pin-dir` resolves; overskriftsrekkefølge Step 8 → Plan File Discovery → Gate Logic → Step 8.1 håndheves; stdout/stderr rekonfigureres med `backslashreplace`; argparse-feil gir `USAGE ERROR` med exit 2; `Path.home()` beregnes lat; en siste skanse i `main` gjør `INTERNAL: … → exit 2` av alt uventet.
+- **Tester:** 10 → 26 (`tests/unit/test_spec_drift_pin.py`); suiten 388 → **404**. Tallene i fase 2–4 under er justert tilsvarende.
+
 ---
 
 ## Phase 2: `verdict` — Step 8-JSON til exit-kode
@@ -740,7 +754,7 @@ Forventet: `15 passed`.
 
 - [ ] **Step 5: Hele suiten og lint**
 
-Kjør: `pytest tests/unit scripts/cost-ledger -q` — forventet **403 passed** (388 + 15).
+Kjør: `pytest tests/unit scripts/cost-ledger -q` — forventet **419 passed** (404 + 15).
 Kjør: `python3 scripts/lint-skills.py` — forventet `0 error(s), 2 warning(s)`.
 
 - [ ] **Step 6: Commit og push**
@@ -1045,8 +1059,10 @@ auto-updates weekly. Re-pinning is deliberate, in steps, and never blind:
 Step 8 says to run as a subagent, in the foreground, and that executing it
 inline forfeits the fresh-context isolation. That holds here. Invoke the
 `Agent` tool with `subagent_type: "general-purpose"`, `run_in_background: false`,
-`description: "spec-drift audit"`, and this prompt with the three placeholders
-filled (`<SECTION_PATH>` is the upstream path or the `--section` value):
+`description: "spec-drift audit"`, and this prompt with the four placeholders
+filled (`<SECTION_PATH>` is the upstream path or the `--section` value;
+`<SCRIPT_PATH>` is the absolute path of `"$SKILL_DIR/../../scripts/spec-drift.py"`
+— the subagent has its own shell and cwd, so never a relative path):
 
 ```
 You are the dispatched subagent for a standalone plan-completion audit
@@ -1060,6 +1076,12 @@ Overrides. Each replaces the part of Step 8 it names; everything else in Step 8
 applies verbatim — the extraction rules, the verification modes, the verdict
 definitions and their cautions.
 
+0. Before you read the section, run `python3 <SCRIPT_PATH> check` (add
+   `--upstream <SECTION_PATH>` if it is not the default) and confirm it prints
+   `PIN OK`. The parent ran it moments ago, but the file is auto-updated by a
+   third party and only a check made by the process that reads the bytes
+   closes that window. Anything else: emit the JSON line with total_items 0
+   and the check's stderr in "summary", and stop.
 1. You ARE the subagent Step 8 says to dispatch. Do not dispatch another agent;
    execute the quoted subagent prompt yourself.
 2. "Plan File Discovery": skip it entirely. The plan file is <PLAN_PATH> — no
@@ -1203,7 +1225,7 @@ will never be shipped, or against a baseline older than the branch. Design:
   Fail closed: empty diff, unreadable plan, zero actionable items and pin
   mismatch are all exit 2, never 0.
 - Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
-  README. 34 unit tests across `test_spec_drift_pin.py`,
+  README. 50 unit tests across `test_spec_drift_pin.py`,
   `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` — the last one is
   omission tests: Step 8 text pasted into SKILL.md, a discovery heuristic brought
   back, or the check moved after the dispatch each turn the suite red.
@@ -1231,7 +1253,7 @@ Forventet: `9 passed`.
 
 - [ ] **Step 11: Hele suiten og lint**
 
-Kjør: `pytest tests/unit scripts/cost-ledger -q` — forventet **412 passed** (403 + 9).
+Kjør: `pytest tests/unit scripts/cost-ledger -q` — forventet **428 passed** (419 + 9).
 Kjør: `python3 scripts/lint-skills.py` — forventet `0 error(s), 2 warning(s) across 18 skills`. Blir det rødt, er de sannsynlige årsakene: E3 (punktet i `CLAUDE.md` mangler eller staver `spec-drift` feil), E4 (CHANGELOG-overskriften matcher ikke `2.52.0` tegn for tegn), E2 (`spec-drift.py` staves annerledes i SKILL.md enn i `scripts/`), W1 som *error* skjer ikke, men sjekk at `description` er ≤ 30 ord (den er 28).
 
 - [ ] **Step 12: Commit og push**
@@ -1279,7 +1301,7 @@ Dette er specens «Verifisering hvis fase 1 bygges», punkt 1–4, pluss den st�
 ```bash
 git status --porcelain            # tomt
 git log --oneline main..HEAD      # fase 1–3-commitene (pluss spec/IDEAS/plan-commitene) synlige
-bash tests/run.sh --unit          # specens egen kommando: 412 passed (= pytest tests/unit scripts/cost-ledger -q)
+bash tests/run.sh --unit          # specens egen kommando: 428 passed (= pytest tests/unit scripts/cost-ledger -q)
 python3 scripts/lint-skills.py    # 0 error(s)
 python3 scripts/spec-drift.py check   # PIN OK
 git fetch origin && git merge origin/main --no-edit   # så /ship sitt Step 3 ikke lager en merge-commit midt i kjøringene
@@ -1475,7 +1497,7 @@ Specen avslutter «Verifisering» med `superpowers-gstack:pitfall-verification` 
 
 Tier-gulvet beregnes av `scripts/classify-change.py` (instruksjonsflate under `skills/` er runtime, så gulvet er minst ship-worthy → Codex kjører). Funn som overlever synthesen rettes i en ny commit (`fix(spec-drift): …` — aldri `--amend` på pushet historikk), etterfulgt av `bash tests/run.sh --unit` og `python3 scripts/lint-skills.py`, og pitfall kjøres én gang til på den nye diffen. Et funn som viser at en av de seks auditene ville dømt annerledes, sender deg tilbake til Step 7 sin feilgren. Først når verdiktet er `CLEAN` er fasen ferdig.
 
-Fase 4 er ferdig når tabellen står i specen med lik dom i 6/6, Step 9 er `CLEAN`, og `bash tests/run.sh --unit` viser **413 passed** lokalt (412 + 1; i CI 412 passed + 1 skipped). Landing er neste beslutning, ikke en del av denne fasen: `/ship` — den fulle pipelinen — kjører Step 8 en gang til på veien, som et sjuende datapunkt.
+Fase 4 er ferdig når tabellen står i specen med lik dom i 6/6, Step 9 er `CLEAN`, og `bash tests/run.sh --unit` viser **429 passed** lokalt (428 + 1; i CI 428 passed + 1 skipped). Landing er neste beslutning, ikke en del av denne fasen: `/ship` — den fulle pipelinen — kjører Step 8 en gang til på veien, som et sjuende datapunkt.
 
 ---
 
@@ -1504,4 +1526,4 @@ Fase 4 er ferdig når tabellen står i specen med lik dom i 6/6, Step 9 er `CLEA
 
 **Navnekonsistens på tvers av faser:** `scripts/spec-drift.py` med subkommandoene `check`, `repin [--yes]`, `verdict [--json]` og flaggene `--upstream`, `--pin-dir` — samme stavemåte i fase 1, 2, 3 (SKILL.md, testene) og 4. Exit-koder: `0/1/2` for skillen og `verdict`; `2` for `check`-avvik; `3` for `repin` uten `--yes` — `3` lekker aldri ut av skillen (SKILL.md oversetter den til «show the diff»). Pin-filer: `skills/spec-drift/pin.json` og `skills/spec-drift/pin/plan-completion.md` — samme stier i scriptets `DEFAULT_PIN_DIR`/`SNAPSHOT_NAME`, i SKILL.md «Re-pin mode», i `test_pin_and_snapshot_are_committed_together` og i fase 4 sin alarmtest. JSON-nøkler: `total_items, done, changed, deferred, unverifiable, summary` — identiske i `JSON_KEYS`, i SKILL.md override 6 og i begge tester som pinner dem. Kontraktstrenger testene leter etter finnes ordrett i SKILL.md: `The plan path is an argument, never discovered.`, `never edits source code`, `Do not commit, push`, `run_in_background: false`, `## Re-pin mode`, `spec-drift.py" check`, `spec-drift.py" repin`, `repin --yes`, `spec-drift.py" verdict`.
 
-**Testtall** (CI-kommandoen `pytest tests/unit scripts/cost-ledger -q`): 378 → 388 (fase 1, +10) → 403 (fase 2, +15) → 412 (fase 3, +9) → 413 lokalt / 412 + 1 skipped i CI (fase 4, +1).
+**Testtall** (CI-kommandoen `pytest tests/unit scripts/cost-ledger -q`): 378 → 388 (fase 1 som planlagt, +10) → 404 (review-rettelsene på fase 1, +16) → 419 (fase 2, +15) → 428 (fase 3, +9) → 429 lokalt / 428 + 1 skipped i CI (fase 4, +1).
