@@ -54,6 +54,7 @@ from datetime import date
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+SELF = Path(__file__).resolve()          # named in messages: a cwd-relative path is wrong from a user's project
 DEFAULT_PIN_DIR = REPO / "skills" / "spec-drift"
 UPSTREAM_REL = Path(".claude") / "skills" / "gstack" / "ship" / "sections" / "plan-completion.md"
 SNAPSHOT_SUBDIR = "pin"                 # <pin-dir>/pin/<SNAPSHOT_NAME>
@@ -219,7 +220,7 @@ def cmd_check(a) -> int:
     pin = load_pin(pin_dir)
     if pin is None:
         print(f"NO PIN: {pin_dir / PIN_NAME} does not exist — review the section with "
-              f"`python3 scripts/spec-drift.py repin`, then accept it with --yes --sha",
+              f"`python3 {SELF} repin`, then accept it with --yes --sha",
               file=sys.stderr)
         return EXIT_CANNOT
     if not pin_well_formed(pin):
@@ -249,7 +250,7 @@ def cmd_check(a) -> int:
               f"(pinned {pin['pinned_at']}, gstack {pin['gstack_version']})\n"
               f"  gstack    {gstack_version(upstream)} installed\n"
               "Verify the wrapper's overrides still fit the section, then: "
-              "python3 scripts/spec-drift.py repin", file=sys.stderr)
+              f"python3 {SELF} repin", file=sys.stderr)
         return EXIT_CANNOT
     missing = missing_anchors(text)
     if missing:
@@ -269,6 +270,9 @@ def _atomic_write(path: Path, data: bytes) -> None:
     try:
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)
+        # mkstemp creates 0600 and os.replace keeps it; a committed, world-readable
+        # file must not flip to owner-only on every repin.
+        os.chmod(tmp, path.stat().st_mode & 0o777 if path.exists() else 0o644)
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)

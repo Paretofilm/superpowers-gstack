@@ -199,7 +199,7 @@ Out: macOS, watchOS, AppKit.
 
 **Differentiation.** `pitfall-verification` spør «ville dette virke?» om et artefakt sett innenfra; dette spør «stemmer artefaktet med virkeligheten?». `plan-fidelity` er prevensjon — en atferdsregel uten håndhevelse, som forutsetter at agenten husker den; dette er nettet under den, for avvikene regelen ikke fanget. `/ship` Step 8 er samme logikk, men låst til merge-tid. Ingen overlapp med intervju-/brainstorming-familien.
 
-**Status.** Fase 1 implementert i 2.52.0 på `feat/spec-drift` (`skills/spec-drift/SKILL.md`, `scripts/spec-drift.py`); plan: `docs/superpowers/plans/2026-09-07-spec-drift.md`. Fase 2–3 fortsatt deferred — vurderes hver for seg etter at fase 1 har vært i drift (måleform: andel reelle funn etter ti kjøringer). Fullt designdokument med begrunnelse, motforestillinger og verifiseringsplan: `docs/superpowers/specs/2026-09-07-spec-drift-design.md`.
+**Status.** Fase 1 implementert i 2.52.0 (`skills/spec-drift/SKILL.md`, `scripts/spec-drift.py`); plan: `docs/superpowers/plans/2026-09-07-spec-drift.md`. Fase 2–3 fortsatt deferred — vurderes hver for seg etter at fase 1 har vært i drift (måleform: andel reelle funn etter ti kjøringer). Fullt designdokument med begrunnelse, motforestillinger og verifiseringsplan: `docs/superpowers/specs/2026-09-07-spec-drift-design.md`.
 
 ---
 

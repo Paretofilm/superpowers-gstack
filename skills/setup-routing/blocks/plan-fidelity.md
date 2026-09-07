@@ -1,4 +1,4 @@
-## Keep the plan true to the code <!-- gstack-plan-fidelity-v2 -->
+## Keep the plan true to the code <!-- gstack-plan-fidelity-v3 -->
 
 When implementation diverges from the plan, **fix the plan in the same commit as the divergence.** Not at the end, not at `/ship`, not "later".
 
@@ -24,4 +24,4 @@ If a whole phase is invalidated, say so at the top of that phase and stop mainta
 
 ### Why this is not the ship gate's job
 
-`/ship` audits plan completion and classifies each item (`DONE` / `PARTIAL` / `CHANGED` / …), which is real and useful — but it runs at merge time, writes its findings to the PR body rather than back into the plan, and never runs at all on a branch that is not shipped. Divergence happens hours earlier, while the plan is still being read. Fix it there.
+`/ship` audits plan completion and classifies each item (`DONE` / `PARTIAL` / `CHANGED` / …), which is real and useful — but it runs at merge time and writes its findings to the PR body rather than back into the plan. `/superpowers-gstack:spec-drift <plan>` runs that same audit on any branch, shipped or not, and reports drift it finds — but it reports; it does not repair. Divergence happens hours earlier, while the plan is still being read. Fix it there.

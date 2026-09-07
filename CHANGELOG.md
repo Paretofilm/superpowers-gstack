@@ -6,7 +6,7 @@ An assessment of a third-party `--verify <spec>` skill turned out to be a survey
 what this repo already had: `/ship` Step 8 (the Plan Completion Audit) is stronger
 than the alternative on the axis that matters — it knows the diff cannot prove
 everything (`DIFF-VERIFIABLE` vs `CROSS-REPO` vs `EXTERNAL-STATE`). What it lacked
-was a way to be invoked at all outside a twenty-step ship pipeline, on a branch that
+was a way to be invoked at all outside the full ship pipeline, on a branch that
 will never be shipped, or against a baseline older than the branch. Design:
 `docs/superpowers/specs/2026-09-07-spec-drift-design.md`. This is its Fase 1.
 
@@ -15,13 +15,18 @@ will never be shipped, or against a baseline older than the branch. Design:
   generated from a template there, so this plugin can neither patch it nor make
   `/ship` call anything. The skill reads
   `~/.claude/skills/gstack/ship/sections/plan-completion.md` from disk at run time
-  and dispatches Step 8 as a foreground subagent with six overrides: no plan
-  discovery (the path is an argument), `<base>` is an argument, no
-  AskUserQuestion gates, report only, stop before Step 8.1, JSON last.
+  and dispatches Step 8 as a subagent with overrides for what differs when
+  nothing is being shipped: the subagent re-runs the hash check itself, does not
+  re-dispatch, skips plan discovery (the path is an argument), takes `<base>` as
+  an argument, answers no AskUserQuestion gate, edits nothing, stops before
+  Step 8.1, and ends with the six-key JSON line (PARTIAL items count in
+  `total_items` only).
 - **Hash-pinned** (`skills/spec-drift/pin.json` + a byte snapshot used only to
   show diffs). `scripts/spec-drift.py check` exits 2 on any mismatch and the skill
-  refuses to run; `repin` prints the unified diff and refuses to write without
-  `--yes`. gstack updates weekly, so the pin will break often — that is the point:
+  refuses to run; `repin` prints the unified diff, checks eight structural
+  anchors and records a receipt, and writing requires `--yes --sha <receipt>`
+  from that same run — refused if upstream changed in between, blocked while
+  an anchor the overrides depend on is missing. gstack updates weekly, so the pin will break often — that is the point:
   a guard overridden without showing what changed trains away its own effect.
 - **Same contract as Step 8** — same report, same last-line JSON — plus
   `SPEC-DRIFT: CLEAN|DRIFT|COULD-NOT-RUN (exit 0|1|2)` computed by
@@ -29,13 +34,22 @@ will never be shipped, or against a baseline older than the branch. Design:
   Fail closed: empty diff, unreadable plan, zero actionable items and pin
   mismatch are all exit 2, never 0.
 - Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
-  README. 64 unit tests across `test_spec_drift_pin.py`,
+  README. 70 unit tests across `test_spec_drift_pin.py`,
   `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` — the last one is
   omission tests: Step 8 text pasted into SKILL.md, a discovery heuristic brought
   back, or the check moved after the dispatch each turn the suite red.
 - Not in this release, by design: write-back into the plan and the drift ledger
   (Fase 2), the spec-blind inventory agent, prose-claim extraction and the
   security category (Fase 3).
+
+### Changed
+- `skills/setup-routing/blocks/plan-fidelity.md` v2 → **v3**: the paragraph every
+  generated CLAUDE.md carries no longer claims that no plan audit runs on an
+  unshipped branch; it names `/superpowers-gstack:spec-drift` and says what it does
+  not do (repair). Adopting projects pick the new block up on their next `/adapt`;
+  the v2 marker joins the lint denylist.
+- `VERSIONS.md`: GStack 1.79.0.0 → 1.81.0.0, read from the installed `VERSION` —
+  the same value `skills/spec-drift/pin.json` records.
 
 ## [2.51.1] - 2026-09-04
 
