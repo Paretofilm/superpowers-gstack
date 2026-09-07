@@ -202,3 +202,14 @@ def test_summary_must_be_a_string(summary):
             f'"summary":{summary}}}')
     rc, out = verdict(line)
     assert rc == 2 and "SPEC-DRIFT: COULD-NOT-RUN (exit 2)" in out and "summary is not a string" in out
+
+
+@pytest.mark.parametrize("restated", ["true", "1.0"])
+def test_a_restated_partial_must_be_an_integer(restated):
+    """Third lens, Fase-1 verification: True == 1 and 1.0 == 1, so a bool or float
+    `partial` slipped through the value-only contradiction check while the five
+    counts are held to exact int. Same rule for the restated key."""
+    line = ('{"total_items":3,"done":2,"changed":0,"deferred":0,"unverifiable":0,'
+            f'"summary":"- [x]","partial":{restated}}}')
+    rc, out = verdict(line)
+    assert rc == 2 and "partial is not an integer" in out

@@ -274,8 +274,14 @@ def _atomic_write(path: Path, data: bytes) -> None:
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)
         # mkstemp creates 0600 and os.replace keeps it; a committed, world-readable
-        # file must not flip to owner-only on every repin.
-        os.chmod(tmp, path.stat().st_mode & 0o777 if path.exists() else 0o644)
+        # file must not flip to owner-only on every repin. One stat, not
+        # exists()-then-stat(): a file removed between the two would turn a
+        # first write into PIN WRITE FAILED for no reason a reader could see.
+        try:
+            mode = path.stat().st_mode & 0o777
+        except OSError:
+            mode = 0o644
+        os.chmod(tmp, mode)
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
@@ -368,7 +374,11 @@ def cmd_repin(a) -> int:
     # --yes is bound to the bytes a diff run showed: the receipt that run wrote
     # must exist, --sha must be a real prefix of it, and upstream must still hash
     # to it now. `check` also prints the current digest, so --sha alone would not
-    # prove anyone looked at a diff; the receipt file does.
+    # tie --yes to a diff run; the receipt file does. That is a procedural guard,
+    # not proof: a caller who writes the file by hand from `check`'s output gets
+    # past it. The guard exists for the model that runs the skill, whose every
+    # file write is visible in its tool log — the diff run is the step it cannot
+    # quietly skip.
     try:
         receipt = receipt_path(pin_dir).read_text(encoding=ENCODING).strip() \
             if receipt_path(pin_dir).is_file() else ""
@@ -430,7 +440,9 @@ def _no_duplicate_keys(pairs):
 def last_json_line(text: str) -> dict | None:
     """The last non-empty line, parsed as one JSON object — or None. Splits on
     "\\n" only (JSON strings may carry U+2028 and friends raw), ignores zero-width
-    padding and a trailing ``` fence, and refuses duplicate keys."""
+    padding and a trailing ``` fence, and refuses duplicate keys. Text with bare
+    "\\r" line endings is therefore one line and parses as nothing — fail closed,
+    by design; a trailing "\\r" after the JSON (CRLF) is whitespace to json."""
     for line in reversed(text.split("\n")):
         line = _INVISIBLE.sub("", line).strip().strip("`")
         if not line:
@@ -493,9 +505,14 @@ def cmd_verdict(a) -> int:
     # clarification. (`not_done` is deliberately not checked: it is not in the
     # contract and its meaning is ambiguous, so enforcing one reading would
     # refuse valid audits.)
-    if "partial" in obj and obj["partial"] != partial:
-        return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
-                        f"partial={obj['partial']!r} contradicts the derived {partial}")
+    if "partial" in obj:
+        # Exact type, like the five counts: True == 1 and 1.0 == 1 in Python, so a
+        # value-only comparison would let a bool or float restate the remainder.
+        if type(obj["partial"]) is not int:
+            return _verdict("COULD-NOT-RUN", EXIT_CANNOT, "partial is not an integer")
+        if obj["partial"] != partial:
+            return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
+                            f"partial={obj['partial']!r} contradicts the derived {partial}")
     breakdown = (f"done={done} changed={changed} partial={partial} "
                  f"not_done={deferred} unverifiable={unver} of {total}")
     if done + changed == total:
