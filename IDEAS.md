@@ -189,7 +189,7 @@ Out: macOS, watchOS, AppKit.
 
 ---
 
-## `spec-drift` — frittstående spec-mot-kode-audit (proposed 2026-09-07)
+## `spec-drift` — frittstående spec-mot-kode-audit (proposed 2026-09-07, in progress)
 
 **Gap.** Vi har tre lag mot spec-drift allerede, og de dekker mer enn ventet: `plan-fidelity-v2` (regelblokk i alle prosjekters CLAUDE.md — «fiks planen i samme commit som avviket»), `/ship` Step 8 Plan Completion Audit (`~/.claude/skills/gstack/ship/sections/plan-completion.md`), `/ship` Step 8.2 Scope Drift Detection, `pitfall-verification:108` (signature drift) og `/document-release` (diagram-drift). Step 8 er faktisk *kraftigere* enn tredjeparts-alternativene på verifikasjonsmodus-aksen: den skiller `DIFF-VERIFIABLE` fra `CROSS-REPO` og `EXTERNAL-STATE`, altså erkjenner at diffen strukturelt ikke kan bevise alt. Men fem hull står igjen, og tre av dem har `plan-fidelity.md` skrevet ned selv: auditen (1) kan ikke invokeres frittstående, (2) skriver funn til PR-body og aldri tilbake i specen, (3) kjører aldri på grener som ikke shippes, (4) har ingen hukommelse mellom kjøringer så akseptert drift re-rapporteres, og (5) bruker `git diff base...HEAD` som baseline, så langsom drift på hovedgrenen er usynlig.
 
@@ -199,7 +199,7 @@ Out: macOS, watchOS, AppKit.
 
 **Differentiation.** `pitfall-verification` spør «ville dette virke?» om et artefakt sett innenfra; dette spør «stemmer artefaktet med virkeligheten?». `plan-fidelity` er prevensjon — en atferdsregel uten håndhevelse, som forutsetter at agenten husker den; dette er nettet under den, for avvikene regelen ikke fanget. `/ship` Step 8 er samme logikk, men låst til merge-tid. Ingen overlapp med intervju-/brainstorming-familien.
 
-**Status.** Deferred — forslag, ikke besluttet. Fullt designdokument med begrunnelse, motforestillinger og verifiseringsplan: `docs/superpowers/specs/2026-09-07-spec-drift-design.md`. Fase 1 er den eneste som anbefales uten videre diskusjon.
+**Status.** In progress (2026-09-07) — fase 1 godkjent for planlegging på `feat/spec-drift`; fase 2–3 fortsatt deferred. Fullt designdokument med begrunnelse, motforestillinger og verifiseringsplan: `docs/superpowers/specs/2026-09-07-spec-drift-design.md`.
 
 ---
 

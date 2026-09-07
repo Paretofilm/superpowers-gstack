@@ -1,8 +1,8 @@
 ---
 type: design-doc
 title: spec-drift — frittstående spec-mot-kode-audit — forslag
-status: DRAFT
-decision: ikke besluttet, ikke påbegynt — fase 1 anbefalt, fase 2-3 til diskusjon
+status: APPROVED
+decision: fase 1 godkjent 2026-09-07 for planlegging på feat/spec-drift — fase 2-3 fortsatt til diskusjon
 date: 2026-09-07
 author: vurdering av Sorbh/interview-me, Oslo
 related:
@@ -25,9 +25,9 @@ frittstående — uten å røre upstream.*
 
 ## Status
 
-**Forslag — ikke besluttet, ikke påbegynt.** Ingen fil under `skills/` er rørt. Fase 1 er
-den eneste som anbefales uten videre diskusjon; fase 2 og 3 er påbygg som bør vurderes hver
-for seg etter at fase 1 har vært i drift.
+**Fase 1 godkjent 2026-09-07** for planlegging på `feat/spec-drift`. Ingen fil under
+`skills/` er rørt ennå. Fase 2 og 3 er påbygg som vurderes hver for seg etter at fase 1 har
+vært i drift.
 
 ## Kontekst
 
