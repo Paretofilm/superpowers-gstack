@@ -16,6 +16,9 @@ model's judgement:
            diff run, with a stale receipt, or while an anchor is missing,
            --yes is refused with exit 2); with --yes --sha <receipt> write the new
            snapshot + pin.json (exit 0). No difference: nothing to do, exit 0.
+  verdict  map Step 8's last-line JSON to the standalone exit code:
+           0 clean (every item DONE or CHANGED), 1 drift (anything else),
+           2 could not audit (no JSON, malformed, or total_items == 0).
 
 Why a snapshot and not only a hash: --repin must SHOW what changed upstream
 before anyone accepts it. A guard that is overridden routinely without showing
@@ -72,7 +75,8 @@ ANCHORS = (
     ('"total_items"', r'"total_items"'),
 )
 
-EXIT_OK, EXIT_CANNOT, EXIT_CONFIRM = 0, 2, 3
+EXIT_OK, EXIT_DRIFT, EXIT_CANNOT, EXIT_CONFIRM = 0, 1, 2, 3
+JSON_KEYS = ("total_items", "done", "changed", "deferred", "unverifiable", "summary")
 SHA_PREFIX = 12   # chars of the digest printed as the --sha receipt; also the minimum --yes must carry
 
 # Terminal-control, bidi and zero-width characters: escaped when the diff is
@@ -400,6 +404,56 @@ class _Parser(argparse.ArgumentParser):
         raise SystemExit(EXIT_CANNOT)
 
 
+def last_json_line(text: str) -> dict | None:
+    """The last non-empty line, parsed — or None. A trailing ``` fence is skipped."""
+    for line in reversed(text.splitlines()):
+        line = line.strip().strip("`")
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            return None
+        return obj if isinstance(obj, dict) else None
+    return None
+
+
+def cmd_verdict(a) -> int:
+    text = a.json if a.json is not None else sys.stdin.read()
+    obj = last_json_line(text)
+    if obj is None or any(k not in obj for k in JSON_KEYS):
+        print("SPEC-DRIFT: COULD-NOT-RUN (exit 2) — last line is not Step 8's JSON "
+              f"({', '.join(JSON_KEYS)})", file=sys.stderr)
+        return EXIT_CANNOT
+    counts = [obj[k] for k in JSON_KEYS[:5]]
+    # The contract is integers. bool is an int subclass, and int() happily eats
+    # "2" and 1.9 — each a way for a malformed line to read as CLEAN. Exact type.
+    if any(type(c) is not int for c in counts):
+        print("SPEC-DRIFT: COULD-NOT-RUN (exit 2) — counts are not integers", file=sys.stderr)
+        return EXIT_CANNOT
+    total, done, changed, deferred, unver = counts
+    if total <= 0:
+        print("SPEC-DRIFT: COULD-NOT-RUN (exit 2) — plan has no actionable items "
+              "(a design doc? prose claims are Fase 3)", file=sys.stderr)
+        return EXIT_CANNOT
+    if min(done, changed, deferred, unver) < 0:
+        # A negative count can make done + changed == total look CLEAN.
+        print("SPEC-DRIFT: COULD-NOT-RUN (exit 2) — negative count in the JSON", file=sys.stderr)
+        return EXIT_CANNOT
+    partial = total - done - changed - deferred - unver
+    if partial < 0:
+        print(f"SPEC-DRIFT: COULD-NOT-RUN (exit 2) — counts add up to more than "
+              f"total_items={total}", file=sys.stderr)
+        return EXIT_CANNOT
+    breakdown = (f"done={done} changed={changed} partial={partial} "
+                 f"not_done={deferred} unverifiable={unver} of {total}")
+    if done + changed == total:
+        print(f"SPEC-DRIFT: CLEAN (exit 0) — {breakdown}")
+        return EXIT_OK
+    print(f"SPEC-DRIFT: DRIFT (exit 1) — {breakdown}")
+    return EXIT_DRIFT
+
+
 def main(argv=None) -> int:
     for stream in (sys.stdout, sys.stderr):
         # The diff carries third-party text; a non-UTF-8 terminal must not turn
@@ -422,6 +476,10 @@ def main(argv=None) -> int:
                                       help="accept the diff shown by a previous run and write the pin")
     sub.choices["repin"].add_argument("--sha", default=None,
                                       help="sha256 prefix printed by the diff run; required with --yes")
+    v = sub.add_parser("verdict")
+    v.add_argument("--json", default=None,
+                   help="JSON text (default: read stdin and use the last non-empty line)")
+    v.set_defaults(fn=cmd_verdict)
     a = p.parse_args(argv)
     try:
         return a.fn(a)
