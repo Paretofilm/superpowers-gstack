@@ -189,6 +189,20 @@ Out: macOS, watchOS, AppKit.
 
 ---
 
+## `spec-drift` — frittstående spec-mot-kode-audit (proposed 2026-09-07)
+
+**Gap.** Vi har tre lag mot spec-drift allerede, og de dekker mer enn ventet: `plan-fidelity-v2` (regelblokk i alle prosjekters CLAUDE.md — «fiks planen i samme commit som avviket»), `/ship` Step 8 Plan Completion Audit (`~/.claude/skills/gstack/ship/sections/plan-completion.md`), `/ship` Step 8.2 Scope Drift Detection, `pitfall-verification:108` (signature drift) og `/document-release` (diagram-drift). Step 8 er faktisk *kraftigere* enn tredjeparts-alternativene på verifikasjonsmodus-aksen: den skiller `DIFF-VERIFIABLE` fra `CROSS-REPO` og `EXTERNAL-STATE`, altså erkjenner at diffen strukturelt ikke kan bevise alt. Men fem hull står igjen, og tre av dem har `plan-fidelity.md` skrevet ned selv: auditen (1) kan ikke invokeres frittstående, (2) skriver funn til PR-body og aldri tilbake i specen, (3) kjører aldri på grener som ikke shippes, (4) har ingen hukommelse mellom kjøringer så akseptert drift re-rapporteres, og (5) bruker `git diff base...HEAD` som baseline, så langsom drift på hovedgrenen er usynlig.
+
+**Scope.** Ikke en ny skill bygget fra bunnen — en **wrapper**. `/ship` er upstream gstack og `plan-completion.md` er autogenerert der, så denne plugin-en kan verken få `/ship` til å kalle noe eller patche seksjonen uten at neste synkronisering overskriver den. Fase 1: `spec-drift` *leser* `plan-completion.md` fra disk og kjører seksjonen frittstående (samme mønster som `office-hours-track-aware` rundt `/office-hours`, og som Step 8.1 selv rundt `qa-only`), med hash-pin som feiler høyt ved upstream-endring, plan-sti som eksplisitt argument, baseline som argument (fortsatt en diff — en eldre commit som base lukker hull 5), og samme JSON + exit-kode frittstående. Dekker *planer* (`docs/superpowers/plans/`, `progress.md`); designdokumenter uten handlingspunkter hopper Step 8 over. Fase 2: skriv-tilbake i specen etter `plan-fidelity.md` sine skriveregler, pluss en committet drift-ledger (`.gstack/spec-drift.jsonl`, append-only, fingeravtrykk `claimId:kind:path`). Fase 3: en inventeringsagent uten spec-tilgang (instruksjons-isolert, med ekskluderingsliste — fanger udokumentert kodevekst i motsatt retning av Step 8), utledning av påstander fra spec-prosa, og en sikkerhetskategori der drift på hemmeligheter/auth/injeksjon tvinges til `critical` og ikke kan batch-avvises.
+
+**Method.** Null duplisert logikk — `plan-completion.md` er allerede den vanskelige delen (claim-ekstraksjon, verifikasjonsmodus, verdikter `DONE`/`PARTIAL`/`NOT DONE`/`CHANGED`/`UNVERIFIABLE`, per-punkt-port, JSON-kontrakt, fail-closed fallback), og wrapperen kjører samme filbytes. Akseptansekriteriet for fase 1 er todelt: strukturell ekvivalens via hash-pinnen, og atferdsekvivalens som lik dom på DONE/NOT DONE-aksen over tre kjøringer (bytelik utdata er ikke et krav — LLM-utført prosa er ikke deterministisk, og `PARTIAL`↔`CHANGED` er støy). Suksessmål: andel reelle funn etter ti kjøringer; nær null → `plan-fidelity` var nok, skillen trekkes. Skillen redigerer aldri kildekode og rører aldri upstream.
+
+**Differentiation.** `pitfall-verification` spør «ville dette virke?» om et artefakt sett innenfra; dette spør «stemmer artefaktet med virkeligheten?». `plan-fidelity` er prevensjon — en atferdsregel uten håndhevelse, som forutsetter at agenten husker den; dette er nettet under den, for avvikene regelen ikke fanget. `/ship` Step 8 er samme logikk, men låst til merge-tid. Ingen overlapp med intervju-/brainstorming-familien.
+
+**Status.** Deferred — forslag, ikke besluttet. Fullt designdokument med begrunnelse, motforestillinger og verifiseringsplan: `docs/superpowers/specs/2026-09-07-spec-drift-design.md`. Fase 1 er den eneste som anbefales uten videre diskusjon.
+
+---
+
 ## Shipped
 
 - `macos-native-review` — shipped in v1.9.0 (2026-04-28). See `skills/macos-native-review/SKILL.md`.
