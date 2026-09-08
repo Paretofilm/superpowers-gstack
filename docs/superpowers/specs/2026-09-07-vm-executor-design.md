@@ -204,6 +204,38 @@ overføring, resignering, kjøring, opprydding.
 `vm-e2e` legges på `PATH` via symlink `~/.local/bin/vm-e2e` (samme mappe som `lume`). Plugin-en
 resolver med `command -v vm-e2e`; ingen hardkodet `~/Developer/virtual-mac`.
 
+### Kontrakts-etterslep funnet under fase 1 (2026-09-08)
+
+Fase 1 er implementert mot kontrakten over, og én ting mangler i den:
+**exit-koden skiller ikke riggfeil fra testfeil.**
+
+`0 kun når failed == 0` (0.1) kollapser to ulike verdener til exit 1 — «tre tester
+feilet» og «VM-en booter ikke». Kalleren kan da ikke velge mellom «rapporter testfeil»
+og «feil tydelig med årsak», som er nettopp skillet «Fallback når `vm` er satt men riggen
+mangler» over bygger på: fravær → fallback, feil → feil.
+
+Foreslått, sendt til riggens sesjon (ikke bekreftet mottatt):
+
+```
+0 = alle tester passerte
+1 = tester KJØRTE, minst én feilet
+2 = kunne ikke kjøre (boot, lease, timeout, overføring)
+```
+
+Ved 2: fortsatt gyldig JSON med et `error`-felt. Aldri tom stdout — den ser ut som
+«ingenting å rapportere», og det er den verste kontrakten som finnes. Samme form som
+`spec-drift.py` sitt `0 clean / 1 drift / 2 could-not-run`.
+
+**Fase 1 fungerer uten dette.** Runneren behandler «ingen parsebar JSON, eller et
+`error`-felt» som riggfeil-signalet, så den er kompatibel med både to- og tre-verdig
+kontrakt. Tre-verdig gjør signalet entydig i stedet for utledet, og fjerner et sted
+der en fremtidig endring i riggens JSON kan gjøre en riggfeil om til en stille pass.
+
+Beslektet, samme klasse: `vm-lease status` printer i dag `e2e-1      ledig`. Hygiene-
+hooken matcher på *fravær* av «ledig» fordi ordet for opptatt ikke er kjent — feil der
+gir støy, ikke stillhet, men en maskinlesbar status (exit-kode eller `--json`) ville
+fjernet gjettingen. Ikke blokkerende for fase 1.
+
 ### Resultatkontrakt (felles for vert og VM)
 
 Samme JSON som scaffold-runneren allerede lager, utvidet med `skipped` og `executed`:
