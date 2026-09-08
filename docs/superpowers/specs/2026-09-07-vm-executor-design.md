@@ -449,6 +449,41 @@ echo host > /tmp/x/.gstack/e2e-executor 2>/dev/null; vm-e2e /tmp/x S P; echo "ex
 Deretter `superpowers-gstack:pitfall-verification` på rigg-diffen (bash, kontrakt, sikkerhet
 rundt hook-kjøring → ship-worthy, Codex-lens).
 
+**Fase 1 (plugin) — KJØRT 2026-09-08, grønn.** Resultatene under er fra den faktiske
+malen i `skills/macos-e2e-scaffold/SKILL.md`, ekstrahert og kjørt — ikke en gjenskrevet
+kopi, som ikke ville bevist noe om det som shippes.
+
+VM-veien, `swiftconfig` med `.gstack/e2e-executor=vm`:
+
+```json
+{"total":9,"passed":7,"failed":0,"skipped":2,"executed":7,
+ "executor":"vm","vm":"e2e-1","seconds":97,"xcresult":"…/uitests.xcresult"}
+```
+
+exit 0; `executor=vm  skipped=2  executed=7` på stderr; leasen frigitt og gjesten
+stoppet etterpå. Identisk med riggens egen baseline for swiftconfig (9/7/0/2), altså
+legger lag 2 ingenting til og mister ingenting.
+
+De VM-frie stiene, samme mal, ekte shell:
+
+| Markør / miljø | Forventet | Fikk |
+|---|---|---|
+| `VM` | exit 2, BLOCKED | ✅ `BLOCKED — invalid .gstack/e2e-executor: 'VM'` |
+| `vm ` (mellomrom) | exit 2, BLOCKED | ✅ |
+| `vm\ncomment` | exit 2, BLOCKED | ✅ |
+| `vm`, ingen rigg, `CI=1` | exit 2, nekter | ✅ «Refusing in a non-interactive session» |
+| `vm`, ingen rigg, interaktiv | fallback-linje + vertskjøring | ✅ |
+| ingen markør | host-vei | ✅ ingen BLOCKED |
+
+Merk hvordan kjøringen ble gjort: malen kjørte fra `/tmp` med prosjektet som
+arbeidsmappe, så ingen fil ble skrevet i `swiftconfig` utover markøren (satt og fjernet).
+Riggens sesjon redigerte `scripts/run-uitests.sh` i samme prosjekt samtidig — leasen
+serialiserer VM-bruken, men ikke filredigering, og det er verdt å vite for neste
+samkjøring.
+
+**Gjenstår:** ingenting på plugin-siden. Kommandoene under er beholdt som oppskrift for
+en ny kjøring.
+
 **Fase 1 (plugin) — senere løp:**
 ```bash
 cd ~/Developer/superpowers-gstack
