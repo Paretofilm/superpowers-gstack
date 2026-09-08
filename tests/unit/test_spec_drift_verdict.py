@@ -137,10 +137,9 @@ def test_a_restated_count_must_agree_with_the_derived_one():
     rc, out = verdict(json.dumps(obj) + "\n")
     assert rc == 2 and "contradicts" in out
     obj = json.loads(step8(3, 1, deferred=2))
-    obj["not_done"] = 7                     # not a contract key: ignored, whatever it says
     obj["partial"] = 0                      # agrees with the derived remainder
     rc, _ = verdict(json.dumps(obj) + "\n")
-    assert rc == 1
+    assert rc == 1, "`partial` is the one extra key with a meaning the script checks"
 
 
 def test_json_flag_is_the_input_and_stdin_is_ignored():
@@ -241,3 +240,33 @@ def test_invisible_padding_around_the_object_is_still_tolerated(pad):
     Edges are stripped, the interior is refused — that distinction is the fix."""
     rc, out = verdict(pad + step8(2, 2) + pad)
     assert rc == 0 and "CLEAN" in out
+
+
+@pytest.mark.parametrize("extra", [
+    {"not_done": 99},                 # a second count contradicting the six
+    {"audit_failed": True},           # a failure flag beside clean counts
+    {"status": "FAILED"},
+    {"note": "harmless"},             # refused too: the rule is positional, not semantic
+])
+def test_a_key_outside_the_contract_refuses_the_line(extra):
+    """Codex, 2.52.0: six clean counts plus `"not_done":99` or `"audit_failed":true`
+    exited 0 while contradicting itself. Override 6 tells the subagent to add no
+    other keys, so the contract IS six — the checker now enforces that instead of
+    describing it. This is the general form of the `partial` contradiction rule."""
+    obj = json.loads(step8(1, 1))
+    obj.update(extra)
+    rc, out = verdict(json.dumps(obj) + "\n")
+    assert rc == 2 and "keys outside the contract" in out, extra
+    for key in extra:
+        assert key in out, "the refusal must name the offending key"
+
+
+def test_partial_is_still_allowed_past_the_contract_check():
+    """The one carve-out: a restated remainder has a meaning the script verifies,
+    so it is checked rather than refused. Agreement passes, contradiction fails."""
+    obj = json.loads(step8(3, 1, deferred=2))
+    obj["partial"] = 0
+    assert verdict(json.dumps(obj) + "\n")[0] == 1
+    obj["partial"] = 2
+    rc, out = verdict(json.dumps(obj) + "\n")
+    assert rc == 2 and "contradicts" in out

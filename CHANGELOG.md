@@ -34,7 +34,7 @@ will never be shipped, or against a baseline older than the branch. Design:
   Fail closed: empty diff, unreadable plan, zero actionable items and pin
   mismatch are all exit 2, never 0.
 - Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
-  README. 103 unit tests across `test_spec_drift_pin.py`,
+  README. 108 unit tests across `test_spec_drift_pin.py`,
   `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` and
   `test_spec_drift_upstream_alarm.py` — the skill tests are omission tests: Step 8
   text pasted into SKILL.md, a discovery heuristic brought back, or the check
@@ -91,6 +91,13 @@ will never be shipped, or against a baseline older than the branch. Design:
 - The dispatch prompt now extends its single-quoting rule to paths taken **from
   the plan**: the plan is a file in the branch under audit, so a path it names is
   attacker-shaped input in a way `<PLAN_PATH>` is not.
+- **`verdict` enforces the six-key contract instead of describing it.** Six clean
+  counts carrying `"not_done": 99` or `"audit_failed": true` alongside them
+  exited 0 while contradicting themselves. Override 6 already tells the subagent
+  to add no other keys, so a key outside the contract now refuses the line and
+  names it. `partial` remains the one permitted extra — a restated remainder has
+  a meaning the script can verify, and it already had to agree with the derived
+  value. Generalising that one rule is the whole change.
 
 Known and documented, not fixed here: `check` verifies the section's bytes and
 the subagent then reads that path itself, so a swap between the two is possible —

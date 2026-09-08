@@ -92,6 +92,7 @@ ANCHORS = (
 EXIT_OK, EXIT_DRIFT, EXIT_CANNOT, EXIT_CONFIRM = 0, 1, 2, 3
 COUNT_KEYS = ("total_items", "done", "changed", "deferred", "unverifiable")
 JSON_KEYS = COUNT_KEYS + ("summary",)
+ALLOWED_EXTRA = ("partial",)   # the only key outside the contract with a checked meaning
 SHA_PREFIX = 12   # chars of the digest printed as the --sha receipt; also the minimum --yes must carry
 
 # Terminal-control, bidi and zero-width characters: escaped when the diff is
@@ -523,6 +524,18 @@ def cmd_verdict(a) -> int:
         return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
                         "last line is not Step 8's JSON, or carries invisible characters "
                         f"inside it ({', '.join(JSON_KEYS)})")
+    # The contract is exactly the six keys override 6 specifies, plus `partial` —
+    # the one extra whose meaning is checked below rather than guessed. Anything
+    # else is refused, not ignored: six clean counts beside `"not_done":99` or
+    # `"audit_failed":true` scored CLEAN while contradicting itself (Codex,
+    # 2.52.0). This is the general form of the `partial` rule the script already
+    # applied to one hand-picked key; the earlier reasoning for tolerating extras
+    # — that reading `not_done` would impose one meaning on an ambiguous field —
+    # argues for refusing the line, not for scoring it.
+    unknown = sorted(set(obj) - set(JSON_KEYS) - set(ALLOWED_EXTRA))
+    if unknown:
+        return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
+                        f"keys outside the contract: {', '.join(unknown)}")
     counts = {k: obj[k] for k in COUNT_KEYS}
     # The contract is integers. bool is an int subclass, and int() happily eats
     # "2" and 1.9 — each a way for a malformed line to read as CLEAN. Exact type.
@@ -545,12 +558,10 @@ def cmd_verdict(a) -> int:
     if partial < 0:
         return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
                         f"counts add up to more than total_items={total}")
-    # Extra keys are ignored — Step 8's contract has six — except one: a
-    # `partial` that restates the derived remainder must agree with it. A model
+    # `partial` is the one key allowed past the contract check above, because a
+    # restated remainder has a meaning this script can verify: a model
     # "correcting itself" with a second number is a contradiction, not a
-    # clarification. (`not_done` is deliberately not checked: it is not in the
-    # contract and its meaning is ambiguous, so enforcing one reading would
-    # refuse valid audits.)
+    # clarification.
     if "partial" in obj:
         # Exact type, like the five counts: True == 1 and 1.0 == 1 in Python, so a
         # value-only comparison would let a bool or float restate the remainder.
