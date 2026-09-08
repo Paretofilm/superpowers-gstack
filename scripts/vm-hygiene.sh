@@ -11,9 +11,13 @@
 set -uo pipefail
 
 # Not a git repo, or no pin, or pin is not `vm` → nothing to say.
-git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
-[ -f .gstack/e2e-executor ] || exit 0
-[ "$(tr -d '[:space:]' < .gstack/e2e-executor 2>/dev/null)" = "vm" ] || exit 0
+# Resolve from the repo ROOT: a session started in a subdirectory would otherwise miss
+# the marker and the hook would go silent for a project that did opt in (Codex, 2.53.0).
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+PIN="$ROOT/.gstack/e2e-executor"
+[ -f "$PIN" ] || exit 0
+# Trim the trailing newline only — never interior whitespace, or `v m` would read as vm.
+[ "$(head -1 "$PIN" | sed 's/[[:space:]]*$//')" = "vm" ] || exit 0
 
 # The rig is a separate project. If it is not installed, this project pins `vm` on a
 # machine that cannot honour it — the runner already prints that at run time, and
@@ -33,8 +37,14 @@ orphans=$(pgrep -fl 'Virtualization.VirtualMachine.xpc' 2>/dev/null | grep -v 'v
 [ -n "$orphans" ] && findings+=("Orphaned Virtualization XPC process(es):"$'\n'"$orphans")
 
 # Held leases. A lease outliving its run blocks the next dispatch until it expires.
-leases=$(vm-lease status 2>/dev/null | grep -i 'busy\|held\|locked' || true)
-[ -n "$leases" ] && findings+=("Held lease(s):"$'\n'"$leases")
+# Do NOT grep for English status words: the rig prints its own vocabulary (today
+# Norwegian — `OPPTATT` / `ledig`), so a word list here silently matches nothing and the
+# hook stays quiet about the very thing it was added to report (Codex, 2.53.0). Show the
+# rig's own output and let the reader judge; the rig owns that wording, not this hook.
+lease_status=$(vm-lease status 2>/dev/null || true)
+if [ -n "$lease_status" ] && [ ${#findings[@]} -gt 0 ]; then
+  findings+=("Lease status (from the rig):"$'\n'"$lease_status")
+fi
 
 [ ${#findings[@]} -eq 0 ] && exit 0
 

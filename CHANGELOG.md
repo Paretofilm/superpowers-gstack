@@ -59,8 +59,20 @@ anyone being logged in.
   check.
 
 ### Notes
-- 18 tests in `tests/unit/test_e2e_executor_marker.py`, including the shipped hook's real
+- 25 tests in `tests/unit/test_e2e_executor_marker.py`, including the shipped hook's real
   behaviour in three project states.
+- Codex found eight issues in the first pass on this feature, four of them P1, all fixed
+  here: a nonzero rig exit was discarded whenever the JSON summary looked clean; the pin
+  was normalised with `tr -d '[:space:]'`, which turns `v m` into a valid `vm` (squeezing
+  junk into a legal value is the opposite of validating it); direct VM dispatch was not
+  gated on an existing UI-test target, so a freshly-pinned project with no suite would be
+  sent at the rig; a legacy suite with a `host` pin and no runner script matched no entry
+  point at all; the hook read the marker from the cwd rather than the repo root, going
+  silent in any session started from a subdirectory; and it grepped for English lease
+  words the rig does not print. The non-interactive rule is now honest about its limits —
+  `--print` and subagent dispatch are not visible from a Bash call, and a TTY check would
+  refuse every interactive run, so the caller sets `E2E_NONINTERACTIVE` and the script
+  does not guess.
 - Fase 1 was 2.52.0 in the spec; that number went to `/spec-drift`, so fase 1 is 2.53.0
   and fase 2–3 shift to 2.54.0 and 2.55.0. The spec is corrected in this commit rather
   than left describing a release that happened differently.

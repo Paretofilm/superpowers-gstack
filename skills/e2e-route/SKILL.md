@@ -94,30 +94,58 @@ the first; the runner handles the second:
   route to the run, and name it: `executor=vm→host-fallback`, with the line
   `executor=vm requested, rig not found on this host — running on host without lease`.
   A committed `vm` pin must not brick the repo on every Mac without the rig.
-- **Exception — non-interactive session** (`CI`, `GITHUB_ACTIONS`, `--print`, a scheduled
-  run) with pin `vm` and no rig → **refuse**. The fallback above is only safe because a
-  human reads the warning; nobody does here, and an unleased host run can collide with
-  another.
+- **Exception — non-interactive session** with pin `vm` and no rig → **refuse**. The
+  fallback above is only safe because a human reads the warning; nobody does here, and an
+  unleased host run can collide with another.
+
+  Be honest about what is detectable. `CI` and `GITHUB_ACTIONS` are visible from a Bash
+  call and settle it. `--print`, a scheduled run and a subagent dispatch are **not** —
+  this skill has no session-kind preamble, and a TTY check answers the wrong question
+  because an agent's Bash tool pipes stdout even when a human is watching. So:
+
+  ```bash
+  [ -n "${CI:-}${GITHUB_ACTIONS:-}${E2E_NONINTERACTIVE:-}" ] && echo NONINTERACTIVE
+  ```
+
+  If you *know* the session is non-interactive from your own context — you were
+  dispatched as a subagent, or the invocation is `--print` — set `E2E_NONINTERACTIVE=1`
+  before invoking the runner and treat the refusal as in force. When neither the
+  environment nor your context says so, treat the session as interactive and let the
+  fallback run. Guessing "probably automated" from a pipe would refuse the ordinary case.
 - **Rig present but the run fails** → not your call. The runner fails loudly with the
   cause and does not fall back; a rig fault is exactly what you want surfaced, and a host
   run instead would turn a real defect into a silently slower pass.
 
 ## Routing table (the oracle)
 
-The macOS committed row has **three** entry points, in priority order — pick the first
-that applies, and name it as the next action:
+The macOS committed row has **four** entry points, in priority order. Pick the first that
+applies and name it as the next action. Entry points 2 and 3 both require an existing
+UI-test target (`find . -maxdepth 2 -type d -name '*UITests' ! -name '*iOSUITests'` with
+`*.swift` in it) — the pin is written at onboarding, before any suite necessarily
+exists, so a `vm` pin alone must never route a project that has no tests to run:
 
 1. `./scripts/run-uitests.sh` exists → run it. It reads `.gstack/e2e-executor` itself and
    dispatches to the VM or the host, so this one entry point covers both executors.
-2. Else pin is `vm` and `vm-e2e` is on `PATH` → call `vm-e2e` directly. This is the path
-   for projects with a UI-test target but no scaffold runner.
-3. Else no UI-test target exists → `/macos-e2e-scaffold` to create one.
+2. Else UI-test target exists **and** pin is `vm` **and** `vm-e2e` is on `PATH` → call
+   `vm-e2e` directly. This is the path for a suite that predates the scaffold runner.
+3. Else UI-test target exists → run it on the host:
+   `xcodebuild test -scheme <Scheme> -destination 'platform=macOS' -only-testing:<Target>`.
+   Covers a legacy or hand-made suite with a `host` pin and no runner script — without
+   this the project matches no entry point at all.
+4. Else no UI-test target → `/macos-e2e-scaffold` to create one.
 
-**A project that is already scaffolded routes to entry point 1 or 2 — never to
+**A project that is already scaffolded routes to entry point 1, 2 or 3 — never to
 MCP-live.** Read literally, `/macos-e2e-scaffold`'s refuse-condition 3 ("a UI-test target
 already exists") would bounce a regression request to exploratory live testing, which
 answers a different question entirely. The scaffold refusing means *the suite is already
-there* — run it.
+there* — run it. Anywhere below that still lists "a UI-test target already exists" as a
+reason to fall back to MCP-live is superseded by this rule for committed intent.
+
+**Set `E2E_NONINTERACTIVE=1` when you invoke entry point 1 from a non-interactive
+session** (`--print`, a scheduled run, a subagent). The runner refuses the missing-rig
+host fallback when it sees that, and it cannot detect the session kind itself: an agent's
+Bash tool always pipes stdout, so a TTY check would refuse every interactive run too.
+You know the session kind; the script does not.
 
 | Intent | Platform | Executor |
 |---|---|---|

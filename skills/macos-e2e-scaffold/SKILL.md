@@ -359,7 +359,10 @@ RESULT_BUNDLE="$(mktemp -d)/uitests.xcresult"
 # run still looks fine afterwards.
 EXECUTOR=host
 if [ -f .gstack/e2e-executor ]; then
-  EXECUTOR=$(tr -d '[:space:]' < .gstack/e2e-executor)
+  # Trim the trailing newline the generators write, and nothing else. `tr -d
+  # '[:space:]'` would turn `v m` into a valid `vm` — normalising junk into a
+  # legal value is the opposite of validating it (Codex, 2.53.0).
+  EXECUTOR=$(head -1 .gstack/e2e-executor | sed 's/[[:space:]]*$//')
   case "$EXECUTOR" in
     host|vm) ;;
     *) echo "BLOCKED — invalid .gstack/e2e-executor: '${EXECUTOR}' (expected host or vm)" >&2
@@ -379,7 +382,10 @@ if [ "$EXECUTOR" = vm ]; then
     # half-written file, an `error` field, a VM that never booted — is a fault. Do NOT
     # fall back to the host here: that turns a real defect into a silently slower pass,
     # and the whole reason to notice a rig fault is that it is a defect.
-    if ! jq -e 'type == "object" and has("total")' "$VM_JSON" >/dev/null 2>&1; then
+    # `has("total")` is not enough: a null or string total passes it, then the arithmetic
+    # below yields an empty EXECUTED and `[ -eq ]` dies with a syntax error instead of a
+    # named refusal. Require the numbers to BE numbers.
+    if ! jq -e 'type == "object" and (.total | type == "number")' "$VM_JSON" >/dev/null 2>&1; then
       echo "E2E RIG FAILED: vm-e2e produced no usable result (exit ${VM_STATUS})." >&2
       jq -r '.error // empty' "$VM_JSON" 2>/dev/null >&2 || true
       echo "Not falling back to the host — a rig fault is the thing to fix, not to route around." >&2
@@ -395,12 +401,23 @@ if [ "$EXECUTOR" = vm ]; then
     echo "executor=vm  skipped=${SKIPPED}  executed=${EXECUTED}" >&2
     [ "$EXECUTED" -eq 0 ] && { echo "FAILED: 0 tests executed — green and empty is not a pass." >&2; exit 1; }
     [ "$FAILED" -ne 0 ] && exit 1
+    # The counts can look clean while the rig still failed — an xcodebuild
+    # infrastructure error, a transfer that half-completed. The rig's own exit code
+    # carries that, so never discard it just because the summary parsed (Codex, 2.53.0).
+    if [ "$VM_STATUS" -ne 0 ]; then
+      echo "vm-e2e exited ${VM_STATUS} despite a clean-looking summary — treating as failure." >&2
+      exit "$VM_STATUS"
+    fi
     exit 0
   fi
   # Rig absent is NOT a rig fault: a committed `vm` pin must not brick the repo on
   # every Mac without the rig. Run on the host, but never silently.
   echo "executor=vm requested, rig not found on this host — running on host without lease" >&2
-  if [ -n "${CI:-}${GITHUB_ACTIONS:-}" ]; then
+  # CI variables do not cover `claude --print` or a scheduled run, and `[ ! -t 1 ]` is
+  # useless here because an agent's Bash tool always pipes stdout — it would refuse
+  # every interactive run too. So the caller, which actually knows the session kind,
+  # says so via E2E_NONINTERACTIVE; e2e-route sets it. (Codex, 2.53.0)
+  if [ -n "${CI:-}${GITHUB_ACTIONS:-}${E2E_NONINTERACTIVE:-}" ]; then
     echo "Refusing in a non-interactive session: nobody reads that warning, and an" >&2
     echo "unleased host run can collide with another. Install the rig or pin host." >&2
     exit 2

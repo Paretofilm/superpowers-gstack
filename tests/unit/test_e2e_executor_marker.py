@@ -176,3 +176,62 @@ def test_vm_hygiene_never_stops_a_vm():
     assert "Reports, never acts" in text
     assert not re.search(r"^\s*(vm-stop|kill|pkill)\s", text, re.M), \
         "the hook must not stop anything — only name what it found"
+
+
+# --- Codex round 1 on 2.53.0: four ways this could still report a false green ---
+
+def test_a_nonzero_rig_status_survives_a_clean_looking_summary():
+    """The counts can parse and look green while the rig still failed — an xcodebuild
+    infrastructure error, a half-completed transfer. Reading only `failed` discards the
+    rig's own verdict and turns that into a pass."""
+    template = runner_template()
+    assert "VM_STATUS" in template
+    assert 'exit "$VM_STATUS"' in template, "the rig's exit code must be able to fail the run"
+    assert "despite a clean-looking summary" in flat(template)
+
+
+def test_the_pin_is_trimmed_at_the_edges_not_squeezed():
+    """`tr -d '[:space:]'` turns `v m` into a valid `vm` — normalising junk into a legal
+    value is the opposite of validating it. Trim the generators' trailing newline only."""
+    for surface, text in (("runner", runner_template()), ("hook", HYGIENE.read_text())):
+        assert "tr -d '[:space:]'" not in text, f"{surface} must not squeeze interior whitespace"
+        assert "sed 's/[[:space:]]*$//'" in text, surface
+
+
+def test_direct_vm_dispatch_requires_an_existing_suite():
+    """The pin is written at onboarding, before any suite necessarily exists. A `vm` pin
+    alone must not route a project with no tests straight at the rig."""
+    assert "*UITests" in ROUTE, "the route must actually check for a UI-test target"
+    assert "before any suite necessarily exists" in flat(ROUTE)
+
+
+def test_a_host_pinned_suite_without_a_runner_has_a_route():
+    """Legacy or hand-made suite + `host` pin + no runner script matched no entry point
+    at all before this: 1 needs the script, 2 is VM-only, 4 excludes existing targets."""
+    assert "-only-testing:<Target>" in ROUTE
+    assert "without this the project matches no entry point at all" in flat(ROUTE)
+
+
+def test_non_interactive_detection_is_honest_about_its_limits():
+    """`--print` and subagent dispatch are not visible from a Bash call, and a TTY check
+    answers the wrong question because an agent's Bash tool always pipes stdout. The
+    caller sets the variable; the script does not guess."""
+    assert "E2E_NONINTERACTIVE" in ROUTE and "E2E_NONINTERACTIVE" in runner_template()
+    assert "pipes stdout even when a human is watching" in flat(ROUTE)
+    assert "Guessing \"probably automated\" from a pipe would refuse the ordinary case" in flat(ROUTE)
+
+
+def test_the_hook_reads_the_marker_from_the_repo_root():
+    """A session started in a subdirectory would otherwise miss the marker entirely and
+    go silent for a project that did opt in."""
+    text = HYGIENE.read_text()
+    assert "git rev-parse --show-toplevel" in text
+    assert '"$ROOT/.gstack/e2e-executor"' in text
+
+
+def test_the_hook_does_not_guess_the_rigs_lease_vocabulary():
+    """The rig prints its own words (today Norwegian). An English word list here matches
+    nothing and the hook stays quiet about the one thing it was added to report."""
+    text = HYGIENE.read_text()
+    assert "grep -i 'busy" not in text, "do not pattern-match the rig's status words"
+    assert "vm-lease status" in text and "let the reader judge" in flat(text)

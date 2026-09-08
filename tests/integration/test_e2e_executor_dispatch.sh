@@ -8,9 +8,15 @@
 # behaves accordingly — the gap between a documented contract and a followed one.
 #
 # Three cases:
-#   A) e2e-executor=vm     → expect executor=vm (or vm→host-fallback if no rig here)
+#   A) e2e-executor=vm     → expect executor=vm with the rig installed; without it,
+#                            expect the fallback line AND E2E_NONINTERACTIVE honoured
 #   B) no marker           → expect executor=host
 #   C) e2e-executor=VM     → expect a refusal, NOT a silent host run
+#
+# Case A is asserted differently depending on whether `vm-e2e` is on PATH, because the
+# correct answer genuinely differs. Every case runs under `claude --print`, so the run
+# also exports E2E_NONINTERACTIVE=1 — that is exactly what a caller in a non-interactive
+# session is required to do, and without it the refusal rule is untestable here.
 #
 # Case C is the one worth the money. A/B can fail visibly; C fails by looking fine,
 # which is the whole reason the pin is validated instead of coerced.
@@ -74,7 +80,7 @@ run_case() {
   fi
 
   local out
-  out="$(cd "$tmpdir" && claude --print --plugin-dir "$PLUGIN_DIR" \
+  out="$(cd "$tmpdir" && E2E_NONINTERACTIVE=1 claude --print --plugin-dir "$PLUGIN_DIR" \
     "Run the committed regression suite for this macOS app." 2>&1 || true)"
 
   if printf '%s' "$out" | grep -qiE "$expect_re"; then
@@ -90,7 +96,13 @@ run_case() {
   echo ""
 }
 
-run_case "vm pin"        "vm" "executor=(vm|vm→host-fallback)"
+if command -v vm-e2e >/dev/null 2>&1; then
+  run_case "vm pin (rig present)" "vm" "executor=vm"
+else
+  # No rig + non-interactive is the refusal case, not the fallback case: the fallback is
+  # only safe because a human reads the warning, and under --print nobody does.
+  run_case "vm pin (rig absent)"  "vm" "refus|BLOCKED|rig not found on this host"
+fi
 run_case "no marker"     ""   "executor=host"
 run_case "invalid pin"   "VM" "BLOCKED|invalid .gstack/e2e-executor"
 
