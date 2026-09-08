@@ -1,5 +1,179 @@
 # Changelog
 
+## [2.52.0] - 2026-09-08
+
+An assessment of a third-party `--verify <spec>` skill turned out to be a survey of
+what this repo already had: `/ship` Step 8 (the Plan Completion Audit) is stronger
+than the alternative on the axis that matters — it knows the diff cannot prove
+everything (`DIFF-VERIFIABLE` vs `CROSS-REPO` vs `EXTERNAL-STATE`). What it lacked
+was a way to be invoked at all outside the full ship pipeline, on a branch that
+will never be shipped, or against a baseline older than the branch. Design:
+`docs/superpowers/specs/2026-09-07-spec-drift-design.md`. This is its Fase 1.
+
+### Added — `/superpowers-gstack:spec-drift`
+- A **wrapper, not a fork**. `/ship` is upstream gstack and its section is
+  generated from a template there, so this plugin can neither patch it nor make
+  `/ship` call anything. The skill reads
+  `~/.claude/skills/gstack/ship/sections/plan-completion.md` from disk at run time
+  and dispatches Step 8 as a subagent with overrides for what differs when
+  nothing is being shipped: the subagent re-runs the hash check itself, does not
+  re-dispatch, skips plan discovery (the path is an argument), takes `<base>` as
+  an argument, answers no AskUserQuestion gate, edits nothing, stops before
+  Step 8.1, and ends with the six-key JSON line (PARTIAL items count in
+  `total_items` only).
+- **Hash-pinned** (`skills/spec-drift/pin.json` + a byte snapshot used only to
+  show diffs). `scripts/spec-drift.py check` exits 2 on any mismatch and the skill
+  refuses to run; `repin` prints the unified diff, checks nine structural
+  anchors and ends with a one-time `--token`, and writing requires
+  `--yes --token <token>` from that same run — refused if upstream changed in between, blocked while
+  an anchor the overrides depend on is missing. gstack updates weekly, so the pin will break often — that is the point:
+  a guard overridden without showing what changed trains away its own effect.
+- **Same contract as Step 8** — same report, same last-line JSON — plus
+  `SPEC-DRIFT: CLEAN|DRIFT|COULD-NOT-RUN (exit 0|1|2)` computed by
+  `scripts/spec-drift.py verdict`, so `/autoimplement` can call it mechanically.
+  Fail closed: empty diff, unreadable plan, zero actionable items and pin
+  mismatch are all exit 2, never 0.
+- Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
+  README. 118 unit tests across `test_spec_drift_pin.py`,
+  `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` and
+  `test_spec_drift_upstream_alarm.py` — the skill tests are omission tests: Step 8
+  text pasted into SKILL.md, a discovery heuristic brought back, or the check
+  moved after the dispatch each turn the suite red; the alarm test fails on any
+  maintainer machine where gstack has changed the section since the pin (skipped
+  in CI).
+- **Verified against `/ship` Step 8** (spec, «Verifisering — resultat»): six
+  audits of a 9-item fixture plan — three through this skill, three through
+  Step 8's own prompt and discovery — agree 6/6 on the DONE / NOT DONE axis, and
+  one added line in a local copy of the section is refused with both hashes
+  named. The run also caught that `${SECTION:+--upstream "$SECTION"}` is a
+  single word under zsh, the shell Claude Code's Bash tool uses on macOS; the
+  skill now expands it as two words.
+- Not in this release, by design: write-back into the plan and the drift ledger
+  (Fase 2), the spec-blind inventory agent, prose-claim extraction and the
+  security category (Fase 3).
+
+### Fixed — findings from the `/ship` review lenses on this same change
+- **`verdict` repaired hostile input instead of refusing it.** Invisible
+  characters were stripped from the whole JSON line before parsing, so a key
+  nobody typed became one the contract accepts: `"do<ZWSP>ne"` parsed as `"done"`
+  and scored `CLEAN (exit 0)`. Reproduced, then closed — padding is still stripped
+  from the line's edges, an invisible inside the object refuses the line. A guard
+  that normalises attacker-shaped input is not fail-closed.
+- **Three Bidi_Control characters were outside the escape set.** LRM (U+200E),
+  RLM (U+200F) and ALM (U+061C) are invisible in a terminal but sat outside both
+  `_BIDI` and `_ZERO_WIDTH`, so a crafted upstream reached the re-pin confirmation
+  diff unescaped *and* unflagged by the invisible-character warning — the one
+  thing the surrounding comment promises cannot happen.
+- **Override 8: the audit no longer runs a validator script the audited branch
+  defines.** Step 8 scans `package.json` for `validate-*` / `lint-wiki` /
+  `check-docs` and invokes what it finds. That is sound under `/ship`, which ships
+  your own branch after its suite has run with the same privileges; it is not
+  sound here, where the whole point is auditing branches nobody is shipping. The
+  phrase moved from the tests' "never paste this" list to the "the skill keys on
+  this wording" list and became the ninth anchor, so upstream renaming the step
+  breaks the check instead of silently restoring the execute path.
+- `RECEIPT WRITE FAILED` joined the module docstring's list of named exit-2
+  reasons, which had omitted the one refusal it did not enumerate.
+- **`--yes` now takes a one-time token, not the digest.** Two rounds went at this.
+  First: the receipt was written before stdout was flushed, so a broken pipe left
+  a receipt for a diff nobody got. Flushing first fixed that but not the class —
+  the structured review's only P1 showed that flushing proves the *kernel* took
+  the bytes, not that anyone read them, so `repin | head -1` completed normally,
+  and the `--sha` credential was independently obtainable from `check` anyway.
+  The diff run now ends with an unpredictable token that exists nowhere else; a
+  view truncated above that line cannot produce one. The receipt still records
+  the upstream digest beside it, so a file changed between the diff and the
+  accept is refused separately, naming both hashes. This is the guard's whole
+  premise — it cannot be satisfied without reading — so it is worth the API change.
+  The receipt stores only `sha256(token)`: a truncated run still writes one, and
+  the agent this guard constrains can read files, so a verbatim token would be
+  recoverable with a single `cat` by the reader who never saw the diff.
+- **A heading that exists only inside a code fence is no longer an anchor.**
+  Upstream can rename a real heading while an old copy survives in a ``` example;
+  the override targeting it would then stop applying with nothing to notice.
+  Structural anchors are matched against text with fenced blocks masked out
+  (offsets preserved); phrase anchors like `<base>` keep the raw text, since
+  those genuinely live inside Step 8's own bash blocks.
+- `~` in `<plan-path>` or `--section` now expands. The values are pasted
+  single-quoted, so no shell expands a leading tilde, and `abspath('~/plan.md')`
+  invented a literal `~` directory inside the repo — a valid path was rejected as
+  missing. Expansion happens before the existence check.
+- The obsolete `--yes --sha` recovery command was purged from the script's own
+  `NO PIN` message and from the maintainer alarm's failure text — both told the
+  reader to run a flag that no longer parses — and the pattern is now in
+  `lint-skills.py`'s DENYLIST, as this repo's release gate requires.
+- `PIN WRITE FAILED` no longer claims "nothing half-written" — the comment two
+  lines above it already said the opposite, and `check` reports PIN CORRUPT in
+  exactly that state. The message now says so.
+
+Two findings from the third lens were investigated and **refuted**, with a test
+left behind for each so the question does not have to be re-asked: a newline in
+`summary` cannot split the verdict line (`summary` never reaches a reason, and
+`_verdict` collapses whitespace before escaping), and an unclosed `~~~~` fence
+does not evade masking — it masks to end-of-document, so a heading planted after
+it disappears and the check refuses. Fail-closed in both directions.
+- **The invisible-character set is now Unicode's format category (Cf) whole**,
+  not a hand-picked subset of it — two review rounds each found one more member
+  the subset had missed. A test asserts the enumeration equals what
+  `unicodedata` reports, so it cannot drift from the standard silently, and
+  astral format characters (tag characters U+E0020–E007F) now escape as
+  `\Uxxxxxxxx` rather than a 5-digit escape no convention defines.
+- The ninth anchor is line-anchored to the actual `**Validator detection.**`
+  step rather than the bare phrase, so upstream moving the step while the words
+  survive in a cross-reference cannot leave override 8 suppressing nothing.
+- The dispatch prompt now extends its single-quoting rule to paths taken **from
+  the plan**: the plan is a file in the branch under audit, so a path it names is
+  attacker-shaped input in a way `<PLAN_PATH>` is not.
+- **`verdict` enforces the six-key contract instead of describing it.** Six clean
+  counts carrying `"not_done": 99` or `"audit_failed": true` alongside them
+  exited 0 while contradicting themselves. Override 6 already tells the subagent
+  to add no other keys, so a key outside the contract now refuses the line and
+  names it. `partial` remains the one permitted extra — a restated remainder has
+  a meaning the script can verify, and it already had to agree with the derived
+  value. Generalising that one rule is the whole change.
+- **The verdict line cannot be forged by the text it reports.** The unknown-key
+  message above printed key names raw, so a key containing a newline emitted a
+  second `SPEC-DRIFT: CLEAN (exit 0)` line under the real refusal — and a caller
+  reads the last such line. Found by the third Codex pass as a regression the
+  second round's own fix had introduced. `_verdict` now flattens and escapes
+  every reason before printing, so no future message can reopen this, and key
+  names are rendered with `ascii()` and capped.
+- The `Validator detection` anchor joined the section-order check, so a copy in a
+  code fence after Step 8.1 can no longer satisfy it while override 8 suppresses
+  nothing. Being line-anchored proved it was a heading, not that it was inside
+  Step 8.
+- The quoting rule now covers paths that START with `-`: quoted or not, a command
+  reads those as options, so they get a `./` prefix or UNVERIFIABLE.
+- **`--section` silently checked the wrong file.** Shell state does not survive
+  between Bash calls, so `SECTION`, bound in Phase 0, expanded to nothing in
+  Phase 1 — `${SECTION:+--upstream}` vanished and the guard verified the DEFAULT
+  upstream instead of the copy the user named, with no error to notice. The
+  `--repin` route skips Phase 0 entirely and had the same hole in both commands,
+  and a third block called `verdict` with an unbound `$SKILL_DIR`. Every block
+  now binds what it uses, and a test walks every bash block to keep it that way.
+  Same flag as the zsh word-splitting fix in 2.52.0's own history, a different
+  failure mode.
+- **Anchors are searched inside Step 8, not across the whole file.** `<base>`
+  also occurs in Step 8.2, so upstream could delete it from the audited section
+  and the anchor would still pass. Only the two boundary headings are looked for
+  file-wide now; every other anchor must fall between them, in order.
+
+Known and documented, not fixed here: `check` verifies the section's bytes and
+the subagent then reads that path itself, so a swap between the two is possible —
+narrowed by having the subagent re-run `check` immediately before its own read,
+but not closed. Closing it means handing the subagent verified bytes instead of a
+path, which is the one thing the omission tests forbid, since an inlined copy is
+what drifts. Fase 2.
+
+### Changed
+- `skills/setup-routing/blocks/plan-fidelity.md` v2 → **v3**: the paragraph every
+  generated CLAUDE.md carries no longer claims that no plan audit runs on an
+  unshipped branch; it names `/superpowers-gstack:spec-drift` and says what it does
+  not do (repair). Adopting projects pick the new block up on their next `/adapt`;
+  the v2 marker joins the lint denylist.
+- `VERSIONS.md`: GStack 1.79.0.0 → 1.81.0.0, read from the installed `VERSION` —
+  the same value `skills/spec-drift/pin.json` records.
+
 ## [2.51.1] - 2026-09-04
 
 Upstream sync, done by verification rather than by auto-merge. Two auto-update PRs

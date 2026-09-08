@@ -112,6 +112,7 @@ Key routing rules:
 - After a PRD/spec/plan for a native Apple app, before implementation → invoke /superpowers-gstack:macos-native-review (macOS) or /superpowers-gstack:ios-native-review (iOS/iPadOS). HIG-citation-grounded conformance gate; complementary to pitfall-verification and quality-review.
 - After a PRD/spec/plan, before implementation — "will this feel good?", perceived quality, loading/empty states, error recovery → invoke /superpowers-gstack:quality-review. Complementary to pitfall-verification ("will this work?").
 - "I fixed it but I don't see it in the app", check a fix/feature by eye before landing, "build and open the app" → invoke /superpowers-gstack:verify-and-land. Builds the branch you are standing on, launches that exact bundle (not the `/Applications` copy Spotlight opens), proves on screen which build is running, gates on the user's eyes, then pushes and offers merge/PR. macOS + iOS simulator; short path for web dev servers.
+- "Does this plan still match the code?", spec drift / plan drift, audit a plan on a branch that is not being shipped, mechanical plan check at a phase boundary → invoke /superpowers-gstack:spec-drift <plan-path> [--base <ref>]. Runs /ship Step 8's plan-completion section standalone — read from disk at run time and sha256-pinned (`--repin` shows the upstream diff and asks before accepting), explicit plan path (no discovery), explicit base (default `git diff <default-branch>...HEAD`; an older commit surfaces drift accumulated on main). Same report and last-line JSON as Step 8, plus exit 0 clean / 1 drift / 2 could not run. Report only — never edits code or the plan; write-back and a drift ledger are Fase 2 of the spec.
 - E2E test a Swift app, "test the app", "trykk gjennom flyten", "e2e", press buttons and verify result → invoke /superpowers-gstack:e2e-route. Pure dispatcher: reads platform (scheme/SUPPORTED_PLATFORMS/.gstack/track) × intent (CI-env/verbs; asks once if ambiguous; multiplatform → asks iOS/macOS/both) and routes to /macos-e2e-scaffold, /ios-e2e-scaffold, MCP-live simulator automation (XcodeBuildMCP / ios-simulator), or visual-regression review (/ios-design-review for iOS, /design-review for macOS). Does not execute itself — names the executor + next action, then hands off.
 - Scaffold committed XCUITest for an iOS SwiftUI app → invoke /superpowers-gstack:ios-e2e-scaffold (manual only; mirrors /macos-e2e-scaffold with iOS heuristics — TabView/NavigationStack scene-walk, sheet/tab/push/gesture TIERs, iOS-Simulator runner). Normally reached via /e2e-route.
 - Visual exploration of an iOS/iPadOS app when the accessibility tree is insufficient (layout regressions, visual landmarks, "find visual issues") → invoke /superpowers-gstack:ios-visual-explore. Tier-2 escalation after XCUITest, not first resort; paid Gemini computer-use per run. Normally reached via /e2e-route.
@@ -407,7 +408,7 @@ The subagent must NOT stop with a recommendation after finding existing code —
 
 `/plan-eng-review` covers reuse at architecture time and `/review` catches violations post-implementation; this rule fills the implementation-time gap between them. Defer to plan-eng-review's findings for high-level architecture decisions.
 
-## Keep the plan true to the code <!-- gstack-plan-fidelity-v2 --><!-- emitted=27 -->
+## Keep the plan true to the code <!-- gstack-plan-fidelity-v3 --><!-- emitted=27 -->
 
 When implementation diverges from the plan, **fix the plan in the same commit as the divergence.** Not at the end, not at `/ship`, not "later".
 
@@ -433,7 +434,7 @@ If a whole phase is invalidated, say so at the top of that phase and stop mainta
 
 ### Why this is not the ship gate's job
 
-`/ship` audits plan completion and classifies each item (`DONE` / `PARTIAL` / `CHANGED` / …), which is real and useful — but it runs at merge time, writes its findings to the PR body rather than back into the plan, and never runs at all on a branch that is not shipped. Divergence happens hours earlier, while the plan is still being read. Fix it there.
+`/ship` audits plan completion and classifies each item (`DONE` / `PARTIAL` / `CHANGED` / …), which is real and useful — but it runs at merge time and writes its findings to the PR body rather than back into the plan. `/superpowers-gstack:spec-drift <plan>` runs that same audit on any branch, shipped or not, and reports drift it finds — but it reports; it does not repair. Divergence happens hours earlier, while the plan is still being read. Fix it there.
 
 ## Session Continuity <!-- gstack-session-continuity-v3 --><!-- emitted=66 -->
 

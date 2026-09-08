@@ -173,6 +173,7 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | `/superpowers-gstack:ios-e2e-scaffold` | iOS SwiftUI apps — one-shot XCUITest scaffolding (TabView/NavigationStack scene-walk, TIER-ranked stubs, iOS-Simulator xcresult runner). Normally reached via /e2e-route. |
 | `/superpowers-gstack:macos-e2e-scaffold` | macOS SwiftUI apps — one-shot XCUITest scaffolding (Scene-walk, TIER-ranked stubs, xcresult runner). Normally reached via /e2e-route. |
 | `/superpowers-gstack:ios-visual-explore` | iOS/iPadOS apps — Tier-2 visual exploration via Gemini computer-use when the accessibility tree is insufficient (layout regressions, visual landmarks). Paid API per run; normally reached via /e2e-route. |
+| `/superpowers-gstack:spec-drift` | Any project with plans in `docs/superpowers/plans/` — standalone "does this plan still match the code?" audit: runs `/ship` Step 8's plan-completion section from disk (hash-pinned) against an explicit plan and base, on any branch, shipped or not. Report + JSON + exit 0/1/2; never edits code. |
 
 ### Step 4: Identify gaps and plan changes
 

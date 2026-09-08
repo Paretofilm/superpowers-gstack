@@ -7,3 +7,6 @@ __pycache__/
 .antigravitycli/
 .superpowers/
 computer-use-runs/
+skills/spec-drift/.repin-receipt
+skills/spec-drift/**/*.tmp
+docs/superpowers/.handoff-last.md
