@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.52.0] - 2026-09-07
+## [2.52.0] - 2026-09-08
 
 An assessment of a third-party `--verify <spec>` skill turned out to be a survey of
 what this repo already had: `/ship` Step 8 (the Plan Completion Audit) is stronger
