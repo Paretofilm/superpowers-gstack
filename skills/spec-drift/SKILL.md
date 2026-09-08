@@ -188,12 +188,15 @@ expands to nothing and re-pins the DEFAULT section instead of the named one.
 3. Ask with `AskUserQuestion`: accept the new section as the pinned one?
    Options: **Accept** (recommended when every override still fits) / **Not
    now**. End your message at this question.
-4. On Accept, pass back the sha the diff run printed — `--yes` is refused
-   without it, and refused if the file changed since the diff was shown:
+4. On Accept, pass back the token the diff run ended with — `--yes` is refused
+   without it, and refused if the file changed since the diff was shown. The
+   token is generated per run and appears nowhere else: if you do not have it,
+   the diff was truncated before it reached you, and re-running is the fix. Do
+   not go looking for it in `check`'s output; it is not there, by design.
    ```bash
    SKILL_DIR='<the base directory the Skill tool printed>'
    SECTION='<the same value step 1 used, or empty>'
-   python3 "$SKILL_DIR/../../scripts/spec-drift.py" repin --yes --sha <the 12 hex chars from the diff run> ${SECTION:+--upstream} ${SECTION:+"$SECTION"}
+   python3 "$SKILL_DIR/../../scripts/spec-drift.py" repin --yes --token <the token the diff run ended with> ${SECTION:+--upstream} ${SECTION:+"$SECTION"}
    ```
    Relay the `PINNED …` line: it names the two files that must be committed
    together. In this plugin's own repo, commit them. In a marketplace install

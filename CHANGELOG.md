@@ -24,8 +24,8 @@ will never be shipped, or against a baseline older than the branch. Design:
 - **Hash-pinned** (`skills/spec-drift/pin.json` + a byte snapshot used only to
   show diffs). `scripts/spec-drift.py check` exits 2 on any mismatch and the skill
   refuses to run; `repin` prints the unified diff, checks nine structural
-  anchors and records a receipt, and writing requires `--yes --sha <receipt>`
-  from that same run — refused if upstream changed in between, blocked while
+  anchors and ends with a one-time `--token`, and writing requires
+  `--yes --token <token>` from that same run — refused if upstream changed in between, blocked while
   an anchor the overrides depend on is missing. gstack updates weekly, so the pin will break often — that is the point:
   a guard overridden without showing what changed trains away its own effect.
 - **Same contract as Step 8** — same report, same last-line JSON — plus
@@ -34,7 +34,7 @@ will never be shipped, or against a baseline older than the branch. Design:
   Fail closed: empty diff, unreadable plan, zero actionable items and pin
   mismatch are all exit 2, never 0.
 - Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
-  README. 112 unit tests across `test_spec_drift_pin.py`,
+  README. 113 unit tests across `test_spec_drift_pin.py`,
   `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` and
   `test_spec_drift_upstream_alarm.py` — the skill tests are omission tests: Step 8
   text pasted into SKILL.md, a discovery heuristic brought back, or the check
@@ -74,11 +74,17 @@ will never be shipped, or against a baseline older than the branch. Design:
   breaks the check instead of silently restoring the execute path.
 - `RECEIPT WRITE FAILED` joined the module docstring's list of named exit-2
   reasons, which had omitted the one refusal it did not enumerate.
-- **A re-pin receipt could certify a diff nobody received.** stdout is buffered,
-  so `repin | head` failed at flush *after* the receipt was already on disk —
-  and `--yes` would then accept never-shown bytes, with the `--sha` lifted from
-  `check`'s own output. Reproduced, then closed: the whole message is flushed
-  first, and a delivery failure writes no receipt (`DIFF NOT DELIVERED`, exit 2).
+- **`--yes` now takes a one-time token, not the digest.** Two rounds went at this.
+  First: the receipt was written before stdout was flushed, so a broken pipe left
+  a receipt for a diff nobody got. Flushing first fixed that but not the class —
+  the structured review's only P1 showed that flushing proves the *kernel* took
+  the bytes, not that anyone read them, so `repin | head -1` completed normally,
+  and the `--sha` credential was independently obtainable from `check` anyway.
+  The diff run now ends with an unpredictable token that exists nowhere else; a
+  view truncated above that line cannot produce one. The receipt still records
+  the upstream digest beside it, so a file changed between the diff and the
+  accept is refused separately, naming both hashes. This is the guard's whole
+  premise — it cannot be satisfied without reading — so it is worth the API change.
 - **The invisible-character set is now Unicode's format category (Cf) whole**,
   not a hand-picked subset of it — two review rounds each found one more member
   the subset had missed. A test asserts the enumeration equals what

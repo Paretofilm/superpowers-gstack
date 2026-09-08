@@ -46,15 +46,15 @@ def run(*args, expect):
     return p
 
 
-def shown_sha(diff_run) -> str:
-    """The sha the diff run tells the user to pass back with --yes."""
-    return re.search(r"--yes --sha ([0-9a-f]{12})", diff_run.stdout).group(1)
+def shown_token(diff_run) -> str:
+    """The one-time token the diff run ends with — what --yes consumes."""
+    return re.search(r"--yes --token ([0-9a-f]{16})", diff_run.stdout).group(1)
 
 
 def accept(upstream, pin_dir):
     """The two-step accept the skill performs: show the diff, then --yes bound to it."""
     p = run("repin", *common(upstream, pin_dir), expect=3)
-    return run("repin", "--yes", "--sha", shown_sha(p), *common(upstream, pin_dir), expect=0)
+    return run("repin", "--yes", "--token", shown_token(p), *common(upstream, pin_dir), expect=0)
 
 
 def module():
@@ -152,38 +152,62 @@ def test_repin_is_a_noop_when_nothing_changed(rig):
 
 
 def test_repin_yes_is_bound_to_the_bytes_the_diff_showed(rig):
-    """Between the diff and the --yes, a weekly gstack update can rewrite the file.
-    Accepting whatever is on disk at --yes time would pin bytes nobody read."""
+    """--yes is bound twice: the token proves a diff run happened and reached the
+    reader, and the digest recorded beside it proves the file has not changed
+    since. A weekly gstack update between the two must not be pinned unread."""
     upstream, pin_dir = rig
-    shown = shown_sha(run("repin", *common(upstream, pin_dir), expect=3))
-    p = run("repin", "--yes", "--sha", shown[:4], *common(upstream, pin_dir), expect=2)
-    assert "REPIN REFUSED" in p.stderr, "a 4-char prefix is a guess, not the receipt the diff run printed"
+    shown = shown_token(run("repin", *common(upstream, pin_dir), expect=3))
+    p = run("repin", "--yes", "--token", shown[:8], *common(upstream, pin_dir), expect=2)
+    assert "REPIN REFUSED" in p.stderr, "half a token is a guess, not the token the run printed"
     upstream.write_text(SECTION + "changed after the diff was shown\n")
-    p = run("repin", "--yes", "--sha", shown, *common(upstream, pin_dir), expect=2)
-    assert "REPIN REFUSED" in p.stderr
+    p = run("repin", "--yes", "--token", shown, *common(upstream, pin_dir), expect=2)
+    assert "upstream changed since the diff was shown" in p.stderr, \
+        "the right token must not accept bytes the diff never showed"
     assert not (pin_dir / "pin.json").exists(), "nothing may be written on a refused accept"
-    p = run("repin", "--yes", *common(upstream, pin_dir), expect=2)   # no --sha at all
+    p = run("repin", "--yes", *common(upstream, pin_dir), expect=2)   # no --token at all
     assert "REPIN REFUSED" in p.stderr
 
 
-def test_yes_without_a_diff_run_is_refused_even_with_the_right_sha(rig):
-    """`check` prints the current digest too, so --sha alone would let a caller go
-    straight from PIN MISMATCH to --yes without ever seeing a diff. The receipt a
-    diff run writes is what --yes actually consumes."""
+def test_yes_without_a_diff_run_is_refused_even_with_the_right_digest(rig):
+    """`check` prints the current digest, so a digest could never be the credential:
+    a caller could go straight from PIN MISMATCH to --yes without seeing a diff.
+    The token cannot be obtained that way — it exists only in a diff run's output."""
     upstream, pin_dir = rig
     sha = hashlib.sha256(SECTION.encode()).hexdigest()
-    p = run("repin", "--yes", "--sha", sha, *common(upstream, pin_dir), expect=2)
-    assert "no diff run recorded" in p.stderr
+    for candidate in (sha, sha[:16]):
+        p = run("repin", "--yes", "--token", candidate, *common(upstream, pin_dir), expect=2)
+        assert "no diff run recorded" in p.stderr
     assert not (pin_dir / "pin.json").exists()
 
 
-def test_sha_receipt_boundary_is_twelve_chars(rig):
+def test_a_truncated_diff_cannot_yield_a_usable_token(rig):
+    """The P1 the structured review found: flushing proves the kernel took the
+    bytes, not that anyone read them, so `repin | head -1` completed normally and
+    left a receipt — and the old --sha credential was independently obtainable
+    from `check`. The token appears ONLY in the last line, after the diff."""
     upstream, pin_dir = rig
-    run("repin", *common(upstream, pin_dir), expect=3)
-    full = hashlib.sha256(SECTION.encode()).hexdigest()
-    run("repin", "--yes", "--sha", full[:11], *common(upstream, pin_dir), expect=2)
-    assert not (pin_dir / "pin.json").exists()
-    run("repin", "--yes", "--sha", full, *common(upstream, pin_dir), expect=0)
+    accept(upstream, pin_dir)
+    upstream.write_text(SECTION.replace("line two", "line two, changed upstream"))
+    proc = subprocess.run(
+        f"{sys.executable} {SCRIPT} repin --upstream {upstream} --pin-dir {pin_dir} | head -1",
+        shell=True, capture_output=True, text=True)
+    assert "--yes --token" not in proc.stdout, "a one-line view must not carry the token"
+    # Even holding the digest — which `check` hands out freely — accepts nothing.
+    digest = hashlib.sha256(upstream.read_bytes()).hexdigest()
+    for guess in (digest[:16], "0" * 16, "f" * 16):
+        run("repin", "--yes", "--token", guess, *common(upstream, pin_dir), expect=2)
+    assert json.loads((pin_dir / "pin.json").read_text())["sha256"] == \
+        hashlib.sha256(SECTION.encode()).hexdigest(), "the old pin must still stand"
+
+
+def test_the_token_must_match_whole_not_by_prefix(rig):
+    """A prefix rule would shrink the search space the token exists to provide."""
+    upstream, pin_dir = rig
+    shown = shown_token(run("repin", *common(upstream, pin_dir), expect=3))
+    for near in (shown[:-1], shown[1:], shown[:-1] + ("0" if shown[-1] != "0" else "1")):
+        run("repin", "--yes", "--token", near, *common(upstream, pin_dir), expect=2)
+        assert not (pin_dir / "pin.json").exists()
+    run("repin", "--yes", "--token", shown, *common(upstream, pin_dir), expect=0)
 
 
 def test_snapshot_that_disagrees_with_pin_json_is_refused(rig):
@@ -234,8 +258,7 @@ def test_repin_refuses_a_section_that_lost_an_anchor(rig):
     upstream.write_text(SECTION.replace("### Gate Logic", "### Decision Logic"))
     p = run("repin", *common(upstream, pin_dir), expect=2)
     assert "ANCHORS MISSING" in p.stderr and "### Gate Logic" in p.stderr
-    sha = hashlib.sha256(upstream.read_bytes()).hexdigest()[:12]
-    p = run("repin", "--yes", "--sha", sha, *common(upstream, pin_dir), expect=2)
+    p = run("repin", "--yes", "--token", "0" * 16, *common(upstream, pin_dir), expect=2)
     assert "ANCHORS MISSING" in p.stderr
     assert not (pin_dir / "pin.json").exists()
 
@@ -296,7 +319,7 @@ def test_ascii_stdout_does_not_turn_a_shown_diff_into_a_traceback(rig):
     p = subprocess.run([sys.executable, str(SCRIPT), "repin", *common(upstream, pin_dir)],
                        capture_output=True, text=True, env=env)
     assert p.returncode == 3 and "Traceback" not in p.stderr, p.stderr
-    assert "--yes --sha" in p.stdout
+    assert "--yes --token" in p.stdout
 
 
 def test_usage_errors_carry_a_named_token(rig):
@@ -305,7 +328,7 @@ def test_usage_errors_carry_a_named_token(rig):
     upstream, pin_dir = rig
     p = run("chek", *common(upstream, pin_dir), expect=2)
     assert "USAGE ERROR" in p.stderr
-    p = run("repin", "--sha", *common(upstream, pin_dir), expect=2)
+    p = run("repin", "--token", *common(upstream, pin_dir), expect=2)
     assert "USAGE ERROR" in p.stderr
 
 
@@ -374,7 +397,7 @@ def test_repin_refuses_when_upstream_is_missing(rig):
     upstream, pin_dir = rig
     accept(upstream, pin_dir)
     upstream.unlink()
-    for args in (("repin",), ("repin", "--yes", "--sha", "0" * 12)):
+    for args in (("repin",), ("repin", "--yes", "--token", "0" * 16)):
         p = run(*args, *common(upstream, pin_dir), expect=2)
         assert "UPSTREAM MISSING" in p.stderr
     assert (pin_dir / "pin" / "plan-completion.md").read_text() == SECTION, \
@@ -395,7 +418,7 @@ def test_write_failure_is_named_not_a_traceback(rig):
     upstream, pin_dir = rig
     p = run("repin", *common(upstream, pin_dir), expect=3)
     (pin_dir / "pin").write_text("a file where a directory belongs")
-    p = run("repin", "--yes", "--sha", shown_sha(p), *common(upstream, pin_dir), expect=2)
+    p = run("repin", "--yes", "--token", shown_token(p), *common(upstream, pin_dir), expect=2)
     assert "PIN WRITE FAILED" in p.stderr
     assert not (pin_dir / "pin.json").exists()
 
@@ -487,7 +510,7 @@ def test_format_set_is_exactly_unicode_category_cf():
 def test_a_diff_that_never_reached_stdout_leaves_no_receipt(rig):
     """The receipt certifies that a human SAW the diff. stdout is buffered, so a
     closed pipe (`repin | head`) failed at flush AFTER the receipt was already on
-    disk — and --yes would then accept never-shown bytes, with the --sha lifted
+    disk — and --yes would then accept never-shown bytes, with the credential lifted
     from `check`'s output. Codex, 2.52.0; reproduced before the fix."""
     upstream, pin_dir = rig
     accept(upstream, pin_dir)

@@ -11,11 +11,12 @@ model's judgement:
            match, 2 on mismatch / missing anchor / missing upstream / missing
            or corrupt pin. The skill refuses to run on anything but 0.
   repin    show the unified diff between the pinned snapshot and the upstream
-           section (exit 3: confirmation required; the run prints the --sha
-           receipt --yes must carry and records it beside the pin — without a
-           diff run, with a stale receipt, or while an anchor is missing,
-           --yes is refused with exit 2); with --yes --sha <receipt> write the new
-           snapshot + pin.json (exit 0). No difference: nothing to do, exit 0.
+           section (exit 3: confirmation required; the run ends with a one-time
+           --token and records it beside the upstream digest — without a diff
+           run, with a stale receipt, with the wrong token, or while an anchor is
+           missing, --yes is refused with exit 2); with --yes --token <token>
+           write the new snapshot + pin.json (exit 0). No difference: nothing to
+           do, exit 0.
   verdict  map Step 8's last-line JSON to the standalone exit code:
            0 clean (every item DONE or CHANGED), 1 drift (anything else),
            2 could not audit (no JSON, malformed, or total_items == 0).
@@ -24,6 +25,12 @@ Why a snapshot and not only a hash: --repin must SHOW what changed upstream
 before anyone accepts it. A guard that is overridden routinely without showing
 its diff trains away its own effect (spec, Fase 1). The snapshot is never
 executed — the skill always reads the upstream path.
+
+Why a random token and not the digest: the digest is also printed by `check`, so
+holding it proves nothing about having seen a diff, and flushing stdout proves
+only that the kernel took the bytes — `repin | head -1` flushed fine while
+showing one line. A token that exists only in the diff run's last line cannot
+survive truncation of the diff above it.
 
 Fail-closed by construction: every unexpected state is a named reason on stderr
 and exit 2 — never exit 0, never a Python traceback. One read of the upstream
@@ -38,8 +45,8 @@ UNREADABLE, NO PIN, PIN CORRUPT, PIN MISMATCH, ANCHORS MISSING, REPIN BLOCKED,
 RECEIPT WRITE FAILED, REPIN REFUSED, PIN WRITE FAILED, PIN DIR INVALID, USAGE
 ERROR, INTERNAL; verdict
 prints its `SPEC-DRIFT: COULD-NOT-RUN (exit 2)` line on stdout like its other two
-outcomes); 3 repin needs confirmation (the receipt line is the LAST line of
-stdout — do not truncate it).
+outcomes); 3 repin needs confirmation (the token is the LAST line of
+stdout — if it was truncated away, the diff was too, and that is the point).
 """
 from __future__ import annotations
 
@@ -49,6 +56,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import sys
 import tempfile
 from datetime import date
@@ -79,13 +87,11 @@ ANCHORS = (
     ("Include in PR body", r"Include in PR body"),
     ("Parent processing", r"Parent processing"),
     ('"total_items"', r'"total_items"'),
-    # Override 8 suppresses this step: /ship may run a repo's own validator script
-    # because it ships that repo's branch, but this skill audits branches nobody
-    # is shipping. If upstream renames the step, the override stops suppressing
-    # anything and the audit silently regains the right to execute repo code.
-    # Line-anchored to the actual step, not the bare phrase: upstream could
-    # otherwise rename or move the step while the words survive in a cross-
-    # reference, and the override would stop suppressing anything silently.
+    # Override 8 suppresses this step: /ship may run a repo's own validator
+    # script because it ships that repo's branch, but this skill audits branches
+    # nobody is shipping. Line-anchored to the step itself, not the bare phrase,
+    # so upstream moving it while the words survive in a cross-reference cannot
+    # leave the override silently suppressing nothing.
     ("Validator detection", r"^(> )?\*\*Validator detection\.\*\*"),
 )
 
@@ -97,7 +103,8 @@ EXIT_OK, EXIT_DRIFT, EXIT_CANNOT, EXIT_CONFIRM = 0, 1, 2, 3
 COUNT_KEYS = ("total_items", "done", "changed", "deferred", "unverifiable")
 JSON_KEYS = COUNT_KEYS + ("summary",)
 ALLOWED_EXTRA = ("partial",)   # the only key outside the contract with a checked meaning
-SHA_PREFIX = 12   # chars of the digest printed as the --sha receipt; also the minimum --yes must carry
+SHA_PREFIX = 12    # chars of a digest shown in messages — display only, never a credential
+TOKEN_BYTES = 8    # 16 hex chars of os-random: the one-time --token a diff run ends with
 
 # Terminal-control, bidi and zero-width characters: escaped when the diff is
 # shown, so a malicious upstream can neither repaint the confirmation prompt the
@@ -405,14 +412,19 @@ def cmd_repin(a) -> int:
             print(f"\nWARNING: INVISIBLE CHARS (zero-width, BOM or bidi controls) at line(s) "
                   f"{', '.join(map(str, invisible[:10]))} — a diff cannot show them; inspect the "
                   "bytes before accepting", file=sys.stderr)
+        # An UNPREDICTABLE token, printed as the very last line, is what --yes
+        # consumes. The digest cannot serve: `check` prints it too, so possessing
+        # it proves nothing about having seen a diff. Flushing does not serve
+        # either — it proves the kernel took the bytes, not that anyone read
+        # them, so `repin | head -1` flushed successfully while showing one line
+        # (Codex structured review, 2.52.0). A token that appears only after the
+        # diff cannot survive truncation of the diff, which is the property the
+        # whole snapshot-and-confirm design is for.
+        token = secrets.token_hex(TOKEN_BYTES)
         print("\nANCHORS: all present")
         print(f"REPIN REQUIRES CONFIRMATION: +{added} -{removed} lines. Read the diff above, "
-              f"verify the wrapper's overrides still match, then re-run with --yes --sha {short(current)}")
-        # The receipt certifies that a human SAW this diff, so it must not reach
-        # disk until the whole message has actually left the process. stdout is
-        # buffered: `repin | head` fails at flush, which used to happen AFTER the
-        # receipt was written — leaving --yes able to accept never-shown bytes
-        # with a --sha lifted from `check`'s output. Codex, 2.52.0; reproduced.
+              f"verify the wrapper's overrides still match, then re-run with "
+              f"--yes --token {token}")
         try:
             sys.stdout.flush()
         except (BrokenPipeError, OSError) as exc:
@@ -421,7 +433,7 @@ def cmd_repin(a) -> int:
             return EXIT_CANNOT
         try:
             pin_dir.mkdir(parents=True, exist_ok=True)
-            _atomic_write(receipt_path(pin_dir), (current + "\n").encode(ENCODING))
+            _atomic_write(receipt_path(pin_dir), f"{token}\n{current}\n".encode(ENCODING))
         except OSError as exc:
             print(f"RECEIPT WRITE FAILED: {receipt_path(pin_dir)}: {exc}", file=sys.stderr)
             return EXIT_CANNOT
@@ -429,29 +441,37 @@ def cmd_repin(a) -> int:
     if missing:
         print(f"REPIN REFUSED: ANCHORS MISSING: {', '.join(missing)}", file=sys.stderr)
         return EXIT_CANNOT
-    # --yes is bound to the bytes a diff run showed: the receipt that run wrote
-    # must exist, --sha must be a real prefix of it, and upstream must still hash
-    # to it now. `check` also prints the current digest, so --sha alone would not
-    # tie --yes to a diff run; the receipt file does. That is a procedural guard,
-    # not proof: a caller who writes the file by hand from `check`'s output gets
-    # past it. The guard exists for the model that runs the skill, whose every
-    # file write is visible in its tool log — the diff run is the step it cannot
+    # --yes is bound to a diff run TWICE over: the token it must carry exists
+    # only in that run's last line, and the digest the same receipt records must
+    # still be what upstream hashes to. The token is the half that survives
+    # truncation — a reader shown half a diff never reaches the line carrying it,
+    # and it cannot be derived from `check` the way the digest could. The digest
+    # half is what refuses a file that changed between the diff and the accept.
+    #
+    # Still a procedural guard, not proof: someone who writes the receipt file by
+    # hand gets past it. It exists for the model that runs this skill, whose file
+    # writes are all visible in its tool log — the diff run is the step it cannot
     # quietly skip.
     try:
-        receipt = receipt_path(pin_dir).read_text(encoding=ENCODING).strip() \
-            if receipt_path(pin_dir).is_file() else ""
+        receipt = receipt_path(pin_dir).read_text(encoding=ENCODING).splitlines() \
+            if receipt_path(pin_dir).is_file() else []
     except (OSError, ValueError):
-        receipt = ""
-    if not receipt:
+        receipt = []
+    if len(receipt) != 2 or not all(receipt):
         print("REPIN REFUSED: no diff run recorded — run repin without --yes first and read "
               "the diff; --yes only accepts what that run showed", file=sys.stderr)
         return EXIT_CANNOT
-    if not a.sha or len(a.sha) < SHA_PREFIX or not receipt.startswith(a.sha) \
-            or receipt != current:
-        print(f"REPIN REFUSED: --yes must carry the --sha printed by the diff run, {SHA_PREFIX}+ "
-              f"hex chars (that run showed {short(receipt)}, upstream is now {short(current)}, "
-              f"got {a.sha or 'nothing'}). Re-run repin without --yes and read the diff again.",
-              file=sys.stderr)
+    shown_token, shown_sha = receipt
+    if not a.token or not secrets.compare_digest(a.token, shown_token):
+        print("REPIN REFUSED: --yes must carry the --token printed as the LAST line of the "
+              "diff run. It is generated per run and appears nowhere else — if you do not "
+              "have it, the diff was truncated before it reached you. Re-run repin without "
+              "--yes, read the whole diff, and use the token it ends with.", file=sys.stderr)
+        return EXIT_CANNOT
+    if shown_sha != current:
+        print(f"REPIN REFUSED: upstream changed since the diff was shown (that run hashed "
+              f"{short(shown_sha)}, it is now {short(current)}). Re-run repin without --yes "
+              "and read the new diff.", file=sys.stderr)
         return EXIT_CANNOT
     version = gstack_version(upstream)
     pin_json = json.dumps({
@@ -626,8 +646,9 @@ def main(argv=None) -> int:
         s.set_defaults(fn=fn)
     sub.choices["repin"].add_argument("--yes", action="store_true",
                                       help="accept the diff shown by a previous run and write the pin")
-    sub.choices["repin"].add_argument("--sha", default=None,
-                                      help="sha256 prefix printed by the diff run; required with --yes")
+    sub.choices["repin"].add_argument("--token", default=None,
+                                      help="one-time token printed as the LAST line of the diff run; "
+                                           "required with --yes")
     v = sub.add_parser("verdict")
     v.add_argument("--json", default=None,
                    help="text whose last non-empty line is Step 8's JSON object "

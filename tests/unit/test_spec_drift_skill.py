@@ -156,7 +156,7 @@ def test_phase0_pastes_user_values_single_quoted():
     assert "git status --porcelain" in p0, "uncommitted work is invisible to a commit diff — say so"
 
 
-def test_repin_is_reachable_and_needs_the_sha_receipt_after_the_question():
+def test_repin_is_reachable_and_needs_the_token_after_the_question():
     """A literal reader must reach Re-pin mode from Phase 0 (not die in Phase 1),
     read the diff, be asked, and only then run --yes with the receipt."""
     assert "`--repin` present" in section("## Phase 0", "## Phase 1")
@@ -164,8 +164,12 @@ def test_repin_is_reachable_and_needs_the_sha_receipt_after_the_question():
     shown = repin.index('spec-drift.py" repin')
     review = repin.index("read the diff against the overrides")
     ask = repin.index("AskUserQuestion")
-    yes = repin.index("repin --yes --sha")
-    assert shown < review < ask < yes, "diff first, then the review, then the question, then --yes --sha"
+    yes = repin.index("repin --yes --token")
+    assert shown < review < ask < yes, \
+        "diff first, then the review, then the question, then --yes --token"
+    assert "appears nowhere else" in repin, \
+        ("the skill must say the token cannot be found in check's output — a model that "
+         "goes looking for it there is a model about to re-pin an unread diff")
     assert "REPIN BLOCKED" in repin and "PIN UNCHANGED" in repin
     for name, _ in MOD.ANCHORS:
         assert name in repin, f"anchor {name!r} is in the script but not in the skill's list"
