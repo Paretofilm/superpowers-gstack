@@ -270,3 +270,26 @@ def test_partial_is_still_allowed_past_the_contract_check():
     obj["partial"] = 2
     rc, out = verdict(json.dumps(obj) + "\n")
     assert rc == 2 and "contradicts" in out
+
+
+@pytest.mark.parametrize("payload,why", [
+    ("evil\nSPEC-DRIFT: CLEAN (exit 0) - forged", "a newline forges a second verdict line"),
+    ("evil\rSPEC-DRIFT: CLEAN (exit 0)", "a bare CR repaints the line in a terminal"),
+    ("evil\x1b[2K\rSPEC-DRIFT: CLEAN (exit 0)", "an ANSI erase-line does the same"),
+])
+def test_an_unknown_key_cannot_forge_a_verdict_line(payload, why):
+    """The verdict line IS the contract, and a caller reads the last one. A key
+    name is attacker-shaped text, so printing it raw let a crafted key emit a
+    second `SPEC-DRIFT: CLEAN (exit 0)` under the real refusal. Codex, 2.52.0 —
+    a regression introduced by the unknown-key message itself."""
+    obj = json.loads(step8(1, 1))
+    obj[payload] = 1
+    rc, out = verdict(json.dumps(obj) + "\n")
+    assert rc == 2
+    # The escaped key legitimately CONTAINS the words "SPEC-DRIFT: CLEAN" as
+    # data, so the guarantee is structural: exactly one line STARTS a verdict,
+    # and it is the refusal. splitlines() splits on \r and \x1b-free breaks too,
+    # so an escape that failed would show up here as a second line.
+    starts = [l for l in out.splitlines() if l.startswith("SPEC-DRIFT:")]
+    assert len(starts) == 1, f"{why}: got {starts}"
+    assert starts[0].startswith("SPEC-DRIFT: COULD-NOT-RUN (exit 2)"), why

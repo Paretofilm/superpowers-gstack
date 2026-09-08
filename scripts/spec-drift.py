@@ -196,12 +196,17 @@ def missing_anchors(text: str) -> list[str]:
     targets one of them would land in the wrong section."""
     missing = [name for name, pat in ANCHORS if not re.search(pat, text, re.M)]
     if not missing:
+        # Validator detection sits in the order list, not just the presence list:
+        # being line-anchored proves it is a real heading, not that it is inside
+        # Step 8. A copy in a code fence after Step 8.1 would otherwise satisfy
+        # the anchor while override 8 suppresses nothing (Codex, 2.52.0).
         order = ("## Step 8: Plan Completion Audit", "### Plan File Discovery",
-                 "### Gate Logic", "## Step 8.1")
+                 "Validator detection", "### Gate Logic", "## Step 8.1")
         pats = dict(ANCHORS)
         positions = [re.search(pats[name], text, re.M).start() for name in order]
         if positions != sorted(positions):
-            missing.append("heading order (Step 8 > Plan File Discovery > Gate Logic > Step 8.1)")
+            missing.append("section order (Step 8 > Plan File Discovery > Validator "
+                           "detection > Gate Logic > Step 8.1)")
     return missing
 
 
@@ -503,8 +508,14 @@ def last_json_line(text: str) -> dict | None:
 
 def _verdict(label: str, code: int, reason: str) -> int:
     """The one line a caller reads. Always stdout — the line IS the contract, and
-    the printed number is the number returned, by construction."""
-    print(f"SPEC-DRIFT: {label} (exit {code}) — {reason}")
+    the printed number is the number returned, by construction.
+
+    The reason is flattened to a single line and escaped before printing. It can
+    carry text lifted from an untrusted JSON key, and a raw newline in one would
+    print a second line: a forged `SPEC-DRIFT: CLEAN` under the real verdict,
+    which is what a caller reading the last such line would believe. Codex,
+    2.52.0 — a regression introduced by the unknown-key message itself."""
+    print(f"SPEC-DRIFT: {label} (exit {code}) — " + visible(" ".join(reason.split())))
     return code
 
 
@@ -534,8 +545,13 @@ def cmd_verdict(a) -> int:
     # argues for refusing the line, not for scoring it.
     unknown = sorted(set(obj) - set(JSON_KEYS) - set(ALLOWED_EXTRA))
     if unknown:
-        return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
-                        f"keys outside the contract: {', '.join(unknown)}")
+        # ascii(), like the `partial` message's !r: a key name is attacker-shaped
+        # text. Capped in count and length — the reason names the offender, it
+        # does not reproduce it.
+        shown = ", ".join(ascii(k)[:60] for k in unknown[:5])
+        if len(unknown) > 5:
+            shown += f", and {len(unknown) - 5} more"
+        return _verdict("COULD-NOT-RUN", EXIT_CANNOT, f"keys outside the contract: {shown}")
     counts = {k: obj[k] for k in COUNT_KEYS}
     # The contract is integers. bool is an int subclass, and int() happily eats
     # "2" and 1.9 — each a way for a malformed line to read as CLEAN. Exact type.

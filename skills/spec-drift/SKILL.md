@@ -222,7 +222,9 @@ and every path you take FROM the plan too. Step 8 has you test whether paths the
 plan names exist on disk; the plan is a file in the branch under audit, so those
 paths are attacker-shaped input in exactly the way <PLAN_PATH> is not. A path
 carrying shell metacharacters gets single-quoted or classified UNVERIFIABLE,
-never interpolated bare into a command.
+never interpolated bare into a command. Quoting does not cover a path that
+STARTS with `-` — quoted or not, the command reads it as an option — so prefix
+that one with `./`, or classify it UNVERIFIABLE.
 
 0. Before you read the section, run `python3 <SCRIPT_PATH> check` (add
    `--upstream <SECTION_PATH>` if it is not the default) and confirm it prints

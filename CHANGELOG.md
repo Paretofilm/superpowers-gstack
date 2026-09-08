@@ -34,7 +34,7 @@ will never be shipped, or against a baseline older than the branch. Design:
   Fail closed: empty diff, unreadable plan, zero actionable items and pin
   mismatch are all exit 2, never 0.
 - Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
-  README. 108 unit tests across `test_spec_drift_pin.py`,
+  README. 111 unit tests across `test_spec_drift_pin.py`,
   `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` and
   `test_spec_drift_upstream_alarm.py` — the skill tests are omission tests: Step 8
   text pasted into SKILL.md, a discovery heuristic brought back, or the check
@@ -98,6 +98,19 @@ will never be shipped, or against a baseline older than the branch. Design:
   names it. `partial` remains the one permitted extra — a restated remainder has
   a meaning the script can verify, and it already had to agree with the derived
   value. Generalising that one rule is the whole change.
+- **The verdict line cannot be forged by the text it reports.** The unknown-key
+  message above printed key names raw, so a key containing a newline emitted a
+  second `SPEC-DRIFT: CLEAN (exit 0)` line under the real refusal — and a caller
+  reads the last such line. Found by the third Codex pass as a regression the
+  second round's own fix had introduced. `_verdict` now flattens and escapes
+  every reason before printing, so no future message can reopen this, and key
+  names are rendered with `ascii()` and capped.
+- The `Validator detection` anchor joined the section-order check, so a copy in a
+  code fence after Step 8.1 can no longer satisfy it while override 8 suppresses
+  nothing. Being line-anchored proved it was a heading, not that it was inside
+  Step 8.
+- The quoting rule now covers paths that START with `-`: quoted or not, a command
+  reads those as options, so they get a `./` prefix or UNVERIFIABLE.
 
 Known and documented, not fixed here: `check` verifies the section's bytes and
 the subagent then reads that path itself, so a swap between the two is possible —

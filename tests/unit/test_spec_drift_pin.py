@@ -29,10 +29,10 @@ SECTION = (
     "## Step 8: Plan Completion Audit\n\n"
     "> ### Plan File Discovery\n"
     "line two\n"
+    "**Validator detection.** ... scan the target repo's `package.json` ...\n"
     "### Gate Logic\n"
     "Use `<base>`. **Include in PR body (Step 8):** ... **Parent processing:** ...\n"
     '`{"total_items":N,"done":N}`\n'
-    "**Validator detection.** ... scan the target repo's `package.json` ...\n"
     "\n## Step 8.1: Plan Verification\n"
     "line three\n"
 )
