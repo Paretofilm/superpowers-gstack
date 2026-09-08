@@ -5,7 +5,7 @@
 gstack auto-update that reshapes Step 8 is seen before anyone needs the skill.
 Skipped in CI (no upstream there), like test_lint_upstream_skills' roster
 check. Failing here is the designed outcome, not flakiness: read the diff with
-`python3 scripts/spec-drift.py repin`, accept it with `--yes --sha <the 12 hex
+`python3 scripts/spec-drift.py repin`, accept it with `--yes --token <the token
 chars that run printed>`, commit the pin.
 """
 from __future__ import annotations
@@ -29,5 +29,5 @@ def test_pin_matches_installed_gstack_when_present():
     assert p.returncode == 0, (
         "upstream plan-completion.md no longer matches skills/spec-drift/pin.json — "
         "gstack updated Step 8. Review: python3 scripts/spec-drift.py repin ; accept: "
-        "python3 scripts/spec-drift.py repin --yes --sha <the 12 hex chars the diff run "
+        "python3 scripts/spec-drift.py repin --yes --token <the token the diff run "
         "printed> ; then commit pin.json + pin/.\n" + p.stderr)

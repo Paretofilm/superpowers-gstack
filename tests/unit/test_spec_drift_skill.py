@@ -153,6 +153,11 @@ def test_phase0_pastes_user_values_single_quoted():
     assert "--end-of-options" in p0 and "--is-inside-work-tree" in p0
     assert p0.count("os.path.abspath") == 2, \
         "the subagent has its own cwd; a relative plan OR section path fails there (Codex, Fase-1 verification)"
+    assert p0.count("os.path.expanduser") == 2, \
+        ("the value is single-quoted, so nothing expands a leading ~; abspath('~/plan.md') "
+         "would invent a literal ~ directory (Codex structured review, 2.52.0)")
+    assert p0.index("os.path.expanduser") < p0.index('[ -f "$PLAN" ]'), \
+        "expand before testing existence, or a valid ~-path is rejected as missing"
     assert "git status --porcelain" in p0, "uncommitted work is invisible to a commit diff — say so"
 
 

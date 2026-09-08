@@ -98,6 +98,14 @@ ANCHORS = (
 # The two headings that delimit the executed span. Searched in the whole file;
 # every other anchor must fall between them.
 BOUNDARY = ("## Step 8: Plan Completion Audit", "## Step 8.1")
+# Anchors whose pattern is line-anchored are structural: they claim a real
+# heading exists. Those are matched against text with fenced blocks masked out,
+# so upstream renaming a heading while an old copy survives inside a ``` example
+# cannot satisfy them (Codex, 2.52.0). The rest (`<base>`, `"total_items"`) are
+# phrases that legitimately occur inside Step 8's own code blocks — masking them
+# would break the check on the real section.
+HEADING_ANCHORS = frozenset(name for name, pat in ANCHORS if pat.startswith("^"))
+_FENCE = re.compile(r"^(?P<f>```+|~~~+)[^\n]*\n.*?(?:^(?P=f)[`~]*[ \t]*$|\Z)", re.M | re.S)
 
 EXIT_OK, EXIT_DRIFT, EXIT_CANNOT, EXIT_CONFIRM = 0, 1, 2, 3
 COUNT_KEYS = ("total_items", "done", "changed", "deferred", "unverifiable")
@@ -200,6 +208,12 @@ def visible(line: str) -> str:
     return _CONTROL.sub(escape, line)
 
 
+def unfenced(text: str) -> str:
+    """`text` with fenced code blocks blanked to spaces. Same length and the same
+    newlines, so every offset and line number stays valid."""
+    return _FENCE.sub(lambda m: re.sub(r"[^\n]", " ", m.group()), text)
+
+
 def missing_anchors(text: str) -> list[str]:
     """Names of anchors the text lacks.
 
@@ -209,21 +223,33 @@ def missing_anchors(text: str) -> list[str]:
     about that span: `<base>` also occurs in Step 8.2, so upstream could delete
     it from Step 8 and the anchor would still pass (Codex, 2.52.0). The three
     inner headings must also hold their order, or an override that targets one
-    would land in the wrong part of the section."""
+    would land in the wrong part of the section.
+
+    Structural anchors (the line-anchored ones) are matched against the text with
+    fenced blocks masked out: a heading that survives only inside a ``` example is
+    an illustration, not the section. The phrase anchors keep the raw text, since
+    `<base>` genuinely lives inside Step 8's own bash blocks."""
     pats = dict(ANCHORS)
-    missing = [name for name in BOUNDARY if not re.search(pats[name], text, re.M)]
+    masked = unfenced(text)
+
+    def where(name: str) -> str:
+        return masked if name in HEADING_ANCHORS else text
+
+    missing = [name for name in BOUNDARY if not re.search(pats[name], where(name), re.M)]
     if missing:
         return missing
-    start = re.search(pats[BOUNDARY[0]], text, re.M).start()
-    end = re.search(pats[BOUNDARY[1]], text, re.M).start()
+    start = re.search(pats[BOUNDARY[0]], masked, re.M).start()
+    end = re.search(pats[BOUNDARY[1]], masked, re.M).start()
     if end <= start:
         return ["section order (Step 8 must precede Step 8.1)"]
-    span = text[start:end]
-    missing = [name for name, pat in ANCHORS
-               if name not in BOUNDARY and not re.search(pat, span, re.M)]
+    # Masked and raw share offsets by construction, so one span serves both.
+    spans = {False: text[start:end], True: masked[start:end]}
+    missing = [name for name, pat in ANCHORS if name not in BOUNDARY
+               and not re.search(pat, spans[name in HEADING_ANCHORS], re.M)]
     if not missing:
         order = ("### Plan File Discovery", "Validator detection", "### Gate Logic")
-        positions = [re.search(pats[name], span, re.M).start() for name in order]
+        positions = [re.search(pats[name], spans[name in HEADING_ANCHORS], re.M).start()
+                     for name in order]
         if positions != sorted(positions):
             missing.append("section order (Plan File Discovery > Validator "
                            "detection > Gate Logic, inside Step 8)")
@@ -277,7 +303,7 @@ def cmd_check(a) -> int:
     pin = load_pin(pin_dir)
     if pin is None:
         print(f"NO PIN: {pin_dir / PIN_NAME} does not exist — review the section with "
-              f"`python3 {SELF} repin`, then accept it with --yes --sha",
+              f"`python3 {SELF} repin`, then accept it with --yes --token",
               file=sys.stderr)
         return EXIT_CANNOT
     if not pin_well_formed(pin):
@@ -433,7 +459,12 @@ def cmd_repin(a) -> int:
             return EXIT_CANNOT
         try:
             pin_dir.mkdir(parents=True, exist_ok=True)
-            _atomic_write(receipt_path(pin_dir), f"{token}\n{current}\n".encode(ENCODING))
+            # The HASH, never the token: truncated tool output still writes a
+            # receipt, and the agent this guard constrains can read files. A
+            # token stored verbatim would be recoverable with one `cat` by the
+            # very reader who never saw the diff (Codex, 2.52.0).
+            _atomic_write(receipt_path(pin_dir),
+                          f"{sha256_bytes(token.encode(ENCODING))}\n{current}\n".encode(ENCODING))
         except OSError as exc:
             print(f"RECEIPT WRITE FAILED: {receipt_path(pin_dir)}: {exc}", file=sys.stderr)
             return EXIT_CANNOT
@@ -447,11 +478,12 @@ def cmd_repin(a) -> int:
     # truncation — a reader shown half a diff never reaches the line carrying it,
     # and it cannot be derived from `check` the way the digest could. The digest
     # half is what refuses a file that changed between the diff and the accept.
+    # The receipt holds only sha256(token), so reading the file recovers nothing.
     #
-    # Still a procedural guard, not proof: someone who writes the receipt file by
-    # hand gets past it. It exists for the model that runs this skill, whose file
-    # writes are all visible in its tool log — the diff run is the step it cannot
-    # quietly skip.
+    # Still a procedural guard, not proof: someone who WRITES the receipt file by
+    # hand — with a hash they computed — gets past it. It exists for the model
+    # that runs this skill, whose file writes are all visible in its tool log;
+    # the diff run is the step it cannot quietly skip.
     try:
         receipt = receipt_path(pin_dir).read_text(encoding=ENCODING).splitlines() \
             if receipt_path(pin_dir).is_file() else []
@@ -461,8 +493,9 @@ def cmd_repin(a) -> int:
         print("REPIN REFUSED: no diff run recorded — run repin without --yes first and read "
               "the diff; --yes only accepts what that run showed", file=sys.stderr)
         return EXIT_CANNOT
-    shown_token, shown_sha = receipt
-    if not a.token or not secrets.compare_digest(a.token, shown_token):
+    token_hash, shown_sha = receipt
+    submitted = sha256_bytes(a.token.encode(ENCODING, "replace")) if a.token else ""
+    if not a.token or not secrets.compare_digest(submitted, token_hash):
         print("REPIN REFUSED: --yes must carry the --token printed as the LAST line of the "
               "diff run. It is generated per run and appears nowhere else — if you do not "
               "have it, the diff was truncated before it reached you. Re-run repin without "

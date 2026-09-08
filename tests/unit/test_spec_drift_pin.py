@@ -534,3 +534,38 @@ def test_an_astral_format_character_is_escaped_readably(rig):
     p = run("repin", *common(upstream, pin_dir), expect=3)
     assert "\U000e0020" not in p.stdout and r"\U000e0020" in p.stdout
     assert "INVISIBLE CHARS" in p.stderr
+
+
+def test_the_receipt_stores_a_hash_not_the_token(rig):
+    """Truncated tool output still writes a receipt, and the agent this guard
+    constrains can read files. A token stored verbatim would be recoverable with
+    one `cat` by the very reader who never saw the diff — so the file holds
+    sha256(token), and the token itself exists only in that run's last line.
+    Codex structured review, 2.52.0."""
+    upstream, pin_dir = rig
+    p = run("repin", *common(upstream, pin_dir), expect=3)
+    token = shown_token(p)
+    receipt = (pin_dir / ".repin-receipt").read_text()
+    assert token not in receipt, "the token must not be recoverable by reading the receipt"
+    stored_hash, stored_sha = receipt.splitlines()
+    assert stored_hash == hashlib.sha256(token.encode()).hexdigest()
+    assert stored_sha == hashlib.sha256(SECTION.encode()).hexdigest()
+    # Submitting what the file contains gets nowhere; the real token still works.
+    run("repin", "--yes", "--token", stored_hash, *common(upstream, pin_dir), expect=2)
+    run("repin", "--yes", "--token", token, *common(upstream, pin_dir), expect=0)
+
+
+def test_a_heading_only_inside_a_code_fence_is_not_an_anchor(rig):
+    """Upstream can rename a real heading while an old copy survives in a ```
+    example. The override targeting it would then silently stop applying, so
+    structural anchors are matched with fenced blocks masked out. Phrase anchors
+    like `<base>` keep the raw text — those genuinely live in Step 8's own bash
+    blocks. Codex structured review, 2.52.0."""
+    upstream, pin_dir = rig
+    accept(upstream, pin_dir)
+    fenced = SECTION.replace("### Gate Logic", "### Decision Logic", 1) \
+                    .replace("## Step 8.1", "```\n### Gate Logic\n```\n\n## Step 8.1", 1)
+    upstream.write_text(fenced)
+    p = run("repin", *common(upstream, pin_dir), expect=2)
+    assert "ANCHORS MISSING" in p.stderr and "### Gate Logic" in p.stderr
+    assert not (pin_dir / ".repin-receipt").exists(), "a blocked repin writes no receipt"

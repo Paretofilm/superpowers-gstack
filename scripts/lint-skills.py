@@ -85,6 +85,8 @@ DENYLIST = [
     (re.compile(r"gstack-multi-lens-review-v[0-5]\b"), "stale multi-lens marker (current: v6+, 2.51.0)"),
     (re.compile(r"gstack-session-continuity-v[12]\b"), "stale session-continuity marker (current: v3+, 2.36.1)"),
     (re.compile(r"gstack-plan-fidelity-v[12]\b"), "stale plan-fidelity marker (current: v3+, 2.52.0)"),
+    (re.compile(r"repin\s+--yes\s+--sha\b|--yes\s+--sha\b"),
+     "spec-drift --sha was replaced by the one-time --token in 2.52.0"),
     (re.compile(r"gstack-routing-v1\b"), "stale track-routing marker (current: v2+, 2.36.1)"),
     (re.compile(r"gstack-git-hygiene-v[0-8]\b"), "stale git-hygiene marker (current: v9+, 2.47.0)"),
     (re.compile(r"gstack-xcode-tools-v[0-5]\b"), "stale xcode-tools marker (current: v6+, 2.48.0)"),

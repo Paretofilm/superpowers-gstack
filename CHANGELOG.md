@@ -34,7 +34,7 @@ will never be shipped, or against a baseline older than the branch. Design:
   Fail closed: empty diff, unreadable plan, zero actionable items and pin
   mismatch are all exit 2, never 0.
 - Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
-  README. 113 unit tests across `test_spec_drift_pin.py`,
+  README. 115 unit tests across `test_spec_drift_pin.py`,
   `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` and
   `test_spec_drift_upstream_alarm.py` — the skill tests are omission tests: Step 8
   text pasted into SKILL.md, a discovery heuristic brought back, or the check
@@ -85,6 +85,23 @@ will never be shipped, or against a baseline older than the branch. Design:
   the upstream digest beside it, so a file changed between the diff and the
   accept is refused separately, naming both hashes. This is the guard's whole
   premise — it cannot be satisfied without reading — so it is worth the API change.
+  The receipt stores only `sha256(token)`: a truncated run still writes one, and
+  the agent this guard constrains can read files, so a verbatim token would be
+  recoverable with a single `cat` by the reader who never saw the diff.
+- **A heading that exists only inside a code fence is no longer an anchor.**
+  Upstream can rename a real heading while an old copy survives in a ``` example;
+  the override targeting it would then stop applying with nothing to notice.
+  Structural anchors are matched against text with fenced blocks masked out
+  (offsets preserved); phrase anchors like `<base>` keep the raw text, since
+  those genuinely live inside Step 8's own bash blocks.
+- `~` in `<plan-path>` or `--section` now expands. The values are pasted
+  single-quoted, so no shell expands a leading tilde, and `abspath('~/plan.md')`
+  invented a literal `~` directory inside the repo — a valid path was rejected as
+  missing. Expansion happens before the existence check.
+- The obsolete `--yes --sha` recovery command was purged from the script's own
+  `NO PIN` message and from the maintainer alarm's failure text — both told the
+  reader to run a flag that no longer parses — and the pattern is now in
+  `lint-skills.py`'s DENYLIST, as this repo's release gate requires.
 - **The invisible-character set is now Unicode's format category (Cf) whole**,
   not a hand-picked subset of it — two review rounds each found one more member
   the subset had missed. A test asserts the enumeration equals what

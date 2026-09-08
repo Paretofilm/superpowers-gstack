@@ -103,9 +103,11 @@ PLAN='<plan-path>'                 # single-quoted verbatim — a $( ), backtick
 BASE='<--base value, or empty>'
 SECTION='<--section value, or empty>'
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "not a git repository"; exit 2; }
+# Expand BEFORE testing: the value is single-quoted, so no shell expands a
+# leading ~, and abspath('~/plan.md') would invent a literal ~ directory here.
+PLAN=$(python3 -c 'import os,sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))' "$PLAN")   # ~, and the subagent has its own cwd
 [ -f "$PLAN" ] || { echo "plan '$PLAN' is not a readable file"; exit 2; }
-PLAN=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "$PLAN")   # the subagent has its own cwd
-[ -z "$SECTION" ] || SECTION=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "$SECTION")   # same reason
+[ -z "$SECTION" ] || SECTION=$(python3 -c 'import os,sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))' "$SECTION")   # same reason
 if [ -z "$BASE" ]; then
   HEAD_REF=$(git symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null)
   for c in "$HEAD_REF" origin/main origin/master main master; do
