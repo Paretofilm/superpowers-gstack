@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.53.2] - 2026-09-09
+
+Two fixes that came out of the rig session answering the open contract questions.
+
+### Fixed
+- **A runner generated before 2.53.0 silently ignores the pin.** 2.53.0 changed the
+  *template*; it did not touch runners already written into projects. Such a runner never
+  looks at `.gstack/e2e-executor`, so with `executor=vm` set it runs on the host and says
+  nothing — the user asked for a VM and got neither the VM nor a warning. It arrived
+  through entry point 1, the one that claims to cover both executors. `e2e-route` now
+  checks (`grep -qE '\.gstack/e2e-executor' scripts/run-uitests.sh`) and falls through to
+  an entry point that honours the pin, naming the reason. The check is a heuristic over
+  text, not proof the file is read, and says so — it is calibrated for the real case,
+  where a pre-2.53.0 runner does not mention the pin at all.
+  Reported by the rig session, which hit it on `swiftconfig`. The migration applies to
+  every project with a runner, not just that one.
+
+### Changed
+- **The runner now reads the rig's exit code before its JSON.** `vm-e2e` implements the
+  three-valued contract as of `virtual-mac dff0a26` — `0` passed, `1` tests ran and at
+  least one failed, `2` could not run — and notably makes *zero executed* a `2` rather
+  than a `1`: green-and-empty is not a test failure, it is the rig not having done the
+  job. Exit 2 is therefore declared rather than inferred, and settles the question before
+  any output is parsed. The JSON checks remain as defence in depth and as the only signal
+  available from a rig older than that contract.
+
 ## [2.53.1] - 2026-09-08
 
 ### Fixed

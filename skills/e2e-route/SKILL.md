@@ -136,8 +136,31 @@ suite — and never reach the macOS scaffold. If the only `*UITests` directory i
 one, this check finds nothing and routing falls through to entry point 4, which is
 correct: the macOS suite does not exist yet.
 
-1. `./scripts/run-uitests.sh` exists → run it. It reads `.gstack/e2e-executor` itself and
-   dispatches to the VM or the host, so this one entry point covers both executors.
+1. `./scripts/run-uitests.sh` exists **and honours the axis** → run it. It reads
+   `.gstack/e2e-executor` itself and dispatches to the VM or the host, so this one entry
+   point covers both executors.
+
+   **Check that it does, before trusting it:**
+
+   ```bash
+   grep -qE '\.gstack/e2e-executor' scripts/run-uitests.sh && echo HONOURS || echo LEGACY
+   ```
+
+   The 2.53.0 release changed the *template*; it did not touch runners already generated
+   into projects. A runner from before it never looks at the pin, so with `executor=vm`
+   set it runs on the host and says nothing — the user asked for a VM and silently got
+   neither the VM nor a warning. That is the exact failure the pin exists to prevent, and
+   it arrives through the entry point that claims to handle both executors.
+
+   `LEGACY` → do not use this entry point. Say so in one line ("`scripts/run-uitests.sh`
+   predates 2.53.0 and ignores `.gstack/e2e-executor`; regenerate it with
+   `/macos-e2e-scaffold`"), then fall through to entry point 2 or 3, which honour the pin
+   directly. When the pin is `host` the outcome is the same either way, so mention it
+   without making it a blocker.
+
+   The check is a heuristic over text, not proof the file is read — a runner naming the
+   path in a comment would pass it. It is calibrated for the real case: a pre-2.53.0
+   runner does not mention the pin at all.
 2. Else UI-test target exists **and** pin is `vm` **and** `vm-e2e` is on `PATH` → call
    `vm-e2e` directly. This is the path for a suite that predates the scaffold runner.
 3. Else UI-test target exists → run it on the host:

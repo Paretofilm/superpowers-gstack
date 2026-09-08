@@ -392,9 +392,21 @@ if [ "$EXECUTOR" = vm ]; then
     # half-written file, an `error` field, a VM that never booted — is a fault. Do NOT
     # fall back to the host here: that turns a real defect into a silently slower pass,
     # and the whole reason to notice a rig fault is that it is a defect.
-    # A parseable object is not automatically a usable result. `{"total":1,"executed":1,
-    # "error":"copy failed"}` parses, and a missing `failed` defaults to 0 — so without
-    # these checks a rig that reported its own failure would print as a green summary.
+    # Exit 2 from the rig means "could not run" — lease, boot, transfer, timeout, or
+    # zero tests executed. That is declared, not inferred, so it settles the question
+    # before any JSON is read (rig contract, virtual-mac dff0a26).
+    if [ "$VM_STATUS" -eq 2 ]; then
+      echo "E2E RIG FAILED: vm-e2e could not run (exit 2)." >&2
+      jq -r '.error // empty' "$VM_JSON" 2>/dev/null >&2 || true
+      echo "Not falling back to the host — a rig fault is the thing to fix, not to route around." >&2
+      rm -f "$VM_JSON"
+      exit 2
+    fi
+    # The JSON checks below stay as defence in depth, and as the only signal available
+    # from a rig older than the three-valued contract. A parseable object is not
+    # automatically a usable result: `{"total":1,"executed":1,"error":"copy failed"}`
+    # parses, and a missing `failed` defaults to 0 — so without these checks a rig that
+    # reported its own failure would print as a green summary.
     # Require: no error field, and every count that EXISTS is a number. `// 0` would
     # treat `"skipped": null` as absent, but null means unknown — executed would then
     # read total-0, higher than reality, blinding the green-and-empty check.
