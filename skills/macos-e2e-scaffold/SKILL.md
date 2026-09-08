@@ -401,11 +401,15 @@ if [ "$EXECUTOR" = vm ]; then
       rm -f "$VM_JSON"
       exit 2
     fi
-    # Normalise: derive `executed` when the rig omits it, and stamp the executor.
-    jq '. + {executor: "vm", executed: (.executed // (.total - (.skipped // 0)))}' "$VM_JSON"
+    # ALWAYS derive `executed` from the two counts just validated — never trust the
+    # rig's own field. A present-but-non-numeric `.executed` would pass the guard above
+    # (which checks total/failed/skipped) and then make `[ -eq 0 ]` fail with status 2;
+    # without `set -e` the script carries on and exits 0. Deriving removes the field
+    # from the trust surface entirely (Codex, 2.53.0).
     SKIPPED=$(jq -r '.skipped // 0' "$VM_JSON")
-    EXECUTED=$(jq -r '.executed // (.total - (.skipped // 0))' "$VM_JSON")
     FAILED=$(jq -r '.failed // 0' "$VM_JSON")
+    EXECUTED=$(( $(jq -r '.total' "$VM_JSON") - SKIPPED ))
+    jq --argjson ex "$EXECUTED" '. + {executor: "vm", executed: $ex}' "$VM_JSON"
     rm -f "$VM_JSON"
     echo "executor=vm  skipped=${SKIPPED}  executed=${EXECUTED}" >&2
     [ "$EXECUTED" -eq 0 ] && { echo "FAILED: 0 tests executed — green and empty is not a pass." >&2; exit 1; }

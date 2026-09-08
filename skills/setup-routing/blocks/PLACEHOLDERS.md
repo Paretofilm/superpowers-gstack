@@ -72,7 +72,19 @@ misconfiguration rather than a stale device name.
 
 Where this project's committed macOS UI tests run: `host` or `vm`. Resolve with:
 
-    [ -f .gstack/e2e-executor ] && tr -d '[:space:]' < .gstack/e2e-executor || echo host
+    if [ -f .gstack/e2e-executor ]; then
+      case "$(cat .gstack/e2e-executor)" in
+        host|vm) cat .gstack/e2e-executor ;;
+        *) echo "BLOCKED — invalid .gstack/e2e-executor" >&2; exit 2 ;;
+      esac
+    else
+      echo host
+    fi
+
+`$( )` strips exactly the trailing newline the generators write and nothing else, so
+`vm `, `v m` and a second line all survive into the `case` and are refused. Do NOT
+reach for `tr -d '[:space:]'` or `head -1 | sed`: both normalise those into a legal
+value, which bypasses the exact-value requirement below rather than enforcing it.
 
 The file's absence means `host` — that is the pin's defined default, not a fallback,
 so a project that never opts in emits `host` and reads correctly.

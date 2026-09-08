@@ -119,10 +119,22 @@ the first; the runner handles the second:
 ## Routing table (the oracle)
 
 The macOS committed row has **four** entry points, in priority order. Pick the first that
-applies and name it as the next action. Entry points 2 and 3 both require an existing
-UI-test target (`find . -maxdepth 2 -type d -name '*UITests' ! -name '*iOSUITests'` with
-`*.swift` in it) — the pin is written at onboarding, before any suite necessarily
-exists, so a `vm` pin alone must never route a project that has no tests to run:
+applies and name it as the next action.
+
+**Entry points 1–3 all require a macOS UI-test target to exist:**
+
+```bash
+find . -maxdepth 2 -type d -name '*UITests' ! -name '*iOSUITests' | head -1
+```
+
+Two separate reasons, and both matter. The pin is written at onboarding, before any suite
+necessarily exists, so a `vm` pin alone must never route a project with no tests at the
+rig. And `scripts/run-uitests.sh` is a **shared path**: `/ios-e2e-scaffold` generates one
+at the same location, so in a multiplatform project scaffolded for iOS first, an
+unguarded entry point 1 would answer a committed *macOS* request by running the *iOS*
+suite — and never reach the macOS scaffold. If the only `*UITests` directory is the iOS
+one, this check finds nothing and routing falls through to entry point 4, which is
+correct: the macOS suite does not exist yet.
 
 1. `./scripts/run-uitests.sh` exists → run it. It reads `.gstack/e2e-executor` itself and
    dispatches to the VM or the host, so this one entry point covers both executors.

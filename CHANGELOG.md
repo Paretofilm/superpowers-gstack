@@ -59,7 +59,7 @@ anyone being logged in.
   check.
 
 ### Notes
-- 44 tests in `tests/unit/test_e2e_executor_marker.py`, including the shipped hook's real
+- 47 tests in `tests/unit/test_e2e_executor_marker.py`, including the shipped hook's real
   behaviour in three project states.
 - Codex found eight issues in the first pass on this feature, four of them P1, all fixed
   here: a nonzero rig exit was discarded whenever the JSON summary looked clean; the pin
@@ -84,6 +84,16 @@ anyone being logged in.
   stale-lease case it exists for. Validation now uses `has()` rather than `// 0`:
   `"skipped": null` means *unknown*, not zero, and treating it as zero makes `executed`
   read higher than reality — blinding the green-and-empty check.
+- A third pass found three more. `scripts/run-uitests.sh` is a **shared path** —
+  `/ios-e2e-scaffold` writes one at the same location — so in a multiplatform project
+  scaffolded for iOS first, an unguarded entry point 1 answered a committed *macOS*
+  request by running the *iOS* suite. All three run-the-suite entry points now require a
+  macOS UI-test target, and a project with only the iOS one falls through to the scaffold,
+  which is correct. `executed` is now always derived from the two validated counts rather
+  than read from the rig: a present-but-non-numeric `.executed` passed the schema guard,
+  then failed the `[ -eq 0 ]` comparison with status 2, and without `set -e` the script
+  continued to exit 0. And the `{{E2E_EXECUTOR}}` resolver still documented
+  `tr -d '[:space:]'` — the one path left that would launder `v m` into a valid pin.
 - Fase 1 was 2.52.0 in the spec; that number went to `/spec-drift`, so fase 1 is 2.53.0
   and fase 2–3 shift to 2.54.0 and 2.55.0. The spec is corrected in this commit rather
   than left describing a release that happened differently.

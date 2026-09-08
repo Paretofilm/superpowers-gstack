@@ -104,13 +104,15 @@ def test_non_interactive_session_refuses_the_fallback():
 # --- "green and empty" is a failure, not a pass -----------------------------------
 
 def test_executed_is_derived_and_zero_is_a_failure():
-    """Every test skipped, nothing run, exit 0 reads as success. `executed` is the
-    number that says whether anything happened, and the rig may not send it."""
+    """Every test skipped, nothing run, exit 0 reads as success. `executed` is the number
+    that says whether anything happened — and it is DERIVED from the two validated
+    counts, never read from the rig, so a malformed field cannot reach the comparison.
+    (Round 3 tightened this: the earlier `.executed // …` fallback trusted the rig's own
+    value when it was present, which is the surface this removes.)"""
     template = runner_template()
     assert "green and empty is not a pass" in template
     assert "0 tests executed" in template
-    assert ".executed // (.total - (.skipped // 0))" in template, \
-        "derive executed when the rig omits it rather than dropping the check"
+    assert "SKIPPED ))" in template, "executed must be computed from total and skipped"
     assert "skipped=" in template, "skipped must be printed in plain text on every run"
 
 
@@ -324,3 +326,36 @@ def test_a_held_lease_is_reported_even_with_no_process_left():
     held_line = text.index("held=$(vm-lease status")
     gate = text.find("${#findings[@]} -gt 0")
     assert gate == -1 or gate > held_line, "the lease check must not depend on other findings"
+
+
+# --- Codex round 3 on 2.53.0 ---
+
+def test_the_shared_runner_path_is_gated_on_a_macos_target():
+    """`scripts/run-uitests.sh` is a SHARED path: /ios-e2e-scaffold writes one there too.
+    Ungated, a committed macOS request in a project scaffolded for iOS first would run
+    the iOS suite and never reach the macOS scaffold."""
+    assert "shared path" in flat(ROUTE)
+    assert "! -name '*iOSUITests'" in ROUTE
+    gate = ROUTE.index("Entry points 1–3 all require")
+    entry1 = ROUTE.index("1. `./scripts/run-uitests.sh` exists")
+    assert gate < entry1, "the target check must be stated before entry point 1, not after"
+
+
+def test_executed_is_derived_never_taken_from_the_rig():
+    """A present-but-non-numeric `.executed` passes a guard that checks total/failed/
+    skipped, then `[ -eq 0 ]` fails with status 2 — and without `set -e` the script
+    continues and exits 0. Deriving removes the field from the trust surface."""
+    template = runner_template()
+    assert "EXECUTED=$(( $(jq -r '.total' \"$VM_JSON\") - SKIPPED ))" in template
+    assert ".executed //" not in template, \
+        "the rig's own executed field must not be read back as a fallback"
+    assert "never trust the\n    # rig's own field" in template
+
+
+def test_the_placeholder_resolver_validates_before_it_normalises():
+    """A generator following the documented command must not be the one path that
+    launders `v m` into a valid pin."""
+    assert "tr -d '[:space:]'" not in PLACEHOLDERS.split("Do NOT")[0], \
+        "the resolver command itself must not squeeze whitespace"
+    assert 'case "$(cat .gstack/e2e-executor)" in' in PLACEHOLDERS
+    assert "BLOCKED — invalid .gstack/e2e-executor" in PLACEHOLDERS
