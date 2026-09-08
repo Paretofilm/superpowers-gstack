@@ -67,3 +67,23 @@ old ones: on the machine that motivated this placeholder (2026-08-27) no iPhone 
 remained, and the emitted command failed as `xcodebuild: error: Unable to find a
 device matching the provided destination specifier` — which reads as a project
 misconfiguration rather than a stale device name.
+
+## `{{E2E_EXECUTOR}}` (xcode-tools.md — native tracks only)
+
+Where this project's committed macOS UI tests run: `host` or `vm`. Resolve with:
+
+    [ -f .gstack/e2e-executor ] && tr -d '[:space:]' < .gstack/e2e-executor || echo host
+
+The file's absence means `host` — that is the pin's defined default, not a fallback,
+so a project that never opts in emits `host` and reads correctly.
+
+Only `host` and `vm` are valid values. If the file exists and holds anything else,
+do NOT emit `host`: stop and tell the user the pin is invalid (`BLOCKED — invalid
+.gstack/e2e-executor`), same as the `.gstack/track` check. A malformed pin that
+silently degrades to `host` is the one outcome the marker exists to prevent, because
+the run still looks successful.
+
+The generators (`setup-routing` Step 6, `adapt` Step 5) ask for this value once on
+native tracks and write the file; they are its only writers. `e2e-route` and the
+scaffold runner are readers. iOS-only and web projects get no file and no question —
+the axis is macOS-only until someone asks for parallel iOS E2E.

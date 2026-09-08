@@ -1,5 +1,70 @@
 # Changelog
 
+## [2.53.0] - 2026-09-08
+
+VM-executor fase 1: committed macOS UI tests can now run in an isolated VM rig instead
+of on your own machine, opt-in per project. Design:
+`docs/superpowers/specs/2026-09-07-vm-executor-design.md`. Fase 0 — the rig itself in
+`~/Developer/virtual-mac` — is done and verified against two projects of opposite shape.
+
+The point is isolation: a UI test that takes over the screen cannot fight the user for
+focus, two runs cannot collide on one machine, and an unattended run does not depend on
+anyone being logged in.
+
+### Added — `.gstack/e2e-executor`
+- A committed pin, `host` or `vm`, absence meaning `host` — same shape as `.gstack/track`,
+  because where the tests run is a project decision, not a per-developer one.
+- **Three layers, one file.** `vm-e2e` (the rig) owns the lease and the guest;
+  `scripts/run-uitests.sh` reads the pin and dispatches; `e2e-route` only names the
+  executor in its decision block. The agent can be wrong in the top layer without two
+  runs landing on the same macOS instance — the invariant is enforced a layer below it.
+- gstack knows four things about the rig and nothing more: the pin file, `vm-e2e` on
+  `PATH`, the JSON it prints, and its exit code. No lume, no VM names, no lease files,
+  no paths into the rig's repo. It can be swapped out.
+
+### Added — routing and runner
+- `e2e-route` gets axis 4 (executor) and `executor=<host|vm|vm→host-fallback>` in every
+  decision block. It stays a pure reader — it writes no files, and says so.
+- The committed/macOS row now has **three** entry points in priority order:
+  `./scripts/run-uitests.sh` → `vm-e2e` directly → `/macos-e2e-scaffold`. This closes a
+  hole that predates the VM work: read literally, the scaffold refusing because "a
+  UI-test target already exists" sent a regression request to exploratory live testing,
+  which answers a different question. The scaffold refusing means the suite is already
+  there — run it.
+- `macos-e2e-scaffold`'s runner template goes to v2.53.0: reads the pin, dispatches or
+  runs locally, emits the same JSON either way, and prints `skipped` and `executed` in
+  plain text on every run. `ios-e2e-scaffold` is untouched — the axis is macOS-only.
+- `setup-routing` and `adapt` ask once on macOS tracks and write the pin, keeping it
+  committable via a `!.gstack/e2e-executor` negation. They are its only writers; this is
+  the first marker either of them writes rather than reads.
+- `blocks/xcode-tools.md` v6 → **v7** with an "E2E executor" section and a new
+  `{{E2E_EXECUTOR}}` placeholder. Adopting projects pick it up on their next `/adapt`;
+  the v6 marker joins the lint denylist.
+- `scripts/vm-hygiene.sh` (SessionStart) reports leftover guests, orphaned
+  Virtualization XPC processes and held leases — but **only** in projects pinned to `vm`,
+  and it never stops anything. A VM you did not start may be someone else's run.
+
+### Two distinctions the design turns on
+- **An absent rig and a failing rig get opposite answers.** Rig not installed → run on
+  the host with a printed line, never silently; a committed `vm` pin must not brick the
+  repo on every Mac without the rig. Rig present but the run produced no usable result →
+  fail loudly with the cause, and do NOT fall back. A rig fault is exactly what you want
+  surfaced; running on the host instead turns a real defect into a silently slower pass.
+  Exception: in a non-interactive session the fallback itself refuses, because nobody
+  reads the warning that makes it safe.
+- **"Green and empty" is a failure.** Every test skipped, nothing executed, exit 0 reads
+  as success and was the rig's own most dangerous result. `executed` (`total − skipped`)
+  is the number that says whether anything happened; `executed == 0` fails regardless of
+  exit code, and `executed` is derived when the rig omits it rather than dropping the
+  check.
+
+### Notes
+- 18 tests in `tests/unit/test_e2e_executor_marker.py`, including the shipped hook's real
+  behaviour in three project states.
+- Fase 1 was 2.52.0 in the spec; that number went to `/spec-drift`, so fase 1 is 2.53.0
+  and fase 2–3 shift to 2.54.0 and 2.55.0. The spec is corrected in this commit rather
+  than left describing a release that happened differently.
+
 ## [2.52.1] - 2026-09-08
 
 Fixes a CI failure 2.52.0 introduced. The suite was green on macOS and red on

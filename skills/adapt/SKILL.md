@@ -592,12 +592,36 @@ The block to insert: read `blocks/track-routing.md` (see **Shared block files** 
 
 **Insert or upgrade the Native Apple development tools section.** Only emit this section when `.gstack/track` exists and equals `ios`, `macos`, or `both` (skip entirely for web-only projects). Scan CLAUDE.md for the heading `^#{2,3} Native Apple development tools` and its version marker `<!-- gstack-xcode-tools-vN -->`. Apply the same four-case logic as Track-aware routing above:
 
-1. **Heading present + marker matches `v6`** → skip (idempotent).
-2. **Heading present + marker `v1`–`v5`** (v1 assumed XcodeBuildMCP universally; v2 added CLI fallback but missed capabilities; v3 hardcoded one team's `DEVELOPMENT_TEAM`; v4 was simulator-only and had no macOS build/launch path at all; v5 hardcoded an `iPhone 16` destination that Xcode no longer ships) → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. (The Native Apple tools block has H4 subsections; "next heading" alone would stop at the first one and leave old prose behind.) **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level so subsections do not sit at the same level as the root — same demote requirement as case 4 below. Auto-upgrade is what the marker pattern is for.
+1. **Heading present + marker matches `v7`** → skip (idempotent).
+2. **Heading present + marker `v1`–`v6`** (v1 assumed XcodeBuildMCP universally; v2 added CLI fallback but missed capabilities; v3 hardcoded one team's `DEVELOPMENT_TEAM`; v4 was simulator-only and had no macOS build/launch path at all; v5 hardcoded an `iPhone 16` destination that Xcode no longer ships; v6 had no E2E-executor section, so a project that opted into the VM rig had nothing in CLAUDE.md saying where its UI tests run or how to read the marker) → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. (The Native Apple tools block has H4 subsections; "next heading" alone would stop at the first one and leave old prose behind.) **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level so subsections do not sit at the same level as the root — same demote requirement as case 4 below. Auto-upgrade is what the marker pattern is for.
 3. **Heading present + marker absent** (pre-v2.7.0) → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Attribution check** above FIRST — replace only if the sentinel is present; if it is absent, preserve the section and insert the block below it — then the **Growth check** before replacing. Sentinel: the body contains `XcodeBuildMCP` or `MUST be performed by the agent`.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
 
 The block to insert: read `blocks/xcode-tools.md` (see **Shared block files** above) and insert its content verbatim.
+
+**Resolve `{{E2E_EXECUTOR}}` — and write the pin if it does not exist yet.** Only when `.gstack/track` is `macos` or `both` (an iOS-only project gets no file and no question; the axis is macOS-only). If `.gstack/e2e-executor` already exists, read it, validate it against `host`/`vm`, and use it — do not re-ask. If it holds anything else, stop with `BLOCKED — invalid .gstack/e2e-executor` rather than defaulting to `host`.
+
+If the file does not exist, ask **once** with `AskUserQuestion`:
+
+> Where should this project's committed macOS UI tests run? A VM rig gives isolation — a UI test that grabs the screen cannot fight you for focus, two runs cannot collide on one machine, and an unattended run does not need anyone logged in. It requires `vm-e2e` on `PATH`; without it the tests still run, on this machine, with a warning.
+>
+> - **On this machine** (recommended) — no extra setup, and what every project does today.
+> - **In the VM rig** — needs the rig installed; a teammate without it gets a warning and a host run, not a failure.
+
+Default to `host` when the answer is unclear. Then write the pin and make sure it is committable — it is a project-level decision like `.gstack/track`, so a teammate cloning the repo must get the same behaviour:
+
+```bash
+mkdir -p .gstack && printf '%s\n' "$ANSWER" > .gstack/e2e-executor   # host or vm
+if git check-ignore -q .gstack/e2e-executor 2>/dev/null; then
+  grep -q '^!\.gstack/e2e-executor$' .gitignore 2>/dev/null \
+    || echo '!.gstack/e2e-executor' >> .gitignore
+  git add .gitignore && git add -f .gstack/e2e-executor
+else
+  git add .gstack/e2e-executor
+fi
+```
+
+Do not offer to install the rig, and do not check whether `vm-e2e` is present when asking — the pin records a project decision, not this machine's capabilities. A `vm` pin on a machine without the rig is a supported state that degrades to a host run with a printed line.
 
 **Insert or upgrade the Companion skills (discovery) section.** Only emit when `.gstack/track` exists and equals `ios`, `macos`, or `both` (skip for web-only projects). Scan CLAUDE.md for heading `^#{2,3} Companion skills` and its version marker `<!-- gstack-companion-skills-vN -->`. Apply the same four-case logic:
 

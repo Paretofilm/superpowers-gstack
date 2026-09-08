@@ -71,11 +71,57 @@ platform), the platform is NOT uniquely determined. Resolve in order:
 Functional / accessibility-assertion vs visual. A request about layout, spacing,
 colour, dark mode, or "does it look right" → the visual-regression row.
 
+### 4. Executor — host vs VM (committed macOS only)
+
+Read `.gstack/e2e-executor`: `host` or `vm`, and the file's absence means `host`. Only
+those two strings are valid — `VM`, a trailing space or an empty file is
+`BLOCKED — invalid .gstack/e2e-executor`, never a silent `host`. A malformed pin that
+quietly runs on the host is the failure the marker exists to prevent, because the run
+still looks fine.
+
+This axis applies **only to committed macOS runs**. Exploratory/MCP-live and
+visual-regression always run on the host — a live MCP session and a screenshot diff both
+need the user's own screen — so do not read the file for those rows.
+
+You are a **reader** of this pin, never its writer. `/superpowers-gstack:adapt` and
+`/superpowers-gstack:setup-routing` ask the question and write the file; this skill
+changes no files at all.
+
+**Absent rig and failing rig are different, and get opposite answers.** You only decide
+the first; the runner handles the second:
+
+- **Rig absent** (`command -v vm-e2e` finds nothing) while the pin says `vm` → still
+  route to the run, and name it: `executor=vm→host-fallback`, with the line
+  `executor=vm requested, rig not found on this host — running on host without lease`.
+  A committed `vm` pin must not brick the repo on every Mac without the rig.
+- **Exception — non-interactive session** (`CI`, `GITHUB_ACTIONS`, `--print`, a scheduled
+  run) with pin `vm` and no rig → **refuse**. The fallback above is only safe because a
+  human reads the warning; nobody does here, and an unleased host run can collide with
+  another.
+- **Rig present but the run fails** → not your call. The runner fails loudly with the
+  cause and does not fall back; a rig fault is exactly what you want surfaced, and a host
+  run instead would turn a real defect into a silently slower pass.
+
 ## Routing table (the oracle)
+
+The macOS committed row has **three** entry points, in priority order — pick the first
+that applies, and name it as the next action:
+
+1. `./scripts/run-uitests.sh` exists → run it. It reads `.gstack/e2e-executor` itself and
+   dispatches to the VM or the host, so this one entry point covers both executors.
+2. Else pin is `vm` and `vm-e2e` is on `PATH` → call `vm-e2e` directly. This is the path
+   for projects with a UI-test target but no scaffold runner.
+3. Else no UI-test target exists → `/macos-e2e-scaffold` to create one.
+
+**A project that is already scaffolded routes to entry point 1 or 2 — never to
+MCP-live.** Read literally, `/macos-e2e-scaffold`'s refuse-condition 3 ("a UI-test target
+already exists") would bounce a regression request to exploratory live testing, which
+answers a different question entirely. The scaffold refusing means *the suite is already
+there* — run it.
 
 | Intent | Platform | Executor |
 |---|---|---|
-| Committed regression | macOS | `/macos-e2e-scaffold` + its xcresult runner |
+| Committed regression | macOS | `./scripts/run-uitests.sh` → else `vm-e2e` (pin `vm`) → else `/macos-e2e-scaffold`. Honours `.gstack/e2e-executor`. |
 | Committed regression | iOS | `/ios-e2e-scaffold` |
 | Exploratory / live | macOS | `XcodeBuildMCP` UI-automation (`snapshot_ui` → tap → screenshot) |
 | Exploratory / live | iOS | `ios-simulator` MCP (`ui_find_element` / `ui_tap`) or `/ios-qa` |
@@ -112,10 +158,16 @@ stop. Do not build/tap/assert; hand control back after emitting.
 ```
 ## /e2e-route decision
 Detected: platform=<iOS|macOS>, intent=<committed|exploratory|visual>, source=<scheme|.gstack/track|asked>
+executor=<host|vm|vm→host-fallback>
 Chosen executor: <skill or MCP sequence>
 Why: <one line tying context → routing cell>
 Next action: <exact /skill to invoke OR exact MCP call sequence>
 ```
+
+`executor=` is present on every block. For committed macOS it carries the resolved pin;
+for iOS, exploratory and visual rows it is always `host`, because those never read the
+axis. `vm→host-fallback` means the pin said `vm` and the rig was not on this machine —
+print the fallback line with it, so the reason is visible and not merely implied.
 
 ## What this skill is NOT
 

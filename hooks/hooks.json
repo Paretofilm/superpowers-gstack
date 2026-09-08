@@ -12,6 +12,11 @@
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/check-branch-hygiene.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/vm-hygiene.sh",
+            "timeout": 10
           }
         ]
       },
