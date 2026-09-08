@@ -100,11 +100,24 @@ def test_fenced_last_line_is_tolerated():
     assert rc == 0
 
 
+# Explicit short ids are load-bearing, not cosmetic. Without them pytest derives
+# the id from the parameter itself, writes it into PYTEST_CURRENT_TEST, and every
+# subprocess these tests spawn inherits a ~200 KB environment — which execve
+# refuses on Linux with E2BIG ("Argument list too long") while macOS allows it.
+# Green locally, red in CI, and the traceback points at subprocess internals
+# rather than at the oversized id. Keep every large parameter id'd.
 @pytest.mark.parametrize("line,why", [
-    ('{"total_items": ' + "1" * 5000 + ', "done": 1, "changed": 0, "deferred": 0, "unverifiable": 0, "summary": ""}',
-     "an int literal past sys.get_int_max_str_digits() is a ValueError, not a JSONDecodeError"),
-    ("[" * 100_000 + "]" * 100_000, "a deeply nested last line is a RecursionError"),
-    (step8(1, 1)[:-1] + ', "summary": ' + "[" * 100_000 + "]" * 100_000 + "}", "same, inside a value"),
+    pytest.param('{"total_items": ' + "1" * 5000 + ', "done": 1, "changed": 0, '
+                 '"deferred": 0, "unverifiable": 0, "summary": ""}',
+                 "an int literal past sys.get_int_max_str_digits() is a ValueError, "
+                 "not a JSONDecodeError",
+                 id="int-literal-past-digit-cap"),
+    pytest.param("[" * 100_000 + "]" * 100_000,
+                 "a deeply nested last line is a RecursionError",
+                 id="deeply-nested-line"),
+    pytest.param(step8(1, 1)[:-1] + ', "summary": ' + "[" * 100_000 + "]" * 100_000 + "}",
+                 "same, inside a value",
+                 id="deeply-nested-inside-a-value"),
 ])
 def test_pathological_last_line_is_named_could_not_run(line, why):
     rc, out = verdict("PLAN COMPLETION AUDIT\n" + line + "\n")
