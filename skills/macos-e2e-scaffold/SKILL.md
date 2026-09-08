@@ -359,10 +359,12 @@ RESULT_BUNDLE="$(mktemp -d)/uitests.xcresult"
 # run still looks fine afterwards.
 EXECUTOR=host
 if [ -f .gstack/e2e-executor ]; then
-  # Trim the trailing newline the generators write, and nothing else. `tr -d
-  # '[:space:]'` would turn `v m` into a valid `vm` — normalising junk into a
-  # legal value is the opposite of validating it (Codex, 2.53.0).
-  EXECUTOR=$(head -1 .gstack/e2e-executor | sed 's/[[:space:]]*$//')
+  # `$( )` strips exactly the trailing newline the generators write and nothing
+  # else, so the case below sees the whole file: `vm ` keeps its space, `v m` its
+  # gap, and a second line stays attached. Every one of those is then BLOCKED.
+  # `tr -d '[:space:]'` and `head -1 | sed` both normalise such junk into a legal
+  # value instead — the opposite of validating it (Codex, 2.53.0).
+  EXECUTOR=$(cat .gstack/e2e-executor)
   case "$EXECUTOR" in
     host|vm) ;;
     *) echo "BLOCKED — invalid .gstack/e2e-executor: '${EXECUTOR}' (expected host or vm)" >&2
@@ -382,10 +384,17 @@ if [ "$EXECUTOR" = vm ]; then
     # half-written file, an `error` field, a VM that never booted — is a fault. Do NOT
     # fall back to the host here: that turns a real defect into a silently slower pass,
     # and the whole reason to notice a rig fault is that it is a defect.
-    # `has("total")` is not enough: a null or string total passes it, then the arithmetic
-    # below yields an empty EXECUTED and `[ -eq ]` dies with a syntax error instead of a
-    # named refusal. Require the numbers to BE numbers.
-    if ! jq -e 'type == "object" and (.total | type == "number")' "$VM_JSON" >/dev/null 2>&1; then
+    # A parseable object is not automatically a usable result. `{"total":1,"executed":1,
+    # "error":"copy failed"}` parses, and a missing `failed` defaults to 0 — so without
+    # these checks a rig that reported its own failure would print as a green summary.
+    # Require: no error field, and every count that EXISTS is a number. `// 0` would
+    # treat `"skipped": null` as absent, but null means unknown — executed would then
+    # read total-0, higher than reality, blinding the green-and-empty check.
+    if ! jq -e 'type == "object"
+                and (.error // null | . == null)
+                and (.total | type == "number")
+                and ((has("failed") | not) or (.failed | type == "number"))
+                and ((has("skipped") | not) or (.skipped | type == "number"))' "$VM_JSON" >/dev/null 2>&1; then
       echo "E2E RIG FAILED: vm-e2e produced no usable result (exit ${VM_STATUS})." >&2
       jq -r '.error // empty' "$VM_JSON" 2>/dev/null >&2 || true
       echo "Not falling back to the host — a rig fault is the thing to fix, not to route around." >&2

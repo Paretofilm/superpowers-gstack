@@ -193,9 +193,17 @@ def test_a_nonzero_rig_status_survives_a_clean_looking_summary():
 def test_the_pin_is_trimmed_at_the_edges_not_squeezed():
     """`tr -d '[:space:]'` turns `v m` into a valid `vm` — normalising junk into a legal
     value is the opposite of validating it. Trim the generators' trailing newline only."""
+    # Assert on the CODE, not the file: the runner's comment names `tr -d '[:space:]'`
+    # to explain why it is wrong, and a bare substring check would flag that explanation
+    # as the defect it warns against.
     for surface, text in (("runner", runner_template()), ("hook", HYGIENE.read_text())):
-        assert "tr -d '[:space:]'" not in text, f"{surface} must not squeeze interior whitespace"
-        assert "sed 's/[[:space:]]*$//'" in text, surface
+        code = [l for l in text.splitlines() if not l.lstrip().startswith("#")]
+        assert not any("tr -d '[:space:]'" in l for l in code), \
+            f"{surface} must not squeeze interior whitespace"
+    # The runner reads the WHOLE file via $( ) — strictest, and simplest. The hook only
+    # needs to recognise `vm`, so a first-line read suffices there; neither squeezes.
+    assert "EXECUTOR=$(cat .gstack/e2e-executor)" in runner_template()
+    assert "head -1" in HYGIENE.read_text()
 
 
 def test_direct_vm_dispatch_requires_an_existing_suite():
@@ -235,3 +243,84 @@ def test_the_hook_does_not_guess_the_rigs_lease_vocabulary():
     text = HYGIENE.read_text()
     assert "grep -i 'busy" not in text, "do not pattern-match the rig's status words"
     assert "vm-lease status" in text and "let the reader judge" in flat(text)
+
+
+# --- Codex round 2 on 2.53.0 ---
+
+@pytest.mark.parametrize("raw,valid", [
+    ("vm\n", True), ("host\n", True), ("vm", True), ("host", True),
+    ("vm ", False), ("v m", False), ("VM\n", False), ("", False),
+    ("vm\ncomment\n", False), (" vm\n", False),
+])
+def test_pin_validation_accepts_only_the_generators_exact_output(raw, valid):
+    """Live-tests the shell the runner ships, not its prose. `$( )` strips exactly the
+    trailing newline the generators write, so everything else — a trailing space, an
+    interior gap, a second line — reaches the case and is refused. `head -1 | sed` and
+    `tr -d '[:space:]'` both normalise those into a legal value instead."""
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / ".gstack").mkdir()
+        (Path(d) / ".gstack" / "e2e-executor").write_text(raw)
+        script = '''
+EXECUTOR=$(cat .gstack/e2e-executor)
+case "$EXECUTOR" in
+  host|vm) echo "OK:$EXECUTOR" ;;
+  *) echo "BLOCKED"; exit 2 ;;
+esac
+'''
+        p = subprocess.run(["bash", "-c", script], cwd=d, capture_output=True, text=True)
+        accepted = p.returncode == 0
+        assert accepted is valid, f"{raw!r} -> {p.stdout.strip()!r}"
+
+
+@pytest.mark.parametrize("payload,usable,why", [
+    ('{"total":16,"passed":7,"failed":0,"skipped":9}', True,  "a real result"),
+    ('{"total":1,"executed":1,"error":"copy failed"}', False, "rig reported its own failure"),
+    ('{"total":1,"failed":"none"}',                    False, "non-numeric failed"),
+    ('{"total":1,"skipped":null}',                     False, "null skipped"),
+    ('{"total":null}',                                 False, "null total"),
+    ('{"error":"VM boot timed out"}',                  False, "error-only shape"),
+])
+def test_vm_result_schema_is_validated_before_it_is_trusted(payload, usable, why):
+    """A parseable object is not automatically a usable result: with a missing `failed`
+    defaulting to 0, a rig that reported its own failure would print as a green summary."""
+    guard = ('type == "object" and (.error // null | . == null) '
+             'and (.total | type == "number") '
+             'and ((has("failed") | not) or (.failed | type == "number")) '
+             'and ((has("skipped") | not) or (.skipped | type == "number"))')
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        f.write(payload); path = f.name
+    try:
+        rc = subprocess.run(["jq", "-e", guard, path], capture_output=True).returncode
+        assert (rc == 0) is usable, why
+        assert flat(guard) in flat(runner_template()), \
+            "the shipped runner must use this exact guard (whitespace aside)"
+    finally:
+        os.unlink(path)
+
+
+def test_the_oracle_row_lists_every_entry_point():
+    """The table is authoritative. A row that skips entry point 3 sends a legacy
+    host-pinned suite to the scaffold, which refuses, which used to mean MCP-live —
+    and the regression never runs."""
+    row = [l for l in ROUTE.splitlines() if l.startswith("| Committed regression | macOS")]
+    assert len(row) == 1
+    assert "run-uitests.sh" in row[0] and "vm-e2e" in row[0] and "-only-testing:" in row[0] \
+        and "macos-e2e-scaffold" in row[0]
+
+
+def test_existing_target_is_not_a_fallback_trigger_for_committed_intent():
+    assert "is NOT a fallback trigger for" in flat(ROUTE)
+    fallback = ROUTE[ROUTE.index("## Fallback"):]
+    numbered = [l for l in fallback.splitlines() if l.startswith("3. a UI-test target")]
+    assert not numbered, "refuse-condition 3 must not sit in the numbered fallback list"
+
+
+def test_a_held_lease_is_reported_even_with_no_process_left():
+    """The stale-lease case: nothing running, but the next dispatch is still blocked.
+    Gating the lease check on process findings made exactly that case silent."""
+    text = HYGIENE.read_text()
+    assert "grep -vE 'ledig|free|idle|available'" in text, \
+        "match the absence of the free marker, not a guessed word for held"
+    held_line = text.index("held=$(vm-lease status")
+    gate = text.find("${#findings[@]} -gt 0")
+    assert gate == -1 or gate > held_line, "the lease check must not depend on other findings"

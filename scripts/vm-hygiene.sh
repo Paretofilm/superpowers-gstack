@@ -41,10 +41,12 @@ orphans=$(pgrep -fl 'Virtualization.VirtualMachine.xpc' 2>/dev/null | grep -v 'v
 # Norwegian — `OPPTATT` / `ledig`), so a word list here silently matches nothing and the
 # hook stays quiet about the very thing it was added to report (Codex, 2.53.0). Show the
 # rig's own output and let the reader judge; the rig owns that wording, not this hook.
-lease_status=$(vm-lease status 2>/dev/null || true)
-if [ -n "$lease_status" ] && [ ${#findings[@]} -gt 0 ]; then
-  findings+=("Lease status (from the rig):"$'\n'"$lease_status")
-fi
+# Verified format (rig, 2026-09-08): one line per guest, `e2e-1      ledig` when free.
+# Match on the ABSENCE of the free-marker rather than guessing the held one: whatever
+# word the rig uses for held, a line that is not free is worth showing. Wrong here
+# means noise, not silence — the safe direction for a hook that exists to warn.
+held=$(vm-lease status 2>/dev/null | grep -vE 'ledig|free|idle|available' | grep -E '\S' || true)
+[ -n "$held" ] && findings+=("Held lease(s) — blocks the next dispatch:"$'\n'"$held")
 
 [ ${#findings[@]} -eq 0 ] && exit 0
 

@@ -59,7 +59,7 @@ anyone being logged in.
   check.
 
 ### Notes
-- 25 tests in `tests/unit/test_e2e_executor_marker.py`, including the shipped hook's real
+- 44 tests in `tests/unit/test_e2e_executor_marker.py`, including the shipped hook's real
   behaviour in three project states.
 - Codex found eight issues in the first pass on this feature, four of them P1, all fixed
   here: a nonzero rig exit was discarded whenever the JSON summary looked clean; the pin
@@ -73,6 +73,17 @@ anyone being logged in.
   `--print` and subagent dispatch are not visible from a Bash call, and a TTY check would
   refuse every interactive run, so the caller sets `E2E_NONINTERACTIVE` and the script
   does not guess.
+- A second Codex pass found four more, all fixed: the pin was read with `head -1 | sed`,
+  which still accepted `vm ` and `vm\ncomment` — it now reads the whole file through
+  `$( )`, which strips exactly the generators' trailing newline and nothing else, so
+  every other shape reaches the `case` and is blocked; the VM result was accepted on
+  `total` alone, so `{"total":1,"error":"copy failed"}` printed as a green summary
+  because a missing `failed` defaults to 0; the oracle table skipped the new host entry
+  point, sending a legacy suite to a scaffold that refuses; and the hygiene hook only
+  looked at leases when a process was also found, which is silent in exactly the
+  stale-lease case it exists for. Validation now uses `has()` rather than `// 0`:
+  `"skipped": null` means *unknown*, not zero, and treating it as zero makes `executed`
+  read higher than reality — blinding the green-and-empty check.
 - Fase 1 was 2.52.0 in the spec; that number went to `/spec-drift`, so fase 1 is 2.53.0
   and fase 2–3 shift to 2.54.0 and 2.55.0. The spec is corrected in this commit rather
   than left describing a release that happened differently.

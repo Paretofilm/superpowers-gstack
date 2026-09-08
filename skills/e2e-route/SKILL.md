@@ -149,7 +149,7 @@ You know the session kind; the script does not.
 
 | Intent | Platform | Executor |
 |---|---|---|
-| Committed regression | macOS | `./scripts/run-uitests.sh` → else `vm-e2e` (pin `vm`) → else `/macos-e2e-scaffold`. Honours `.gstack/e2e-executor`. |
+| Committed regression | macOS | `./scripts/run-uitests.sh` → else `vm-e2e` (target exists + pin `vm`) → else `xcodebuild test -only-testing:<Target>` on the host (target exists) → else `/macos-e2e-scaffold`. Honours `.gstack/e2e-executor`. |
 | Committed regression | iOS | `/ios-e2e-scaffold` |
 | Exploratory / live | macOS | `XcodeBuildMCP` UI-automation (`snapshot_ui` → tap → screenshot) |
 | Exploratory / live | iOS | `ios-simulator` MCP (`ui_find_element` / `ui_tap`) or `/ios-qa` |
@@ -165,11 +165,19 @@ actually refuses** — i.e. one of the scaffold's three refuse-conditions fires:
 1. not a Swift project, or
 2. no SwiftUI app for the routed platform detected — no SwiftUI scene (e.g. a
    UIKit-/AppKit-only app) or no platform-discriminating signal (e.g. a pure-iOS app
-   routed to /macos-e2e-scaffold, or vice versa), or
-3. a UI-test target already exists.
+   routed to /macos-e2e-scaffold, or vice versa).
 
 Emit an explicit note naming the unmet precondition. No false promise; always a way
 forward.
+
+**Refuse-condition 3 — "a UI-test target already exists" — is NOT a fallback trigger for
+committed intent.** It used to be listed here, and that was the bug: for a committed
+regression request the scaffold refusing means *the suite is already there*, so the
+answer is to run it (entry point 1, 2 or 3 above), not to switch to exploratory live
+testing, which answers a different question. A legacy suite with a `host` pin and no
+runner script is exactly the case that would otherwise fall through every branch and end
+up in MCP-live having never run the regression it was asked for. It remains a fallback
+trigger for **exploratory** intent, where live testing is what was wanted anyway.
 
 **SPM-only is NOT a fallback trigger.** The scaffold skills accept `Package.swift`
 projects and proceed — they generate files under `Tests/<TARGET_DIR>/` (`<App>UITests`,
