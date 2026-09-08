@@ -359,3 +359,21 @@ def test_the_placeholder_resolver_validates_before_it_normalises():
         "the resolver command itself must not squeeze whitespace"
     assert 'case "$(cat .gstack/e2e-executor)" in' in PLACEHOLDERS
     assert "BLOCKED — invalid .gstack/e2e-executor" in PLACEHOLDERS
+
+
+def test_the_runner_resolves_the_pin_from_the_project_root():
+    """Invoked from a subdirectory, a relative read finds no pin and proceeds as host —
+    so an INVALID pin degrades to a silent host run, the one outcome the marker exists
+    to prevent. Drives the real template from both directories."""
+    tmpl = runner_template().replace("<APP>", "X").replace("<TARGET_DIR>", "XUITests")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / ".gstack").mkdir(); (root / "scripts").mkdir(); (root / "sub").mkdir()
+        (root / ".gstack" / "e2e-executor").write_text("VM\n")   # invalid on purpose
+        runner = root / "scripts" / "run-uitests.sh"
+        runner.write_text("#!/usr/bin/env bash\n" + tmpl); runner.chmod(0o755)
+        for cwd in (root, root / "sub"):
+            p = subprocess.run(["bash", str(runner)], cwd=cwd,
+                               capture_output=True, text=True, timeout=30)
+            assert p.returncode == 2, f"from {cwd.name}: exit {p.returncode}"
+            assert "BLOCKED" in p.stderr, f"from {cwd.name}: an invalid pin was not refused"

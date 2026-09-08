@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.53.1] - 2026-09-08
+
+### Fixed
+- **The generated runner now runs from the project root.** Invoked from a subdirectory,
+  it looked for `.gstack/e2e-executor` relative to the caller's cwd, found nothing, and
+  proceeded as `host` — so an *invalid* pin degraded to a silent host run, which is the
+  single outcome the marker exists to prevent. Verified before and after: from a
+  subdirectory a `VM` pin previously passed through unblocked; it now exits 2.
+- Same class as the `vm-hygiene.sh` cwd bug Codex found during 2.53.0 review — fixed
+  there, missed here. Found by reading the rig session's own runner, which had it right.
+  A defect fixed in one of two places is its own failure mode, and this is the second
+  time it has surfaced in this feature.
+
 ## [2.53.0] - 2026-09-08
 
 VM-executor fase 1: committed macOS UI tests can now run in an isolated VM rig instead
