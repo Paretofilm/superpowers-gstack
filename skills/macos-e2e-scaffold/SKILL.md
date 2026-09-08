@@ -349,6 +349,14 @@ Skill cannot reliably modify `project.pbxproj` programmatically (one wrong line 
 
 set -uo pipefail
 
+# Run from the project root regardless of where the caller stood. Every path below
+# is relative to it — `.gstack/e2e-executor` above all — and read from a subdirectory
+# the pin simply is not found, so an INVALID pin degrades to a silent host run: the
+# one outcome the marker exists to prevent. (Borrowed from the rig session's runner,
+# which had this right; the same class of bug Codex found in vm-hygiene.sh, fixed
+# there and missed here.)
+cd "$(cd "$(dirname "$0")/.." && pwd)" || { echo "cannot resolve project root" >&2; exit 2; }
+
 SCHEME="<APP>"
 UITEST_TARGET="<TARGET_DIR>"   # <App>UITests, or <App>macOSUITests on multiplatform
 RESULT_BUNDLE="$(mktemp -d)/uitests.xcresult"
