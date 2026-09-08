@@ -284,7 +284,39 @@ verbatim, in this order:
   8. `blocks/xcode-tools.md` — ONLY when `.gstack/track` is `ios`, `macos`, or `both`; skip for web
   9. `blocks/companion-skills.md` — same native-track condition as xcode-tools.md
 Resolve `{{...}}` placeholders per `blocks/PLACEHOLDERS.md` before writing — never
-let a raw `{{...}}` token reach the generated CLAUDE.md. If the `blocks/` directory
+let a raw `{{...}}` token reach the generated CLAUDE.md.
+
+**`{{E2E_EXECUTOR}}` needs a pin to resolve against, and this skill writes it.** Only
+when `.gstack/track` is `macos` or `both` — an iOS-only project gets no file and no
+question, since the axis is macOS-only. If `.gstack/e2e-executor` exists, read and
+validate it (`host` or `vm`; anything else is `BLOCKED — invalid .gstack/e2e-executor`,
+never a silent `host`). If it does not exist, ask **once** with `AskUserQuestion`:
+
+> Where should this project's committed macOS UI tests run? A VM rig gives isolation —
+> a UI test that grabs the screen cannot fight you for focus, two runs cannot collide on
+> one machine, and an unattended run does not need anyone logged in. It requires
+> `vm-e2e` on `PATH`; without it the tests still run, on this machine, with a warning.
+>
+> - **On this machine** (recommended) — no extra setup, and what every project does today.
+> - **In the VM rig** — needs the rig installed; a teammate without it gets a warning and
+>   a host run, not a failure.
+
+Default to `host` if the answer is unclear, then write the pin and keep it committable
+(project-level decision, same as `.gstack/track`):
+
+```bash
+mkdir -p .gstack && printf '%s\n' "$ANSWER" > .gstack/e2e-executor   # host or vm
+if git check-ignore -q .gstack/e2e-executor 2>/dev/null; then
+  grep -q '^!\.gstack/e2e-executor$' .gitignore 2>/dev/null \
+    || echo '!.gstack/e2e-executor' >> .gitignore
+  git add .gitignore && git add -f .gstack/e2e-executor
+else
+  git add .gstack/e2e-executor
+fi
+```
+
+Do not check whether `vm-e2e` is installed before asking — the pin records a project
+decision, not this machine's capabilities. If the `blocks/` directory
 is missing (older plugin cache), warn the user to run `/plugin update
 superpowers-gstack` and omit these sections.
 

@@ -1,4 +1,4 @@
-## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v6 -->
+## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v7 -->
 
 Xcode-related operations MUST be performed by the agent — NEVER delegated to the user; the user should never need to open Xcode to verify your work. Prefer MCP tools, falling back to CLI otherwise. Check MCP availability via `ToolSearch` first (deferred tools load on demand); drop to CLI only if the search returns nothing.
 
@@ -47,6 +47,50 @@ not inspection**:
 
 `/superpowers-gstack:verify-and-land` performs exactly this sequence and then offers
 the landing; reach for it rather than re-deriving the steps.
+
+### E2E executor — where committed UI tests run
+
+This project's committed macOS UI tests run on: **{{E2E_EXECUTOR}}**.
+
+The value lives in `.gstack/e2e-executor` (`host` or `vm`; the file's absence means
+`host`). It is a committed pin, like `.gstack/track` — a project-level decision, not a
+per-developer one — so a teammate cloning the repo gets the same behaviour.
+
+`vm` means committed UI tests are dispatched to a macOS VM rig via `vm-e2e`, which owns
+the lease, boot, transfer, resigning and run. The point is isolation: a UI test that
+takes over the screen cannot fight the user for focus, two runs cannot collide on one
+machine, and an unattended run does not depend on anyone being logged in. Nothing in
+this file needs to know how the rig works — only that `vm-e2e` is on `PATH` and speaks
+JSON.
+
+**Reading the marker.** Only the exact strings `host` and `vm` are valid. Anything else
+— `VM`, a trailing space, an empty file, a stray comment — is an invalid pin, not a
+silent `host`: refuse with `BLOCKED — invalid .gstack/e2e-executor`, the same shape as
+the `.gstack/track` check. A typo that quietly runs on the host is precisely the
+failure this marker exists to prevent, because the run still looks fine.
+
+**When the rig is absent vs. when it fails — opposite answers.** Both matter, and
+conflating them is the trap:
+
+| Situation | Detect | Response |
+|---|---|---|
+| Marker is `vm`, `command -v vm-e2e` finds nothing | rig not installed on this machine | **Run on the host**, printing `executor=vm requested, rig not found on this host — running on host without lease`. Never silently. A committed `vm` marker must not brick the repo on every Mac without the rig. |
+| Marker is `vm`, rig present, run fails to produce a result | no parseable JSON on stdout, or an `error` field | **Fail loudly, naming the cause.** Do NOT fall back to the host. A rig fault is the thing you want to find out about; running on the host instead turns a real defect into a silently slower run. |
+| Non-interactive session (`CI`, `--print`, scheduled), marker `vm`, rig absent | nobody reads a warning | **Fail.** The fallback above depends on a human seeing the line. |
+
+**Reading the result.** Host and VM emit the same JSON shape, so the caller does not
+branch on executor:
+
+```json
+{"total": 16, "passed": 7, "failed": 0, "skipped": 9, "executed": 7,
+ "executor": "vm", "xcresult": "/path/on/host.xcresult"}
+```
+
+Always state `skipped` in plain text. "Green and empty" — every test skipped, nothing
+run, exit 0 — is the most dangerous result this pipeline can produce, because it reads
+as success. `executed` (`total − skipped`) is the number that says whether anything
+actually happened; treat `executed == 0` as a failure regardless of exit code. If the
+rig omits `executed`, derive it rather than dropping the check.
 
 ### Project file management (prefer declarative)
 

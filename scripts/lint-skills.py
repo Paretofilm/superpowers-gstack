@@ -89,7 +89,7 @@ DENYLIST = [
      "spec-drift --sha was replaced by the one-time --token in 2.52.0"),
     (re.compile(r"gstack-routing-v1\b"), "stale track-routing marker (current: v2+, 2.36.1)"),
     (re.compile(r"gstack-git-hygiene-v[0-8]\b"), "stale git-hygiene marker (current: v9+, 2.47.0)"),
-    (re.compile(r"gstack-xcode-tools-v[0-5]\b"), "stale xcode-tools marker (current: v6+, 2.48.0)"),
+    (re.compile(r"gstack-xcode-tools-v[0-6]\b"), "stale xcode-tools marker (current: v7+, 2.53.0)"),
     # v5 hardcoded `name=iPhone 16`; Xcode had already dropped it on the author's
     # own machine, and the resulting "Unable to find a device matching the
     # provided destination specifier" reads as a broken project, not a dead name.

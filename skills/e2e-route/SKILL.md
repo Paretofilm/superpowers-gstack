@@ -71,11 +71,97 @@ platform), the platform is NOT uniquely determined. Resolve in order:
 Functional / accessibility-assertion vs visual. A request about layout, spacing,
 colour, dark mode, or "does it look right" → the visual-regression row.
 
+### 4. Executor — host vs VM (committed macOS only)
+
+Read `.gstack/e2e-executor`: `host` or `vm`, and the file's absence means `host`. Only
+those two strings are valid — `VM`, a trailing space or an empty file is
+`BLOCKED — invalid .gstack/e2e-executor`, never a silent `host`. A malformed pin that
+quietly runs on the host is the failure the marker exists to prevent, because the run
+still looks fine.
+
+This axis applies **only to committed macOS runs**. Exploratory/MCP-live and
+visual-regression always run on the host — a live MCP session and a screenshot diff both
+need the user's own screen — so do not read the file for those rows.
+
+You are a **reader** of this pin, never its writer. `/superpowers-gstack:adapt` and
+`/superpowers-gstack:setup-routing` ask the question and write the file; this skill
+changes no files at all.
+
+**Absent rig and failing rig are different, and get opposite answers.** You only decide
+the first; the runner handles the second:
+
+- **Rig absent** (`command -v vm-e2e` finds nothing) while the pin says `vm` → still
+  route to the run, and name it: `executor=vm→host-fallback`, with the line
+  `executor=vm requested, rig not found on this host — running on host without lease`.
+  A committed `vm` pin must not brick the repo on every Mac without the rig.
+- **Exception — non-interactive session** with pin `vm` and no rig → **refuse**. The
+  fallback above is only safe because a human reads the warning; nobody does here, and an
+  unleased host run can collide with another.
+
+  Be honest about what is detectable. `CI` and `GITHUB_ACTIONS` are visible from a Bash
+  call and settle it. `--print`, a scheduled run and a subagent dispatch are **not** —
+  this skill has no session-kind preamble, and a TTY check answers the wrong question
+  because an agent's Bash tool pipes stdout even when a human is watching. So:
+
+  ```bash
+  [ -n "${CI:-}${GITHUB_ACTIONS:-}${E2E_NONINTERACTIVE:-}" ] && echo NONINTERACTIVE
+  ```
+
+  If you *know* the session is non-interactive from your own context — you were
+  dispatched as a subagent, or the invocation is `--print` — set `E2E_NONINTERACTIVE=1`
+  before invoking the runner and treat the refusal as in force. When neither the
+  environment nor your context says so, treat the session as interactive and let the
+  fallback run. Guessing "probably automated" from a pipe would refuse the ordinary case.
+- **Rig present but the run fails** → not your call. The runner fails loudly with the
+  cause and does not fall back; a rig fault is exactly what you want surfaced, and a host
+  run instead would turn a real defect into a silently slower pass.
+
 ## Routing table (the oracle)
+
+The macOS committed row has **four** entry points, in priority order. Pick the first that
+applies and name it as the next action.
+
+**Entry points 1–3 all require a macOS UI-test target to exist:**
+
+```bash
+find . -maxdepth 2 -type d -name '*UITests' ! -name '*iOSUITests' | head -1
+```
+
+Two separate reasons, and both matter. The pin is written at onboarding, before any suite
+necessarily exists, so a `vm` pin alone must never route a project with no tests at the
+rig. And `scripts/run-uitests.sh` is a **shared path**: `/ios-e2e-scaffold` generates one
+at the same location, so in a multiplatform project scaffolded for iOS first, an
+unguarded entry point 1 would answer a committed *macOS* request by running the *iOS*
+suite — and never reach the macOS scaffold. If the only `*UITests` directory is the iOS
+one, this check finds nothing and routing falls through to entry point 4, which is
+correct: the macOS suite does not exist yet.
+
+1. `./scripts/run-uitests.sh` exists → run it. It reads `.gstack/e2e-executor` itself and
+   dispatches to the VM or the host, so this one entry point covers both executors.
+2. Else UI-test target exists **and** pin is `vm` **and** `vm-e2e` is on `PATH` → call
+   `vm-e2e` directly. This is the path for a suite that predates the scaffold runner.
+3. Else UI-test target exists → run it on the host:
+   `xcodebuild test -scheme <Scheme> -destination 'platform=macOS' -only-testing:<Target>`.
+   Covers a legacy or hand-made suite with a `host` pin and no runner script — without
+   this the project matches no entry point at all.
+4. Else no UI-test target → `/macos-e2e-scaffold` to create one.
+
+**A project that is already scaffolded routes to entry point 1, 2 or 3 — never to
+MCP-live.** Read literally, `/macos-e2e-scaffold`'s refuse-condition 3 ("a UI-test target
+already exists") would bounce a regression request to exploratory live testing, which
+answers a different question entirely. The scaffold refusing means *the suite is already
+there* — run it. Anywhere below that still lists "a UI-test target already exists" as a
+reason to fall back to MCP-live is superseded by this rule for committed intent.
+
+**Set `E2E_NONINTERACTIVE=1` when you invoke entry point 1 from a non-interactive
+session** (`--print`, a scheduled run, a subagent). The runner refuses the missing-rig
+host fallback when it sees that, and it cannot detect the session kind itself: an agent's
+Bash tool always pipes stdout, so a TTY check would refuse every interactive run too.
+You know the session kind; the script does not.
 
 | Intent | Platform | Executor |
 |---|---|---|
-| Committed regression | macOS | `/macos-e2e-scaffold` + its xcresult runner |
+| Committed regression | macOS | `./scripts/run-uitests.sh` → else `vm-e2e` (target exists + pin `vm`) → else `xcodebuild test -only-testing:<Target>` on the host (target exists) → else `/macos-e2e-scaffold`. Honours `.gstack/e2e-executor`. |
 | Committed regression | iOS | `/ios-e2e-scaffold` |
 | Exploratory / live | macOS | `XcodeBuildMCP` UI-automation (`snapshot_ui` → tap → screenshot) |
 | Exploratory / live | iOS | `ios-simulator` MCP (`ui_find_element` / `ui_tap`) or `/ios-qa` |
@@ -91,11 +177,19 @@ actually refuses** — i.e. one of the scaffold's three refuse-conditions fires:
 1. not a Swift project, or
 2. no SwiftUI app for the routed platform detected — no SwiftUI scene (e.g. a
    UIKit-/AppKit-only app) or no platform-discriminating signal (e.g. a pure-iOS app
-   routed to /macos-e2e-scaffold, or vice versa), or
-3. a UI-test target already exists.
+   routed to /macos-e2e-scaffold, or vice versa).
 
 Emit an explicit note naming the unmet precondition. No false promise; always a way
 forward.
+
+**Refuse-condition 3 — "a UI-test target already exists" — is NOT a fallback trigger for
+committed intent.** It used to be listed here, and that was the bug: for a committed
+regression request the scaffold refusing means *the suite is already there*, so the
+answer is to run it (entry point 1, 2 or 3 above), not to switch to exploratory live
+testing, which answers a different question. A legacy suite with a `host` pin and no
+runner script is exactly the case that would otherwise fall through every branch and end
+up in MCP-live having never run the regression it was asked for. It remains a fallback
+trigger for **exploratory** intent, where live testing is what was wanted anyway.
 
 **SPM-only is NOT a fallback trigger.** The scaffold skills accept `Package.swift`
 projects and proceed — they generate files under `Tests/<TARGET_DIR>/` (`<App>UITests`,
@@ -112,10 +206,16 @@ stop. Do not build/tap/assert; hand control back after emitting.
 ```
 ## /e2e-route decision
 Detected: platform=<iOS|macOS>, intent=<committed|exploratory|visual>, source=<scheme|.gstack/track|asked>
+executor=<host|vm|vm→host-fallback>
 Chosen executor: <skill or MCP sequence>
 Why: <one line tying context → routing cell>
 Next action: <exact /skill to invoke OR exact MCP call sequence>
 ```
+
+`executor=` is present on every block. For committed macOS it carries the resolved pin;
+for iOS, exploratory and visual rows it is always `host`, because those never read the
+axis. `vm→host-fallback` means the pin said `vm` and the rig was not on this machine —
+print the fallback line with it, so the reason is visible and not merely implied.
 
 ## What this skill is NOT
 

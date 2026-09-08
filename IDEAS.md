@@ -160,6 +160,8 @@ Out: macOS, watchOS, AppKit.
 
 **Differentiation.** Erstatter ikke loop-motoren, VisionCritic, action-adapteren eller rapport-byggeren — alt det forblir gstack-policy. `live-swiftui` leverer kun executor-**primitivene** (screenshot/tap/type i koordinatrom + AX-fakta). Klar mekanisme-vs-policy-grense, dokumentert i `live-swiftui/docs/boundary-live-swiftui-vs-superpowers-gstack.md`.
 
+**Tredje sti, tilgjengelig siden 2.53.0.** VM-riggen (`.gstack/e2e-executor=vm`, se `docs/superpowers/specs/2026-09-07-vm-executor-design.md`) fjerner hele fysisk-skjerm-klassen på en annen måte: cliclick i en **gjest** klikker i VM-ens skjerm, ikke i brukerens. Fokus-kapring, zoom-mapping og vindus-deteksjon er fortsatt der, men de koster ingenting når skjermen ikke er din — og en ubemannet kjøring blir mulig fordi gjesten alltid er ulåst. Det gjør ikke valget mellom `live-swiftui` og cliclick, men det svekker cliclicks største innvending. Avgjøres her, ikke i VM-spec-en.
+
 **Trade-off å avveie.** `live-swiftui` driver et rendret `#Preview` (in-/sub-prosess NSHostingView), ikke nødvendigvis hele den launchede appen — så den passer **komponent-/view-nivå** macOS-utforsking. cliclick driver et hvilket som helst ekte app-vindu (helhetlig, men skjørt). De kan sameksistere som to macOS-executorer for ulike behov; poenget er at cliclick-investeringen ikke bør gjøres *uten* å vurdere `live-swiftui`-stien først.
 
 **Status.** Open — beslutning ønskes **før** computer-use Fase 4 (cliclick) bygges, og **før** `live-swiftui` v0.5 bygger sine interaksjons-tools (så kontrakten koordineres én gang, ikke to). Ikke blokkerende for Fase 1–3 (iOS/iPadOS via idb).
