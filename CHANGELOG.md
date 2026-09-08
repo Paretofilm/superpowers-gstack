@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.52.1] - 2026-09-08
+
+Fixes a CI failure 2.52.0 introduced. The suite was green on macOS and red on
+Linux, which is the shape worth naming: `pytest` derives a parametrized test's id
+from the parameter when no `id=` is given, and writes that id into
+`PYTEST_CURRENT_TEST` — which every subprocess the test spawns inherits. Two
+parameters in `test_spec_drift_verdict.py` are 100,000 characters of nested
+brackets, so the child process was handed a ~200 KB environment and `execve`
+refused it on Linux with `E2BIG` ("Argument list too long"). macOS allows it, so
+six local runs and eight review rounds never saw it. The traceback points at
+`subprocess.py`, not at the id, which is why it reads as unrelated.
+
+### Fixed
+- Every large parameter in `test_spec_drift_verdict.py` now carries an explicit
+  short `pytest.param(..., id=...)`. Coverage is unchanged — the inputs are
+  identical, only their ids shrank (200,008 chars → 263 at the longest).
+- New `tests/unit/test_node_id_budget.py` collects the whole suite and fails if
+  any node id exceeds 4 KB, naming the offender and the fix. Mutation-tested
+  against the id-less form. A developer on macOS cannot reproduce the original
+  failure, so prose in a comment would not have held.
+
 ## [2.52.0] - 2026-09-08
 
 An assessment of a third-party `--verify <spec>` skill turned out to be a survey of
