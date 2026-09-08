@@ -569,3 +569,32 @@ def test_a_heading_only_inside_a_code_fence_is_not_an_anchor(rig):
     p = run("repin", *common(upstream, pin_dir), expect=2)
     assert "ANCHORS MISSING" in p.stderr and "### Gate Logic" in p.stderr
     assert not (pin_dir / ".repin-receipt").exists(), "a blocked repin writes no receipt"
+
+
+def test_an_unclosed_fence_masks_to_the_end_of_the_document(rig):
+    """Third lens (DeepSeek) argued a mismatched fence (open ~~~~, close ```) goes
+    unmasked, letting a planted heading extend the checked span. It does the
+    opposite: `_FENCE`'s `\\Z` branch means an unclosed fence masks everything
+    after it, so a planted boundary heading DISAPPEARS and the check refuses.
+    Fail-closed. This test exists because the claim was plausible enough to need
+    a permanent answer."""
+    upstream, pin_dir = rig
+    planted = SECTION.replace(
+        "\n## Step 8.1: Plan Verification",
+        "\n~~~~\n## Step 8.1 planted inside an unclosed fence\n```\n\n## Step 8.1: Plan Verification", 1)
+    upstream.write_text(planted)
+    p = run("repin", *common(upstream, pin_dir), expect=2)
+    assert "ANCHORS MISSING" in p.stderr and "## Step 8.1" in p.stderr
+
+
+def test_unfenced_preserves_offsets_and_line_numbers(rig):
+    """missing_anchors indexes the masked text and slices the raw one with the
+    same offsets. If masking changed either length, the two spans would drift
+    apart and a phrase anchor could be searched in the wrong region."""
+    m = module()
+    for text in (SECTION,
+                 SECTION + "\n```python\nx = 1\n```\ntail\n",
+                 SECTION + "\n~~~\nunclosed to the end\n"):
+        masked = m.unfenced(text)
+        assert len(masked) == len(text)
+        assert masked.count("\n") == text.count("\n")

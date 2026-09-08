@@ -34,7 +34,7 @@ will never be shipped, or against a baseline older than the branch. Design:
   Fail closed: empty diff, unreadable plan, zero actionable items and pin
   mismatch are all exit 2, never 0.
 - Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
-  README. 115 unit tests across `test_spec_drift_pin.py`,
+  README. 118 unit tests across `test_spec_drift_pin.py`,
   `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` and
   `test_spec_drift_upstream_alarm.py` — the skill tests are omission tests: Step 8
   text pasted into SKILL.md, a discovery heuristic brought back, or the check
@@ -102,6 +102,16 @@ will never be shipped, or against a baseline older than the branch. Design:
   `NO PIN` message and from the maintainer alarm's failure text — both told the
   reader to run a flag that no longer parses — and the pattern is now in
   `lint-skills.py`'s DENYLIST, as this repo's release gate requires.
+- `PIN WRITE FAILED` no longer claims "nothing half-written" — the comment two
+  lines above it already said the opposite, and `check` reports PIN CORRUPT in
+  exactly that state. The message now says so.
+
+Two findings from the third lens were investigated and **refuted**, with a test
+left behind for each so the question does not have to be re-asked: a newline in
+`summary` cannot split the verdict line (`summary` never reaches a reason, and
+`_verdict` collapses whitespace before escaping), and an unclosed `~~~~` fence
+does not evade masking — it masks to end-of-document, so a heading planted after
+it disappears and the check refuses. Fail-closed in both directions.
 - **The invisible-character set is now Unicode's format category (Cf) whole**,
   not a hand-picked subset of it — two review rounds each found one more member
   the subset had missed. A test asserts the enumeration equals what

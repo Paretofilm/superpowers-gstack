@@ -521,7 +521,9 @@ def cmd_repin(a) -> int:
     except OSError as exc:
         # Each file is replaced atomically; if the second replace failed the
         # snapshot is new and pin.json is old, which check reports as PIN CORRUPT.
-        print(f"PIN WRITE FAILED: {exc} — nothing half-written; re-run repin", file=sys.stderr)
+        print(f"PIN WRITE FAILED: {exc} — each file is written atomically, but the two "
+              f"may now disagree; `check` reports PIN CORRUPT until a repin completes",
+              file=sys.stderr)
         return EXIT_CANNOT
     print(f"PINNED sha256={short(current)} gstack={version} — "
           f"commit {pin_dir / PIN_NAME} and {snap} together")

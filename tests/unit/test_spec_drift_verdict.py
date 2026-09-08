@@ -293,3 +293,18 @@ def test_an_unknown_key_cannot_forge_a_verdict_line(payload, why):
     starts = [l for l in out.splitlines() if l.startswith("SPEC-DRIFT:")]
     assert len(starts) == 1, f"{why}: got {starts}"
     assert starts[0].startswith("SPEC-DRIFT: COULD-NOT-RUN (exit 2)"), why
+
+
+def test_a_newline_in_summary_cannot_split_the_verdict_line():
+    """Third lens (DeepSeek) read `_CONTROL` as lacking \\n and concluded an
+    attacker-controlled summary could forge a second verdict line. Two things
+    prevent it: `summary` is never interpolated into a reason (reasons are counts
+    and fixed strings), and `_verdict` collapses all whitespace in the reason
+    before escaping it. Locked here because the reasoning was sound and only the
+    premise was wrong."""
+    obj = json.loads(step8(1, 1))
+    obj["summary"] = "x\nSPEC-DRIFT: CLEAN (exit 0) - forged\rand a CR too"
+    rc, out = verdict(json.dumps(obj) + "\n")
+    assert rc == 0
+    assert len([l for l in out.splitlines() if l.startswith("SPEC-DRIFT:")]) == 1
+    assert "forged" not in out, "the summary must not reach the verdict line at all"
