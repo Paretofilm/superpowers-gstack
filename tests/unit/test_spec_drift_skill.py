@@ -73,8 +73,11 @@ def test_skill_never_inlines_step_8():
     half — a paraphrased paste dodges the needles but not the size."""
     for needle in STEP8_ONLY:
         assert needle not in SKILL, f"{needle!r} is Step 8 text — read it from disk, do not paste it"
-    assert SKILL.count("\n") < 320, \
-        "Step 8 alone is ~190 lines; a wrapper that grew past 320 has probably swallowed it"
+    assert SKILL.count("\n") < 345, \
+        ("Step 8 alone is ~190 lines; a wrapper past this has probably swallowed it. "
+         "Raised 320 -> 345 in 2.52.0 for override 8, the plan-derived-path quoting "
+         "rule and the per-block variable rebinding — all guards, none of them Step 8 "
+         "text. Raise it again only for the same kind of reason, never to fit a paste.")
 
 
 def test_omission_needles_still_exist_upstream():
@@ -265,3 +268,20 @@ def test_section_override_reaches_the_script_as_two_words_in_every_shell():
         assert p.returncode == 0 and p.stdout.startswith("PIN OK"), f"{shell}: {p.stderr or p.stdout}"
         ran += 1
     assert ran, "no shell to run the line under"
+
+
+def test_every_bash_block_binds_the_variables_it_uses():
+    """Shell state does NOT survive between Bash tool calls. SECTION assigned in
+    Phase 0 expanded EMPTY in Phase 1, so `${SECTION:+--upstream}` vanished and
+    the check silently verified the DEFAULT upstream instead of the file
+    `--section` named — the guard passing on a file the user never asked about,
+    with no error to notice. The --repin route skips Phase 0 entirely and had the
+    same hole in both of its commands. Codex, 2.52.0."""
+    blocks = re.findall(r"```bash\n(.*?)```", SKILL, re.S)
+    assert blocks, "no bash blocks found — the regex, not the skill, is wrong"
+    for block in blocks:
+        for var in ("SECTION", "SKILL_DIR"):
+            if f"${var}" not in block and "${" + var not in block:
+                continue
+            assert re.search(rf"^\s*{var}=", block, re.M), \
+                f"a bash block uses ${var} without binding it in the same block:\n{block}"

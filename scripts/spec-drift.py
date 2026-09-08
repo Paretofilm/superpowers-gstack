@@ -89,6 +89,10 @@ ANCHORS = (
     ("Validator detection", r"^(> )?\*\*Validator detection\.\*\*"),
 )
 
+# The two headings that delimit the executed span. Searched in the whole file;
+# every other anchor must fall between them.
+BOUNDARY = ("## Step 8: Plan Completion Audit", "## Step 8.1")
+
 EXIT_OK, EXIT_DRIFT, EXIT_CANNOT, EXIT_CONFIRM = 0, 1, 2, 3
 COUNT_KEYS = ("total_items", "done", "changed", "deferred", "unverifiable")
 JSON_KEYS = COUNT_KEYS + ("summary",)
@@ -190,23 +194,32 @@ def visible(line: str) -> str:
 
 
 def missing_anchors(text: str) -> list[str]:
-    """Names of anchors the text lacks. The four headings must also appear in the
-    order the wrapper assumes — Step 8, then Plan File Discovery and Gate Logic
-    inside it, then Step 8.1 where the wrapper stops — or the override that
-    targets one of them would land in the wrong section."""
-    missing = [name for name, pat in ANCHORS if not re.search(pat, text, re.M)]
+    """Names of anchors the text lacks.
+
+    Only the two boundary headings are looked for in the whole file; everything
+    else must appear INSIDE Step 8 — between its heading and Step 8.1, which is
+    exactly the span the wrapper executes. A whole-file search proved nothing
+    about that span: `<base>` also occurs in Step 8.2, so upstream could delete
+    it from Step 8 and the anchor would still pass (Codex, 2.52.0). The three
+    inner headings must also hold their order, or an override that targets one
+    would land in the wrong part of the section."""
+    pats = dict(ANCHORS)
+    missing = [name for name in BOUNDARY if not re.search(pats[name], text, re.M)]
+    if missing:
+        return missing
+    start = re.search(pats[BOUNDARY[0]], text, re.M).start()
+    end = re.search(pats[BOUNDARY[1]], text, re.M).start()
+    if end <= start:
+        return ["section order (Step 8 must precede Step 8.1)"]
+    span = text[start:end]
+    missing = [name for name, pat in ANCHORS
+               if name not in BOUNDARY and not re.search(pat, span, re.M)]
     if not missing:
-        # Validator detection sits in the order list, not just the presence list:
-        # being line-anchored proves it is a real heading, not that it is inside
-        # Step 8. A copy in a code fence after Step 8.1 would otherwise satisfy
-        # the anchor while override 8 suppresses nothing (Codex, 2.52.0).
-        order = ("## Step 8: Plan Completion Audit", "### Plan File Discovery",
-                 "Validator detection", "### Gate Logic", "## Step 8.1")
-        pats = dict(ANCHORS)
-        positions = [re.search(pats[name], text, re.M).start() for name in order]
+        order = ("### Plan File Discovery", "Validator detection", "### Gate Logic")
+        positions = [re.search(pats[name], span, re.M).start() for name in order]
         if positions != sorted(positions):
-            missing.append("section order (Step 8 > Plan File Discovery > Validator "
-                           "detection > Gate Logic > Step 8.1)")
+            missing.append("section order (Plan File Discovery > Validator "
+                           "detection > Gate Logic, inside Step 8)")
     return missing
 
 

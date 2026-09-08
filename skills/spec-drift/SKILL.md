@@ -68,6 +68,7 @@ by `spec-drift.py verdict`, never judged from the report. A caller that needs a
 real process status runs that same command on the final JSON line:
 
 ```bash
+SKILL_DIR='<the base directory the Skill tool printed>'   # shell state does not cross Bash calls
 python3 "$SKILL_DIR/../../scripts/spec-drift.py" verdict <<'JSON'
 <the JSON line the skill ended with>
 JSON
@@ -135,6 +136,12 @@ message, not the mechanism.
 ## Phase 1 — the pin, before anything is read
 
 ```bash
+# Bind both again: shell state does NOT survive between Bash calls, and an empty
+# $SECTION makes ${SECTION:+…} vanish — the check would then silently verify the
+# DEFAULT upstream instead of the file --section named (Codex, 2.52.0). Use the
+# absolute SECTION value Phase 0 echoed, not the raw argument.
+SKILL_DIR='<the base directory the Skill tool printed>'
+SECTION='<the absolute SECTION Phase 0 echoed, or empty>'
 # two expansions, not one: zsh does not word-split, so a single ${…:+--upstream "$SECTION"} arrives as one word
 python3 "$SKILL_DIR/../../scripts/spec-drift.py" check ${SECTION:+--upstream} ${SECTION:+"$SECTION"}
 ```
@@ -154,10 +161,14 @@ the audit `/ship` runs, rather than a copy of it.
 The pin breaks whenever gstack changes the section, which is often — gstack
 auto-updates weekly. Re-pinning is deliberate, in steps, and never blind. Use
 the same `--upstream "$SECTION"` on every command below when `--section` was
-given, or the receipt will not match the file `--yes` hashes.
+given, or the receipt will not match the file `--yes` hashes. This route skips
+Phase 0, so bind the variables in each block yourself — an unbound `$SECTION`
+expands to nothing and re-pins the DEFAULT section instead of the named one.
 
 1. Show what changed:
    ```bash
+   SKILL_DIR='<the base directory the Skill tool printed>'
+   SECTION='<--section value as an absolute path, or empty>'
    python3 "$SKILL_DIR/../../scripts/spec-drift.py" repin ${SECTION:+--upstream} ${SECTION:+"$SECTION"}
    ```
    Exit 0 with `PIN UNCHANGED`: say so and stop. Exit 2 with `REPIN BLOCKED:
@@ -180,6 +191,8 @@ given, or the receipt will not match the file `--yes` hashes.
 4. On Accept, pass back the sha the diff run printed — `--yes` is refused
    without it, and refused if the file changed since the diff was shown:
    ```bash
+   SKILL_DIR='<the base directory the Skill tool printed>'
+   SECTION='<the same value step 1 used, or empty>'
    python3 "$SKILL_DIR/../../scripts/spec-drift.py" repin --yes --sha <the 12 hex chars from the diff run> ${SECTION:+--upstream} ${SECTION:+"$SECTION"}
    ```
    Relay the `PINNED …` line: it names the two files that must be committed
@@ -291,6 +304,7 @@ the same overrides. If that also yields no JSON, do not guess a result —
    response (step 3).
 2. Compute the exit code from the JSON line — never by reading the report:
    ```bash
+   SKILL_DIR='<the base directory the Skill tool printed>'
    python3 "$SKILL_DIR/../../scripts/spec-drift.py" verdict <<'JSON'
    <the JSON line>
    JSON

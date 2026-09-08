@@ -34,7 +34,7 @@ will never be shipped, or against a baseline older than the branch. Design:
   Fail closed: empty diff, unreadable plan, zero actionable items and pin
   mismatch are all exit 2, never 0.
 - Routed in `CLAUDE.md`, both generator tables, `model-routing.md` (sonnet) and the
-  README. 111 unit tests across `test_spec_drift_pin.py`,
+  README. 112 unit tests across `test_spec_drift_pin.py`,
   `test_spec_drift_verdict.py`, `test_spec_drift_skill.py` and
   `test_spec_drift_upstream_alarm.py` — the skill tests are omission tests: Step 8
   text pasted into SKILL.md, a discovery heuristic brought back, or the check
@@ -111,6 +111,19 @@ will never be shipped, or against a baseline older than the branch. Design:
   Step 8.
 - The quoting rule now covers paths that START with `-`: quoted or not, a command
   reads those as options, so they get a `./` prefix or UNVERIFIABLE.
+- **`--section` silently checked the wrong file.** Shell state does not survive
+  between Bash calls, so `SECTION`, bound in Phase 0, expanded to nothing in
+  Phase 1 — `${SECTION:+--upstream}` vanished and the guard verified the DEFAULT
+  upstream instead of the copy the user named, with no error to notice. The
+  `--repin` route skips Phase 0 entirely and had the same hole in both commands,
+  and a third block called `verdict` with an unbound `$SKILL_DIR`. Every block
+  now binds what it uses, and a test walks every bash block to keep it that way.
+  Same flag as the zsh word-splitting fix in 2.52.0's own history, a different
+  failure mode.
+- **Anchors are searched inside Step 8, not across the whole file.** `<base>`
+  also occurs in Step 8.2, so upstream could delete it from the audited section
+  and the anchor would still pass. Only the two boundary headings are looked for
+  file-wide now; every other anchor must fall between them, in order.
 
 Known and documented, not fixed here: `check` verifies the section's bytes and
 the subagent then reads that path itself, so a swap between the two is possible —
