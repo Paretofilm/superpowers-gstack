@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.53.3] - 2026-09-09
+
+### Fixed
+- **The version nudge pointed at a version it could not deliver.**
+  `check-plugin-version.sh` read the *newest* plugin version in the cache rather than the
+  one actually running. A session keeps the plugin root it resolved at startup, and the
+  cache holds every version ever installed — nine here, all runnable — so those two
+  differ routinely. The result was advice that could never be satisfied: it told the user
+  to run `/adapt` to reach a version their `/adapt` does not come from, so `/adapt` wrote
+  the running version's marker back and the next session nudged again. The hook now reads
+  `$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json` — `hooks.json` already invokes it
+  through that variable — and falls back to the cache only when invoked outside a plugin
+  context.
+- Reported by the rig session, which observed a session being served 2.51.1 while
+  `installed_plugins.json` said 2.53.1. It went unnoticed there only because the files
+  were byte-identical between the two versions. Their framing is the one worth keeping:
+  **"different" is not "older", and a self-heal keyed on difference can be a downgrade.**
+
 ## [2.53.2] - 2026-09-09
 
 Two fixes that came out of the rig session answering the open contract questions.
