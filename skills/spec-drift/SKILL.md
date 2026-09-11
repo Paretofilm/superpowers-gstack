@@ -45,10 +45,11 @@ reason).
 
 ## Contract
 
-Same human-readable report as `/ship` Step 8, same JSON on the last line —
+Same human-readable report as `/ship` Step 8, and a JSON object on the last line —
 `{"total_items":N,"done":N,"changed":N,"deferred":N,"unverifiable":N,"summary":"…"}`,
-where `"deferred"` counts NOT DONE items exactly as Step 8 uses it — plus a
-verdict line just above the JSON. The table shows each line's prefix; the real
+where `"deferred"` is the NOT DONE count (Step 8 itself, gstack ≥ 1.83, spells it
+`"not_done"` and adds `"partial"`; this skill keeps the keys its callers read —
+override 6 makes the subagent write them) — plus a verdict line just above the JSON. The table shows each line's prefix; the real
 line continues with a breakdown:
 
 | Verdict line (prefix) | Meaning | Exit |
@@ -182,7 +183,10 @@ expands to nothing and re-pins the DEFAULT section instead of the named one.
    `spec-drift.py`: `## Step 8: Plan Completion Audit`, `## Step 8.1`,
    `### Plan File Discovery`, `### Gate Logic`, `<base>`, `Include in PR body`,
    `Parent processing`, `"total_items"`, `Validator detection` — the first four
-   in that order). What the script cannot
+   in that order; a heading inside a code fence does not count, except in the
+   one ````text fence after `**Subagent prompt:**` — that fence is the prompt
+   itself since gstack 1.83; fences nested inside it are examples, and a
+   second labelled fence is refused by count). What the script cannot
    judge is meaning: read the diff against the overrides in Phase 2 below and
    say, in one or two sentences, whether any override now contradicts what the
    section says — a renamed verdict, a new gate, a changed JSON key. If one
@@ -266,10 +270,12 @@ that one with `./`, or classify it UNVERIFIABLE.
    review-report text), and stop. The gate's decisions are made by the caller
    from your JSON. Skip "Include in PR body" and "Parent processing".
 5. Report only. Do not commit, push, edit the plan, or edit any file.
-6. Your LAST line is the JSON object Step 8 specifies, with exactly its keys:
-   total_items, done, changed, deferred, unverifiable, summary — where
-   deferred is the NOT DONE count and PARTIAL items count in total_items only,
-   never in the four counts. Add no other keys. Nothing after it.
+6. Your LAST line is the JSON object Step 8 specifies, but with exactly these
+   keys: total_items, done, changed, deferred, unverifiable, summary — where
+   deferred is the NOT DONE count (write `deferred`, never `not_done`; no
+   `partial` key — PARTIAL items count in total_items only, never in the four
+   counts; Step 8's "do not classify work as deferred" is about the parent's
+   gate, not this key). Add no other keys. Nothing after it.
 7. Step 8's 50-item cap does not apply: extract and classify every item. If
    the plan has more than 50, total_items is still the full count, and any
    item you could not classify is UNVERIFIABLE — never a silently shorter list.

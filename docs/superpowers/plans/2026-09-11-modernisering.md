@@ -29,7 +29,7 @@ Grunnlag: `docs/superpowers/specs/2026-09-11-modernisering-audit.md`. Branch `fe
 
 ## Fase 4 — arkitektur (utsatt, egen PR)
 
-- spec-drift mot gstack 1.84.1: upstream flyttet subagent-prompten i `ship/sections/plan-completion.md` inn i en ````text-fence, som `scripts/spec-drift.py` maskerer før anker-skann → `repin` blokkeres med «ANCHORS MISSING». Oppdaget 2026-09-11 da gstack auto-oppgraderte midt i 3.0.0-økten; `tests/unit/test_spec_drift_upstream_alarm.py` er rød på maskiner med gstack ≥ 1.83, grønn i CI. Egen fix.
+- [x] spec-drift mot gstack 1.84.1 (3.0.2, `fix/spec-drift-prompt-fence`): `unfenced()` behandler ````text-fencen etter `**Subagent prompt:**` som seksjonstekst; pin re-akseptert mot 1.84.1.0. Opprinnelig notat: upstream flyttet subagent-prompten i `ship/sections/plan-completion.md` inn i en ````text-fence, som `scripts/spec-drift.py` maskerer før anker-skann → `repin` blokkeres med «ANCHORS MISSING». Oppdaget 2026-09-11 da gstack auto-oppgraderte midt i 3.0.0-økten; `tests/unit/test_spec_drift_upstream_alarm.py` er rød på maskiner med gstack ≥ 1.83, grønn i CI. Egen fix.
 
 - [x] adapt → deterministisk merge-script; setup-routing inn i adapt (3.1.0, `feat/adapt-merge-script`): `scripts/adapt-claude-md.py` + 34 tester; E8 sjekker scriptets roster, E13 sjekker delegering; roster i `skills/adapt/roster.md`, blokkene under `skills/adapt/blocks/`. Design: `docs/superpowers/specs/2026-09-11-adapt-merge-script-design.md`
 
