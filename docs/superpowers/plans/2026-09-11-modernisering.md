@@ -37,4 +37,4 @@ Grunnlag: `docs/superpowers/specs/2026-09-11-modernisering-audit.md`. Branch `fe
 
 - [x] lint grønn, pytest grønn, `sync-own-claude-md.py`
 - [x] plugin.json 3.0.0 + CHANGELOG; README-liste; CLAUDE.md-ruting; VERSIONS.md
-- [ ] pitfall-verification → /ship (after commit)
+- [x] pitfall-verification → /ship — self-pitfall ×2, third lens, Codex adversarial, Claude adversarial, six specialists; PR opened 2026-09-11
