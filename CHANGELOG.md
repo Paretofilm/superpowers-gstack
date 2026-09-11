@@ -11,11 +11,20 @@
   `tests/unit/test_spec_drift_upstream_alarm.py` stayed red on any machine with a
   current gstack. `unfenced()` now treats the one fence that follows
   `**Subagent prompt:**` as the section it is; fences nested inside it, a ````text
-  fence anywhere else, and an unclosed prompt fence all stay masked (fail-closed). So
-  does a labelled prompt fence whose label itself sits inside another fence — upstream
-  quoting its own prompt in a `~~~` example — which the first cut let through (pitfall
-  round 1: a renamed real heading with the old name surviving in such an example passed
-  the anchor check). The pin is re-accepted at gstack 1.84.1.0 (`skills/spec-drift/pin/`).
+  fence anywhere else, and an unclosed prompt fence all stay masked (fail-closed). The
+  prompt fence is found among `_FENCE`'s own matches, not by a second regex with its own
+  idea of where a fence ends — the first cut's regex let a `````-closed prompt run over a
+  later example (a heading that existed only there passed the check), let a labelled
+  `~~~` example above the prompt swallow the real one (`ANCHORS MISSING` on a healthy
+  file), made every labelled fence transparent instead of the one, and went quadratic
+  on a file of unclosed labels (pitfall round 1 + /review). Now: a label that itself
+  sits inside another fence is an example, a longer closing run closes (CommonMark),
+  and two labelled fences refuse by count. The fence grammar follows CommonMark where it
+  matters for masking: up to three spaces of indentation, a closer of the same character
+  only, and a `\r` before the newline, so an indented example is masked, ````~~ does not
+  close a ```` fence, and a CRLF file is refused for its line endings rather than for
+  anchors that only looked missing (third house). The pin is re-accepted at gstack
+  1.84.1.0 (`skills/spec-drift/pin/`).
 - The skill's contract prose said `deferred` counts NOT DONE "exactly as Step 8 uses
   it"; Step 8 now names that count `not_done` and adds `partial`. Override 6 keeps the
   wrapper's key set for its callers (`autoimplement` reads `deferred`) and now says so

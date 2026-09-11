@@ -710,3 +710,121 @@ def test_the_label_must_itself_be_prose_not_a_line_inside_another_fence(rig):
     masked = module().unfenced(upstream.read_text())
     assert "### Plan File Discovery" not in masked, "a labelled fence inside an example is still an example"
     assert "### Plan Discovery" in masked, "the real prompt fence is still transparent"
+
+
+# --- /review on 3.0.2: the prompt fence's extent must come from _FENCE itself -----
+#
+# The first cut located the prompt fence with a second regex that had its own
+# idea of where a fence closes (exactly four backticks, on the raw text). Three
+# lenses found the same seam from different sides: a longer closing run (CommonMark
+# closes a 4-backtick fence with 4 OR MORE) split the two views, a labelled
+# example above the prompt swallowed the real one, every labelled fence was
+# transparent rather than "the one", and the raw-text scan went quadratic.
+
+
+def test_a_longer_closing_run_still_closes_the_prompt_fence(rig):
+    """CommonMark closes a 4-backtick fence with 4 or more backticks, and `_FENCE`
+    agrees. The prompt fence must agree too, or a harmless upstream reformat
+    re-breaks every install."""
+    upstream, pin_dir = rig
+    upstream.write_text(SECTION_PROMPT_FENCED.replace(
+        "````\n\n**Parent processing:**", "`````\n\n**Parent processing:**", 1))
+    p = run("repin", *common(upstream, pin_dir), expect=3)
+    assert "ANCHORS: all present" in p.stdout, p.stderr
+
+
+def test_an_example_after_a_longer_closer_stays_an_example(rig):
+    """The false-PASS shape: the prompt closes with `````, a 5-backtick example
+    later carries `### Gate Logic`, and an exact ```` pair follows. A regex that
+    closes the prompt only on exactly four backticks runs the prompt's body
+    over the example and un-masks the illustration."""
+    upstream, pin_dir = rig
+    text = SECTION_PROMPT_FENCED.replace(
+        "````\n\n**Parent processing:**", "`````\n\n**Parent processing:**", 1)
+    text = text.replace("### Gate Logic\n",
+                        "`````\n### Gate Logic\n`````\n````\n````\n", 1)
+    upstream.write_text(text)
+    p = run("repin", *common(upstream, pin_dir), expect=2)
+    assert "ANCHORS MISSING" in p.stderr and "### Gate Logic" in p.stderr
+
+
+def test_a_labelled_example_above_the_prompt_does_not_swallow_it(rig):
+    """A `~~~` example carrying the label and a ````text opener sits ABOVE the
+    real prompt. The example is skipped (its label is fenced), but a raw-text
+    scan that skips it still CONSUMES a span running to the real prompt's
+    closer, so the real label is never visited and every anchor goes missing —
+    the outage 3.0.2 exists to end, re-created by an illustration."""
+    upstream, pin_dir = rig
+    example = "~~~md\n**Subagent prompt:** looks like this:\n````text\nexample\n~~~\n\n"
+    upstream.write_text(SECTION_PROMPT_FENCED.replace(
+        "**Subagent prompt:** Pass", example + "**Subagent prompt:** Pass", 1))
+    p = run("repin", *common(upstream, pin_dir), expect=3)
+    assert "ANCHORS: all present" in p.stdout, p.stderr
+
+
+def test_a_second_labelled_prompt_fence_refuses(rig):
+    """Only ONE prompt fence is the section. A duplicate `**Subagent prompt:**`
+    ````text block in prose that keeps an old heading must not satisfy an anchor
+    the real prompt renamed — whichever side of the real prompt it sits on. The
+    refusal names the count, so the operator sees why."""
+    upstream, pin_dir = rig
+    renamed = SECTION_PROMPT_FENCED.replace(
+        "### Plan File Discovery\nline two\n", "### Plan Discovery\nline two\n")
+    decoy = ("**Subagent prompt:** (older wording, kept for reference)\n\n"
+             "````text\n### Plan File Discovery\n**Validator detection.** old\n````\n\n")
+    for text in (renamed.replace("**Subagent prompt:** Pass", decoy + "**Subagent prompt:** Pass", 1),
+                 renamed.replace("**Parent processing:**", decoy + "**Parent processing:**", 1)):
+        upstream.write_text(text)
+        p = run("repin", *common(upstream, pin_dir), expect=2)
+        assert "ANCHORS MISSING" in p.stderr and "prompt fence" in p.stderr and "found 2" in p.stderr, p.stdout
+
+
+def test_unfenced_stays_linear_on_many_unclosed_labelled_openers():
+    """A hostile or broken upstream with thousands of labelled ````text openers
+    and no closer. A raw-text scan that restarts at every label is quadratic
+    (measured: 4x per doubling, ~45 min at the 4 MB cap); the fence-driven scan
+    consumes the file once. Generous budget, wide margin: the old shape took
+    ~9 s at this size."""
+    import time
+    m = module()
+    text = "**Subagent prompt:**\n````text\n" * 8000
+    t0 = time.perf_counter()
+    masked = m.unfenced(text)
+    assert time.perf_counter() - t0 < 3.0
+    assert len(masked) == len(text)
+
+
+# --- third house (DeepSeek), 3.0.2: fence grammar edges ---------------------------
+
+def test_an_indented_fence_still_masks_a_planted_heading(rig):
+    """CommonMark allows up to three spaces before a fence. An unmasked indented
+    example would let a heading inside it satisfy an anchor."""
+    upstream, pin_dir = rig
+    planted = SECTION.replace("### Gate Logic", "### Decision Logic", 1).replace(
+        "## Step 8.1", "   ```\n### Gate Logic\n   ```\n\n## Step 8.1", 1)   # content inside an indented fence sits at column 0
+    upstream.write_text(planted)
+    p = run("repin", *common(upstream, pin_dir), expect=2)
+    assert "ANCHORS MISSING" in p.stderr and "### Gate Logic" in p.stderr
+
+
+def test_a_closer_with_mixed_fence_characters_does_not_close(rig):
+    """````~~ is not a closing fence (CommonMark: same character only). Treating
+    it as one would expose everything after it."""
+    upstream, pin_dir = rig
+    planted = SECTION.replace("### Gate Logic", "### Decision Logic", 1).replace(
+        "## Step 8.1", "````\nexample\n````~~\n### Gate Logic\n````\n\n## Step 8.1", 1)
+    upstream.write_text(planted)
+    p = run("repin", *common(upstream, pin_dir), expect=2)
+    assert "ANCHORS MISSING" in p.stderr and "### Gate Logic" in p.stderr
+
+
+def test_a_crlf_section_with_fences_is_named_as_line_endings_not_anchors(rig):
+    """With `$` matching only before `\\n`, a CRLF file never closed a fence and
+    masked itself to EOF — refused for the wrong reason. The reason must be the
+    real one so the way out (re-pin after upstream normalises) is visible."""
+    upstream, pin_dir = rig
+    upstream.write_text(SECTION_PROMPT_FENCED)
+    accept(upstream, pin_dir)
+    upstream.write_bytes(SECTION_PROMPT_FENCED.replace("\n", "\r\n").encode())
+    p = run("repin", *common(upstream, pin_dir), expect=3)
+    assert "line endings" in p.stdout

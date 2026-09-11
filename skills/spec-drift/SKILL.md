@@ -184,8 +184,9 @@ expands to nothing and re-pins the DEFAULT section instead of the named one.
    `### Plan File Discovery`, `### Gate Logic`, `<base>`, `Include in PR body`,
    `Parent processing`, `"total_items"`, `Validator detection` — the first four
    in that order; a heading inside a code fence does not count, except in the
-   ````text fence after `**Subagent prompt:**` — that fence is the prompt
-   itself since gstack 1.83, and only fences nested inside it are examples). What the script cannot
+   one ````text fence after `**Subagent prompt:**` — that fence is the prompt
+   itself since gstack 1.83; fences nested inside it are examples, and a
+   second labelled fence is refused by count). What the script cannot
    judge is meaning: read the diff against the overrides in Phase 2 below and
    say, in one or two sentences, whether any override now contradicts what the
    section says — a renamed verdict, a new gate, a changed JSON key. If one
