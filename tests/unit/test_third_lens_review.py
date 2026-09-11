@@ -43,7 +43,7 @@ def test_western_prefixes_gone():
 
 
 def test_resolve_transport_openrouter_roles():
-    assert tlr.resolve_transport("architecture", None) == ("openrouter", "z-ai/glm-5.2")
+    assert tlr.resolve_transport("architecture", None) == ("openrouter", "z-ai/glm-5.3")
     assert tlr.resolve_transport("correctness", None) == ("openrouter", "deepseek/deepseek-v4-pro")
 
 
@@ -64,15 +64,16 @@ def test_run_openrouter_prints_framing(monkeypatch, capsys):
     monkeypatch.setattr(tlr, "http_json", lambda *a, **k: fake_resp)
     monkeypatch.setattr(tlr, "get_pricing", lambda *a, **k: (1e-6, 2e-6))
     monkeypatch.setattr(tlr, "get_credits", lambda *a, **k: 4.47)
+    monkeypatch.setattr(tlr, "model_is_served", lambda *a, **k: True)
 
     class Args:
         max_tokens = 16000
         effort = "medium"
         dry_run = False
         prompt = None
-    tlr.run_openrouter("SYS", "USER", "z-ai/glm-5.2", Args(), "fakekey")
+    tlr.run_openrouter("SYS", "USER", "z-ai/glm-5.3", Args(), "fakekey")
     out = capsys.readouterr().out
-    assert "===== THIRD-LENS RAW OUTPUT (z-ai/glm-5.2) =====" in out
+    assert "===== THIRD-LENS RAW OUTPUT (z-ai/glm-5.3) =====" in out
     assert "P2 finding here" in out
     assert "END RAW OUTPUT" in out
 
@@ -212,3 +213,19 @@ def test_main_cli_dry_run_skips_key(monkeypatch, capsys):
     monkeypatch.setattr(tlr, "resolve_key", boom)
     tlr.main()
     assert "codex CLI" in capsys.readouterr().out
+
+
+def test_run_openrouter_refuses_unserved_model(monkeypatch):
+    """The pinned id is version-locked; a retired pin must fail loudly, not review nothing."""
+    monkeypatch.setattr(tlr, "get_pricing", lambda *a, **k: (None, None))
+    monkeypatch.setattr(tlr, "model_is_served", lambda *a, **k: False)
+    monkeypatch.setattr(tlr, "http_json", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not call the model")))
+
+    class Args:
+        max_tokens = 16000
+        effort = "medium"
+        dry_run = False
+        prompt = None
+    with pytest.raises(SystemExit) as e:
+        tlr.run_openrouter("SYS", "USER", "z-ai/glm-0.0", Args(), "fakekey")
+    assert e.value.code == 4

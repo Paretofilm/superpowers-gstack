@@ -141,7 +141,7 @@ def test_every_guard_needle_lives_in_the_step_that_owns_it():
 GUARD_REGIONS = {
     "growth check gate (cross-references left in place)": (
         "**Growth check — applies to every marker-managed section",
-        "**Insert or upgrade the Autonomy",
+        "**Insert or upgrade the Git hygiene",
     ),
     "Step 6 mandatory diff item 3": (
         "3. **Diff against the snapshot and classify every removed line.**",
@@ -157,7 +157,7 @@ GUARD_REGIONS = {
     ),
     "case-3 attribution check": (
         "**Attribution check — applies to case 3",
-        "**Insert or upgrade the Autonomy",
+        "**Insert or upgrade the Git hygiene",
     ),
 }
 
@@ -167,7 +167,6 @@ def test_every_case_3_replace_names_an_attribution_sentinel():
     for itself; case 3 used to replace them on the heading alone. Each must now
     name a string only a past emitter would have written into that section."""
     reserved = [
-        "**Insert or upgrade the Autonomy and user interruption section.**",
         "**Insert or upgrade the Git hygiene & commit cadence section.**",
         "**Insert or upgrade the Multi-lens review section.**",
         "**Insert or upgrade the Keep the plan true to the code section.**",
@@ -297,7 +296,7 @@ def test_growth_check_precedes_every_per_section_rule():
     """Stated once, above the rules it governs — a gate below its cases is a gate
     the reader meets after deciding."""
     gate = ADAPT_SKILL.index("**Growth check")
-    first_rule = ADAPT_SKILL.index("**Insert or upgrade the Autonomy")
+    first_rule = ADAPT_SKILL.index("**Insert or upgrade the Git hygiene")
     assert gate < first_rule
 
 
@@ -305,7 +304,7 @@ def test_growth_check_has_a_non_interactive_branch():
     """/adapt also runs under --print, in CI, and as a subagent. A hard stop
     there is a hang, not a safeguard."""
     gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check"):]
-    gate = gate[: gate.index("**Insert or upgrade the Autonomy")]
+    gate = gate[: gate.index("**Insert or upgrade the Git hygiene")]
     assert "Non-interactive runs" in gate
 
 
@@ -374,7 +373,7 @@ def test_preserve_and_insert_tells_the_user_how_to_undo_it():
 
 def test_both_generators_record_the_emitted_line_count():
     """Provenance rides in a SECOND comment beside the marker, never inside it.
-    Inside, `<!-- gstack-autonomy-v2 -->` stops being a substring of what was
+    Inside, `<!-- gstack-git-hygiene-v10 -->` stops being a substring of what was
     written, and every reader that only knows the bare form — an older plugin
     cache, lint E8 — reads the section as markerless."""
     setup = (REPO / "skills" / "setup-routing" / "SKILL.md").read_text()
@@ -427,7 +426,7 @@ def test_block_files_never_carry_the_emitted_attribute():
 
 def _growth_gate():
     gate = ADAPT_SKILL[ADAPT_SKILL.index("**Growth check"):]
-    return gate[: gate.index("**Insert or upgrade the Autonomy")]
+    return gate[: gate.index("**Insert or upgrade the Git hygiene")]
 
 
 def test_growth_check_reads_provenance_alongside_the_two_proxies():

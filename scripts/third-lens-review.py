@@ -33,19 +33,18 @@ KEYCHAIN_ACCOUNT = "openrouter-api-key"
 # Default lens-by-role transport + target.
 # OpenRouter for distant houses with no CLI; the codex CLI for OpenAI (subscription).
 #
-# Currency (verified 2026-08-18 against the OpenRouter /models endpoint, not press):
-#   glm-5.2  — newest GLM OpenRouter serves. GLM-5.3 was announced 2026-08-14 but
-#              is absent from both OpenRouter and z.ai's own release-notes page, so
-#              there is nothing to upgrade to yet. This ID is version-pinned and has
-#              NO watchdog (scripts/check-new-models.py covers Anthropic tiers only)
-#              — re-check it by hand when bumping this file.
+# Currency (verified 2026-09-11 against the OpenRouter /models endpoint):
+#   glm-5.3  — newest GLM OpenRouter serves. Version-pinned on purpose (a newer GLM
+#              is a behaviour change worth a human look), but no longer unwatched:
+#              run_openrouter() refuses a model id that is absent from /models, so a
+#              retired pin fails loudly instead of silently reviewing nothing.
 #   v4-pro   — deliberately the FLOATING alias, not the pinned `-0813` checkpoint.
 #              Pinning would buy reproducibility we cannot maintain: nothing here
 #              notices when DeepSeek ships a newer checkpoint, so a pin rots
 #              silently while the alias tracks GA on its own.
 #   codex    — self-updating by design; the CLI picks OpenAI's current default.
 ROLE_SPEC = {
-    "architecture": {"transport": "openrouter", "target": "z-ai/glm-5.2"},
+    "architecture": {"transport": "openrouter", "target": "z-ai/glm-5.3"},
     "correctness": {"transport": "openrouter", "target": "deepseek/deepseek-v4-pro"},
     "countersynthesis": {"transport": "cli", "target": "codex"},
 }
@@ -105,7 +104,10 @@ def http_json(method, path, key, payload=None, timeout=300):
 
 
 def get_pricing(key, model):
-    """Return (prompt_per_tok, completion_per_tok) in USD, or (None, None)."""
+    """Return (prompt_per_tok, completion_per_tok) in USD, or (None, None).
+
+    (None, None) means either the /models call failed or the id is not served —
+    model_is_served() tells the two apart for the watchdog."""
     try:
         d = http_json("GET", "/models", key, timeout=30)
     except SystemExit:
@@ -118,6 +120,17 @@ def get_pricing(key, model):
             except (TypeError, ValueError):
                 return (None, None)
     return (None, None)
+
+
+def model_is_served(key, model):
+    """Watchdog for the pinned ids in ROLE_SPEC: True/False from /models, or None
+    when the list could not be fetched (network) — never block on an outage."""
+    try:
+        d = http_json("GET", "/models", key, timeout=30)
+    except SystemExit:
+        return None
+    ids = {m.get("id") for m in d.get("data", [])}
+    return model in ids
 
 
 def get_credits(key):
@@ -234,6 +247,13 @@ def run_openrouter(system_prompt, user_msg, model, args, key):
         else:
             print("Pricing unavailable for this model id — verify it exists on OpenRouter.")
         return
+
+    served = model_is_served(key, model)
+    if served is False:
+        eprint(f"ERROR: OpenRouter does not serve model id '{model}'. The pin in "
+               f"ROLE_SPEC is stale — check https://openrouter.ai/models and bump it, "
+               f"or pass --model <id> for this run.")
+        sys.exit(4)
 
     payload = {
         "model": model,
@@ -361,7 +381,7 @@ def main():
     ap.add_argument("--diff-base", default="HEAD", help="git ref to diff against (default HEAD)")
     ap.add_argument("--model", default=None, help="OpenRouter model id (overrides --role)")
     ap.add_argument("--role", choices=list(ROLE_SPEC), default="architecture",
-                    help="pick lens by role (default architecture=GLM-5.2 via OpenRouter; countersynthesis uses the codex CLI)")
+                    help="pick lens by role (default architecture=GLM-5.3 via OpenRouter; countersynthesis uses the codex CLI)")
     ap.add_argument("--prompt", default=None, help="extra instructions appended to the review prompt")
     ap.add_argument("--max-tokens", type=int, default=16000,
                     help="completion token cap (includes reasoning tokens on reasoning models)")

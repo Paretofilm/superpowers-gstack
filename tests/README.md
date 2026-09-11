@@ -13,7 +13,7 @@ tests/
     └── test_track_aware_dispatch.sh   ← verifies track-aware routing dispatches correctly
 ```
 
-Unit tests live in `tests/unit/` and run together with the cost-ledger suite in `scripts/cost-ledger/` (`test_scorer.py`, `test_machinery.py`) — all stdlib-only pytest, no API calls. htmlify has its own `skills/htmlify/tests/` Bun suite.
+Unit tests live in `tests/unit/` — all stdlib-only pytest, no API calls. htmlify has its own `skills/htmlify/tests/` Bun suite.
 
 ## Running
 
@@ -21,7 +21,7 @@ Unit tests live in `tests/unit/` and run together with the cost-ledger suite in 
 # All tests
 bash tests/run.sh
 
-# Unit only (pytest: tests/unit + scripts/cost-ledger)
+# Unit only (pytest: tests/unit)
 bash tests/run.sh --unit
 
 # Integration only
@@ -59,13 +59,12 @@ Integration tests shell out to `claude --print` to verify real dispatch behavior
 
 - `/office-hours-track-aware` wrapper dispatch (intercepts `/office-hours`)
 - `/context-handoff` write + restore cycle (YAML frontmatter survives `/clear`)
-- `/htmlify` PostToolUse hook actually fires when `handoff.md` is written
 - Other CLAUDE.md routing rules emitted by `setup-routing`
 
 These would be additional `tests/integration/test_*.sh` files following the same pattern.
 
 ## CI
 
-The pytest suites run on every push/PR (`.github/workflows/lint.yml` runs `pytest tests/unit scripts/cost-ledger -q` after the instruction-surface lint — free, stdlib-only).
+The pytest suite runs on every push/PR (`.github/workflows/lint.yml` runs `pytest tests/unit -q` after the instruction-surface lint — free, stdlib-only).
 
 The `claude --print` integration tests do NOT run in CI. That would require `ANTHROPIC_API_KEY` as a repo secret and a willingness to spend on every PR. If/when that's set up, the natural entry is `bash tests/run.sh --integration` in a GitHub Actions workflow.

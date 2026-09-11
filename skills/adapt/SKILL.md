@@ -156,23 +156,20 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | `/pair-agent` | When pairing a remote AI agent with your browser session |
 | `/setup-browser-cookies` | One-time: import cookies for authenticated `/qa` and `/browse` testing |
 | `/context-handoff` | Long implementation sessions, projects using SDD, or any multi-step workflow |
-| `/htmlify` | Any project — generates beautiful HTML companions for MD artefacts (design docs, plans, handoffs) so verbose output stays readable. Optional PostToolUse hook auto-fires. |
+| `/superpowers-gstack:htmlify` | Offline HTML rendering of MD artefacts when the Artifact tool is unavailable; otherwise prefer the Artifact tool. |
 | `/context-save` | Save progress and working state |
 | `/context-restore` | Resume where you left off |
 | `/benchmark` | Projects with performance monitoring needs |
 | `/benchmark-models` | Projects comparing AI model performance |
 | `/codex` | Projects needing second opinions or adversarial code review |
 | `/superpowers-gstack:autoimplement` | Multi-phase plans where the user always confirms phase boundaries — chains `/review` + `/pitfall-verification` automatically (pitfall auto-chains `/codex review` + the third lens per tier — no separate codex step). v2.14.0+ adds active pre-flight that reviews the plan body itself before Phase 1 unless the latest plan commit matches the marker regex `^(chore\|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]\|$)` (closes the gap between writing-plans and autoimplement). Refuses on <2 phases, missing per-phase commit steps, dirty tree, main/master branch, or plans touching migrations/secrets/credentials/.env/.ssh. |
-| `/superpowers-gstack:office-hours-track-aware` | All new-project brainstorming — wraps `/office-hours` with track inference (web vs native), inline platform question, design-doc relocation, htmlify --open, and approve-before-render gate. **Intercepts `/office-hours`** — see routing-intercept rules below. |
+| `/superpowers-gstack:office-hours-track-aware` | All new-project brainstorming — wraps `/office-hours` with track inference (web vs native), inline platform question, design-doc relocation, and an Artifact preview before the approval gate. **Intercepts `/office-hours`** — see routing-intercept rules below. |
 | `/superpowers-gstack:swiftui-design-consultation` | Native SwiftUI projects — produces DESIGN.md + Swift Package starter; equivalent to /design-consultation for web. Inlines the platform question (iOS/macOS/both) on first run if `.gstack/track` is missing. |
-| `/superpowers-gstack:macos-native-review` | macOS apps — pre-implementation HIG-citation-grounded review (vocabulary, controls, keyboard shortcuts, semantic colors, sheets, menu bar, dock, App menu). Run on PRDs/specs/plans before implementation. Phase 0 detects macOS signals; auto-N/A for non-macOS projects. |
-| `/superpowers-gstack:ios-native-review` | iOS / iPadOS apps — pre-implementation HIG-citation-grounded review (vocabulary, touch targets, navigation paradigm, modal presentation, gestures, system surfaces, keyboard, haptics, semantic colors, animation, privileged operations, accessibility, lifecycle). Run on PRDs/specs/plans before implementation. Phase 0 detects iOS signals; auto-N/A for non-iOS projects. |
+| `/superpowers-gstack:apple-native-review` | iOS / iPadOS / macOS apps — pre-implementation HIG-citation-grounded review; platform from `.gstack/track` or the artifact; every finding cites a HIG page fetched this run via the apple-docs MCP. Run on PRDs/specs/plans before implementation. |
 | `/superpowers-gstack:quality-review` | After any PRD/spec/plan, before implementation — hunts perceived-quality pitfalls (silent failures, loading/empty states, error recovery, state drift). Complementary to pitfall-verification ("will it work?" vs "will it feel good?"). |
 | `/superpowers-gstack:verify-and-land` | Apple + web projects — after a fix, builds the checked-out branch, launches that exact bundle (not the installed copy), proves which build is on screen, gates on the user seeing the fix, then pushes and offers merge/PR. |
-| `/superpowers-gstack:e2e-route` | Swift projects — pure dispatcher for E2E test requests: reads platform × intent and routes to the right executor (scaffold skills, MCP-live simulator automation, visual review, ios-visual-explore). |
-| `/superpowers-gstack:ios-e2e-scaffold` | iOS SwiftUI apps — one-shot XCUITest scaffolding (TabView/NavigationStack scene-walk, TIER-ranked stubs, iOS-Simulator xcresult runner). Normally reached via /e2e-route. |
-| `/superpowers-gstack:macos-e2e-scaffold` | macOS SwiftUI apps — one-shot XCUITest scaffolding (Scene-walk, TIER-ranked stubs, xcresult runner). Normally reached via /e2e-route. |
-| `/superpowers-gstack:ios-visual-explore` | iOS/iPadOS apps — Tier-2 visual exploration via Gemini computer-use when the accessibility tree is insufficient (layout regressions, visual landmarks). Paid API per run; normally reached via /e2e-route. |
+| `/superpowers-gstack:e2e-route` | Swift projects — pure dispatcher for E2E test requests: reads platform × intent and routes to the right executor (scaffold skill, MCP-live simulator automation, visual review). |
+| `/superpowers-gstack:e2e-scaffold` | iOS or macOS SwiftUI apps — one-shot XCUITest scaffolding (scene-walk, TIER-ranked stubs, identifier suggestions, xcresult runner from `templates/run-uitests.sh` honouring `.gstack/e2e-executor`). Manual only; normally reached via /e2e-route. |
 | `/superpowers-gstack:spec-drift` | Any project with plans in `docs/superpowers/plans/` — standalone "does this plan still match the code?" audit: runs `/ship` Step 8's plan-completion section from disk (hash-pinned) against an explicit plan and base, on any branch, shipped or not. Report + JSON + exit 0/1/2; never edits code. |
 
 ### Step 4: Identify gaps and plan changes
@@ -285,7 +282,7 @@ comment on that block's heading line, immediately after the version marker the b
 file itself carries, with nothing at all between the two:
 
 ```
-<!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->
+<!-- gstack-git-hygiene-v10 --><!-- emitted=101 -->
 ```
 
 Leave the version marker byte-for-byte as the block wrote it. Provenance is a separate
@@ -399,8 +396,8 @@ When the gate fires, do not replace the section silently:
    it a heading starting with the project's own name, so it can never collide with a
    heading the plugin manages, and it survives every future upgrade), or
    **leave this section at its old version** and skip its upgrade.
-3. Do not proceed past this gate without an answer. This is a category-3 stop under
-   the Autonomy rules — genuinely ambiguous, with materially different consequences —
+3. Do not proceed past this gate without an answer. This is a genuinely ambiguous
+   choice with materially different consequences — a legitimate reason to stop —
    and the one place in `/adapt` where silent correctness is worse than asking. A
    wrong guess here is unrecoverable for the user; the cost of asking is one question.
 4. **Non-interactive runs** — nobody is there to answer. Take the preserving branch
@@ -482,19 +479,12 @@ that has drifted past its sentinel gets preserved instead of upgraded. A stale s
 costs one `/adapt` run after the user deletes it; a destroyed one costs whatever was
 in it.
 
-**Insert or upgrade the Autonomy and user interruption section.** This section applies to ALL projects (web and native equally — agents over-asking is platform-agnostic). Scan CLAUDE.md for the heading `^#{2,3} Autonomy and user interruption` and its version marker `<!-- gstack-autonomy-vN -->`. Apply the same four-case logic:
-
-1. **Heading present + marker matches `v2`** → skip (idempotent).
-2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4 below.
-3. **Heading present + marker absent** (legacy pre-v2.8.0) → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Attribution check** above FIRST — replace only if the sentinel is present; if it is absent, preserve the section and insert the block below it — then the **Growth check** before replacing. Sentinel: the body contains `The only five reasons to stop and ask` or `Forbidden phrases`.
-4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
-
-The block to insert: read `blocks/autonomy.md` (see **Shared block files** above) and insert its content verbatim.
+**Remove retired plugin sections.** The `Autonomy and user interruption` block was retired in 3.0.0: the Claude Code harness now carries the same instruction, so the section is pure context tax. Scan CLAUDE.md for a heading carrying the marker `<!-- gstack-autonomy-vN -->`. The marker is the attribution — only a past emitter wrote it — so: run the **Growth check** above; if the section has not grown past its block, delete it through the next heading of equal-or-shallower level and list it in the report's `Removed (plugin prose)` block; if it HAS grown, leave it in place and report it under `Deferred` so the user can move their own lines out before the next run. A markerless section with that heading is the user's and is never touched.
 
 **Insert or upgrade the Git hygiene & commit cadence section.** This section applies to ALL projects (git is universal). Scan CLAUDE.md for heading `^#{2,3} Git hygiene` and its version marker `<!-- gstack-git-hygiene-vN -->`. Apply the same four-case logic:
 
-1. **Heading present + marker matches `v9`** → skip (idempotent).
-2. **Heading present + marker `v1` or `v2` (older emitters — universalist convention rule, autonomy cross-ref missing, stash advice without WIP-branch caveat) OR different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. (The Git hygiene block has H4 subsections; "next heading" alone would stop at the first one and leave old v1 prose behind.) **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level so subsections do not sit at the same level as the root — same demote requirement as case 4 below.
+1. **Heading present + marker matches `v10`** → skip (idempotent).
+2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. (The Git hygiene block has H4 subsections; "next heading" alone would stop at the first one and leave old v1 prose behind.) **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level so subsections do not sit at the same level as the root — same demote requirement as case 4 below.
 3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Attribution check** above FIRST — replace only if the sentinel is present; if it is absent, preserve the section and insert the block below it — then the **Growth check** before replacing. Sentinel: the body contains `Hygiene rules (NEVER violate)` or `Committing is not backing up`.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
 
@@ -502,7 +492,7 @@ The block to insert: read `blocks/git-hygiene.md` (see **Shared block files** ab
 
 **Insert or upgrade the Multi-lens review section.** This section applies to ALL projects (review hygiene is universal). Scan CLAUDE.md for heading `^#{2,3} Multi-lens review` and its version marker `<!-- gstack-multi-lens-review-vN -->`. Apply the same four-case logic:
 
-1. **Heading present + marker matches the current version (`v5`)** → skip (idempotent).
+1. **Heading present + marker matches the current version (`v7`)** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4 below. (The Multi-lens review block has H4 subsections; "next heading" alone would stop at the first one and leave old prose behind.)
 3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Attribution check** above FIRST — replace only if the sentinel is present; if it is absent, preserve the section and insert the block below it — then the **Growth check** before replacing. Sentinel: the body contains `What counts as ship-worthy` or `pitfall-verification`.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.
@@ -511,7 +501,7 @@ The block to insert: read `blocks/multi-lens-review.md` (see **Shared block file
 
 **Insert or upgrade the Code reuse discipline section.** This section applies to ALL projects (the agentic-duplication failure mode is platform-agnostic). Scan CLAUDE.md for heading `^#{2,3} Code reuse discipline` and its version marker `<!-- gstack-code-reuse-vN -->`. Apply the four-case logic, but with a CRITICAL difference from the other marker-managed sections in case 3:
 
-1. **Heading present + marker matches `v2`** → skip (idempotent).
+1. **Heading present + marker matches `v3`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4 below. (The Code reuse block has subsections one level below the root; "next heading" alone would stop at the first subsection and leave old prose behind.)
 3. **Heading present + marker absent** → **PRESERVE, do NOT replace.** This section was newly introduced in v2.12.0 of the plugin — markerless `Code reuse discipline` headings cannot be pre-marker plugin content, which means they are *user-authored* sections that happen to share the heading. Replacing them would silently destroy the user's hand-written content. Instead, leave the user's section intact and surface a notice to the user in the adapt summary: "Found existing markerless `Code reuse discipline` section in CLAUDE.md; preserved as-is. To switch to the plugin-managed version, delete your existing section and re-run `/adapt`." This is the key difference from the other marker-sections (Autonomy, Git hygiene, Multi-lens review, etc.) where case 3 legitimately treats markerless content as pre-marker plugin legacy.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on this section at ship time.
@@ -529,9 +519,9 @@ The block to insert: read `blocks/plan-fidelity.md` (see **Shared block files** 
 
 **Insert or upgrade the Session Continuity section.** This section applies to ALL projects (context handoff is platform-agnostic). Scan CLAUDE.md for heading `^#{2,3} Session [Cc]ontinuity` and its version marker `<!-- gstack-session-continuity-vN -->`. Apply the same four-case logic:
 
-1. **Heading present + marker matches `v3`** → skip (idempotent).
+1. **Heading present + marker matches `v4`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level (see the heading-level rule below). Run the **Growth check** above before replacing.
-3. **Heading present + marker absent** → the section is either a pre-2.36.0 emitted block or one the user wrote themselves, and unlike `Git hygiene & commit cadence` or `Autonomy and user interruption`, "Session Continuity" is a heading a project could plausibly own. Tell them apart before touching it: treat it as emitted ONLY if the section body mentions `docs/superpowers/handoff.md`. **If it does** → REPLACE as in case 2. Run the **Growth check** above before replacing. This is the upgrade that matters, because every pre-2.36.0 emitter wrote a sensor keyed only to the `## Mode: auto` Markdown marker, which `/superpowers-gstack:context-handoff` deletes the moment it writes YAML — so those projects re-ask the opt-in question after every single compact. **If it does not** → leave the user's section untouched, insert the block as a separate H2
+3. **Heading present + marker absent** → the section is either a pre-2.36.0 emitted block or one the user wrote themselves, and unlike `Git hygiene & commit cadence`, "Session Continuity" is a heading a project could plausibly own. Tell them apart before touching it: treat it as emitted ONLY if the section body mentions `docs/superpowers/handoff.md`. **If it does** → REPLACE as in case 2. Run the **Growth check** above before replacing. This is the upgrade that matters: older emitted copies keyed the post-compact sensor to a Markdown marker the handoff writer no longer produces, so those projects re-ask the opt-in question after every single compact. **If it does not** → leave the user's section untouched, insert the block as a separate H2
    section, and report it the way the **Attribution check** above reports a preserve:
 
    > `Session Continuity`: I cannot attribute this section to a past emitter — its body does
@@ -555,7 +545,7 @@ CLAUDE.md. Check two things independently: (a) does any heading
 matching `^#{2,3} Track-aware routing \(dual-track\)` exist (H2 or
 H3 — `setup-routing` emits H3 as subsection, `adapt` historically
 emitted H2 as top-level), and (b) is there a version marker
-`<!-- gstack-routing-vN -->` on that heading line (currently `v2`).
+`<!-- gstack-routing-vN -->` on that heading line (currently `v3`).
 Four cases:
 
 1. **Heading present + marker matches current version (`v2`)** →
@@ -625,7 +615,7 @@ Do not offer to install the rig, and do not check whether `vm-e2e` is present wh
 
 **Insert or upgrade the Companion skills (discovery) section.** Only emit when `.gstack/track` exists and equals `ios`, `macos`, or `both` (skip for web-only projects). Scan CLAUDE.md for heading `^#{2,3} Companion skills` and its version marker `<!-- gstack-companion-skills-vN -->`. Apply the same four-case logic:
 
-1. **Heading present + marker matches `v2`** → skip (idempotent).
+1. **Heading present + marker matches `v3`** → skip (idempotent).
 2. **Heading present + marker present + different version** → REPLACE through next heading of equal-or-shallower level. Preserve original heading level. Run the **Growth check** above before replacing. **If the existing root is H3** (nested under `## Skill routing`, as pre-2.34.0 setup-routing emitted), you MUST demote every subsection in the replacement block one level (H3 → H4) so subsections do not sit at the same level as the root — same demote requirement as case 4 below.
 3. **Heading present + marker absent** → REPLACE the same way; one-time silent upgrade adds the current marker. Run the **Attribution check** above FIRST — replace only if the sentinel is present; if it is absent, preserve the section and insert the block below it — then the **Growth check** before replacing. Sentinel: the body contains `swiftui-expert-skill` or `discovery — not routing`.
 4. **Heading absent** → APPEND the block below as H2 (subsections stay at H3, one level below the root — the REPLACE-through-equal-or-shallower-heading invariant holds). If you instead insert the block under `## Skill routing` as H3 to match `setup-routing`'s structure, you MUST also demote every H3 subsection in the block to H4. Otherwise the H3 subsections sit at the SAME level as the H3 root, and the next marker upgrade stops at the first subsection and leaves stale content behind — same heading-hierarchy class bug `/codex review` flagged on the v2.12.0 Code reuse section.

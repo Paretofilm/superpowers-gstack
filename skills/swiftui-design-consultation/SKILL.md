@@ -1,9 +1,9 @@
 ---
 name: swiftui-design-consultation
 description: |
-  Apple-canon design system for SwiftUI projects: produces DESIGN.md + a Swift
-  Package starter (semantic colors, SF Pro, Liquid Glass, motion, accessibility).
-  Use when starting or refreshing a SwiftUI design system.
+  Apple-canon design system for SwiftUI projects: writes DESIGN.md plus a
+  DesignSystem Swift Package, then runs a HIG-budgeted native review. Use
+  when starting or refreshing a SwiftUI design system.
 allowed-tools:
   - Bash
   - Read
@@ -12,8 +12,9 @@ allowed-tools:
   - Glob
   - Grep
   - AskUserQuestion
-  - WebFetch
   - Skill
+  - ToolSearch
+  - Artifact
   - mcp__swiftui-rag__corpus_info
   - mcp__swiftui-rag__search_swiftui_corpus
   - mcp__swiftui-rag__index_project
@@ -23,52 +24,33 @@ allowed-tools:
   - mcp__swiftui-rag__review_liquid_glass
   - mcp__swiftui-rag__review_accessibility
 upstream_skills:
-  - office-hours-track-aware (typical entry — sets marker before this skill runs)
+  - office-hours-track-aware (typical entry — writes .gstack/track first)
 chains_to:
-  - macos-native-review (track=macos / both)
-  - ios-native-review (track=ios / both)
-  - htmlify
+  - apple-native-review (platform read from .gstack/track)
 ---
 
 # /superpowers-gstack:swiftui-design-consultation
 
 Apple-canon design system consultation for SwiftUI projects. Output:
-`DESIGN.md` + `DesignSystem/` Swift Package + `DESIGN.html` (via htmlify).
-
-**Locating this skill's files:** templates/, schema/ and bin/ live NEXT TO this
-SKILL.md, not in the user's project. Set `SKILL_DIR` to this skill's base
-directory (shown when the skill loads) and reference every asset as
-`$SKILL_DIR/templates/…`, `$SKILL_DIR/schema/…`, `$SKILL_DIR/bin/…`. This
-resolves both in the plugin repo and in a marketplace install — never assume
-cwd contains `skills/`.
-
-> Phase numbering is historical: former Phases 2, 4 and 5 were folded into
-> Phases 3 and 6 during earlier revisions. The remaining numbers (0, 1, 3, 6)
-> are kept stable because cross-references cite them.
+`DESIGN.md` + `DesignSystem/` Swift Package, reviewed against a HIG
+conformance budget. The proposal is previewed as an Artifact page before
+approval; `DESIGN.md` itself is the committed artefact — no `DESIGN.html`
+is generated or committed. `templates/` and `bin/` live NEXT TO this
+SKILL.md, not in the user's project: set `SKILL_DIR` to this skill's base
+directory (shown when the skill loads) and address assets as `$SKILL_DIR/…`.
 
 ## Phase 0 — Setup
 
 ### Step 0.0: Initialize gstack helpers (set $SLUG)
 
-This skill writes per-project state under `~/.gstack/projects/$SLUG/`,
-so `$SLUG` (the gstack project identifier derived from the git remote)
-must be set before any other Phase reads or writes it.
+Per-project state lives under `~/.gstack/projects/$SLUG/`, so `$SLUG`
+(the gstack project identifier derived from the git remote) is set first.
 
 ```bash
-# Pull gstack-slug into the current shell. Sets $SLUG = repo-slug
-# from `git remote get-url origin` per gstack convention.
-#
-# CAREFUL: `eval "$(... 2>/dev/null)" || fallback` does NOT work — if
-# gstack-slug is missing, command substitution returns empty, `eval ""`
-# succeeds (exit 0), and the fallback never runs. Capture output first
-# and check non-empty explicitly.
 SLUG_OUTPUT=$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
-if [ -n "$SLUG_OUTPUT" ]; then
-  eval "$SLUG_OUTPUT"
-fi
+[ -n "$SLUG_OUTPUT" ] && eval "$SLUG_OUTPUT"
 if [ -z "${SLUG:-}" ]; then
-  # Fallback: derive slug from git toplevel basename, or pwd basename
-  # if not in a git repo.
+  # Fallback: git toplevel basename, or pwd basename outside a repo.
   SLUG="$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")"
   export SLUG
 fi
@@ -80,11 +62,7 @@ mkdir -p ~/.gstack/projects/"$SLUG"
 echo "SLUG: $SLUG"
 ```
 
-`$SLUG` is referenced throughout subsequent phases for state-file paths
-(`~/.gstack/projects/$SLUG/design-proposal-{ts}.md`,
-`~/.gstack/projects/$SLUG/swiftui-consultation-state.json`, etc.).
-
-### Step 0.1: Track self-bootstrap (inline platform-question)
+### Step 0.1: Track self-bootstrap (inline platform question)
 
 ```bash
 mkdir -p .gstack
@@ -95,55 +73,29 @@ else
 fi
 ```
 
-If output is `TRACK_MISSING`, ask the platform question inline. Since
-v2.3.0 there is no separate `swiftui-track` skill — the platform
-question lives here (when invoked directly) and in
-`/superpowers-gstack:office-hours-track-aware` Phase 3 (when reached
-via the standard office-hours flow).
-
-AskUserQuestion brief:
+If output is `TRACK_MISSING`, ask the platform question inline (the standard
+flow asks it in `/superpowers-gstack:office-hours-track-aware`):
 
 ```
 D0 — Which platform target does this project ship to?
-Project/branch/task: declaring SwiftUI track for direct invocation
-ELI10: I need to know iPhone/iPad, Mac, or both — so generated
-  Package.swift and design defaults match. The marker is set once
-  per project and read by all future swiftui-* skills.
-Stakes if we pick wrong: Package.swift declares wrong platforms;
-  easy to re-run later. No permanent damage.
+ELI10: iPhone/iPad, Mac, or both — so the generated Package.swift and
+  design defaults match. Set once per project; read by all swiftui-* skills.
+Stakes if we pick wrong: wrong platforms in Package.swift; easy to re-run.
 Recommendation: iOS only (most common for new projects)
-Note: options differ in kind, not coverage — no completeness score.
-Pros / cons:
-A) iOS only (recommended)
-  ✅ Most common case; iPadOS works via iOS target automatically
-  ✅ Smallest Package.swift surface
-  ❌ No macOS companion — add later by re-running
-B) macOS only
-  ✅ Menu-bar tools, productivity apps, system utilities
-  ✅ Liquid Glass strategy tuned for macOS chrome
-  ❌ Narrows reach — no phone/tablet
-C) Both iOS + macOS
-  ✅ Cross-platform Swift Package; max reach
-  ❌ More #if os() surfaces; longer compile times
-Net: pick where you'll first ship.
+A) iOS only (recommended) — iPadOS comes with the iOS target; smallest surface
+B) macOS only — menu-bar tools, productivity apps, system utilities
+C) Both iOS + macOS — max reach; more #if os() surfaces, longer compiles
 ```
 
-Write the chosen value to `.gstack/track`:
+Write the chosen value (`ios`, `macos` or `both`) and re-read it:
 
 ```bash
 echo "$CHOICE" > .gstack/track
-```
-
-After write, re-read:
-
-```bash
 TRACK=$(cat .gstack/track | tr -d '[:space:]')
 echo "TRACK: $TRACK"
 ```
 
-`$TRACK` must be one of `ios | macos | both` to continue. If it is
-anything else (corrupted marker, user typed invalid value), STOP and
-report `BLOCKED — invalid .gstack/track value`.
+`$TRACK` must be `ios`, `macos` or `both`; otherwise STOP: `BLOCKED — invalid .gstack/track value`.
 
 ### Step 0.2: Detect project mode
 
@@ -157,329 +109,148 @@ echo "MODE: $MODE"
 
 ### Step 0.3: Verify MCP surface
 
-Call `mcp__swiftui-rag__corpus_info` (no arguments). Verify the
-returned JSON has:
-- `runtime_version` (string, e.g., "1.3.1")
-- `sample_count` (integer, > 0)
-- `hig_rules` (array with at least 11 entries)
-- `accessibility_rules` (array with at least 3 entries)
-
-If any field is missing or the call fails, STOP and report:
+Call `mcp__swiftui-rag__corpus_info` (no arguments). The returned JSON
+must have `runtime_version` (string), `sample_count` (> 0), `hig_rules`
+(≥ 11 entries) and `accessibility_rules` (≥ 3 entries). Otherwise STOP:
 `BLOCKED — swiftui-rag MCP unavailable. Run /sync-gbrain or check pipx install.`
 
-### Step 0.3.1: Verify MCP parameter schemas (defensive)
-
-Tool NAMES are only half the contract. Before any later phase
-invokes these tools, verify the actual parameter NAMES match what
-the plan assumes. The tool schemas are visible in Claude Code's
-tool list (the same list this skill's frontmatter `allowed-tools`
-references). Read them and confirm:
-
-| Tool | Expected primary param | If schema differs, use the actual name |
-|---|---|---|
-| `mcp__swiftui-rag__index_project` | `path` (string) | Look for `repo_path`, `project_path`, `dir`, etc. |
-| `mcp__swiftui-rag__search_project` | `query` (string) | Look for `q`, `text`, `pattern` |
-| `mcp__swiftui-rag__search_swiftui_corpus` | `question` (string) — verified live | Optional: `platform`, `cluster_tag`, `hyde_doc`, `top_k` |
-| `mcp__swiftui-rag__swift_typecheck` | `swift_code` (string), `target_versions` (array of strings) | Verify both names |
-| `mcp__swiftui-rag__review_macos_hig` | `swift_code` (string) | Verify name |
-| `mcp__swiftui-rag__review_liquid_glass` | `swift_code` (string) | Verify name |
-| `mcp__swiftui-rag__review_accessibility` | `swift_code` (string) | Verify name |
-
-If a tool's actual schema differs from the table above, the agent
-executing this plan should ADJUST its invocations accordingly — do
-not blindly use the names above if the schema disagrees. This is a
-runtime-correctness gate; the plan's prose uses the most likely names
-but the schema is authoritative.
-
-If any tool is missing from the tool list (e.g., MCP server not
-attached), STOP and report `BLOCKED — required MCP tool not available`.
+Before calling any other `mcp__swiftui-rag__*` tool, load its schema via
+ToolSearch and use the parameter names it reports.
 
 ### Step 0.4: Existing-project indexing
 
-If `MODE` is `existing`, call `mcp__swiftui-rag__index_project` with
-the repo root path. Cache the returned project ID for Phase 1 lookups.
+If `MODE` is `existing`, call `mcp__swiftui-rag__index_project` with the
+repo root path and keep the returned project ID for Phase 1.
 
 ### Step 0.5: Read existing DESIGN.md if present
 
-```bash
-if [ -f DESIGN.md ]; then
-  echo "DESIGN_MD_EXISTS"
-fi
-```
-
-If exists, read it. We may be doing a refresh consultation, in which
-case Phase 3 will surface "keep / replace / refine" choices per pillar.
+If `DESIGN.md` exists, read it: this is a refresh consultation, and
+Phase 2 will offer keep / replace / refine per pillar.
 
 ## Phase 1 — Product Context
 
-Single combined AskUserQuestion brief. Three fields (platform is
-already in `.gstack/track`, no need to re-ask).
+One combined AskUserQuestion brief with three fields. Platform is already
+in `.gstack/track`; do not re-ask.
 
 ### Step 1.1: Pre-fill from project context
 
-If `README.md` or `CLAUDE.md` exist, read them and extract: product
-name, audience, space/industry. Pre-fill the AskUserQuestion with what
-you found, asking the user to confirm or refine.
+If `README.md` or `CLAUDE.md` exist, read them and extract product name,
+audience and space/industry to pre-fill the brief.
 
-If `MODE` is `existing` and `search_project` was indexed, call
-`mcp__swiftui-rag__search_project` with these queries:
-- `"Color extension"` — surface existing semantic-color decisions
-- `"Font.system\|Font.custom"` — surface existing typography
-- `"\.material\|\.glassEffect"` — surface existing material usage
-- `"Color(red:"` — flag non-semantic colors (a quality signal)
-
-Cache the counts: `N Color extensions, M Font declarations, K material
-usages, X non-semantic colors flagged`. These appear in the Phase 1
-prompt.
+If `MODE` is `existing`, call `mcp__swiftui-rag__search_project` with
+`"Color extension"`, `"Font.system\|Font.custom"`,
+`"\.material\|\.glassEffect"` and `"Color(red:"` (non-semantic colors, a
+quality signal). Cache the counts: `N Color extensions, M Font
+declarations, K material usages, X non-semantic colors flagged`.
 
 ### Step 1.2: Ask the combined Phase 1 question
 
-AskUserQuestion brief:
-
 ```
 D1 — Product context for the SwiftUI design system
-
-Project/branch/task: starting design consultation for this $TRACK project
-ELI10: I need three things before I can propose a design system:
-  what the product IS, what feeling it should evoke (so every later
-  design choice serves one anchor), and how strict the HIG conformance
-  bar is. The platform is already set ($TRACK from .gstack/track).
-Stakes if we pick wrong: a memorable-thing answer that's too vague
-  produces a generic-feeling app; a too-loose budget lets POLISH
-  findings accumulate; an unclear audience leads to mis-tuned
-  defaults (e.g., productivity-app density vs reader-app whitespace).
-
-Field 1 — Product context confirm/refine
-[Pre-filled from README/CLAUDE.md if found. User confirms or rewrites.]
-
-Field 2 — Memorable Apple thing
-"What's the one Apple-native quality you want this app to be remembered
-for after a user opens it for the first time?" Examples: "as fluid as
-Things", "as sharp as Linear-mac", "as quiet as Reeder", "as confident
-as Stripe-mac". One sentence.
-
+ELI10: I need what the product IS, what feeling it should evoke (one
+  anchor every later choice serves), and how strict the HIG bar is.
+Stakes if we pick wrong: a vague memorable-thing gives a generic app; a
+  loose budget lets POLISH findings pile up; an unclear audience mis-tunes
+  defaults (productivity density vs reader whitespace).
+Field 1 — Product context confirm/refine [pre-filled if found]
+Field 2 — Memorable Apple thing: "What's the one Apple-native quality this
+  app should be remembered for after first launch?" One sentence, e.g.
+  "as fluid as Things", "as sharp as Linear-mac", "as quiet as Reeder".
 Field 3 — HIG conformance budget
-A) Recommended: 0 CRITICAL · 0 SIGNIFICANT · ≤5 POLISH (recommended)
-B) Strict: 0 / 0 / 0 (zero tolerance — for apps that must feel Apple-native on first launch)
-C) Relaxed: 0 / 3 / 10 (early prototype; some POLISH and limited SIGNIFICANT acceptable)
+  A) Recommended: 0 CRITICAL · 0 SIGNIFICANT · ≤5 POLISH
+  B) Strict: 0 / 0 / 0 (must feel Apple-native on first launch)
+  C) Relaxed: 0 / 3 / 10 (early prototype)
 ```
 
-If `MODE` is `existing`, prepend to the brief:
-```
-I indexed your project. Current patterns I found: $N Color extensions,
-$M Font declarations, $K material usages, $X non-semantic colors
-flagged. We can keep, replace, or refine each in Phase 3.
-```
+If `MODE` is `existing`, prepend: `I indexed your project. Current
+patterns: $N Color extensions, $M Font declarations, $K material usages,
+$X non-semantic colors flagged. We can keep, replace, or refine each.`
 
 ### Step 1.3: Store the answer
 
-Cache the user's three answers as JSON in
-`~/.gstack/projects/$SLUG/swiftui-consultation-state.json`:
+Cache the answers in `~/.gstack/projects/$SLUG/swiftui-consultation-state.json`
+with keys `track`, `product_context`, `memorable_thing`, `budget`
+(`critical`/`significant`/`polish`), `mode`, `existing_patterns`. This
+state survives /clear, so a long consultation can resume.
 
-```json
-{
-  "track": "ios",
-  "product_context": "...",
-  "memorable_thing": "...",
-  "budget": { "critical": 0, "significant": 0, "polish": 5 },
-  "mode": "greenfield",
-  "existing_patterns": null
-}
-```
+## Phase 2 — Proposal (Artifact preview + approval)
 
-This state survives /clear, so a long consultation can resume.
+### Step 2.1: Ground each pillar in the corpus
 
-## Phase 3 — Complete Proposal (with htmlify preview)
+Query `mcp__swiftui-rag__search_swiftui_corpus` per pillar, passing
+`platform` from `$TRACK`: Typography `"typography roles SF Pro semantic
+font"`, Color `"semantic color asset catalog dark mode adaptive"`,
+Materials `"Liquid Glass material chrome content layer"`, Motion `"spring
+animation snappy smooth named easing"`, Accessibility `"VoiceOver Dynamic
+Type contrast accessibility"`. Each returns 3–5 corpus samples plus
+HIG-page citations; they ground every proposed choice.
 
-Build the internal DesignProposal data model, serialize to a structured
-proposal Markdown, /htmlify it for Safari preview, then ask user to
-approve / drill / change.
-
-### Step 3.1: Build the data model
-
-Query `mcp__swiftui-rag__search_swiftui_corpus` per pillar to ground
-each choice in canonical patterns + HIG citations:
-
-- Typography: query `"typography roles SF Pro semantic font"`
-- Color: query `"semantic color asset catalog dark mode adaptive"`
-- Materials: query `"Liquid Glass material chrome content layer"`
-- Motion: query `"spring animation snappy smooth named easing"`
-- Accessibility: query `"VoiceOver Dynamic Type contrast accessibility"`
-
-Each returns 3-5 corpus samples + HIG-page citations. Use these as
-grounding for proposing the design.
-
-Build the DesignProposal object as a **structured YAML document
-matching `$SKILL_DIR/schema/proposal.schema.yaml`**.
-The schema defines every required field across all eight pillars
-(metadata, track, typography, color, materials, motion, spacing,
-accessibility, platforms, budget, decisions_log) with the exact
-types Phase 6 generators expect.
-
-See `$SKILL_DIR/schema/proposal.example.yaml`
-for a fully populated canonical example. New proposals SHOULD start
-from that template and only modify fields where the actual design
-differs.
-
-The structured proposal becomes the single source of truth — both
-DESIGN.md and the DesignSystem/* Swift Package are generated as
-pure functions of this YAML object in Phase 6. Drift between the
-two outputs is structurally impossible because they read the same
-parsed data.
-
-### Step 3.2: Serialize and /htmlify the proposal
-
-Pin a single timestamp so the files written here and the paths
-referenced when invoking htmlify match exactly (do NOT call
-`$(date ...)` twice; the two calls would produce different
-timestamps when seconds tick):
+### Step 2.2: Write the proposal as Markdown
 
 ```bash
 TS=$(date +%Y%m%d-%H%M%S)
 PROPOSAL_PATH=~/.gstack/projects/"$SLUG"/design-proposal-"$TS".md
-PROPOSAL_YAML=~/.gstack/projects/"$SLUG"/design-proposal-"$TS".yaml
 ```
 
-Write **both** files with the same timestamp suffix:
+Write `$PROPOSAL_PATH` directly as Markdown. It is the single source of
+truth: Phase 3 fills both `DESIGN.md` and the Swift templates from it, so
+every section must carry concrete, named values — not only prose.
 
-- `$PROPOSAL_YAML` — the structured proposal matching `proposal.schema.yaml`. This is what Phase 6 reads.
-- `$PROPOSAL_PATH` — the human-readable proposal Markdown for /htmlify preview. Derived from the same data, but formatted for human review.
+- H1 `Design Proposal: $PRODUCT_NAME`, then a metadata line with date,
+  track, product context, memorable thing and aesthetic direction.
+- H2 per pillar, each with rationale, HIG citation links and a table of
+  choices: **Typography** (roles → `Font.TextStyle`), **Color** (brand
+  hex values with light/dark backgrounds; semantic → system colors),
+  **Materials** (where glass goes / doesn't), **Spacing & Radii** (named
+  point constants), **Motion** (named presets with spring parameters),
+  **Accessibility**, **Platforms** (per-track assertions).
+- H2 **HIG Conformance Budget** (the Phase 1 numbers) and H2
+  **Decisions Log** (one bullet per decision with its reason).
 
-Both files MUST be consistent — same values in both. The YAML is
-authoritative; the MD is its presentation. If you regenerate one,
-regenerate the other from the same source.
+In refresh mode, mark each pillar `keep` / `replace` / `refine` against
+the existing `DESIGN.md`.
 
-Structure the file as rich Markdown with:
-- H1: "Design Proposal: $PRODUCT_NAME"
-- H2 sections per pillar (Aesthetic, Typography, Color, Materials, Spacing, Motion, Accessibility)
-- For each pillar: rationale + HIG citation links + table of choices
-- Final H2: "HIG Conformance Budget" + "Decisions Log"
+### Step 2.3: Preview and ask approve / drill / change
 
-Build a /htmlify v2 plan JSON at `/tmp/design-proposal-plan.json` with:
-- `flowchart-svg` for the Materials section (shows where glass goes / doesn't)
-- `comparison-matrix` for Typography (display vs title vs body vs caption vs code)
-- `stats-bar` for the HIG Budget panel
-- Color swatches as a custom inline HTML block (via `section-card` body)
-- `feedback_panel` with premises drawn from the actual proposal and `Approve / Drill into X / Change Y / Start over` radio
-
-Invoke htmlify via the **Skill tool** (NOT a direct bin path — the
-htmlify skill's base directory differs per install location: dev repo
-vs marketplace cache vs vendored). Use the Skill invocation pattern
-that Claude Code resolves automatically:
-
-```
-Skill(skill="superpowers-gstack:htmlify",
-      args="~/.gstack/projects/$SLUG/design-proposal-$TS.md --plan /tmp/design-proposal-plan.json --open")
-```
-
-If the Skill-tool dispatch is unavailable (rare; only in spawned
-sessions without the htmlify plugin), fall back to locating htmlify's
-bin from the plugin cache:
-
-```bash
-HTMLIFY_BIN=""
-for VERSION_DIR in ~/.claude/plugins/cache/paretofilm-plugins/superpowers-gstack/*/; do
-  CANDIDATE="${VERSION_DIR}skills/htmlify/bin/htmlify"
-  [ -x "$CANDIDATE" ] && HTMLIFY_BIN="$CANDIDATE"
-done
-# Or repo dev path:
-[ -z "$HTMLIFY_BIN" ] && [ -x "$(git rev-parse --show-toplevel 2>/dev/null)/skills/htmlify/bin/htmlify" ] \
-  && HTMLIFY_BIN="$(git rev-parse --show-toplevel)/skills/htmlify/bin/htmlify"
-[ -z "$HTMLIFY_BIN" ] && { echo "htmlify not found"; exit 1; }
-
-"$HTMLIFY_BIN" ~/.gstack/projects/$SLUG/design-proposal-$TS.md \
-  --plan /tmp/design-proposal-plan.json --open
-```
-
-Prefer the Skill tool path; fall back to bin only if needed.
-
-### Step 3.3: Ask user approve/drill/change
-
-AskUserQuestion brief:
+Publish the proposal as a page with the Artifact tool (load the
+`artifact-design` skill first) so the user reads it before approving:
+typography specimens, color swatches in light and dark, material
+placement, motion presets, budget panel and decisions log. Give the user
+the link, then ask:
 
 ```
 D2 — Does the proposed design system look right?
-
-Project/branch/task: SwiftUI design consultation, Phase 3 proposal review
-ELI10: I opened a visual preview in Safari (typography specimens, color
-  swatches with light/dark toggle, material samples, motion previews,
-  HIG budget panel, decisions log). Tell me which path: approve and
-  ship, drill into a specific pillar to tighten it, change something
-  specific, or restart the proposal from scratch.
-
-A) Approve — write DESIGN.md + Swift Package now (recommended if the preview feels right)
+ELI10: The proposal page is published; pick approve, drill, change or restart.
+A) Approve — write DESIGN.md + Swift Package now (recommended if it feels right)
 B) Drill into [pillar] — tighten one pillar without committing the others
 C) Change [pillar] — different direction for one pillar
 D) Start over — rebuild the whole proposal with different constraints
 ```
 
-If `A`: proceed to Phase 6.
-If `B` or `C`: AskUserQuestion which pillar, then re-query that
-pillar's corpus, rewrite that section of the proposal MD, re-htmlify,
-loop back to D2.
-If `D`: go back to Phase 1 to refine constraints.
+If `A`: proceed to Phase 3. If `B` or `C`: ask which pillar, re-query
+that pillar's corpus, rewrite that section, republish the same page, loop
+back to D2. If `D`: go back to Phase 1.
 
-### Step 3.4: Cache approved proposal
-
-When user picks `A`, copy **both** the structured YAML and the
-human-readable MD to canonical names (without the timestamp suffix):
+### Step 2.4: Cache the approved proposal
 
 ```bash
-cp "$PROPOSAL_YAML" ~/.gstack/projects/"$SLUG"/swiftui-consultation-state.proposal.yaml
 cp "$PROPOSAL_PATH" ~/.gstack/projects/"$SLUG"/swiftui-consultation-state.proposal.md
 ```
 
-The YAML is what Phase 6 generators read — it is the structured
-source of truth. The MD is kept alongside for human inspection,
-debugging, and audit trails (e.g. "what did we approve last
-Tuesday?"). They must stay consistent.
+Phase 3 reads this copy; the timestamped file stays as the audit trail.
 
-## Phase 6 — Write Artifacts (with native-review chain)
+## Phase 3 — Write Artefacts (with native-review chain)
 
-Paired generation. DESIGN.md and DesignSystem/* are both written from
-the approved proposal YAML. Then run conformance review against the
-HIG budget; iterate up to 2 times if over budget, with severity
-monotonicity guard between iterations.
+Both `DESIGN.md` and `DesignSystem/*` are filled from the cached proposal,
+so prose and Swift declarations name the same roles, colors and presets.
+If the proposal's track differs from `$TRACK`, STOP and AskUserQuestion
+which is authoritative.
 
-### Step 6.0: Load and validate the structured proposal
-
-Before generating any artifact, read the cached structured proposal
-and validate it against the schema:
+### Step 3.1: Generate DESIGN.md from template (with overwrite safety)
 
 ```bash
-PROPOSAL_YAML=~/.gstack/projects/"$SLUG"/swiftui-consultation-state.proposal.yaml
-SCHEMA="$SKILL_DIR/schema/proposal.schema.yaml"
-
-[ -f "$PROPOSAL_YAML" ] || { echo "ERROR: no cached proposal — Phase 3 must complete first."; exit 1; }
-```
-
-Then **LLM-side validation**:
-
-1. Read both `$PROPOSAL_YAML` and the schema file into context.
-2. Walk every `required` field in the schema. Confirm it is present
-   in the proposal with the right type. (For arrays with `minItems`,
-   confirm the item count. For strings with `pattern`, confirm the
-   regex matches.)
-3. Confirm `schema_version` in the proposal equals the schema's
-   `version` field (currently `1`). Mismatch is a hard STOP — surface
-   to user with explicit upgrade guidance, do not attempt to
-   regenerate against a schema the proposal doesn't claim.
-4. Confirm `track` in the proposal matches `$TRACK` (the value from
-   `.gstack/track`). Mismatch is a hard STOP — the proposal claims
-   one platform target, the project marker claims another. Surface
-   the discrepancy and AskUserQuestion which is authoritative.
-
-If validation passes, the parsed proposal object is the single source
-of truth for every token substitution in Steps 6.1 and 6.2 below. If
-any required field is missing or any type mismatches, STOP and
-surface the schema gap to the user — do NOT silently substitute
-empty strings.
-
-### Step 6.1: Generate DESIGN.md from template (with overwrite-safety)
-
-**Before writing**, check if `<repo>/DESIGN.md` already exists:
-
-```bash
+PROPOSAL=~/.gstack/projects/"$SLUG"/swiftui-consultation-state.proposal.md
+[ -f "$PROPOSAL" ] || { echo "ERROR: no cached proposal — Phase 2 must complete first."; exit 1; }
 if [ -f DESIGN.md ]; then
   BACKUP="DESIGN.md.backup-$(date +%Y%m%d-%H%M%S)"
   cp DESIGN.md "$BACKUP"
@@ -487,40 +258,17 @@ if [ -f DESIGN.md ]; then
 fi
 ```
 
-This is the refresh-mode safety net: any prior DESIGN.md is preserved
-under a timestamp suffix before overwrite. Same pattern for the Swift
-Package in Step 6.2.
+Read `$SKILL_DIR/templates/DESIGN.md.template` and substitute every
+`{{TOKEN}}` from the matching proposal section: `{{DATE}}`,
+`{{PRODUCT_CONTEXT}}`, `{{MEMORABLE_THING}}`, `{{AESTHETIC_DIRECTION}}`
+from the metadata line; the seven `{{*_PROSE}}` tokens from the pillar
+sections; `{{BUDGET_CRITICAL}}`, `{{BUDGET_SIGNIFICANT}}`,
+`{{BUDGET_POLISH}}` from the budget section; `{{DECISIONS_LOG}}` as the
+bulleted list. Write to `<repo>/DESIGN.md`. Never leave a token
+unresolved or substitute an empty string — a missing value means the
+proposal is incomplete; return to Phase 2 for that pillar.
 
-Then read `$SKILL_DIR/templates/DESIGN.md.template`.
-Substitute all 15 tokens (`{{DATE}}`, `{{PRODUCT_CONTEXT}}`, etc.)
-**from the parsed proposal YAML object** loaded in Step 6.0 — NOT
-from the human-readable proposal MD. The MD is for human review; the
-YAML is the data source. Write to `<repo>/DESIGN.md`.
-
-Token-to-YAML-field mapping:
-
-| Template token | Proposal YAML path |
-|---|---|
-| `{{DATE}}` | `metadata.date` |
-| `{{PRODUCT_CONTEXT}}` | `metadata.product_context` |
-| `{{MEMORABLE_THING}}` | `metadata.memorable_thing` |
-| `{{AESTHETIC_DIRECTION}}` | `metadata.aesthetic_direction` |
-| `{{TYPOGRAPHY_PROSE}}` | `typography.prose` |
-| `{{COLOR_PROSE}}` | `color.prose` |
-| `{{MATERIALS_PROSE}}` | `materials.prose` |
-| `{{MOTION_PROSE}}` | `motion.prose` |
-| `{{SPACING_PROSE}}` | `spacing.prose` |
-| `{{ACCESSIBILITY_PROSE}}` | `accessibility.prose` |
-| `{{PLATFORMS_PROSE}}` | `platforms.prose` |
-| `{{BUDGET_CRITICAL}}` | `budget.critical` |
-| `{{BUDGET_SIGNIFICANT}}` | `budget.significant` |
-| `{{BUDGET_POLISH}}` | `budget.polish` |
-| `{{DECISIONS_LOG}}` | `decisions_log` (rendered as bulleted list) |
-
-### Step 6.2: Generate Swift Package (with overwrite-safety)
-
-**Before writing**, back up any existing DesignSystem/ directory
-(refresh-mode safety net, companion to Step 6.1's DESIGN.md backup):
+### Step 3.2: Generate the Swift Package (with overwrite safety)
 
 ```bash
 if [ -d DesignSystem ]; then
@@ -528,324 +276,124 @@ if [ -d DesignSystem ]; then
   mv DesignSystem "$BACKUP_DIR"
   echo "Existing DesignSystem/ moved to $BACKUP_DIR"
 fi
+mkdir -p DesignSystem/Sources/DesignSystem/Resources DesignSystem/Tests/DesignSystemTests
 ```
 
-Then create the directory layout:
+Read each template under `$SKILL_DIR/templates/`, substitute its tokens
+from the proposal, and write it to the mapped path under `DesignSystem/`:
+
+| Template | Output path | Tokens (proposal section) |
+|---|---|---|
+| `Package.swift.template` | `Package.swift` | `{{PLATFORMS}}` (from `$TRACK`) |
+| `Colors.swift.template` | `Sources/DesignSystem/Colors.swift` | `{{BRAND_COLORS}}`, `{{SEMANTIC_COLORS}}` (Color) |
+| `Typography.swift.template` | `Sources/DesignSystem/Typography.swift` | `{{TYPE_ROLES}}` (Typography) |
+| `Spacing.swift.template` | `Sources/DesignSystem/Spacing.swift` | `{{SPACING_CONSTANTS}}`, `{{RADIUS_CONSTANTS}}` (Spacing & Radii) |
+| `Motion.swift.template` | `Sources/DesignSystem/Motion.swift` | `{{MOTION_PRESETS}}` (Motion) |
+| `Materials.swift.template` | `Sources/DesignSystem/Materials.swift` | none |
+| `HIGBudgetTests.swift.template` | `Tests/DesignSystemTests/HIGBudgetTests.swift` | none |
+| `PlatformsTests.swift.template` | `Tests/DesignSystemTests/PlatformsTests.swift` | `{{DECLARED_TRACK}}`, `{{PLATFORM_ASSERTIONS}}` (Platforms) |
+
+`{{PLATFORMS}}` per `$TRACK`: `ios` → `.iOS(.v26)`, `macos` →
+`.macOS(.v26)`, `both` → `.iOS(.v26), .macOS(.v26)`. Render brand colors
+as `Color` extensions backed by color sets under
+`Sources/DesignSystem/Resources/Assets.xcassets/` (light, dark and
+high-contrast variants), semantic colors as extensions onto system
+colors, motion presets as `static let X: Animation`, spacing and radii as
+`static let X: CGFloat`, platform assertions as `#if os(...)` test guards.
+
+**WCAG contrast check.** For each brand hex, run
+`$SKILL_DIR/bin/contrast-check.sh` once against the proposed light
+background and once against the dark background:
 
 ```bash
-mkdir -p DesignSystem/Sources/DesignSystem/Resources
-mkdir -p DesignSystem/Tests/DesignSystemTests
+if RESULT=$("$SKILL_DIR/bin/contrast-check.sh" "$BRAND_HEX" "$BG_HEX" 2>&1); then
+  PASS=$(echo "$RESULT" | grep -o '"pass_aa_normal": [a-z]*' | awk '{print $2}')
+else
+  PASS="error"; echo "WARN: contrast-check failed for $BRAND_HEX vs $BG_HEX" >&2
+fi
 ```
 
-For each template in `$SKILL_DIR/templates/`:
-- Read it
-- Substitute tokens **from the parsed proposal YAML object loaded
-  in Step 6.0** (NOT from the human-readable proposal MD)
-- Write to the corresponding path under `DesignSystem/`
+If `PASS` is `error` (likely `bc` missing or invalid hex), ask the user
+whether to accept the color without a verified contrast; never treat an
+empty result as a pass. If `PASS` is `false`, report the `ratio` from the
+JSON, flag which background fails WCAG AA, and AskUserQuestion: keep the
+hex (override) or pick another. The skill does not auto-adjust colors.
 
-Token-to-YAML-field mapping for the Swift Package templates:
+### Step 3.3: Type-check the generated Swift
 
-| Template token | Proposal YAML path |
+Call `mcp__swiftui-rag__swift_typecheck` on the generated code with
+target versions per `$TRACK`: `ios` → `["iOS-26.0"]`, `macos` →
+`["macOS-26.0"]`, `both` → both. On failure, fix the offending file
+(usually a missing `#if os()` guard) and retry; hard cap 3 attempts, then
+STOP and report the diagnostic.
+
+### Step 3.4: Native review, one fix pass, one re-run
+
+Run the review chain once, fix CRITICAL findings, re-run once, and report
+what remains against the budget.
+
+**Spec-level review (DESIGN.md).** Read `DESIGN.md` into context, then
+invoke the merged native review with the platform from `.gstack/track`:
+
+```
+Read(file_path="<absolute path>/DESIGN.md")
+Skill(skill="superpowers-gstack:apple-native-review",
+      args="platform=$TRACK. Review the DESIGN.md just loaded into context: the design system spec for a SwiftUI project; budget is $BUDGET_CRITICAL/$BUDGET_SIGNIFICANT/$BUDGET_POLISH.")
+```
+
+Capture its verdict and findings by severity (CRITICAL, SIGNIFICANT,
+POLISH).
+
+**Code-level review** (each `.swift` under `DesignSystem/Sources/DesignSystem/`).
+The three tools are complementary; run all three in parallel per file
+with the same `swift_code` argument:
+
+| Tool | Rules |
 |---|---|
-| `{{PLATFORMS}}` | derived from `track` (`ios` → `.iOS(.v26)`, `macos` → `.macOS(.v26)`, `both` → `.iOS(.v26), .macOS(.v26)`) |
-| `{{DECLARED_TRACK}}` | `track` |
-| `{{TYPE_ROLES}}` | `typography.roles` (rendered as Swift type-role enum + Font.TextStyle map) |
-| `{{BRAND_COLORS}}` | `color.brand` (rendered as Swift Color extensions + asset-catalog entries) |
-| `{{SEMANTIC_COLORS}}` | `color.semantic` (rendered as Swift Color extensions mapping to system colors) |
-| `{{MOTION_PRESETS}}` | `motion.presets` (rendered as `static let X: Animation = ...` declarations) |
-| `{{SPACING_CONSTANTS}}` | `spacing.constants` (rendered as `static let X: CGFloat = ...`) |
-| `{{RADIUS_CONSTANTS}}` | `spacing.radius` (rendered as `static let X: CGFloat = ...`) |
-| `{{PLATFORM_ASSERTIONS}}` | `platforms.assertions` (rendered as `#if os(...) ... #endif` test guards) |
+| `mcp__swiftui-rag__review_macos_hig` | full HIG ruleset (C1, C2, S1–S9) |
+| `mcp__swiftui-rag__review_accessibility` | A1–A3 |
+| `mcp__swiftui-rag__review_liquid_glass` | Liquid Glass subset (C1, S7, S8) |
 
-Because both DESIGN.md (Step 6.1) and the Swift Package (Step 6.2)
-read the same parsed YAML object, the prose in DESIGN.md and the
-declarations in Swift code are guaranteed to refer to the same
-typography roles, colors, motion presets, etc. Drift is structurally
-impossible.
+Aggregate all findings, spec-level and code-level, deduplicated by
+`(rule_id, file:line)` — the Liquid Glass tool repeats a subset of the
+HIG tool's findings; count each once.
 
-Mapping:
-- `Package.swift.template` → `DesignSystem/Package.swift`
-  - Substitute `{{PLATFORMS}}` per `$TRACK`:
-    - `ios` → `.iOS(.v26)`
-    - `macos` → `.macOS(.v26)`
-    - `both` → `.iOS(.v26), .macOS(.v26)`
-- `Colors.swift.template` → `DesignSystem/Sources/DesignSystem/Colors.swift`
-- `Typography.swift.template` → `DesignSystem/Sources/DesignSystem/Typography.swift`
-- `Spacing.swift.template` → `DesignSystem/Sources/DesignSystem/Spacing.swift`
-- `Motion.swift.template` → `DesignSystem/Sources/DesignSystem/Motion.swift`
-- `Materials.swift.template` → `DesignSystem/Sources/DesignSystem/Materials.swift`
-- `HIGBudgetTests.swift.template` → `DesignSystem/Tests/DesignSystemTests/HIGBudgetTests.swift`
-- `PlatformsTests.swift.template` → `DesignSystem/Tests/DesignSystemTests/PlatformsTests.swift`
+**Fix pass.** For every CRITICAL finding: edit the cached proposal
+Markdown (the single source of truth — never patch `DESIGN.md` or
+`DesignSystem/*` directly), regenerate from Step 3.1 onwards, type-check
+again, then re-run the spec-level and code-level reviews exactly once.
 
-For brand colors with hex values, also create asset-catalog entries
-under `DesignSystem/Sources/DesignSystem/Resources/Assets.xcassets/`.
-Each brand color entry uses Xcode's color-set format with light, dark,
-and high-contrast variants.
+**Report.** Compare the re-run counts with the Phase 1 budget. Within
+budget: continue to Step 3.5 and print `DESIGN.md + DesignSystem/
+committed. 0 CRITICAL · 0 SIGNIFICANT · 3 POLISH (within budget of 0/0/5).`
+Over budget: list the remaining findings ranked by severity with
+`file:line` and a proposed fix, then AskUserQuestion `(A) ship anyway,
+(B) override the budget to the actual numbers, (C) refine manually now`;
+only `A` and `B` continue to Step 3.5.
 
-**WCAG contrast check (via `$SKILL_DIR/bin/contrast-check.sh`):** for each brand hex
-provided, call `$SKILL_DIR/bin/contrast-check.sh`
-once against the proposed light-mode background and once against the
-proposed dark-mode background. Parse the returned JSON:
+### Step 3.5: Commit (including the .gstack/track marker)
+
+`.gstack/track` is a project-level decision and ships in the repo. If the
+project ignores `.gstack/`, force-add the marker and record an exception
+so future runs don't silently drop it:
 
 ```bash
-# Example call from inside the skill — handle exit code explicitly
-# so a missing `bc` or invalid hex doesn't silently pass the check.
-CONTRAST_BIN="$SKILL_DIR/bin/contrast-check.sh"
-
-if RESULT_LIGHT=$("$CONTRAST_BIN" "$BRAND_HEX" "$BG_LIGHT_HEX" 2>&1); then
-  PASS_LIGHT=$(echo "$RESULT_LIGHT" | grep -o '"pass_aa_normal": [a-z]*' | awk '{print $2}')
-else
-  PASS_LIGHT="error"
-  echo "WARN: contrast-check failed for $BRAND_HEX vs $BG_LIGHT_HEX (exit $?). Skipping; surfacing to user." >&2
-fi
-
-if RESULT_DARK=$("$CONTRAST_BIN" "$BRAND_HEX" "$BG_DARK_HEX" 2>&1); then
-  PASS_DARK=$(echo "$RESULT_DARK" | grep -o '"pass_aa_normal": [a-z]*' | awk '{print $2}')
-else
-  PASS_DARK="error"
-  echo "WARN: contrast-check failed for $BRAND_HEX vs $BG_DARK_HEX (exit $?). Skipping; surfacing to user." >&2
-fi
-```
-
-If either result is `error` (helper script failed — likely `bc` missing
-or invalid hex), surface the warning to the user and ask explicitly
-whether to accept the brand color without verified contrast. Do NOT
-treat empty/missing PASS as a pass.
-
-If either `PASS_LIGHT` or `PASS_DARK` is `false`, surface to the user:
-- The actual ratio (from `RESULT_LIGHT.ratio` / `RESULT_DARK.ratio`)
-- A flag: "Brand color $BRAND_HEX fails WCAG AA against $WHICH background"
-- AskUserQuestion: keep this hex (override), or pick a different one?
-
-The skill does NOT auto-adjust the hex (the spec said L*-rotation in
-OKLCH but that requires a full color-space library — out of scope for
-v1's bash helper). Manual adjustment by the user is the v1 fallback;
-auto-suggestion can be added in v1.1.
-
-### Step 6.3: Type-check generated Swift
-
-Call `mcp__swiftui-rag__swift_typecheck` with the generated Swift code.
-Target versions per `$TRACK`:
-- `ios`: `["iOS-26.0"]`
-- `macos`: `["macOS-26.0"]`
-- `both`: `["iOS-26.0", "macOS-26.0"]`
-
-If typecheck fails: fix the offending file (likely a missing `#if os()`
-guard for platform-specific API) and retry. Hard cap: 3 typecheck
-attempts. If still failing, STOP and report the diagnostic.
-
-### Step 6.4: Generate DESIGN.html via Skill tool (auto-copy to repo root)
-
-Invoke htmlify via the **Skill tool** (same pattern as Step 3.2; do
-NOT use a hardcoded bin path):
-
-```
-Skill(skill="superpowers-gstack:htmlify", args="<repo>/DESIGN.md")
-```
-
-No --plan needed — v1 rendering is fine for the human-readable spec;
-no feedback panel needed for the final DESIGN.html.
-
-htmlify writes to `<repo>/.superpowers-html/DESIGN.html` by default,
-but `.superpowers-html/` is typically gitignored. The spec promises
-`DESIGN.html` lives next to `DESIGN.md` at repo root and ships
-committed. After htmlify completes, copy the file:
-
-```bash
-mkdir -p .superpowers-html  # ensure htmlify output dir exists
-if [ -f .superpowers-html/DESIGN.html ]; then
-  cp .superpowers-html/DESIGN.html DESIGN.html
-  echo "Copied DESIGN.html to repo root for commit"
-else
-  echo "WARN: htmlify did not produce expected output at .superpowers-html/DESIGN.html" >&2
-  # Don't fail the skill — DESIGN.md is the source of truth; HTML is auxiliary.
-fi
-```
-
-The repo-root `DESIGN.html` is what Step 6.8 commits. The
-`.superpowers-html/DESIGN.html` is the htmlify-managed copy (refreshed
-on every re-htmlify; remains gitignored). Both exist intentionally;
-they have different lifecycles.
-
-### Step 6.5: Chain to the native review for the project's track (on DESIGN.md)
-
-The native-review skills read the artifact from context, not from a path
-argument. Pick the reviewer(s) by `$TRACK` — **an iOS project must get
-`ios-native-review`, not a guaranteed-N/A macOS pass**:
-
-| `$TRACK` | Invoke |
-|---|---|
-| `macos` | `superpowers-gstack:macos-native-review` |
-| `ios` | `superpowers-gstack:ios-native-review` |
-| `both` | both skills, sequentially (each reviews its own platform's surfaces) |
-
-For each reviewer to run:
-
-1. **Read DESIGN.md into context** via the Read tool (once is enough
-   even when both reviewers run):
-   ```
-   Read(file_path="<absolute path>/DESIGN.md")
-   ```
-
-2. **Invoke the reviewer** via the Skill tool. The just-loaded
-   DESIGN.md content is now in the model's context, so the skill's
-   Phase 0 (platform signal detection) and its category review can
-   read it directly:
-   ```
-   Skill(skill="superpowers-gstack:<track-appropriate>-native-review",
-         args="Review the DESIGN.md just loaded into context. It is the design system spec for a SwiftUI project on track=$TRACK; budget is $BUDGET_CRITICAL/$BUDGET_SIGNIFICANT/$BUDGET_POLISH.")
-   ```
-
-Capture each skill's verdict and findings list by severity (CRITICAL,
-SIGNIFICANT, POLISH). These feed into the budget check at Step 6.7 —
-for `both`, aggregate the two findings lists.
-
-(History: before v2.23.0 this step invoked macos-native-review
-unconditionally and told iOS projects to treat its N/A as "expected
-behavior" — so iOS DESIGN.md never got a native review at all.)
-
-### Step 6.6: Chain to review-* tools (on each .swift file)
-
-The three review-* tools are **complementary, not overlapping**.
-Each has its own ruleset; running all three is the only way to get
-complete coverage:
-
-| Tool | What it lints | Rules |
-|------|---------------|-------|
-| `mcp__swiftui-rag__review_macos_hig` | Full macOS HIG ruleset | C1, C2, S1–S9 (11 rules) |
-| `mcp__swiftui-rag__review_accessibility` | Accessibility-only subset | A1, A2, A3 (3 rules) |
-| `mcp__swiftui-rag__review_liquid_glass` | Liquid Glass-only subset of HIG | C1, S7, S8 (subset) |
-
-For each `.swift` file under `DesignSystem/Sources/DesignSystem/`,
-**invoke all three tools in parallel** (they are independent and
-read-only). Each call passes the same `swift_code` argument.
-
-Aggregate findings across all three tools by severity, **deduplicating
-by `(rule_id, line)`** — `review_liquid_glass` returns a subset of
-HIG findings, so the same `S7-material-on-content` finding can appear
-in both its output and `review_macos_hig`'s. Count it once.
-
-**Known limitation (as of swiftui-rag v1.4.0 / corpus v1.3.3):** the
-`C1-glass-on-content` rule does not always fire when the `.glassEffect`
-modifier is separated from its shape primitive by other method calls.
-Pattern that DOES fire: `Circle().glassEffect()`. Pattern that has been
-observed NOT to fire: `Circle().fill(...).frame(...).glassEffect()`.
-If your generated code uses shape-then-modifier-then-glassEffect chains
-on content layers, manually verify against Materials HIG. Track
-upstream fix at `swiftui-rag-pipeline` issue tracker.
-
-### Step 6.7: Budget check + iteration
-
-Aggregate findings from **all three review-* tools** combined
-(`review_macos_hig` + `review_accessibility` + `review_liquid_glass`),
-deduplicated by `(rule_id, line)`, plus the track-appropriate native-review verdict(s):
-- CRITICAL count
-- SIGNIFICANT count
-- POLISH count
-
-Compare against the Phase 1 budget. If within budget:
-- Commit the artifacts (one commit, message format below)
-- Print summary: "✅ DESIGN.md + DesignSystem/ + DESIGN.html committed. 0 CRITICAL · 0 SIGNIFICANT · 3 POLISH (within budget of 0/0/5)."
-- Done.
-
-If over budget:
-- List findings ranked by severity with file:line + proposed fix
-- Update the **proposal YAML** to absorb the proposed fixes (single
-  source of truth — never edit DESIGN.md or DesignSystem/* files
-  directly during iteration; they are regenerated from the YAML)
-- Regenerate all artifacts (Step 6.1 onwards) from the updated YAML
-- Re-run reviews
-- **Severity monotonicity guard** (see below) must pass before
-  accepting the iteration; otherwise rollback
-- Hard cap: 2 iterations. If still over budget after iteration 2, STOP
-  and AskUserQuestion: "Findings exceed budget after 2 iterations.
-  Choose: (A) ship anyway, (B) override budget to actual numbers,
-  (C) refine manually now."
-
-#### Severity monotonicity guard (between iterations)
-
-After each iteration N (N ≥ 1), compare findings against iteration
-N-1 (the baseline is the post-Phase-3-approval state, before any
-HIG-driven edits). The fix for one finding must not introduce new
-findings of equal or higher severity. Specifically:
-
-- **No NEW CRITICAL** — iteration N must have zero CRITICAL findings
-  that were not present in iteration N-1. A fix that turns
-  SIGNIFICANT into CRITICAL is worse than the original.
-- **SIGNIFICANT count must not increase** — N's SIGNIFICANT count ≤
-  N-1's SIGNIFICANT count. Same logic.
-- **POLISH count may drift up or down** — POLISH is the most
-  tolerant category; tighter conformance often surfaces additional
-  POLISH gaps that were masked by SIGNIFICANT issues. This is fine.
-
-Comparison procedure:
-
-1. Parse findings from iteration N (output of the three review-*
-   tools + the track-appropriate native review(s), aggregated and
-   deduplicated per Step 6.7 as written).
-2. For each iteration-N finding, look it up by `(rule_id, file:line)`
-   in iteration N-1. NEW findings are those not present in N-1.
-3. Count NEW CRITICAL and NEW SIGNIFICANT.
-4. **If NEW CRITICAL > 0 OR NEW SIGNIFICANT > 0 (rolled-up count
-   increased)**:
-   - **ROLLBACK** the proposal YAML to its iteration N-1 state
-     (keep an in-memory backup of the YAML before each iteration's
-     edit so rollback is mechanical, not LLM-judgment).
-   - **AskUserQuestion**:
-     > "Iteration $N introduced $NEW_CRITICAL new CRITICAL and
-     > $NEW_SIGNIFICANT new SIGNIFICANT findings while fixing the
-     > original. Choose: (A) accept iteration $N anyway (override
-     > monotonicity), (B) accept iteration $N-1 state (forgo the
-     > attempted fix), (C) refine manually now (drop into AskUserQuestion-
-     > driven editing)."
-
-This prevents the failure mode where the LLM trades one CRITICAL for
-another, or fixes a SIGNIFICANT by introducing two new SIGNIFICANTs.
-Without the guard, "iteration 2" can leave the user with a strictly
-worse artifact than the one they approved in Phase 3.
-
-Why this matters: budget conformance is a *necessary* condition,
-not a *sufficient* one. An artifact with zero CRITICAL findings that
-was originally zero CRITICAL is fine. An artifact with zero CRITICAL
-findings that *had* one CRITICAL in iteration N-1 and one *different*
-CRITICAL in iteration N has churned, not improved — the monotonicity
-check catches that.
-
-### Step 6.8: Commit (including .gstack/track marker)
-
-The spec requires `.gstack/track` committed to the repo (project-level
-decision, not per-developer). If the project's `.gitignore` already
-excludes `.gstack/`, we need to force-add the marker AND record an
-exception in `.gitignore` so future runs don't silently drop it.
-
-```bash
-# Ensure .gstack/track is committable
 if git check-ignore -q .gstack/track 2>/dev/null; then
-  # Project ignores .gstack/ — add an exception for the marker
-  if ! grep -q '^!\.gstack/track$' .gitignore 2>/dev/null; then
-    echo '!.gstack/track' >> .gitignore
-    echo "Added exception for .gstack/track to .gitignore"
-  fi
+  grep -q '^!\.gstack/track$' .gitignore 2>/dev/null || echo '!.gstack/track' >> .gitignore
   git add .gitignore
-  git add -f .gstack/track  # force-add since ignore rule still matches dir-walk
+  git add -f .gstack/track
 else
   git add .gstack/track
 fi
 
-git add DESIGN.md DESIGN.html DesignSystem/
+git add DESIGN.md DesignSystem/
 git commit -m "feat: scaffold design system via swiftui-design-consultation
 
-Generated by /superpowers-gstack:swiftui-design-consultation.
-
 - DESIGN.md: design source of truth (HIG-cited)
-- DesignSystem/: Swift Package with semantic colors, SF Pro typography,
-  Liquid Glass material discipline, named motion presets, accessibility
-  baseline
-- DesignSystemTests: HIGBudgetTests + PlatformsTests enforce the
-  conformance budget at CI time
+- DesignSystem/: Swift Package (semantic colors, SF Pro typography, Liquid
+  Glass discipline, motion presets, accessibility baseline); its tests
+  enforce the conformance budget at CI time
 
 Track: $TRACK
-HIG findings: $CRITICAL CRITICAL · $SIGNIFICANT SIGNIFICANT · $POLISH POLISH (within budget)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+HIG findings: $CRITICAL CRITICAL · $SIGNIFICANT SIGNIFICANT · $POLISH POLISH"
 ```

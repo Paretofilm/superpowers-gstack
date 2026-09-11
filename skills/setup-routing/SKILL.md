@@ -152,23 +152,20 @@ Think through each GStack skill, organized by phase:
 | `/pair-agent` | When pairing a remote AI agent with your browser session |
 | `/setup-browser-cookies` | One-time: import cookies for authenticated `/qa` and `/browse` testing |
 | `/context-handoff` | Long implementation sessions, projects using SDD, or any multi-step workflow |
-| `/htmlify` | Any project — generates beautiful HTML companions for MD artefacts (design docs, plans, handoffs) so verbose output stays readable. Optional PostToolUse hook auto-fires. |
+| `/superpowers-gstack:htmlify` | Offline HTML rendering of MD artefacts when the Artifact tool is unavailable; otherwise prefer the Artifact tool. |
 | `/context-save` | Save progress and working state |
 | `/context-restore` | Resume where you left off |
 | `/benchmark` | Projects with performance monitoring needs |
 | `/benchmark-models` | Projects comparing AI model performance |
 | `/codex` | Projects needing second opinions or adversarial code review |
 | `/superpowers-gstack:autoimplement` | Multi-phase plans where the user always confirms phase boundaries — chains `/review` + `/pitfall-verification` automatically (pitfall auto-chains `/codex review` + the third lens per tier — no separate codex step). v2.14.0+ adds active pre-flight that reviews the plan body itself before Phase 1 unless the latest plan commit matches the marker regex `^(chore\|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]\|$)` (closes the gap between writing-plans and autoimplement). Refuses on <2 phases, missing per-phase commit steps, dirty tree, main/master branch, or plans touching migrations/secrets/credentials/.env/.ssh. |
-| `/superpowers-gstack:office-hours-track-aware` | All new-project brainstorming — wraps `/office-hours` with track inference (web vs native), inline platform question, design-doc relocation, htmlify --open, and approve-before-render gate. **Intercepts `/office-hours`** — see routing-intercept rules below. |
+| `/superpowers-gstack:office-hours-track-aware` | All new-project brainstorming — wraps `/office-hours` with track inference (web vs native), inline platform question, design-doc relocation, and an Artifact preview before the approval gate. **Intercepts `/office-hours`** — see routing-intercept rules below. |
 | `/superpowers-gstack:swiftui-design-consultation` | Native SwiftUI projects — produces DESIGN.md + Swift Package starter; equivalent to /design-consultation for web. Inlines the platform question (iOS/macOS/both) on first run if `.gstack/track` is missing. |
-| `/superpowers-gstack:macos-native-review` | macOS apps — pre-implementation HIG-citation-grounded review (vocabulary, controls, keyboard shortcuts, semantic colors, sheets, menu bar, dock, App menu). Run on PRDs/specs/plans before implementation. Phase 0 detects macOS signals; auto-N/A for non-macOS projects. |
-| `/superpowers-gstack:ios-native-review` | iOS / iPadOS apps — pre-implementation HIG-citation-grounded review (vocabulary, touch targets, navigation paradigm, modal presentation, gestures, system surfaces, keyboard, haptics, semantic colors, animation, privileged operations, accessibility, lifecycle). Run on PRDs/specs/plans before implementation. Phase 0 detects iOS signals; auto-N/A for non-iOS projects. |
+| `/superpowers-gstack:apple-native-review` | iOS / iPadOS / macOS apps — pre-implementation HIG-citation-grounded review; platform from `.gstack/track` or the artifact; every finding cites a HIG page fetched this run via the apple-docs MCP. Run on PRDs/specs/plans before implementation. |
 | `/superpowers-gstack:quality-review` | After any PRD/spec/plan, before implementation — hunts perceived-quality pitfalls (silent failures, loading/empty states, error recovery, state drift). Complementary to pitfall-verification ("will it work?" vs "will it feel good?"). |
 | `/superpowers-gstack:verify-and-land` | Apple + web projects — after a fix, builds the checked-out branch, launches that exact bundle (not the installed copy), proves which build is on screen, gates on the user seeing the fix, then pushes and offers merge/PR. |
-| `/superpowers-gstack:e2e-route` | Swift projects — pure dispatcher for E2E test requests: reads platform × intent and routes to the right executor (scaffold skills, MCP-live simulator automation, visual review, ios-visual-explore). |
-| `/superpowers-gstack:ios-e2e-scaffold` | iOS SwiftUI apps — one-shot XCUITest scaffolding (TabView/NavigationStack scene-walk, TIER-ranked stubs, iOS-Simulator xcresult runner). Normally reached via /e2e-route. |
-| `/superpowers-gstack:macos-e2e-scaffold` | macOS SwiftUI apps — one-shot XCUITest scaffolding (Scene-walk, TIER-ranked stubs, xcresult runner). Normally reached via /e2e-route. |
-| `/superpowers-gstack:ios-visual-explore` | iOS/iPadOS apps — Tier-2 visual exploration via Gemini computer-use when the accessibility tree is insufficient (layout regressions, visual landmarks). Paid API per run; normally reached via /e2e-route. |
+| `/superpowers-gstack:e2e-route` | Swift projects — pure dispatcher for E2E test requests: reads platform × intent and routes to the right executor (scaffold skill, MCP-live simulator automation, visual review). |
+| `/superpowers-gstack:e2e-scaffold` | iOS or macOS SwiftUI apps — one-shot XCUITest scaffolding (scene-walk, TIER-ranked stubs, identifier suggestions, xcresult runner from `templates/run-uitests.sh` honouring `.gstack/e2e-executor`). Manual only; normally reached via /e2e-route. |
 | `/superpowers-gstack:spec-drift` | Any project with plans in `docs/superpowers/plans/` — standalone "does this plan still match the code?" audit: runs `/ship` Step 8's plan-completion section from disk (hash-pinned) against an explicit plan and base, on any branch, shipped or not. Report + JSON + exit 0/1/2; never edits code. |
 
 ### Step 5: Present the routing plan
@@ -274,15 +271,14 @@ This project uses Superpowers + GStack. Each owns a distinct phase:
 [SHARED BLOCKS — emit here, as top-level (H2) sections. Read each file from this
 skill's `blocks/` directory (sibling of this SKILL.md) and paste its content
 verbatim, in this order:
-  1. `blocks/autonomy.md`
-  2. `blocks/git-hygiene.md`
-  3. `blocks/multi-lens-review.md`
-  4. `blocks/code-reuse.md`
-  5. `blocks/plan-fidelity.md`
-  6. `blocks/session-continuity.md`
-  7. `blocks/track-routing.md`
-  8. `blocks/xcode-tools.md` — ONLY when `.gstack/track` is `ios`, `macos`, or `both`; skip for web
-  9. `blocks/companion-skills.md` — same native-track condition as xcode-tools.md
+  1. `blocks/git-hygiene.md`
+  2. `blocks/multi-lens-review.md`
+  3. `blocks/code-reuse.md`
+  4. `blocks/plan-fidelity.md`
+  5. `blocks/session-continuity.md`
+  6. `blocks/track-routing.md`
+  7. `blocks/xcode-tools.md` — ONLY when `.gstack/track` is `ios`, `macos`, or `both`; skip for web
+  8. `blocks/companion-skills.md` — same native-track condition as xcode-tools.md
 Resolve `{{...}}` placeholders per `blocks/PLACEHOLDERS.md` before writing — never
 let a raw `{{...}}` token reach the generated CLAUDE.md.
 
@@ -325,7 +321,7 @@ comment on that block's heading line, immediately after the version marker the b
 file itself carries, with nothing at all between the two:
 
 ```
-<!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->
+<!-- gstack-git-hygiene-v10 --><!-- emitted=101 -->
 ```
 
 Leave the version marker byte-for-byte as the block wrote it. Provenance is a separate

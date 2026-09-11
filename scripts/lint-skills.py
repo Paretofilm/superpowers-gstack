@@ -82,13 +82,16 @@ BODY_WARN_LINES = 500
 DENYLIST = [
     (re.compile(r"`sensitive`\s*="), "third-lens 'sensitive' role was removed in 2.18.0"),
     (re.compile(r"--role\s+sensitive|--sensitive\b"), "third-lens --sensitive flag was removed in 2.18.0"),
-    (re.compile(r"gstack-multi-lens-review-v[0-5]\b"), "stale multi-lens marker (current: v6+, 2.51.0)"),
-    (re.compile(r"gstack-session-continuity-v[12]\b"), "stale session-continuity marker (current: v3+, 2.36.1)"),
+    (re.compile(r"gstack-multi-lens-review-v[0-6]\b"), "stale multi-lens marker (current: v7+, 3.0.0)"),
+    (re.compile(r"gstack-session-continuity-v[1-3]\b"), "stale session-continuity marker (current: v4+, 3.0.0)"),
+    (re.compile(r"gstack-code-reuse-v[12]\b"), "stale code-reuse marker (current: v3+, 3.0.0)"),
+    (re.compile(r"gstack-autonomy-v\d"), "the autonomy block was retired in 3.0.0 — the Claude Code harness carries the same instruction; /adapt removes the old section"),
     (re.compile(r"gstack-plan-fidelity-v[12]\b"), "stale plan-fidelity marker (current: v3+, 2.52.0)"),
     (re.compile(r"repin\s+--yes\s+--sha\b|--yes\s+--sha\b"),
      "spec-drift --sha was replaced by the one-time --token in 2.52.0"),
-    (re.compile(r"gstack-routing-v1\b"), "stale track-routing marker (current: v2+, 2.36.1)"),
-    (re.compile(r"gstack-git-hygiene-v[0-8]\b"), "stale git-hygiene marker (current: v9+, 2.47.0)"),
+    (re.compile(r"gstack-routing-v[12]\b"), "stale track-routing marker (current: v3+, 3.0.0)"),
+    (re.compile(r"gstack-companion-skills-v[12]\b"), "stale companion-skills marker (current: v3+, 3.0.0)"),
+    (re.compile(r"gstack-git-hygiene-v[0-9]\b"), "stale git-hygiene marker (current: v10+, 3.0.0)"),
     (re.compile(r"gstack-xcode-tools-v[0-6]\b"), "stale xcode-tools marker (current: v7+, 2.53.0)"),
     # v5 hardcoded `name=iPhone 16`; Xcode had already dropped it on the author's
     # own machine, and the resulting "Unable to find a device matching the
@@ -99,19 +102,23 @@ DENYLIST = [
     (re.compile(r"start-mlx"), "MLX local-server routing removed in v0.2 (2.27.0)"),
     (re.compile(r"models\.json"), "Pi models.json runtime detection removed in v0.2 (2.27.0)"),
     (re.compile(r"WXNUGGYB2B"), "hardcoded Apple Team ID removed in 2.33.0 — use the {{DEVELOPMENT_TEAM}} placeholder"),
-    # Matches the usage form (with or without a subcommand). The lookahead
-    # exempts prose that says the command does NOT exist ("there is no
-    # `/cost-ledger` slash command").
-    (re.compile(r"(?<![\w.~])/cost-ledger\b(?!`? slash command)"),
-     "no /cost-ledger slash command exists — use python3 scripts/cost-ledger/cli.py <subcommand> (2.34.1)"),
-    # 2.36.0: the handoff persistence mode was renamed auto -> continuous so it
-    # stops colliding with Claude Code's `auto` PERMISSION mode (default for
-    # Pro/Max/Team since 2026-08-14). Reading the legacy `mode: auto` value is
-    # deliberate and stays legal — only these two purged forms are denied.
+    # 3.0.0 removals: the adaptive lens router never reached its own skip
+    # threshold in two months of records; the Gemini computer-use loop was
+    # replaced by the session model's own multimodality + XcodeBuildMCP.
+    (re.compile(r"cost[-_]ledger"), "the cost-ledger adaptive lens router was removed in 3.0.0"),
+    (re.compile(r"ios-visual-explore|computer[-_]use"), "ios-visual-explore and scripts/computer_use were removed in 3.0.0"),
+    # 2.36.0 renamed the handoff persistence mode auto -> continuous; 3.0.0 dropped
+    # the legacy read paths (`mode: auto`, `## Mode: auto`, typeless v1.12 frontmatter).
     (re.compile(r"auto context (guard|handoff)"),
      "renamed to 'continuous handoff' in 2.36.0 ('auto context guard' was also drifted wording in adapt)"),
-    (re.compile(r"does not contain\s+`?##\s*Mode:\s*auto"),
-     "marker-only compact sensor is stale — check YAML `mode:` (continuous, then legacy auto) first (2.36.0)"),
+    (re.compile(r"mode:\s*auto\b|##\s*Mode:\s*auto|legacy `?auto`?"),
+     "legacy handoff spellings (`mode: auto`, `## Mode: auto`) are no longer read since 3.0.0 — only `mode: continuous`"),
+    # Model ids and prices belong in scripts and model-routing.md, never in
+    # instruction prose or emitted blocks — they went stale within weeks every time.
+    (re.compile(r"gpt-5\.5|glm-5\.2|GLM-5\.2|\$\d+/\$\d+ per Mtok"),
+     "hardcoded model id / price in instruction prose — name the tier or role, let the script resolve the id (3.0.0)"),
+    (re.compile(r"setup-htmlify-hook|htmlify-posttooluse|htmlify --open|--open`"),
+     "htmlify's Safari flow and PostToolUse hook were removed in 3.0.0 — previews go through the Artifact tool"),
     # 2.48.0: Step 6 used to ask for a diff against a file Step 5 had already
     # overwritten. An unperformable verification is always answered
     # optimistically — the fix is a real snapshot, not better wording.
@@ -124,7 +131,6 @@ DENYLIST = [
 # blocks must have their `<!-- gstack-<name>-vN -->` marker on the H2 heading.
 BLOCKS_DIR_REL = Path("skills") / "setup-routing" / "blocks"
 MARKER_BLOCKS = [
-    "autonomy.md",
     "git-hygiene.md",
     "multi-lens-review.md",
     "code-reuse.md",
