@@ -376,3 +376,13 @@ def test_resume_instruction_line_only_when_speaking(repo):
     assert "agent" not in run_resume(repo).lower()
     (repo / "docs" / "superpowers" / "plans" / "progress.md").write_text(PROGRESS)
     assert "agent" in run_resume(repo).lower()
+
+
+def test_resume_no_longer_reads_typeless_legacy_handoff(repo):
+    """3.0.0 dropped the v1.12 form (session_end + next_step, no type:). The banner
+    must say nothing for it — the Session Continuity block classifies the same file
+    as not consumable, and the hook and the block have to agree."""
+    (repo / "docs" / "superpowers" / "handoff.md").write_text(
+        "---\nsession_end: 2026-09-01T10:00:00+02:00\n"
+        "next_step: \"Read x.py:1\"\n---\n")
+    assert "next step" not in run_resume(repo)

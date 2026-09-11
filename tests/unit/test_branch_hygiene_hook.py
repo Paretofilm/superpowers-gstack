@@ -534,7 +534,8 @@ def test_menu_briefs_the_agent_on_how_to_turn_it_into_choices(tmp_path, repo):
     """3.0.0 moved the agent brief out of the emitted CLAUDE.md block and into the
     report itself, so the rules travel with the menu they govern: option 1 never
     destroys, a click authorizes only what it names, and a non-interactive session
-    parks loose work on a local recovery branch without pushing it."""
+    takes no action at all (a recovery branch would switch a shared worktree and could
+    commit untracked secrets)."""
     with_remote(tmp_path, repo)
     (repo / "loose.txt").write_text("x")
     menu = run_hook(repo).split(MENU)[1]
@@ -542,5 +543,5 @@ def test_menu_briefs_the_agent_on_how_to_turn_it_into_choices(tmp_path, repo):
     assert "AskUserQuestion" in menu
     assert "option 1 never" in menu and "destroys anything" in menu
     assert "a click authorizes only what it names" in menu
-    assert "local recovery branch and do not push it" in menu
+    assert "in a non-interactive session take no action" in menu
     assert "say what you left unresolved" in menu

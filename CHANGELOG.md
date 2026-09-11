@@ -26,7 +26,9 @@ verdicts: `docs/superpowers/specs/2026-09-11-modernisering-audit.md`.
   grown section is deferred, never destroyed) and never touches a markerless one.
 - **htmlify's Safari takeover and PostToolUse hook** (`scripts/setup-htmlify-hook.sh`,
   `scripts/htmlify-posttooluse.sh`). `--open` now opens the file in the default browser
-  and closes nothing. Previews of design docs and proposals go through Claude Code's
+  and closes nothing. If you ran `setup-htmlify-hook.sh` on 2.x, remove the
+  `PostToolUse` entry it wrote to `~/.claude/settings.json` — it points at a script
+  that no longer exists. Previews of design docs and proposals go through Claude Code's
   Artifact tool; htmlify remains as the offline fallback, and `styles/companion.css`
   stays the canonical house style.
 - **Legacy handoff spellings** — `mode: auto`, the `## Mode: auto` Markdown marker and
@@ -44,6 +46,11 @@ verdicts: `docs/superpowers/specs/2026-09-11-modernisering-audit.md`.
 - Personal paths (`~/super-me/brain/ideas/seeds`) from `office-hours-track-aware`.
 
 ### Changed
+- **`/adapt` renames retired skill names** in the non-marker part of a project's
+  `## Skill routing` (`macos-/ios-native-review` → `apple-native-review`,
+  `macos-/ios-e2e-scaffold` → `e2e-scaffold`, `ios-visual-explore` rows removed) and
+  removes a marker-carrying `Autonomy and user interruption` section, sized per marker
+  version (v1 = 56 lines, v2 = 31), H3 roots included.
 - **`apple-native-review`** replaces `macos-native-review` + `ios-native-review`: one
   procedure, per-platform category tables, one stated source chain (the HIG page's
   structured form for the citation, the apple-docs MCP for API reference, the
@@ -83,7 +90,9 @@ verdicts: `docs/superpowers/specs/2026-09-11-modernisering-audit.md`.
 
 ### Fixed
 - `/adapt` compared the `Keep the plan true to the code` section against marker `v2`
-  while the block has carried `v3` since 2.52.0 — every run re-replaced a current section.
+  while the block has carried `v3` since 2.52.0, and the Multi-lens rule against `v5`
+  while the block was `v6` — every run re-replaced a current section. Both literals now
+  match their blocks (v3, v7).
 
 ### Lint
 - E7 denylist: `cost-ledger`, `ios-visual-explore` / `computer_use`, `gstack-autonomy-v*`,

@@ -106,7 +106,8 @@ DENYLIST = [
     # threshold in two months of records; the Gemini computer-use loop was
     # replaced by the session model's own multimodality + XcodeBuildMCP.
     (re.compile(r"cost[-_]ledger"), "the cost-ledger adaptive lens router was removed in 3.0.0"),
-    (re.compile(r"ios-visual-explore|computer[-_]use"), "ios-visual-explore and scripts/computer_use were removed in 3.0.0"),
+    # The lookbehind exempts /adapt's rename table, whose rows must name the old skill.
+    (re.compile(r"(?<!\| `)ios-visual-explore|computer[-_]use"), "ios-visual-explore and scripts/computer_use were removed in 3.0.0"),
     # 2.36.0 renamed the handoff persistence mode auto -> continuous; 3.0.0 dropped
     # the legacy read paths (`mode: auto`, `## Mode: auto`, typeless v1.12 frontmatter).
     (re.compile(r"auto context (guard|handoff)"),
@@ -119,7 +120,7 @@ DENYLIST = [
      "hardcoded model id / price in instruction prose — name the tier or role, let the script resolve the id (3.0.0)"),
     (re.compile(r"(auto-)?chains? `?/codex review|`/codex review` \(Stage 2\)|invoke `/codex review`"),
      "gstack /review owns the Codex pass since 3.0.0 — say `/review`, never chain `/codex review` on a diff"),
-    (re.compile(r"setup-htmlify-hook|htmlify-posttooluse|htmlify --open|--open`"),
+    (re.compile(r"setup-htmlify-hook|htmlify-posttooluse|close every window"),
      "htmlify's Safari flow and PostToolUse hook were removed in 3.0.0 — previews go through the Artifact tool"),
     # 2.48.0: Step 6 used to ask for a diff against a file Step 5 had already
     # overwritten. An unperformable verification is always answered

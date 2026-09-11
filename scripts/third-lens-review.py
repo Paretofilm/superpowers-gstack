@@ -14,6 +14,7 @@ Design notes:
 - Pricing is fetched live from OpenRouter /models and applied to the real `usage`
   object — no hardcoded prices to go stale.
 Exit codes: 0 ok | 2 usage error | 3 auth/key error | 4 API/network/CLI failure
+           | 5 model id not served by OpenRouter (stale pin or bad --model)
            | 6 nothing to review
 """
 
@@ -107,9 +108,13 @@ def fetch_models(key):
     """OpenRouter /models as a list, or None when it could not be fetched. Fetched
     once per run; pricing and the watchdog both read it."""
     try:
-        return http_json("GET", "/models", key, timeout=30).get("data", [])
+        d = http_json("GET", "/models", key, timeout=30)
     except SystemExit:
         return None
+    data = d.get("data") if isinstance(d, dict) else None
+    if not isinstance(data, list) or not data:
+        return None  # a proxy page or an empty list is "unknown", never "not served"
+    return [m for m in data if isinstance(m, dict)]
 
 
 _UNSET = object()  # "caller did not supply models" — distinct from None, "fetch failed"
@@ -136,7 +141,9 @@ def model_is_served(key, model, models=_UNSET):
         models = fetch_models(key)
     if models is None:
         return None
-    return model in {m.get("id") for m in models}
+    # OpenRouter lists base ids; routing variants (`:nitro`, `:floor`, `:online`) are
+    # legal on a request but absent from /models — compare the base id.
+    return model.split(":")[0] in {str(m.get("id")).split(":")[0] for m in models}
 
 
 def get_credits(key):
@@ -243,6 +250,20 @@ def run_openrouter(system_prompt, user_msg, model, args, key):
     est_in = (len(system_prompt) + len(user_msg)) // 4
     models = fetch_models(key)
     p_in, p_out = get_pricing(key, model, models)
+    # The watchdog runs BEFORE the dry-run branch: a stale pin must fail the same way
+    # whether or not the model is about to be called.
+    served = model_is_served(key, model, models)
+    if served is False:
+        if getattr(args, "model", None):
+            eprint(f"ERROR: OpenRouter does not serve model id '{model}' (given with --model). "
+                   f"Check https://openrouter.ai/models for the exact id.")
+        else:
+            eprint(f"ERROR: OpenRouter does not serve model id '{model}'. The pin in "
+                   f"ROLE_SPEC is stale — a human picks the replacement house: check "
+                   f"https://openrouter.ai/models, bump ROLE_SPEC, and re-run. Do not "
+                   f"substitute an id on the agent's own initiative.")
+        sys.exit(5)
+
     if args.dry_run:
         print(f"Model: {model}")
         print(f"Estimated input tokens: ~{est_in:,}")
@@ -254,13 +275,6 @@ def run_openrouter(system_prompt, user_msg, model, args, key):
         else:
             print("Pricing unavailable for this model id — verify it exists on OpenRouter.")
         return
-
-    served = model_is_served(key, model, models)
-    if served is False:
-        eprint(f"ERROR: OpenRouter does not serve model id '{model}'. The pin in "
-               f"ROLE_SPEC is stale — check https://openrouter.ai/models and bump it, "
-               f"or pass --model <id> for this run.")
-        sys.exit(4)
 
     payload = {
         "model": model,

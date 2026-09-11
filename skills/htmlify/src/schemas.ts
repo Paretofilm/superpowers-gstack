@@ -34,12 +34,11 @@ export const Handoff = z
     session_end: z.string(),
     branch: z.string().optional(),
     commit_at_handoff: z.string().optional(),
-    // `continuous` is the current value (2.36.0+); `auto` is its pre-2.36.0
-    // spelling, renamed because it collided with Claude Code's `auto`
-    // PERMISSION mode. Both must parse: handoff.md files written by older
-    // plugin versions still sit in users' repos, and classify() hard-exits via
-    // die(EXIT.SCHEMA) on a rejected enum — so a missing value here breaks the
-    // PostToolUse hook on every single handoff write, not just the render.
+    // `continuous` is the current value; `auto` is its pre-2.36.0 spelling. The
+    // plugin no longer READS `auto` (3.0.0), but the renderer still tolerates it:
+    // handoff.md files written by older versions sit in users' repos, and
+    // classify() hard-exits via die(EXIT.SCHEMA) on a rejected enum — a render
+    // must not die on a file it was merely asked to display.
     mode: z.enum(["manual", "continuous", "auto"]).optional(),
     active_task: z.string().optional(),
     status: z

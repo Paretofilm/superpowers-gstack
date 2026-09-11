@@ -23,7 +23,8 @@ cd "$(cd "$(dirname "$0")/.." && pwd)" || { echo "cannot resolve project root" >
 # before substituting, and single quotes keep a name that slipped through from ever
 # being expanded — a scheme called `$(x)` is a file name, not a command.
 SCHEME='<SCHEME>'
-PLATFORM='<PLATFORM>'          # macos | ios
+# PLATFORM is one of: macos, ios — e2e-route matches this line, so keep the value alone on it.
+PLATFORM='<PLATFORM>'
 TEST_TARGET='<TEST_TARGET>'    # <App>UITests, or <App>macOSUITests / <App>iOSUITests on multiplatform
 case "$SCHEME$TEST_TARGET" in *[!A-Za-z0-9_.\ -]*) echo "refusing: scheme/target name carries shell-significant characters" >&2; exit 2 ;; esac
 
@@ -33,7 +34,7 @@ case "$SCHEME$TEST_TARGET" in *[!A-Za-z0-9_.\ -]*) echo "refusing: scheme/target
 # still looks fine afterwards.
 EXECUTOR=host
 if [ -f .gstack/e2e-executor ]; then
-  # `$( )` strips exactly the trailing newline the generators write and nothing else,
+  # `$( )` strips trailing newlines and nothing else,
   # so the case below sees the whole file: `vm ` keeps its space, `v m` its gap, and a
   # second line stays attached. Every one of those is then BLOCKED. Do not normalise
   # first (`tr -d '[:space:]'`, `head -1 | sed`): that launders junk into a legal value
@@ -120,7 +121,6 @@ if [ "$EXECUTOR" = vm ]; then
   fi
   # Rig absent is NOT a rig fault: a committed `vm` pin must not brick the repo on
   # every Mac without the rig. Run on the host, but never silently.
-  echo "executor=vm requested, rig not found on this host — running on host without lease" >&2
   # CI variables do not cover `claude --print` or a scheduled run, and `[ ! -t 1 ]` is
   # useless here because an agent's Bash tool always pipes stdout — it would refuse
   # every interactive run too. So the caller, which actually knows the session kind,
@@ -130,6 +130,7 @@ if [ "$EXECUTOR" = vm ]; then
     echo "unleased host run can collide with another. Install the rig or pin host." >&2
     exit 2
   fi
+  echo "executor=vm requested, rig not found on this host — running on host without lease" >&2
   EXECUTOR="vm→host-fallback"
 fi
 

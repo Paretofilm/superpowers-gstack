@@ -69,7 +69,7 @@ wrote the code.
 |---------------------------------------------|-------------|-------------------|-------|
 | RT audio / DSP / lock-free concurrency      | very high   | opus + verify     | silent corruption; no "safe cheap coding" |
 | Migration / data-transform logic            | high        | opus + verify     | irreversibility |
-| Auth / payments / security                  | high        | opus (Fable→Opus fallback anyway) | |
+| Auth / payments / security                  | high        | opus + verify     | |
 | App / UI feature wiring                     | medium      | sonnet            | tests catch most |
 | Format plumbing / serialization             | low         | sonnet / haiku    | round-trip tests are a strong net |
 | Templated scaffolding / mechanical refactor | low         | haiku             | deterministic |

@@ -71,7 +71,7 @@ Absent rig and failing rig are different and get opposite answers:
 | Intent | Platform | Executor |
 |---|---|---|
 | Committed regression | macOS | Entry points 1–4 below, in order. Honours `.gstack/e2e-executor`. |
-| Committed regression | iOS | the iOS runner (`scripts/run-uitests.sh` with `PLATFORM=ios`, else `scripts/run-uitests-ios.sh`) if present; else an existing iOS UI-test target → run it directly: `xcodebuild test -scheme <Scheme> -destination 'platform=iOS Simulator,id=<UDID from xcrun simctl list devices available>' -only-testing:<Target>`; else `/superpowers-gstack:e2e-scaffold` (target `<App>iOSUITests`). A project that already has a suite is never sent to the scaffold — it refuses existing suites. |
+| Committed regression | iOS | the iOS runner (`scripts/run-uitests.sh` with `PLATFORM=ios`, or with no `PLATFORM=` line and an `iOS Simulator` destination — a 2.x runner; else `scripts/run-uitests-ios.sh`) if present, subject to the LEGACY pin check below; else an existing iOS UI-test target → run it directly: `xcodebuild test -scheme <Scheme> -destination 'platform=iOS Simulator,id=<UDID from xcrun simctl list devices available>' -only-testing:<Target>`; else `/superpowers-gstack:e2e-scaffold` (target `<App>iOSUITests`). A project that already has a suite is never sent to the scaffold — it refuses existing suites. |
 | Exploratory / live | macOS | XcodeBuildMCP UI automation: `snapshot_ui` → tap → `screenshot` |
 | Exploratory / live | iOS | `ios-simulator` MCP (`ui_find_element` / `ui_tap`) or `/ios-qa` |
 | Visual exploration | iOS / macOS | XcodeBuildMCP `screenshot` / `snapshot_ui`, driven by the session model |
@@ -85,8 +85,11 @@ a test-less project to the rig. If the only suite is the iOS one, this falls thr
 In a multiplatform project (`.gstack/track` = `both`, or both SDKs listed) an **unsuffixed**
 `<App>UITests` target is ambiguous — it may be a pre-suffix iOS suite — so do not assume
 macOS: read its scheme's destination or ask once which platform it tests, and say so in
-the decision block. A runner with no `PLATFORM=` line (the SPM stub, or a pre-3.0.0 runner)
-counts as matching either platform; the LEGACY grep below still decides pin-awareness.
+the decision block. A runner with no `PLATFORM=` line is a single-platform 2.x runner (or the SPM stub):
+read its `-destination` line — `platform=macOS` is the macOS runner, `iOS Simulator` the
+iOS one — and treat it as matching that platform; the LEGACY grep below still decides
+pin-awareness, so a 2.x macOS runner runs through entry point 1 with pin `host` and is
+regenerated before a `vm` run.
 
 1. `./scripts/run-uitests.sh` exists for this platform **and reads the pin** → run it.
    "For this platform" means its `PLATFORM=` line matches the routed platform; otherwise

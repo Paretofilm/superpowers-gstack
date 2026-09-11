@@ -44,6 +44,8 @@ If the change is not high-stakes, **do not run this skill** — it burns money a
 The script picks the lens by `--role`; the concrete model id per role lives in one
 place, `ROLE_SPEC` in `scripts/third-lens-review.py`, and nowhere in prose. The script
 refuses to run a pinned id OpenRouter no longer serves, so a stale pin fails loudly.
+**When it refuses (exit 5), stop and report it** — a change of model house is a human
+decision; never pick a replacement id yourself and re-run.
 
 | `--role` | House | Use when |
 |----------|-------|----------|

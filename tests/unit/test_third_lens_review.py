@@ -227,7 +227,32 @@ def test_run_openrouter_refuses_unserved_model(monkeypatch):
         prompt = None
     with pytest.raises(SystemExit) as e:
         tlr.run_openrouter("SYS", "USER", "z-ai/glm-0.0", Args(), "fakekey")
-    assert e.value.code == 4
+    assert e.value.code == 5
+
+
+def test_dry_run_surfaces_a_stale_pin_the_same_way(monkeypatch):
+    """--dry-run must not soften a retired pin into 'pricing unavailable'."""
+    monkeypatch.setattr(tlr, "fetch_models", lambda *a, **k: [{"id": "z-ai/glm-5.3"}])
+
+    class Args:
+        max_tokens = 16000
+        effort = "medium"
+        dry_run = True
+        prompt = None
+    with pytest.raises(SystemExit) as e:
+        tlr.run_openrouter("SYS", "USER", "z-ai/glm-0.0", Args(), "fakekey")
+    assert e.value.code == 5
+
+
+def test_routing_variants_are_served_by_their_base_id():
+    assert tlr.model_is_served("k", "z-ai/glm-5.3:nitro", models=[{"id": "z-ai/glm-5.3"}]) is True
+    assert tlr.model_is_served("k", "z-ai/glm-9.9", models=[{"id": "z-ai/glm-5.3"}]) is False
+
+
+def test_malformed_models_response_is_unknown_not_unserved(monkeypatch):
+    for bad in (["x"], {"data": "oops"}, {"data": []}, {"nodata": 1}):
+        monkeypatch.setattr(tlr, "http_json", lambda *a, **k: bad)
+        assert tlr.fetch_models("k") is None
 
 
 # --- 3.0.0: /models is fetched once and shared by pricing + the watchdog ---------
@@ -236,8 +261,7 @@ def test_run_openrouter_refuses_unserved_model(monkeypatch):
     ([{"id": "z-ai/glm-5.3", "pricing": {"prompt": "0.000001", "completion": "0.000002"}}],
      "Estimated max cost", "pricing found → the cost estimate is printed"),
     (None, "Pricing unavailable", "/models unreachable → say so instead of guessing"),
-    ([{"id": "someone/else"}], "Pricing unavailable", "id absent from /models → same message"),
-], ids=["priced", "models-outage", "unlisted-id"])
+], ids=["priced", "models-outage"])
 def test_run_openrouter_dry_run_reports_pricing_or_its_absence(monkeypatch, capsys, models, expect, why):
     """--dry-run must never reach the chat endpoint, whatever /models returned."""
     monkeypatch.setattr(tlr, "fetch_models", lambda *a, **k: models)

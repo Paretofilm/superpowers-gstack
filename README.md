@@ -190,9 +190,7 @@ No hooks, no orchestration overhead, no nesting. Just save and restore.
 /clear
 /pitfall-verification  → Spec-level: "will this work?"
 /quality-review        → Spec-level: "will this feel good?"
-[macOS only]
 /apple-native-review   → Spec-level: "is this Apple-native?"
-[iOS only]
 /superpowers:brainstorming         → Adopt design, refine technical approach
 /superpowers:writing-plans         → Break into TDD tasks
 /pitfall-verification  → Plan-level: re-check after writing-plans

@@ -315,7 +315,8 @@ def test_the_oracle_row_lists_every_entry_point():
     numbered = [l for l in entries.splitlines() if re.match(r"^[1-4]\. ", l)]
     assert len(numbered) == 4, "all four entry points must be numbered, in order"
     assert "run-uitests.sh" in numbered[0] and "vm-e2e" in numbered[1] \
-        and "-only-testing:" in entries and "e2e-scaffold" in numbered[3]
+        and "-only-testing:" in entries[entries.index(numbered[2]):entries.index(numbered[3])] \
+        and "e2e-scaffold" in numbered[3]
 
 
 def test_existing_target_is_not_a_fallback_trigger_for_committed_intent():
@@ -339,9 +340,10 @@ def test_a_held_lease_is_reported_even_with_no_process_left():
 # --- Codex round 3 on 2.53.0 ---
 
 def test_the_shared_runner_path_is_gated_on_a_macos_target():
-    """`scripts/run-uitests.sh` is a SHARED path: /e2e-scaffold writes the same file for
-    an iOS run. Ungated, a committed macOS request in a project scaffolded for iOS first
-    would run the iOS suite and never reach the macOS scaffold."""
+    """A single-platform project's runner sits at `scripts/run-uitests.sh` whichever
+    platform it targets, so the macOS gate must check the target directory, not the
+    file's existence — ungated, a committed macOS request in a project scaffolded for
+    iOS first would run the iOS suite and never reach the macOS scaffold."""
     assert "If the only suite is the iOS one, this falls through to 4" in flat(ROUTE)
     assert "! -name '*iOSUITests'" in ROUTE
     gate = ROUTE.index("Entries 1–3 require a macOS UI-test target")
@@ -472,6 +474,9 @@ GREEN = _summary(2, 2, 0, 0)
     pytest.param("ios", "vm\n", False, {"STUB_SIMS": SIM, "STUB_SUMMARY": GREEN}, 0,
                  "executor=vm pin applies to macOS only", '"executor": "host"', True, None,
                  id="ios-ignores-the-vm-pin-loudly"),
+    pytest.param("ios", "VM\n", False, {"STUB_SIMS": SIM, "STUB_SUMMARY": GREEN}, 2,
+                 "BLOCKED", "", False, None,
+                 id="ios-validates-the-pin-before-downgrading-it"),
     pytest.param("macos", None, False, {"STUB_SUMMARY": _summary(2, 1, 1, 0), "STUB_XCB_STATUS": "65"}, 65,
                  "executor=host", '"failed": 1', True, "platform=macOS",
                  id="macos-passes-xcodebuild-status-through-not-1"),

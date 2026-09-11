@@ -563,7 +563,7 @@ import pytest
     ("if the frontmatter says `mode: auto`, treat it as continuous", True, "legacy handoff mode"),
     ("route architecture to glm-5.2 at $1/$3 per Mtok", True, "hardcoded model id / price"),
     ("then auto-chains `/codex review` on the diff", True, "chained codex review"),
-    ("run `/htmlify --open` to preview", True, "htmlify Safari flow"),
+    ("close every window in Safari, then open the file", True, "htmlify Safari flow"),
     ("bash scripts/setup-htmlify-hook.sh", True, "htmlify PostToolUse hook"),
     # what a 3.0.0 generator actually writes must stay clean
     ("## Multi-lens review <!-- gstack-multi-lens-review-v7 -->", False, "current multi-lens"),
