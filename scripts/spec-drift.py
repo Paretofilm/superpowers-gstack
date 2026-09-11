@@ -75,9 +75,11 @@ ENCODING = "utf-8"
 MAX_UPSTREAM_BYTES = 4 * 1024 * 1024    # the real section is ~15 KB; anything near this is not it
 
 # Text the wrapper's overrides name: (name shown in messages, regex). Headings
-# are line-anchored (an optional "> " blockquote prefix allowed) so a copy of the
-# words inside a comment or a code fence does not satisfy them, and Step 8 must
-# precede Step 8.1 because the wrapper stops at the second heading.
+# are line-anchored (an optional "> " blockquote prefix allowed — how gstack
+# ≤ 1.82 quoted the subagent prompt) so a copy of the words inside a comment or
+# a code fence does not satisfy them, and Step 8 must precede Step 8.1 because
+# the wrapper stops at the second heading. Since gstack 1.83 the prompt sits in a
+# ````text fence instead; `unfenced` treats that one fence as prose.
 ANCHORS = (
     ("## Step 8: Plan Completion Audit", r"^(> )?## Step 8: Plan Completion Audit"),
     ("## Step 8.1", r"^(> )?## Step 8\.1(?![0-9])"),
@@ -105,7 +107,27 @@ BOUNDARY = ("## Step 8: Plan Completion Audit", "## Step 8.1")
 # phrases that legitimately occur inside Step 8's own code blocks — masking them
 # would break the check on the real section.
 HEADING_ANCHORS = frozenset(name for name, pat in ANCHORS if pat.startswith("^"))
-_FENCE = re.compile(r"^(?P<f>```+|~~~+)[^\n]*\n.*?(?:^(?P=f)[`~]*[ \t]*$|\Z)", re.M | re.S)
+# `close` is empty when the fence runs to EOF unclosed (the `\Z` alternative).
+# CommonMark's grammar, the parts that matter for masking: up to three spaces of
+# indentation on either delimiter, a closer of the SAME character at least as long
+# as the opener with nothing else on its line — a `\r` before the newline allowed,
+# so a CRLF file closes its fences instead of masking itself to EOF (third house,
+# 3.0.2: indented fences were unmasked, and ````~~ closed a ```` fence).
+_FENCE = re.compile(r"^ {0,3}(?P<f>(?P<c>[`~])(?P=c){2,})(?P<info>[^\n]*)\n(?P<body>.*?)"
+                    r"(?P<close>^ {0,3}(?P=f)(?P=c)*[ \t]*\r?$|\Z)", re.M | re.S)
+# gstack ≥ 1.83 hands the subagent its instructions inside a ````text fence that
+# follows the `**Subagent prompt:**` line. That fence is not an example — it IS
+# the section, the text every override in the wrapper addresses — so its body is
+# scanned like prose. `_prompt_fences` finds it among `_FENCE`'s OWN matches, so
+# opener and closer are the ones the mask used (a second regex with its own idea
+# of where a fence ends let a `````-closed prompt run over a later example, and a
+# labelled example above the prompt swallow the real one — /review, 3.0.2).
+# Transparent only when it is the ONE such fence, only when the label precedes
+# it as PROSE — a label that itself sits inside another fence is upstream
+# illustrating its prompt, an example; fences nested inside the prompt (its own
+# bash blocks) stay masked. An UNCLOSED prompt fence is not transparent, and two
+# labelled fences make neither transparent: the anchors go missing — fail-closed.
+PROMPT_LABEL = "**Subagent prompt:**"
 
 EXIT_OK, EXIT_DRIFT, EXIT_CANNOT, EXIT_CONFIRM = 0, 1, 2, 3
 COUNT_KEYS = ("total_items", "done", "changed", "deferred", "unverifiable")
@@ -208,10 +230,56 @@ def visible(line: str) -> str:
     return _CONTROL.sub(escape, line)
 
 
+def _blank(m: re.Match) -> str:
+    return re.sub(r"[^\n]", " ", m.group())
+
+
+def _prompt_fences(text: str, masked: str) -> list[tuple[int, int]]:
+    """Body spans of every fence that is the subagent prompt: one of `_FENCE`'s
+    own matches that is CLOSED, opened by four or more backticks with the info
+    string `text`, and whose nearest preceding non-blank line is `PROMPT_LABEL`
+    still standing as prose in `masked`. `masked` is the plain `_FENCE` pass over
+    `text`; a label it blanked sits inside some other fence, and that is upstream
+    quoting its prompt as an example, not the prompt."""
+    spans = []
+    for m in _FENCE.finditer(text):
+        if not (m.group("f").startswith("````") and m.group("info").strip() == "text"
+                and m.group("close")):   # info is `text` (a trailing \r is whitespace to strip)
+            continue
+        i = m.start()
+        while i > 0 and text[i - 1] in " \t\r\n":
+            i -= 1
+        label = text.rfind("\n", 0, i) + 1
+        if text.startswith(PROMPT_LABEL, label) and masked[label] == text[label]:
+            spans.append(m.span("body"))
+    return spans
+
+
+def _masked(text: str) -> tuple[str, list[tuple[int, int]]]:
+    masked = _FENCE.sub(_blank, text)
+    return masked, _prompt_fences(text, masked)
+
+
 def unfenced(text: str) -> str:
     """`text` with fenced code blocks blanked to spaces. Same length and the same
-    newlines, so every offset and line number stays valid."""
-    return _FENCE.sub(lambda m: re.sub(r"[^\n]", " ", m.group()), text)
+    newlines, so every offset and line number stays valid.
+
+    The subagent-prompt fence (`_prompt_fences`) is the one exception: its body is
+    kept, with the fences nested inside it blanked. The outer `_FENCE` pass has
+    already swallowed the whole prompt fence — a 4-backtick opener is closed only
+    by a line of 4 or more, so the inner ``` blocks never close it — which is why
+    the body is re-masked on its own and spliced back over the same offsets. Two
+    labelled fences are not "the one": neither is opened, and the anchors inside
+    the real one go missing."""
+    masked, spans = _masked(text)
+    if len(spans) == 1:
+        start, end = spans[0]
+        masked = masked[:start] + _FENCE.sub(_blank, text[start:end]) + masked[end:]
+    return masked
+
+
+def prompt_fence_count(text: str) -> int:
+    return len(_masked(text)[1])
 
 
 def missing_anchors(text: str) -> list[str]:
@@ -230,6 +298,9 @@ def missing_anchors(text: str) -> list[str]:
     an illustration, not the section. The phrase anchors keep the raw text, since
     `<base>` genuinely lives inside Step 8's own bash blocks."""
     pats = dict(ANCHORS)
+    n = prompt_fence_count(text)
+    if n > 1:
+        return [f"one subagent prompt fence (found {n})"]
     masked = unfenced(text)
 
     def where(name: str) -> str:

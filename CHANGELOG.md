@@ -1,5 +1,35 @@
 # Changelog
 
+## [3.0.2] - 2026-09-11
+
+### Fixed
+- **`spec-drift` re-pins against gstack ≥ 1.83.** Upstream moved Step 8's subagent prompt
+  out of a `> ` blockquote into a ````text fence, and the anchor scan — which masks code
+  fences so a heading in an example cannot pass as structure — blanked the prompt with
+  them. `### Plan File Discovery` and `**Validator detection.**` live inside that
+  prompt, so `repin` refused every 1.83+ install with `ANCHORS MISSING` and
+  `tests/unit/test_spec_drift_upstream_alarm.py` stayed red on any machine with a
+  current gstack. `unfenced()` now treats the one fence that follows
+  `**Subagent prompt:**` as the section it is; fences nested inside it, a ````text
+  fence anywhere else, and an unclosed prompt fence all stay masked (fail-closed). The
+  prompt fence is found among `_FENCE`'s own matches, not by a second regex with its own
+  idea of where a fence ends — the first cut's regex let a `````-closed prompt run over a
+  later example (a heading that existed only there passed the check), let a labelled
+  `~~~` example above the prompt swallow the real one (`ANCHORS MISSING` on a healthy
+  file), made every labelled fence transparent instead of the one, and went quadratic
+  on a file of unclosed labels (pitfall round 1 + /review). Now: a label that itself
+  sits inside another fence is an example, a longer closing run closes (CommonMark),
+  and two labelled fences refuse by count. The fence grammar follows CommonMark where it
+  matters for masking: up to three spaces of indentation, a closer of the same character
+  only, and a `\r` before the newline, so an indented example is masked, ````~~ does not
+  close a ```` fence, and a CRLF file is refused for its line endings rather than for
+  anchors that only looked missing (third house). The pin is re-accepted at gstack
+  1.84.1.0 (`skills/spec-drift/pin/`).
+- The skill's contract prose said `deferred` counts NOT DONE "exactly as Step 8 uses
+  it"; Step 8 now names that count `not_done` and adds `partial`. Override 6 keeps the
+  wrapper's key set for its callers (`autoimplement` reads `deferred`) and now says so
+  explicitly, so a subagent reading both does not follow the upstream spelling.
+
 ## [3.0.1] - 2026-09-11
 
 ### Fixed
@@ -125,7 +155,7 @@ verdicts: `docs/superpowers/specs/2026-09-11-modernisering-audit.md`.
 ### Known
 - With gstack ≥ 1.83 installed, `spec-drift --repin` reports `ANCHORS MISSING`: upstream moved
   the plan-completion subagent prompt into a fenced block that the anchor scan masks. Not
-  caused by this release; fix tracked in `docs/superpowers/plans/2026-09-11-modernisering.md`.
+  caused by this release; fixed in 3.0.2.
 
 ### Deferred (own PR)
 - adapt as a deterministic merge script and setup-routing folded into adapt — touches
