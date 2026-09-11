@@ -327,7 +327,7 @@ other non-zero is xcodebuild's own status (typically 65) — callers test `-ne 0
 ### E2E executor pin (macOS)
 
 `.gstack/e2e-executor` holds `host` or `vm`; absence means `host`. The runner only
-**reads** it — `/setup-routing` and `/adapt` are its writers, `/e2e-route` is the
+**reads** it — `/adapt` is its writer, `/e2e-route` is the
 dispatcher that decides which entry point to run. Semantics the runner enforces:
 
 | Situation | Response |

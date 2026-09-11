@@ -50,7 +50,7 @@ fi
 echo ""
 
 # Minimal macOS project fixture. Kept inline so the test does not depend on
-# setup-routing/adapt running successfully — it tests the routing rule alone.
+# adapt running successfully — it tests the routing rule alone.
 read -r -d '' PROJECT_CLAUDE_MD <<'CLAUDE_MD' || true
 # Project CLAUDE.md (test fixture)
 

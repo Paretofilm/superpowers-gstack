@@ -53,13 +53,13 @@ Integration tests shell out to `claude --print` to verify real dispatch behavior
 
 | Test | Cases | What it verifies |
 |---|---|---|
-| `test_track_aware_dispatch.sh` | 2 | track=ios fixture → LLM dispatches to `/superpowers-gstack:swiftui-design-consultation`; no marker → LLM dispatches to gstack's `/design-consultation`. Tests the routing rule that `setup-routing` and `adapt` emit. |
+| `test_track_aware_dispatch.sh` | 2 | track=ios fixture → LLM dispatches to `/superpowers-gstack:swiftui-design-consultation`; no marker → LLM dispatches to gstack's `/design-consultation`. Tests the routing rule that `adapt` emits. |
 
 ## What's NOT tested yet (deferred backlog)
 
 - `/office-hours-track-aware` wrapper dispatch (intercepts `/office-hours`)
 - `/context-handoff` write + restore cycle (YAML frontmatter survives `/clear`)
-- Other CLAUDE.md routing rules emitted by `setup-routing`
+- Other CLAUDE.md routing rules emitted by `adapt`
 
 These would be additional `tests/integration/test_*.sh` files following the same pattern.
 

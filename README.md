@@ -2,7 +2,7 @@
 
 > **"Superpowers owns the implementation loop, GStack owns everything before and after it. Context Guard keeps the session clean."**
 
-A Claude Code plugin that integrates [Superpowers](https://github.com/obra/superpowers) and [GStack](https://github.com/garrytan/gstack) into one workflow — with skill routing, automatic context management, and project auto-configuration. Already have an existing project? Run `/adapt` and it analyzes your setup, preserves your CLAUDE.md, and adds routing — so you can jump right in.
+A Claude Code plugin that integrates [Superpowers](https://github.com/obra/superpowers) and [GStack](https://github.com/garrytan/gstack) into one workflow — with skill routing, automatic context management, and project auto-configuration. New or existing project, run `/adapt`: it analyzes your setup, preserves your CLAUDE.md, and adds routing — so you can jump right in.
 
 **Status: Work in Progress** — Actively developed. Contributions, feedback, and ideas are very welcome. See [Contributing](#contributing).
 
@@ -29,9 +29,8 @@ They never overlap. GStack focuses on *what roles review the work*. Superpowers 
 
 ## What's Included
 
-- **Claude Code Plugin** with fifteen skills:
-  - `/setup-routing` — Generates a tailored CLAUDE.md for new projects
-  - `/adapt` — Adds routing to existing projects without losing your CLAUDE.md content; removes plugin sections that have been retired
+- **Claude Code Plugin** with fourteen skills:
+  - `/adapt` — Sets up a new project's CLAUDE.md or upgrades an existing one without losing its content. The analysis and skill selection are the skill's; every write is `scripts/adapt-claude-md.py` — deterministic, idempotent, with a growth gate that defers (never destroys) a section you have written into, `--rescue` to move such content into an unmarked section, and a Removed / Deferred report
   - `/autoimplement` — Auto-advance through a multi-phase implementation plan: one subagent per phase (the Claude Code Workflow tool may run the loop), `/review` + `/pitfall-verification` chained at every phase boundary, an active pre-flight chain on the plan itself before Phase 1 unless the latest plan commit matches `^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)`. Stops by default on any actionable finding; severe findings always stop. Hard refusals: fewer than 2 phases, missing per-phase commit steps, dirty working tree, on `main`/`master`, plan touches migrations / secrets / credentials / `.env` / `.ssh`.
   - `/context-handoff` — Writes a human-readable handoff to `docs/superpowers/handoff.md` before `/clear` or `/compact`. Auto-resumes on next session start. Different from gstack's `/context-save` — this lives in the repo and works cross-machine.
   - `/htmlify` — Offline HTML rendering of MD artefacts (design docs, plans, handoffs) and per-directory dashboards in the plugin's house style (`styles/companion.css`). Since 3.0.0 the fallback: previews normally go through Claude Code's Artifact tool. Bun + TypeScript with its own test suite; sanitized via DOMPurify.
@@ -45,11 +44,11 @@ They never overlap. GStack focuses on *what roles review the work*. Superpowers 
   - `/spec-drift` — standalone "does this plan still match the code?" audit, invoked as `/superpowers-gstack:spec-drift <plan-path> [--base <ref>]`. Wraps `/ship` Step 8's plan-completion section: read from `~/.claude/skills/gstack/ship/sections/plan-completion.md` at run time, never copied, sha256-pinned in `skills/spec-drift/pin.json` (`--repin` shows the upstream diff and asks before accepting). Explicit plan path and explicit `--base`. Same report and last-line JSON as Step 8 plus exit `0` clean / `1` drift / `2` could not run. Report only; write-back and a drift ledger are Fase 2 of `docs/superpowers/specs/2026-09-07-spec-drift-design.md`.
   - `/superpowers-gstack:office-hours-track-aware` — wraps upstream `/office-hours` for dual-track projects: runs the gstack brainstorm, infers track (native vs web), asks the platform question inline only if needed, writes `.gstack/track`, relocates the design doc into `docs/`, publishes it as an Artifact page BEFORE the Approve / Revise / Restart gate, and suggests `/superpowers-gstack:swiftui-design-consultation` next for native tracks. **Intercepts `/office-hours`** via CLAUDE.md routing rules.
   - `/superpowers-gstack:swiftui-design-consultation` — Apple-canon design system consultation for SwiftUI projects; produces `DESIGN.md` + a Swift Package starter from templates and chains into `/apple-native-review` with a HIG conformance budget. Inlines the platform question (iOS/macOS/both) on first run if `.gstack/track` is missing.
-- **Per-skill model routing** (v0.2) — `/setup-routing` and `/adapt` emit a `## Model Routing` section inside the generated CLAUDE.md. Routes by two axes: a per-skill **base tier** (`fable`/`opus`/`sonnet`/`haiku`) and a project-level **domain-sensitivity** modifier (very high/high/medium/low — inferred from project type and security signals). See `skills/setup-routing/model-routing.md` for the canonical table. Advisory — orchestrator-Claude consults it when dispatching subagents.
+- **Per-skill model routing** (v0.2) — `/adapt` emits a `## Model Routing` section inside the generated CLAUDE.md. Routes by two axes: a per-skill **base tier** (`fable`/`opus`/`sonnet`/`haiku`) and a project-level **domain-sensitivity** modifier (very high/high/medium/low — inferred from project type and security signals). See `skills/adapt/model-routing.md` for the canonical table. Advisory — orchestrator-Claude consults it when dispatching subagents.
 - **[Appendix](appendix-reference.md)** — Skill internals, troubleshooting, and anti-patterns
 - **Automated update pipeline** — GitHub Actions keeps the plugin in sync when upstream frameworks change
 
-> **Tip:** In autocomplete, type `/setup-routing`, `/adapt`, or `/context-handoff` — Claude Code matches on the skill name. The full prefixed form (e.g. `/superpowers-gstack:adapt`) also works.
+> **Tip:** In autocomplete, type `/adapt` or `/context-handoff` — Claude Code matches on the skill name. The full prefixed form (e.g. `/superpowers-gstack:adapt`) also works.
 
 ## Kickstart
 
@@ -88,11 +87,7 @@ claude
 ### 3. Set up your project
 
 ```
-# New project:
-/setup-routing
-
-# Existing project:
-/adapt
+/adapt        # new project or existing one — same skill
 ```
 
 This generates a CLAUDE.md with routing rules tailored to your project type, tech stack, and deployment target.
@@ -333,7 +328,7 @@ Review passed? → /qa → /cso → /ship
 
 ### Model Routing (v0.2)
 
-When orchestrator-Claude dispatches a subagent, it should pick the model based on the **task being executed** and the project's **domain sensitivity**, not the orchestrator's default. The full table lives at [`skills/setup-routing/model-routing.md`](skills/setup-routing/model-routing.md). Highlights:
+When orchestrator-Claude dispatches a subagent, it should pick the model based on the **task being executed** and the project's **domain sensitivity**, not the orchestrator's default. The full table lives at [`skills/adapt/model-routing.md`](skills/adapt/model-routing.md). Highlights:
 
 | Skill / Phase                                         | Base tier         |
 |-------------------------------------------------------|-------------------|
@@ -345,7 +340,7 @@ When orchestrator-Claude dispatches a subagent, it should pick the model based o
 | High-blast-radius coding (RT audio, migrations, auth) | opus + verify     |
 | Novel technique, long-horizon, not chunkable          | fable             |
 
-The recommendations are **advisory v0.2**. Domain sensitivity (inferred at setup/adapt time from project type and Q3 security signals) acts as a modifier: very-high/high domains floor coding at `opus`; medium uses the base tier; low can go one tier cheaper. See `skills/setup-routing/model-routing.md` for the full table with phase-level breakdowns and caveats.
+The recommendations are **advisory v0.2**. Domain sensitivity (inferred at setup/adapt time from project type and Q3 security signals) acts as a modifier: very-high/high domains floor coding at `opus`; medium uses the base tier; low can go one tier cheaper. See `skills/adapt/model-routing.md` for the full table with phase-level breakdowns and caveats.
 
 ## How It Stays Up to Date
 
@@ -389,7 +384,7 @@ This is a work in progress and **any help is welcome**:
 Both. They cover different phases. This project gives you the workflow to combine them.
 
 **Can I use this with an existing project?**
-Yes. Run `/adapt` — it preserves your existing CLAUDE.md and adds only the routing section.
+Yes. Run `/adapt` — it preserves your existing CLAUDE.md and adds only the plugin's sections; every write goes through a deterministic script with a snapshot and a Removed report.
 
 **Do I need both frameworks installed?**
 Yes. Install both [Superpowers](https://github.com/obra/superpowers) and [GStack](https://github.com/garrytan/gstack), then add this plugin for routing.

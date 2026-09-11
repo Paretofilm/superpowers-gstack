@@ -25,10 +25,10 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 ROUTE = (REPO / "skills" / "e2e-route" / "SKILL.md").read_text()
 RUNNER = (REPO / "skills" / "e2e-scaffold" / "templates" / "run-uitests.sh").read_text()
-XCODE_BLOCK = (REPO / "skills" / "setup-routing" / "blocks" / "xcode-tools.md").read_text()
-PLACEHOLDERS = (REPO / "skills" / "setup-routing" / "blocks" / "PLACEHOLDERS.md").read_text()
+XCODE_BLOCK = (REPO / "skills" / "adapt" / "blocks" / "xcode-tools.md").read_text()
+PLACEHOLDERS = (REPO / "skills" / "adapt" / "blocks" / "PLACEHOLDERS.md").read_text()
 ADAPT = (REPO / "skills" / "adapt" / "SKILL.md").read_text()
-SETUP = (REPO / "skills" / "setup-routing" / "SKILL.md").read_text()
+ADAPT_SCRIPT = (REPO / "scripts" / "adapt-claude-md.py").read_text()
 HYGIENE = REPO / "scripts" / "vm-hygiene.sh"
 
 
@@ -126,17 +126,20 @@ def test_the_block_tells_the_reader_to_treat_zero_executed_as_failure():
 # --- layering: who writes the pin, who only reads it ------------------------------
 
 def test_only_the_generators_write_the_pin():
-    for name, text in (("adapt", ADAPT), ("setup-routing", SETUP)):
-        assert ".gstack/e2e-executor" in text, name
-        assert "!\\.gstack/e2e-executor" in text or "!.gstack/e2e-executor" in text, \
-            f"{name} must keep the pin committable when .gstack/ is ignored"
+    assert ".gstack/e2e-executor" in ADAPT
+    assert "!\\.gstack/e2e-executor" in ADAPT or "!.gstack/e2e-executor" in ADAPT, \
+        "adapt must keep the pin committable when .gstack/ is ignored"
+    assert "def read_executor" in ADAPT_SCRIPT and "read_executor(project)" in ADAPT_SCRIPT, \
+        "the script reads the pin (PLACEHOLDERS.md's rule, in code); the skill writes it"
     assert "never its writer" in ROUTE, "e2e-route must stay a pure reader"
 
 
 def test_the_axis_is_macos_only():
     """iOS routes to its own scaffold and has no rig; asking there would be a question
     with no useful answer."""
-    assert "macos" in ADAPT[ADAPT.index("{{E2E_EXECUTOR}}"):][:400]
+    assert "macos" in ADAPT[ADAPT.index("E2E executor pin"):][:200], \
+        "adapt asks for the pin only on macos/both"
+    assert "macos" in PLACEHOLDERS[PLACEHOLDERS.index("{{E2E_EXECUTOR}}"):][:400].lower()
     assert "macOS-only" in ROUTE or "committed macOS only" in ROUTE
 
 
@@ -144,9 +147,10 @@ def test_block_marker_and_placeholder_are_wired():
     assert "<!-- gstack-xcode-tools-v7 -->" in XCODE_BLOCK
     assert "{{E2E_EXECUTOR}}" in XCODE_BLOCK
     assert "{{E2E_EXECUTOR}}" in PLACEHOLDERS, "every placeholder needs a resolution rule"
-    ladder = ADAPT[ADAPT.index("Native Apple development tools section."):][:2500]
-    assert "matches `v7`" in ladder, "adapt's version ladder must skip on v7"
-    assert "`v1`–`v6`" in ladder, "and must replace v6 and older"
+    # the version ladder is derived, not written: the script compares the section's
+    # marker to the block's, so a v7 block skips v7 and replaces v1-v6 by construction
+    assert 'Block("xcode-tools.md", "gstack-xcode-tools"' in ADAPT_SCRIPT
+    assert "gstack-xcode-tools-v7" in XCODE_BLOCK.split("\n", 1)[0]
 
 
 def test_route_decision_block_carries_the_executor_field():

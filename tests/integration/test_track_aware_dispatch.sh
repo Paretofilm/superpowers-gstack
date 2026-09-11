@@ -2,7 +2,7 @@
 #
 # tests/integration/test_track_aware_dispatch.sh
 #
-# Verifies that the track-aware routing rules in setup-routing's
+# Verifies that the track-aware routing rules in adapt's
 # generated CLAUDE.md actually cause /design-consultation to dispatch
 # to the right skill based on .gstack/track.
 #
@@ -37,7 +37,7 @@ echo "Plugin under test: $PLUGIN_DIR"
 echo ""
 
 # --- Fixture: minimal project CLAUDE.md with track-aware routing block ---
-# Mirrors the block that setup-routing/adapt would emit. Kept inline so
+# Mirrors the block that adapt would emit. Kept inline so
 # the test does not depend on those skills running successfully — it
 # tests the dispatch rule in isolation.
 

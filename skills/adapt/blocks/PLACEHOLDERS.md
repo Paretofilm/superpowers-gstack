@@ -1,10 +1,12 @@
 # Placeholder resolution for shared emitted blocks
 
-The block files in this directory are the single source for the sections both
-generators (`setup-routing`, `adapt`) emit into a project's CLAUDE.md. Emit each
-block **verbatim** — except for `{{...}}` placeholders, which the generator MUST
-resolve to concrete values before writing the file. Never let a raw `{{...}}`
-token reach a generated CLAUDE.md.
+The block files in this directory are the single source for the sections
+`scripts/adapt-claude-md.py` emits into a project's CLAUDE.md on behalf of
+`/superpowers-gstack:adapt`. The script writes each block **verbatim** — except for
+`{{...}}` placeholders, which the skill MUST resolve to concrete values and pass as
+`--set TOKEN=value` before the script runs; the script refuses (exit 2, nothing
+written) when a block it is about to emit still carries an unresolved token. Never
+let a raw `{{...}}` token reach a generated CLAUDE.md.
 
 ## `{{DOMAIN_SENSITIVITY}}` (model-routing-section.md)
 
@@ -95,7 +97,8 @@ do NOT emit `host`: stop and tell the user the pin is invalid (`BLOCKED — inva
 silently degrades to `host` is the one outcome the marker exists to prevent, because
 the run still looks successful.
 
-The generators (`setup-routing` Step 6, `adapt` Step 5) ask for this value once on
-native tracks and write the file; they are its only writers. `e2e-route` and the
+`/superpowers-gstack:adapt` (Step 4) asks for this value once on native tracks and writes the file; it
+is the pin's only writer. The script reads the pin itself (this rule, in code) so
+`--set E2E_EXECUTOR=` is only needed to override it. `e2e-route` and the
 scaffold runner are readers. iOS-only and web projects get no file and no question —
 the axis is macOS-only until someone asks for parallel iOS E2E.

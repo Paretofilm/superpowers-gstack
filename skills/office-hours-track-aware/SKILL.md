@@ -122,5 +122,5 @@ Next:
 
 Re-runs are idempotent: an existing `.gstack/track` is kept, office-hours runs fresh and
 writes a new doc, and relocation never overwrites an earlier doc.
-`/superpowers-gstack:setup-routing` emits a CLAUDE.md rule preferring this wrapper when
+`/superpowers-gstack:adapt` emits a CLAUDE.md rule preferring this wrapper when
 the user types `/office-hours`.

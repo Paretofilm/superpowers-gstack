@@ -238,7 +238,7 @@ If you need to stop mid-implementation:
 
 ### superpowers-gstack skills not found
 
-**Symptom:** Running `/superpowers-gstack:setup-routing` or `/superpowers-gstack:adapt` returns "Unknown skill" even though the plugin files exist.
+**Symptom:** Running `/superpowers-gstack:adapt` returns "Unknown skill" even though the plugin files exist.
 
 **Cause:** The plugin was installed via symlink (`./scripts/install-plugin.sh` without `--dev`) instead of via marketplace. Symlinks place the files in `~/.claude/plugins/` but don't register in `installed_plugins.json`, so Claude Code's skill discovery doesn't find the skills.
 
@@ -256,7 +256,7 @@ Then reinstall via marketplace (see [Kickstart](README.md#kickstart) for the com
 
 **Symptom:** You ask to implement something and GStack's `/investigate` activates instead of Superpowers' debugging.
 
-**Fix:** Run `/setup-routing` (new project) or `/adapt` (existing project) to generate routing rules in your CLAUDE.md. Without routing rules, Claude guesses based on context and often picks wrong.
+**Fix:** Run `/adapt` (new or existing project) to generate routing rules in your CLAUDE.md. Without routing rules, Claude guesses based on context and often picks wrong.
 
 ### `/review` says "nothing to review"
 

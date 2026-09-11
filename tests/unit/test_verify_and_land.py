@@ -11,8 +11,8 @@ import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SKILL = ROOT / "skills" / "verify-and-land" / "SKILL.md"
-XCODE = ROOT / "skills" / "setup-routing" / "blocks" / "xcode-tools.md"
-HYGIENE = ROOT / "skills" / "setup-routing" / "blocks" / "git-hygiene.md"
+XCODE = ROOT / "skills" / "adapt" / "blocks" / "xcode-tools.md"
+HYGIENE = ROOT / "skills" / "adapt" / "blocks" / "git-hygiene.md"
 
 
 def test_xcode_block_can_build_and_launch_a_macos_app():

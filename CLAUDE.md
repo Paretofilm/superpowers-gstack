@@ -24,13 +24,13 @@ A GitHub Action (`.github/workflows/check-updates.yml`) runs weekly and:
 3. Creates a PR with the changes
 4. Creates a GitHub issue with `notification` label
 
-A **separate, independent** `check-models` job (`scripts/check-new-models.py`) queries the Anthropic `/v1/models` API and compares it, per tier, against the model IDs `skills/setup-routing/model-routing.md` references. When a newer model ships (e.g. Sonnet 5 on 2026-06-30), it opens a `model-review` issue — it never edits model IDs or feeds the auto-edit job, because model IDs are pinned snapshots with behaviour differences and adopting one is a human review call, not an auto-merge. Detection is stateless (version-tuple compare, unparseable/preview IDs skipped) and idempotent (won't re-open an issue already covering the model). The job self-tests its detection logic in CI before the live query.
+A **separate, independent** `check-models` job (`scripts/check-new-models.py`) queries the Anthropic `/v1/models` API and compares it, per tier, against the model IDs `skills/adapt/model-routing.md` references. When a newer model ships (e.g. Sonnet 5 on 2026-06-30), it opens a `model-review` issue — it never edits model IDs or feeds the auto-edit job, because model IDs are pinned snapshots with behaviour differences and adopting one is a human review call, not an auto-merge. Detection is stateless (version-tuple compare, unparseable/preview IDs skipped) and idempotent (won't re-open an issue already covering the model). The job self-tests its detection logic in CI before the live query.
 
 The plugin ships a SessionStart hook (`hooks/hooks.json` → `scripts/check-plugin-version.sh`) that nudges `/adapt` when a project's generated CLAUDE.md lags the installed plugin version — every plugin user gets it automatically, and it exempts this repo. A second, maintainer-only hook (`scripts/notify-pending-updates.sh`, surfaces pending auto-update PRs) is opt-in via `./scripts/setup-hooks.sh`.
 
 Since 2.50.0 the plugin also ships a session-continuity hook pair: `scripts/capture-session-tail.sh` (SessionEnd) deterministically salvages the last user/assistant exchange plus a git snapshot into `<git-dir>/gstack-last-session.md` when a session ends — including `/clear`, where no model is available to write a handoff — and `scripts/session-resume.sh` (SessionStart, matcher `startup|clear`) prints a "Where this project left off" banner from `progress.md`, a complete `handoff.md`, and that capture, before the user types anything. Both are read-only toward `handoff.md` (classification/consumption stays with the Session Continuity rules below), silent when the sources are absent, and active only in repos with a `docs/superpowers/` directory.
 
-The update pipeline also keeps `skills/setup-routing/SKILL.md` and `skills/adapt/SKILL.md` in sync — if upstream adds, removes, or renames skills, the skill evaluation tables in both skills are updated automatically.
+The update pipeline also keeps `skills/adapt/roster.md` current — if upstream adds, removes, or renames skills, the skill evaluation tables in that file are updated automatically.
 
 ### Required secret
 `ANTHROPIC_API_KEY` must be set in GitHub repo secrets for the Claude API call.
@@ -47,13 +47,12 @@ Run `./scripts/check-updates.sh` locally for an immediate check.
 
 ## Plugin
 
-This repo is also a Claude Code plugin (`superpowers-gstack`). The skill `setup-routing` generates tailored CLAUDE.md files for new projects.
+This repo is also a Claude Code plugin (`superpowers-gstack`). The skill `adapt` sets up or upgrades a project's CLAUDE.md; every write goes through `scripts/adapt-claude-md.py`.
 
 - Install via marketplace: `/plugin marketplace add Paretofilm/claude-marketplace` then `/plugin install superpowers-gstack@paretofilm-plugins`
 - Dev mode: `./scripts/install-plugin.sh --dev` (creates symlink, skills won't be discoverable in the skills list)
 - Skills:
-  - `/superpowers-gstack:setup-routing` — generate CLAUDE.md for new projects
-  - `/superpowers-gstack:adapt` — adapt existing projects (preserves CLAUDE.md content)
+  - `/superpowers-gstack:adapt` — set up a new project or adapt an existing one (preserves CLAUDE.md content; the merge itself is `scripts/adapt-claude-md.py`, deterministic and tested)
 
 ## Setup
 
@@ -129,7 +128,7 @@ Key routing rules:
 
 Before merging/pushing any plugin change (skills/, scripts/, CLAUDE.md, workflows):
 
-1. `python3 scripts/lint-skills.py` must be GREEN — it enforces frontmatter validity, cross-reference resolution, routing coverage, CHANGELOG↔plugin.json version match, multi-lens marker consistency, the stale-pattern denylist, a ≤30-word description budget, and single-sourcing of the emitted CLAUDE.md blocks (E8: every shared block in `skills/setup-routing/blocks/` exists, is referenced by both generators, and has no inline copy in either SKILL.md — so setup-routing and adapt can't silently write different content). CI runs the same lint plus the pytest suites on every push/PR (`.github/workflows/lint.yml`).
+1. `python3 scripts/lint-skills.py` must be GREEN — it enforces frontmatter validity, cross-reference resolution, routing coverage, CHANGELOG↔plugin.json version match, multi-lens marker consistency, the stale-pattern denylist, a ≤30-word description budget, and single-sourcing of the emitted CLAUDE.md blocks (E8: every shared block in `skills/adapt/blocks/` exists, is in the `BLOCKS` roster of `scripts/adapt-claude-md.py`, and has no inline copy in `adapt/SKILL.md`), and that `/adapt` never merges by hand (E13: the skill names the script and carries none of the retired hand-surgery instructions). CI runs the same lint plus the pytest suites on every push/PR (`.github/workflows/lint.yml`).
 2. Ship-worthy change ⇒ bump `.claude-plugin/plugin.json` (or the marketplace cache never updates) **and** add the `## [X.Y.Z]` CHANGELOG entry (the lint refuses a version without one).
 3. New/removed/renamed skill ⇒ update README's skill list and the routing section above (the lint refuses unrouted skills).
 4. When purging a stale pattern, add it to `DENYLIST` in `scripts/lint-skills.py` so it stays purged.
