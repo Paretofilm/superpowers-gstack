@@ -201,7 +201,7 @@ the same test process, because of an internal write-coalescing delay that
 step after every save-then-assert test, rather than trusting the save call
 itself, and it turned every one of those tests deterministic on the first try.
 
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v8 --><!-- emitted=162 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v8 --><!-- emitted=101 -->
 
 This section captures how *this* team actually works with git day to day — it grew
 out of two incidents in the first three months of the project and has been amended
@@ -339,67 +339,6 @@ Whoever cuts the release branch is responsible for the version bump commit being
 the *first* commit on that branch, before any late fixes land on top of it, so
 that `git log release/1.4.0` reads top-to-bottom as "here is the version, here is
 everything that shipped in it."
-
-### Submodule and package dependency pinning
-
-This project has no git submodules and the team intends to keep it that way — the
-one attempt at vendoring a dependency as a submodule (an early experiment with a
-custom Markdown renderer) turned into enough `git submodule update --init
---recursive` confusion for new clones that it was pulled back out within a week
-and replaced with a plain Swift Package Manager dependency pinned to an exact
-version tag, never a branch or a commit SHA, so that `Package.resolved` alone is
-enough to reproduce a build without a second `git` operation of any kind.
-
-### Handling `.pbxproj` conflicts
-
-Xcode's project file is XML-ish and diffs badly, so this team has a standing rule
-that nobody resolves a `project.pbxproj` conflict by hand past the first five
-lines of context — past that point, the safer move is to open both branches in
-Xcode separately, note which files/targets/build-settings actually changed on
-each side in plain English, then let one person redo those specific changes on
-top of the merged branch and regenerate the file cleanly. Hand-splicing conflict
-markers inside `.pbxproj` has produced a project that opened fine in Xcode but
-silently dropped a target's Info.plist reference, and the bug wasn't caught for
-two weeks because the target still built — it just stopped embedding the file it
-needed at runtime, which only showed up as a crash in a build a tester happened
-to install fresh.
-
-### Pre-commit hook scope
-
-The repo's pre-commit hook runs exactly two checks — `swift-format --lint` and a
-check that no file under `Sources/` contains the literal string `FIXME-BLOCKING`
-— and deliberately nothing else. Test suites and full builds are explicitly kept
-out of pre-commit, because a hook slow enough to notice is a hook people route
-around, and this team would rather have a fast hook everyone actually runs than a
-thorough one people start passing `--no-verify` to justify to themselves. Anything
-heavier than lint-speed belongs in CI, which runs on every push regardless of
-whether the local hook ran.
-
-### Local branch cleanup cadence
-
-Merged branches are deleted from the remote automatically by GitHub's own
-"automatically delete head branches" setting, so nobody on this team manually
-deletes a remote branch after merge — but local clones accumulate stale branches
-that setting can't reach, so everyone runs a `git fetch --prune && git branch
---merged main | grep -v '^\*\|main' | xargs git branch -d` pass at the start of
-each week rather than whenever their local branch list starts feeling cluttered.
-Doing it on a fixed cadence instead of an as-needed basis turned out to matter:
-"as needed" meant it never actually happened, because a cluttered branch list is
-mildly annoying but never urgent enough to stop and fix in the moment.
-
-### Tagging pre-release builds for internal QA
-
-Internal QA builds (the ones handed to the two beta testers who are not on
-TestFlight) are tagged `internal/<date>-<short-sha>` rather than bumping the real
-version at all, specifically so those throwaway tags never collide with, or get
-mistaken for, an actual `app-v*` release tag in `git tag --list`. These internal
-tags are never pushed to the shared remote — they exist only on the machine that
-built that particular QA artifact, as a local pointer back to exactly which commit
-produced it, and are deleted once the QA cycle they were made for is over.
-Losing one of these local tags when a laptop gets wiped has never mattered in
-practice, which is exactly the point — if it ever did matter, that would be a
-sign the artifact should have been a real, pushed, `app-v*` release instead of an
-ad hoc internal build in the first place.
 
 ## Project conventions
 
