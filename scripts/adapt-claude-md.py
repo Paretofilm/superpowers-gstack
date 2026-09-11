@@ -177,18 +177,29 @@ def fence_mask(lines: list[str]) -> list[bool]:
     return mask
 
 
-def unclosed_fence(lines: list[str]) -> int | None:
-    """1-based line of a fence that never closes, or None. Appending below an
-    open fence would put every block inside it, invisible to the next run."""
-    open_at, open_char, open_len = None, None, 0
+def unclosed_fence(lines: list[str]) -> tuple[str, int] | None:
+    """("fence"|"comment", 1-based line) of a fence or HTML comment that never
+    closes, or None. Appending below an open one would put every block inside
+    it, invisible to the next run."""
+    open_at, open_char, open_len, comment_at = None, None, 0, None
     for i, line in enumerate(lines):
+        if comment_at is not None:
+            if "-->" in line:
+                comment_at = None
+            continue
         m = re.match(r"^[ \t]{0,3}(`{3,}|~{3,})(.*)$", line)
         if open_char is None:
             if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
                 open_at, open_char, open_len = i + 1, m.group(1)[0], len(m.group(1))
+            elif "<!--" in line and "-->" not in line[line.index("<!--") + 4:]:
+                comment_at = i + 1
         elif m and m.group(1)[0] == open_char and len(m.group(1)) >= open_len and not m.group(2).strip():
             open_char = None
-    return open_at if open_char is not None else None
+    if open_char is not None:
+        return ("fence", open_at)
+    if comment_at is not None:
+        return ("comment", comment_at)
+    return None
 
 
 def heading_text(line: str) -> str:
@@ -416,7 +427,12 @@ def _find_section(lines: list[str], marker: str | None, heading_re: str):
             by_marker.append((i, lvl, raw, int(m.group(2))))
         elif re.match(heading_re, heading_text(raw), re.I):
             by_text.append((i, lvl, raw, None))
+    if len(by_marker) > 1:
+        _DUPES.append((marker, len(by_marker)))
     return (by_marker or by_text or [None])[0]
+
+
+_DUPES: list[tuple[str, int]] = []
 
 
 def growth(lines: list[str], start: int, end: int, blk: BlockText) -> dict:
@@ -479,20 +495,48 @@ def rescue_section(lines: list[str], start: int, end: int, blk: BlockText, ctx: 
     return out
 
 
-def _placeholder_refresh(sec: list[str], raw: str, ctx: Context, level: int) -> list[str] | None:
+KNOWN_VALUES = {"E2E_EXECUTOR": EXECUTORS, "DOMAIN_SENSITIVITY": SENSITIVITIES}
+
+
+def _placeholder_refresh(sec: list[str], raw: str, ctx: Context, level: int):
     """A current-version section whose only differences from a fresh emission sit
-    on the block's placeholder lines has stale placeholder VALUES (the executor pin
-    changed, say). Return the fresh emission then; None means leave it alone."""
+    on the block's placeholder lines MAY have stale placeholder VALUES (the executor
+    pin changed, say). Refresh only when every such old line is the template line
+    with a KNOWN value in the slot — `run on: **host**`, not `run on: **host** (chosen
+    for speed)`, which is the user's edit and must stay. Returns (new lines, the old
+    lines replaced) or (None, reason)."""
+    needed_before = set(ctx.needed)
     new = _emitted_block(raw, ctx, level)
-    if sec == new or len(sec) != len(new):
-        return None
+    ctx.needed = needed_before   # only a refresh that happens may demand values
+    if sec == new:
+        return None, None
+    if len(sec) != len(new):
+        return None, "differs from a fresh emission beyond its placeholder lines"
     template = raw.rstrip("\n").split("\n")
     if level == 3:
         template = demote(template)
+    template[0] = re.sub(r"<!-- emitted=\d+ -->", "", new[0])   # `new` carries provenance; the template does not
+    replaced = []
     for a, b, t in zip(sec, new, template):
-        if a != b and "{{" not in t:
-            return None
-    return new
+        if a == b:
+            continue
+        tokens = PLACEHOLDER_RE.findall(t)
+        if not tokens:
+            return None, "differs from a fresh emission on a line with no placeholder"
+        pat = re.escape(t)
+        for tok in tokens:
+            pat = pat.replace(re.escape("{{" + tok + "}}"), "(?P<" + tok + ">.+?)", 1)
+        m = re.fullmatch(pat, a)
+        if not m:
+            return None, f"line `{a.strip()[:60]}` is not the block's placeholder line with a value in it"
+        for tok in tokens:
+            if tok in KNOWN_VALUES and m.group(tok) not in KNOWN_VALUES[tok]:
+                return None, f"line `{a.strip()[:60]}` carries a value this script did not write"
+            if tok not in KNOWN_VALUES and m.group(tok) != ctx.sets.get(tok):
+                return None, f"line `{a.strip()[:60]}` carries a {tok} value only you can vouch for"
+        replaced.append(a)
+    ctx.needed |= set(PLACEHOLDER_RE.findall(raw))
+    return new, replaced
 
 
 def apply_block(lines: list[str], blk: Block, ctx: Context, report: Report) -> list[str]:
@@ -500,7 +544,11 @@ def apply_block(lines: list[str], blk: Block, ctx: Context, report: Report) -> l
     marker, cur_version, _ = _block_meta(raw)
     bt = BlockText(raw)
     name = heading_text(raw.split("\n", 1)[0])
+    _DUPES.clear()
     found = _find_section(lines, marker, blk.heading)
+    for m_, n_ in _DUPES:
+        report.notes.append(f"more than one section carries `{m_}` ({n_} found); only the first is managed — "
+                            f"delete the copy you did not write, the snapshot has both")
     wanted = blk.tracks is None or ctx.track in blk.tracks
     if found is None:
         if wanted:
@@ -508,14 +556,23 @@ def apply_block(lines: list[str], blk: Block, ctx: Context, report: Report) -> l
             return _append(lines, _emitted_block(raw, ctx, 2))
         return lines
     start, level, raw_head, version = found
+    if not wanted:
+        report.notes.append(f"`{heading_text(raw_head)}` is a native-track section and this run's "
+                            f"track is {ctx.track} — not on this track, so it is upgraded as usual but never removed; "
+                            f"delete it yourself if the project stopped being native")
     end = section_end(lines, start, level)
     head_name = heading_text(raw_head)
     if version == cur_version:
         if "{{" in raw:
-            refreshed = _placeholder_refresh(lines[start:content_end(lines, start, end)], raw, ctx, level)
+            refreshed, info = _placeholder_refresh(lines[start:content_end(lines, start, end)], raw, ctx, level)
             if refreshed is not None:
                 report.changes.append(f"{name}: placeholder values refreshed ({marker}-v{cur_version})")
+                report.removed.append({"section": head_name, "lines": info,
+                                       "where": "placeholder line(s) rewritten with the current value"})
                 return _splice(lines, start, content_end(lines, start, end), refreshed)
+            if info:
+                report.notes.append(f"`{head_name}` is at the current version but {info}; not touched — "
+                                    f"edit that line by hand if the value is stale")
         report.preserved.append(f"{head_name}: already at {marker}-v{cur_version}")
         return lines
     if version is not None and version > cur_version:
@@ -609,7 +666,7 @@ def apply_autonomy(lines: list[str], report: Report) -> list[str]:
 def _managed_ranges(lines: list[str]) -> list[tuple[int, int]]:
     out = []
     for i, lvl, raw in headings(lines):
-        if MARKER_RE.search(raw) or heading_text(raw) == "Model Routing":
+        if MARKER_RE.search(raw) or heading_text(raw).lower() == "model routing":
             out.append((i, section_end(lines, i, lvl)))
     return out
 
@@ -631,7 +688,7 @@ def apply_renames(lines: list[str], report: Report) -> list[str]:
     managed = _managed_ranges(lines)
     editable = [not mask[i] and not any(a <= i < b for a, b in managed) for i in range(len(lines))]
     counts: dict[str, int] = {}
-    removed_rows = 0
+    removed_rows: list[str] = []
     kept_mentions: list[int] = []
     renamed_at: set[int] = set()
     out: list[str] = []
@@ -642,7 +699,7 @@ def apply_renames(lines: list[str], report: Report) -> list[str]:
             continue
         if removed_pat.search(line):
             if _is_reference_line(line, removed_pat):
-                removed_rows += 1
+                removed_rows.append(line)
                 continue
             kept_mentions.append(len(out) + 1)
         for olds, new in RENAMES:
@@ -655,7 +712,7 @@ def apply_renames(lines: list[str], report: Report) -> list[str]:
     # rows that collapsed into the same skill become one row (keep the first) —
     # only rows a rename touched THIS run, only within one table
     mask = fence_mask(lines)
-    result, seen, in_table, removed_dupes = [], set(), False, 0
+    result, seen, in_table, removed_dupes = [], set(), False, []
     for i, line in enumerate(lines):
         is_row = not mask[i] and line.lstrip().startswith("|")
         if is_row and not in_table:
@@ -665,7 +722,7 @@ def apply_renames(lines: list[str], report: Report) -> list[str]:
         if is_row:
             key = [c.strip() for c in line.strip().strip("|").split("|")][0]
             if key in seen and i in renamed_at:
-                removed_dupes += 1
+                removed_dupes.append(line)
                 continue
             seen.add(key)
         result.append(line)
@@ -673,9 +730,13 @@ def apply_renames(lines: list[str], report: Report) -> list[str]:
         olds = next(o for o, n in RENAMES if n == new)
         report.changes.append(f"renamed `{'`/`'.join(olds)}` -> `{new}` ({k} places)")
     if removed_rows:
-        report.changes.append(f"removed {removed_rows} roster row(s)/list item(s) naming a retired skill")
+        report.changes.append(f"removed {len(removed_rows)} roster row(s)/list item(s) naming a retired skill")
+        report.removed.append({"section": "Skill routing (retired skill rows)", "lines": removed_rows,
+                               "where": "the skill no longer exists; visual exploration is routed by e2e-route"})
     if removed_dupes:
-        report.changes.append(f"collapsed {removed_dupes} row(s) that a rename made identical to an earlier row")
+        report.changes.append(f"collapsed {len(removed_dupes)} row(s) that a rename made identical to an earlier row")
+        report.removed.append({"section": "Skill routing (collapsed rows)", "lines": removed_dupes,
+                               "where": "a rename made this row's skill identical to an earlier row's; the earlier row stays"})
     for n in kept_mentions:
         report.notes.append(f"line {n} mentions a retired skill in prose; kept as written — edit it by hand")
     return result
@@ -684,7 +745,7 @@ def apply_renames(lines: list[str], report: Report) -> list[str]:
 def apply_routing(lines: list[str], ctx: Context, report: Report) -> list[str]:
     if not ctx.routing:
         return lines
-    if any(lvl == 2 and heading_text(raw) == "Skill routing" for _, lvl, raw in headings(lines)):
+    if any(lvl == 2 and heading_text(raw).lower() == "skill routing" for _, lvl, raw in headings(lines)):
         report.preserved.append("Skill routing: present, kept as-is (its plugin-managed subsections are handled per block)")
         return lines
     new = ctx.routing.rstrip("\n").split("\n")
@@ -710,7 +771,7 @@ def _model_routing_is_emitted(body_lines: list[str]) -> bool:
 def apply_model_routing(lines: list[str], ctx: Context, report: Report) -> list[str]:
     raw = ctx.blocks[MODEL_ROUTING_FILE]
     bt = BlockText(raw)
-    found = [(i, lvl, h) for i, lvl, h in headings(lines) if lvl in (2, 3) and heading_text(h) == "Model Routing"]
+    found = [(i, lvl, h) for i, lvl, h in headings(lines) if lvl in (2, 3) and heading_text(h).lower() == "model routing"]
     if found:
         i, lvl, h = found[0]
         end = section_end(lines, i, lvl)
@@ -742,7 +803,7 @@ def apply_model_routing(lines: list[str], ctx: Context, report: Report) -> list[
     else:
         report.changes.append("Model Routing: added")
     new = _resolve("\n".join(bt.lines), ctx).split("\n")
-    sr = next(((i, lvl) for i, lvl, h in headings(lines) if lvl == 2 and heading_text(h) == "Skill routing"), None)
+    sr = next(((i, lvl) for i, lvl, h in headings(lines) if lvl == 2 and heading_text(h).lower() == "skill routing"), None)
     if sr is None:
         return _append(lines, new)
     return _insert_after(lines, section_end(lines, sr[0], sr[1]), new)
@@ -757,8 +818,10 @@ def merge(text: str | None, ctx: Context) -> tuple[str, Report]:
         report.notes.append("no prior CLAUDE.md — nothing to snapshot; the file is created")
     open_at = unclosed_fence(lines)
     if open_at is not None:
-        raise Refusal(f"BLOCKED — CLAUDE.md has a code fence opened at line {open_at} that never closes; "
-                      f"everything appended below it would land inside the fence. Close it and re-run")
+        kind, at = open_at
+        what = "a code fence" if kind == "fence" else "an HTML comment"
+        raise Refusal(f"BLOCKED — CLAUDE.md has {what} opened at line {at} that never closes; "
+                      f"everything appended below it would land inside it. Close it and re-run")
     lines = apply_header(lines, ctx, report)
     lines = apply_autonomy(lines, report)
     lines = apply_renames(lines, report)
@@ -858,12 +921,14 @@ def snapshot(project: Path, original: bytes, report: Report) -> None:
         pass   # not a git repository: the snapshot still works
 
 
-def read_track(project: Path, override: str | None) -> str:
+def read_track(project: Path, override: str | None, report: Report | None = None) -> str:
     if override:
         value = override
     else:
         f = project / ".gstack" / "track"
         if not f.is_file():
+            if report is not None:
+                report.notes.append("no .gstack/track file — assumed web (write `ios`, `macos` or `both` there for a native project)")
             return "web"
         value = f.read_text().removesuffix("\n")
     if value not in TRACKS:
@@ -949,7 +1014,8 @@ def main(argv=None) -> int:
             raise Refusal(f"USAGE ERROR: --plugin-version must be X.Y.Z, got {version!r} — the header the "
                           f"next run looks for would not match it")
         sets = parse_sets(a.set)
-        track = read_track(project, a.track)
+        pre_notes = Report()
+        track = read_track(project, a.track, pre_notes)
         if track in NATIVE:
             # the pin is authoritative; --set may only agree with it or stand in for it
             pin = read_executor(project)
@@ -987,6 +1053,7 @@ def main(argv=None) -> int:
                       routing=routing, model_routing=not a.no_model_routing,
                       project=a.project_name or project_name(text or "", project))
         new_text, report = merge(text, ctx)
+        report.notes = pre_notes.notes + report.notes
         unresolved = sorted(t for t in ctx.needed if t not in sets)
         if unresolved:
             raise Refusal("UNRESOLVED PLACEHOLDER: " + ", ".join(unresolved) +

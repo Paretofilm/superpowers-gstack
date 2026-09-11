@@ -27,6 +27,8 @@ open:
 ```bash
 SKILL_DIR='<the base directory the Skill tool printed when this skill loaded>'
 SCRIPT="$SKILL_DIR/../../scripts/adapt-claude-md.py"
+[ -f "$SCRIPT" ] || SCRIPT=$(ls ~/.claude/plugins/cache/*/superpowers-gstack/*/scripts/adapt-claude-md.py 2>/dev/null | sort -V | tail -1)
+[ -f "$SCRIPT" ] || { echo "BLOCKED — adapt-claude-md.py not found; run /plugin update superpowers-gstack"; exit 2; }
 ```
 
 **Dependency check:** verify both upstream frameworks are installed:

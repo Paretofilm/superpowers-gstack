@@ -33,10 +33,16 @@ modernisation (`docs/superpowers/specs/2026-09-11-adapt-merge-script-design.md`)
   fences are not section boundaries. `--dry-run` writes nothing; every refusal
   (`BLOCKED`, `UNRESOLVED PLACEHOLDER`, `UNREADABLE`) is exit 2 with nothing written.
   The report ends with one JSON line the skill reads for its questions.
-- `tests/unit/test_adapt_script.py` — 34 tests against the real block files, including
+- `tests/unit/test_adapt_script.py` — 65 tests against the real block files, including
   the two fixtures the prose could only describe: the 2.7× section that motivated the
   gate (every sentinel line survives, the section is deferred) and the volume-neutral
-  section where only provenance can see the growth.
+  section where only provenance can see the growth. The pre-landing lenses (self-pitfall,
+  Codex adversarial + structured, GLM architecture, DeepSeek correctness) each added
+  cases: no downgrade of a newer section, rename-collision-only row dedupe, a negation
+  guard on the reword heuristic, verbatim Removed listings, table-or-sentinel Model
+  Routing ownership, indented/Setext headings, unclosed fences and comments refused,
+  H2 placement outside H3 subtrees, atomic write with every refusal before it, pin over
+  `--set`, guarded placeholder refresh, CRLF preserved, `roster.md` inside the lint scan.
 - Lint E8 now checks the script's `BLOCKS` roster (imported) against the block files;
   E13 now checks that `adapt/SKILL.md` names the script and carries none of the retired
   hand-surgery instructions.

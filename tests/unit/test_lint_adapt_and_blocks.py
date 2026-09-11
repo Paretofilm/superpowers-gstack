@@ -217,3 +217,20 @@ def test_autonomy_block_is_gone_from_every_roster():
     assert '"autonomy.md"' not in sync_src
     script = load("adapt_claude_md2", "scripts/adapt-claude-md.py")
     assert "autonomy.md" not in {b.file for b in script.BLOCKS}
+
+
+def test_the_roster_is_inside_the_lint_scan():
+    """The weekly auto-update writes into roster.md; the file an LLM edits is the
+    one that must be scanned for retired names and stale patterns."""
+    src = (REPO / "scripts" / "lint-skills.py").read_text()
+    assert '"roster.md"' in src
+    for name in ("check_refs", "check_upstream_skills"):
+        assert name in src
+    assert lint.roster_path().is_file()
+
+
+def test_every_block_file_ends_with_a_newline():
+    """`emitted=` is the newline count; a block without a trailing newline would
+    be one line short of its own length forever."""
+    for f in sorted(BLOCKS.glob("*.md")):
+        assert f.read_bytes().endswith(b"\n"), f.name

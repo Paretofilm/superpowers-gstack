@@ -215,6 +215,10 @@ def documented_placeholders(text: str) -> set[str]:
     return out
 
 
+def roster_path() -> Path:
+    return SKILLS / "adapt" / "roster.md"
+
+
 def adapt_script_blocks() -> list[str] | None:
     """The block file names scripts/adapt-claude-md.py emits (its BLOCKS roster),
     or None when the script cannot be imported — E8 then reports that itself."""
@@ -398,6 +402,11 @@ def main() -> int:
         check_refs(skill_md, text, repo_doc=False)
         check_upstream_skills(skill_md, text)
 
+    # E2 + E10 on the roster: every skill it lists must exist
+    if roster_path().is_file():
+        check_refs(roster_path(), roster_path().read_text(), repo_doc=False)
+        check_upstream_skills(roster_path(), roster_path().read_text())
+
     # E2 on CLAUDE.md + README too
     check_refs(REPO / "CLAUDE.md", claude_md, repo_doc=True)
     check_upstream_skills(REPO / "CLAUDE.md", claude_md)
@@ -443,6 +452,10 @@ def main() -> int:
     _mr = REPO / "skills" / "adapt" / "model-routing.md"
     if _mr.is_file():
         targets.append((_mr, _mr.read_text()))
+    # ... and the skill roster — the one file the weekly auto-update LLM writes
+    # into, and since 3.1.0 no longer inside a SKILL.md (third house, 3.1.0).
+    if roster_path().is_file():
+        targets.append((roster_path(), roster_path().read_text()))
     # ... and the shared emitted blocks — they ARE the generated-CLAUDE.md content.
     if (REPO / BLOCKS_DIR_REL).is_dir():
         targets += [(f, f.read_text()) for f in sorted((REPO / BLOCKS_DIR_REL).glob("*.md"))]
@@ -485,6 +498,8 @@ def main() -> int:
             first = f.read_text().split("\n", 1)[0]
             if not re.match(r"^## .*<!-- gstack-[a-z-]+-v\d+ -->$", first):
                 errors.append(f"E8 {BLOCKS_DIR_REL}/{fname}: first line must be an H2 heading with a gstack version marker")
+            if not f.read_bytes().endswith(b"\n"):
+                errors.append(f"E8 {BLOCKS_DIR_REL}/{fname}: no trailing newline — `emitted=` is the newline count and would be one short")
         if fname == "PLACEHOLDERS.md":
             for gen, text in gen_texts.items():
                 if fname not in text:

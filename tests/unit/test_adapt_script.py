@@ -811,3 +811,70 @@ def test_an_empty_development_team_emits_the_no_account_form(tmp_path):
     text = (proj / "CLAUDE.md").read_text()
     assert "DEVELOPMENT_TEAM: {{" not in text and "DEVELOPMENT_TEAM: \n" not in text and "DEVELOPMENT_TEAM: `,\n" not in text
     assert "no paid developer account" in text.lower() or "no paid developer account" in p.stdout.lower()
+
+
+# --- third house (GLM architecture + DeepSeek correctness), 3.1.0 -------------------
+
+def test_placeholder_refresh_never_overwrites_a_user_edited_placeholder_line(tmp_path):
+    """A current block whose executor line reads `vm (chosen for speed)` was
+    edited by the user; a refresh would silently drop the parenthesis."""
+    proj = project(tmp_path, track="macos")
+    run(proj, *NATIVE_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    edited = text.replace("run on: **host**", "run on: **host** (chosen for speed)")
+    assert edited != text
+    (proj / "CLAUDE.md").write_text(edited)
+    (proj / ".gstack" / "e2e-executor").write_text("vm\n")
+    p = run(proj, *NATIVE_SETS)
+    assert "(chosen for speed)" in (proj / "CLAUDE.md").read_text()
+    assert "placeholder" in p.stdout.lower() and "by hand" in p.stdout.lower()
+
+
+def test_a_refreshed_placeholder_line_is_listed_under_removed(tmp_path):
+    proj = project(tmp_path, track="macos")
+    run(proj, *NATIVE_SETS)
+    (proj / ".gstack" / "e2e-executor").write_text("vm\n")
+    p = run(proj, *NATIVE_SETS)
+    removed = p.stdout[p.stdout.index(REMOVED):p.stdout.index("**Snapshot")]
+    assert "run on: **host**" in removed
+
+
+def test_skill_routing_and_model_routing_headings_match_case_insensitively(tmp_path):
+    routing = tmp_path / "r.md"
+    routing.write_text("## Skill routing\n\nrows\n")
+    proj = project(tmp_path, claude_md="# P\n\n## skill routing\n\nours\n\n## model routing\n\n**This project's domain sensitivity: low** (x).\n")
+    run(proj, "--routing-file", str(routing), *WEB_SETS)
+    hs = headings((proj / "CLAUDE.md").read_text())
+    assert len([h for h in hs if h.lower() == "## skill routing"]) == 1
+    assert len([h for h in hs if h.lower() == "## model routing"]) == 1
+
+
+def test_an_unclosed_html_comment_is_refused(tmp_path):
+    proj = project(tmp_path, claude_md="# P\n\n<!-- never closed\n\n## Git hygiene & commit cadence\n\nx\n")
+    p = run(proj, *WEB_SETS, expect=2)
+    assert "comment" in p.stderr
+
+
+def test_collapsed_and_retired_rows_are_listed_under_removed(tmp_path):
+    routing = ("# P\n\n## Skill routing\n\n| Skill | When |\n|---|---|\n"
+               "| `/superpowers-gstack:macos-native-review` | macOS specs |\n"
+               "| `/superpowers-gstack:ios-native-review` | iOS specs |\n"
+               "| `/superpowers-gstack:ios-visual-explore` | look around |\n")
+    proj = project(tmp_path, claude_md=routing)
+    p = run(proj, *WEB_SETS)
+    removed = p.stdout[p.stdout.index(REMOVED):p.stdout.index("**Snapshot")]
+    assert "iOS specs" in removed and "look around" in removed
+
+
+def test_notes_name_a_missing_track_a_track_mismatch_and_a_duplicate_marker(tmp_path):
+    proj = project(tmp_path)
+    p = run(proj, *WEB_SETS)
+    assert "no .gstack/track" in p.stdout
+    native = (proj / "CLAUDE.md").read_text() + "\n" + block("xcode-tools.md").replace("{{IOS_SIMULATOR}}", "iPhone 17").replace("{{DEVELOPMENT_TEAM}}", "X").replace("{{E2E_EXECUTOR}}", "host")
+    (proj / "CLAUDE.md").write_text(native)
+    p = run(proj, *WEB_SETS)
+    assert "track" in p.stdout and "Native Apple development tools" in p.stdout and "not on this track" in p.stdout
+    dup = (proj / "CLAUDE.md").read_text() + "\n## Git hygiene & commit cadence <!-- gstack-git-hygiene-v1 -->\n\ncopy\n"
+    (proj / "CLAUDE.md").write_text(dup)
+    p = run(proj, *WEB_SETS)
+    assert "more than one" in p.stdout and "Git hygiene" in p.stdout

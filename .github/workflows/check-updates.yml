@@ -598,6 +598,7 @@ jobs:
                       prepend_changelog_entry(new_entry)
                       updated.append("CHANGELOG.md (prepended)")
                       roster_rest = strip_preamble(roster_rest, ROSTER_PREFIX, "skills/adapt/roster.md")
+                      roster_rest = roster_rest.split("\n===", 1)[0].rstrip("\n") + "\n"   # a stray old-format section never lands in the roster
                       write_or_fail(Path("skills/adapt/roster.md"), roster_rest, "skills/adapt/roster.md")
                       updated.append("skills/adapt/roster.md")
                   else:
@@ -611,6 +612,7 @@ jobs:
                       write_or_fail(Path("VERSIONS.md"), versions_part, "VERSIONS.md")
                       updated.append("VERSIONS.md")
                       roster_rest = strip_preamble(roster_rest, ROSTER_PREFIX, "skills/adapt/roster.md")
+                      roster_rest = roster_rest.split("\n===", 1)[0].rstrip("\n") + "\n"   # a stray old-format section never lands in the roster
                       write_or_fail(Path("skills/adapt/roster.md"), roster_rest, "skills/adapt/roster.md")
                       updated.append("skills/adapt/roster.md")
                   else:
