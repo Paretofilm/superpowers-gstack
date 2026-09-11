@@ -25,6 +25,14 @@ echo "SLUG=$SLUG EXISTING_TRACK=${EXISTING_TRACK:-none}"
 
 ## Phase 1 — Run upstream office-hours
 
+Before invoking it, drop a timestamp marker so the doc *this* run produces can be told
+apart from anything else that changes on disk meanwhile (another session, a formatter, a
+handoff write):
+
+```bash
+mkdir -p .gstack && touch .gstack/.office-hours-start
+```
+
 Invoke it through the Skill tool and let it run its normal flow (product context, forcing
 questions or builder mode, design doc). A skill invoking a skill is fine.
 
@@ -32,13 +40,18 @@ questions or builder mode, design doc). A skill invoking a skill is fine.
 Skill(skill="office-hours")
 ```
 
-gstack writes the design doc under `~/.gstack/projects/$SLUG/` by default. Locate the
-freshest one and relocate it into the repo's `docs/`, never overwriting an earlier doc:
+gstack writes the design doc under `~/.gstack/projects/$SLUG/` by default. Locate the one
+written after the marker that carries design-doc frontmatter, and relocate it into the
+repo's `docs/`, never overwriting an earlier doc:
 
 ```bash
-RECENT_MD=$(find ~/.gstack/projects/"$SLUG" . -maxdepth 3 -type f -name '*.md' -mmin -10 \
-  ! -path '*/node_modules/*' ! -path '*/.git/*' -exec ls -t {} + 2>/dev/null | head -1)
-[ -z "$RECENT_MD" ] && { echo "No design doc found — did office-hours write one?" >&2; exit 1; }
+CANDIDATES=$(find ~/.gstack/projects/"$SLUG" . -maxdepth 3 -type f -name '*.md' -newer .gstack/.office-hours-start \
+  ! -path '*/node_modules/*' ! -path '*/.git/*' -exec grep -lE '^(type: design-doc|status: DRAFT)' {} + 2>/dev/null)
+rm -f .gstack/.office-hours-start
+COUNT=$(printf '%s\n' "$CANDIDATES" | grep -c . || true)
+[ "$COUNT" -eq 0 ] && { echo "No design doc found — did office-hours write one?" >&2; exit 1; }
+[ "$COUNT" -gt 1 ] && { echo "Several new design docs:"; printf '%s\n' "$CANDIDATES"; echo "Ask which one before moving anything." >&2; exit 1; }
+RECENT_MD="$CANDIDATES"
 case "$RECENT_MD" in
   "$HOME/.gstack/projects/"*)
     mkdir -p docs
@@ -90,7 +103,9 @@ Then ask with AskUserQuestion:
 ## Phase 5 — Mark approved and suggest the next step
 
 ```bash
+grep -q '^status: DRAFT$' "$RECENT_MD" || { echo "no 'status: DRAFT' line to approve in $RECENT_MD" >&2; exit 1; }
 sed -i.bak 's/^status: DRAFT$/status: APPROVED/' "$RECENT_MD" && rm -f "$RECENT_MD.bak"
+grep -q '^status: APPROVED$' "$RECENT_MD" || { echo "approval write failed" >&2; exit 1; }
 ```
 
 Republish the artifact so the page shows the new status, then print:

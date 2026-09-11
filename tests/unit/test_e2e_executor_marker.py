@@ -424,3 +424,122 @@ def test_rig_exit_2_settles_the_question_before_json_is_read():
     schema = template.index("type == \"object\"")
     assert exit2 < schema, "the declared signal must be checked before the inferred one"
     assert "defence in depth" in flat(template)
+
+
+# --- 3.0.0: the template became one file for both platforms — drive it end to end ---
+
+def _summary(total, passed, failed, skipped):
+    """What `xcrun xcresulttool get test-results summary --format json` prints."""
+    import json
+    failures = [{"testIdentifier": f"XUITests/t{i}",
+                 "sourceCodeContext": {"location": {"filePath": "a.swift", "lineNumber": 1}},
+                 "failureText": "boom"} for i in range(failed)]
+    return json.dumps({"totalTestCount": total, "passedTests": passed, "failedTests": failed,
+                       "skippedTests": skipped, "testFailures": failures or None})
+
+
+def _stub_bins(d: Path, with_rig: bool) -> Path:
+    """xcodebuild / xcrun / automationmodetool / vm-e2e stand-ins, all driven by STUB_* env."""
+    b = d / "bin"; b.mkdir()
+    stubs = {
+        "xcodebuild": 'printf "%s\\n" "$*" > "$STUB_LOG/xcodebuild.args"\nexit "${STUB_XCB_STATUS:-0}"\n',
+        "xcrun": ('case "$1 $2" in\n'
+                  '  "simctl list") printf "%s\\n" "$STUB_SIMS" ;;\n'
+                  '  "xcresulttool get") if [ "$3" = test-results ]; then printf "%s" "$STUB_SUMMARY";'
+                  ' else echo "plaintext result"; fi ;;\n'
+                  'esac\n'),
+        "automationmodetool": 'echo "automationmodetool: DOES NOT REQUIRE"\n',
+    }
+    if with_rig:
+        stubs["vm-e2e"] = ('while [ $# -gt 0 ]; do case "$1" in --json) J="$2"; shift ;; esac; shift; done\n'
+                           'printf "%s" "$STUB_VM_JSON" > "$J"\nexit "${STUB_VM_STATUS:-0}"\n')
+    for name, body in stubs.items():
+        p = b / name; p.write_text("#!/usr/bin/env bash\n" + body); p.chmod(0o755)
+    return b
+
+
+SIM = "    iPhone 17 (ABCDEF01-1234-1234-1234-1234567890AB) (Shutdown)"
+GREEN = _summary(2, 2, 0, 0)
+
+
+@pytest.mark.parametrize("platform,pin,rig,env,rc,stderr_has,stdout_has,xcb_ran,dest", [
+    pytest.param("ios", None, False, {"STUB_SIMS": ""}, 2,
+                 "No iPhone simulator available", "", False, None, id="ios-no-simulator-exit-2"),
+    pytest.param("ios", None, False, {"STUB_SIMS": SIM, "STUB_SUMMARY": GREEN}, 0,
+                 "(using iPhone simulator ABCDEF01-1234-1234-1234-1234567890AB)", '"executor": "host"',
+                 True, "platform=iOS Simulator,id=ABCDEF01-1234-1234-1234-1234567890AB",
+                 id="ios-targets-the-simulator-by-udid"),
+    pytest.param("ios", "vm\n", False, {"STUB_SIMS": SIM, "STUB_SUMMARY": GREEN}, 0,
+                 "executor=vm pin applies to macOS only", '"executor": "host"', True, None,
+                 id="ios-ignores-the-vm-pin-loudly"),
+    pytest.param("macos", None, False, {"STUB_SUMMARY": _summary(2, 1, 1, 0), "STUB_XCB_STATUS": "65"}, 65,
+                 "executor=host", '"failed": 1', True, "platform=macOS",
+                 id="macos-passes-xcodebuild-status-through-not-1"),
+    pytest.param("macos", None, False, {"STUB_SUMMARY": _summary(3, 0, 0, 3)}, 1,
+                 "0 tests executed", '"executed": 0', True, None,
+                 id="macos-green-and-empty-is-exit-1"),
+    pytest.param("macos", None, False, {"STUB_SUMMARY": ""}, 2,
+                 "could not verify that any test executed", "plaintext result", True, None,
+                 id="macos-old-xcode-plaintext-cannot-prove-a-run-so-exit-2"),
+    pytest.param("macos", None, False, {"STUB_SUMMARY": '{"unexpected": true}'}, 2,
+                 "lacks integer counts", "", True, None,
+                 id="macos-summary-without-counts-is-exit-2-not-false-green"),
+    pytest.param("macos", "vm\n", True, {"STUB_VM_JSON": '{"total":2,"passed":2,"failed":0,"skipped":0}'}, 0,
+                 "executor=vm  skipped=0  executed=2", '"executor": "vm"', False, None,
+                 id="macos-vm-pin-runs-the-rig-not-xcodebuild"),
+    pytest.param("macos", "vm\n", True, {"STUB_VM_JSON": '{"error":"boot timed out"}', "STUB_VM_STATUS": "2"}, 2,
+                 "E2E RIG FAILED: vm-e2e could not run (exit 2)", "", False, None,
+                 id="macos-rig-fault-is-exit-2-no-fallback"),
+    pytest.param("macos", "vm\n", True, {"STUB_VM_JSON": '{"total":1,"executed":1,"error":"copy failed"}'}, 2,
+                 "produced no usable result (exit 0)", "", False, None,
+                 id="macos-rig-self-reported-error-is-exit-2"),
+    pytest.param("macos", "vm\n", True, {"STUB_VM_JSON": '{"total":2,"passed":0,"failed":0,"skipped":2}'}, 1,
+                 "green and empty is not a pass", '"executed": 0', False, None,
+                 id="macos-vm-green-and-empty-is-exit-1"),
+    pytest.param("macos", "vm\n", True, {"STUB_VM_JSON": '{"total":2,"passed":1,"failed":1,"skipped":0}'}, 1,
+                 "executed=2", '"failed": 1', False, None,
+                 id="macos-vm-failed-test-is-exit-1"),
+    pytest.param("macos", "vm\n", True, {"STUB_VM_JSON": '{"total":2,"passed":2,"failed":0,"skipped":0}',
+                                          "STUB_VM_STATUS": "65"}, 65,
+                 "despite a clean-looking summary", '"executor": "vm"', False, None,
+                 id="macos-vm-clean-summary-keeps-the-rigs-status"),
+    pytest.param("macos", "vm\n", False, {"E2E_NONINTERACTIVE": "1"}, 2,
+                 "Refusing in a non-interactive session", "", False, None,
+                 id="macos-no-rig-non-interactive-refuses"),
+    pytest.param("macos", "vm\n", False, {"STUB_SUMMARY": GREEN}, 0,
+                 "rig not found on this host", '"executor": "vm→host-fallback"', True, "platform=macOS",
+                 id="macos-no-rig-interactive-falls-back-loudly"),
+])
+def test_the_runner_dispatches_and_exits_as_documented(platform, pin, rig, env, rc, stderr_has,
+                                                        stdout_has, xcb_ran, dest):
+    """Drives the shipped template against stub tools: the host|vm dispatch, the iOS
+    simulator-by-UDID path, the executed==0 rule, and the documented exit codes
+    (0 pass, 2 could-not-run, xcodebuild's own status otherwise)."""
+    tmpl = (runner_template().replace("<SCHEME>", "X").replace("<PLATFORM>", platform)
+            .replace("<TEST_TARGET>", "XUITests"))
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "scripts").mkdir()
+        runner = root / "scripts" / "run-uitests.sh"
+        runner.write_text(tmpl); runner.chmod(0o755)
+        if pin is not None:
+            (root / ".gstack").mkdir()
+            (root / ".gstack" / "e2e-executor").write_text(pin)
+        bins = _stub_bins(root, rig)
+        log = root / "log"; log.mkdir()
+        # A closed PATH: the developer's own rig (`vm-e2e`) and Xcode must never be
+        # reachable from here — the "rig absent" cases exist to prove the fallback.
+        full_env = {k: v for k, v in os.environ.items()
+                    if k not in ("CI", "GITHUB_ACTIONS", "E2E_NONINTERACTIVE", "PATH")}
+        full_env.update({"PATH": f"{bins}:/usr/bin:/bin",
+                         "STUB_LOG": str(log), "STUB_SIMS": "", "STUB_SUMMARY": ""})
+        full_env.update(env)
+        p = subprocess.run(["bash", str(runner)], cwd=root, env=full_env,
+                           capture_output=True, text=True, timeout=30)
+        assert p.returncode == rc, f"exit {p.returncode}\nstdout:\n{p.stdout}\nstderr:\n{p.stderr}"
+        assert stderr_has in p.stderr, p.stderr
+        assert stdout_has in p.stdout, p.stdout
+        args_file = log / "xcodebuild.args"
+        assert args_file.exists() is xcb_ran, "xcodebuild ran" if args_file.exists() else "xcodebuild did not run"
+        if dest is not None:
+            assert dest in args_file.read_text()

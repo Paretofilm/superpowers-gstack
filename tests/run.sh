@@ -50,6 +50,11 @@ if [ "${RUN_UNIT:-false}" = "true" ]; then
     echo ">>> unit: FAIL"
     FAIL=$((FAIL + 1))
   fi
+  # Skill-level shell contract tests (no pytest, no deps): every skills/*/tests/*.test.sh
+  for t in "$REPO_ROOT"/skills/*/tests/required-sections.test.sh; do
+    [ -f "$t" ] || continue
+    if bash "$t"; then echo ">>> $(basename "$(dirname "$(dirname "$t")")"): PASS"; else echo ">>> $(basename "$t"): FAIL"; FAIL=$((FAIL + 1)); fi
+  done
 fi
 
 if [ "${RUN_INTEGRATION:-false}" = "true" ]; then

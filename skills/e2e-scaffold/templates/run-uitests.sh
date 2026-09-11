@@ -19,10 +19,13 @@ set -uo pipefail
 # outcome the pin exists to prevent.
 cd "$(cd "$(dirname "$0")/.." && pwd)" || { echo "cannot resolve project root" >&2; exit 2; }
 
-SCHEME="<SCHEME>"
-PLATFORM="<PLATFORM>"          # macos | ios
-TEST_TARGET="<TEST_TARGET>"    # <App>UITests, or <App>macOSUITests / <App>iOSUITests on multiplatform
-RESULT_BUNDLE="$(mktemp -d)/uitests.xcresult"
+# Single-quoted on purpose: the scaffold validates these against ^[A-Za-z0-9_.-]+( [A-Za-z0-9_.-]+)*$
+# before substituting, and single quotes keep a name that slipped through from ever
+# being expanded — a scheme called `$(x)` is a file name, not a command.
+SCHEME='<SCHEME>'
+PLATFORM='<PLATFORM>'          # macos | ios
+TEST_TARGET='<TEST_TARGET>'    # <App>UITests, or <App>macOSUITests / <App>iOSUITests on multiplatform
+case "$SCHEME$TEST_TARGET" in *[!A-Za-z0-9_.\ -]*) echo "refusing: scheme/target name carries shell-significant characters" >&2; exit 2 ;; esac
 
 # --- Executor pin ---------------------------------------------------------------
 # host | vm; absence means host. Only those two exact strings are valid: a typo that
@@ -48,6 +51,11 @@ if [ "$EXECUTOR" = vm ] && [ "$PLATFORM" = ios ]; then
   echo "executor=vm pin applies to macOS only — running iOS tests on the simulator" >&2
   EXECUTOR=host
 fi
+
+# The result bundle lives in a fresh temp dir, created only once every check above has
+# passed — an invalid pin must not leave an empty directory behind. The bundle itself
+# is kept: its path is in the JSON so the caller can open it.
+RESULT_BUNDLE="$(mktemp -d)/uitests.xcresult"
 
 # --- VM path --------------------------------------------------------------------
 if [ "$EXECUTOR" = vm ]; then
@@ -165,25 +173,37 @@ SUMMARY=$(xcrun xcresulttool get test-results summary --path "$RESULT_BUNDLE" --
   | jq --arg ex "$EXECUTOR" --arg rb "$RESULT_BUNDLE" \
       '{total: .totalTestCount, passed: .passedTests, failed: .failedTests,
         skipped: (.skippedTests // 0),
-        executed: (.totalTestCount - (.skippedTests // 0)),
+        executed: (if .totalTestCount == null then null else .totalTestCount - (.skippedTests // 0) end),
         executor: $ex, xcresult: $rb,
         results: [((.testFailures // [])[]) | {test: .testIdentifier, file: .sourceCodeContext.location.filePath, line: .sourceCodeContext.location.lineNumber, message: .failureText}]}' 2>/dev/null)
 
 if [ -n "$SUMMARY" ]; then
   printf '%s\n' "$SUMMARY"
+  TOTAL=$(printf '%s' "$SUMMARY" | jq -r '.total')
   SKIPPED=$(printf '%s' "$SUMMARY" | jq -r '.skipped')
-  EXECUTED=$(printf '%s' "$SUMMARY" | jq -r '.executed')
+  # Validate the two counts everything else derives from, and DERIVE executed from
+  # them rather than trusting a field: a summary with `.totalTestCount` absent gives
+  # `executed: null`, `[ null -eq 0 ]` only prints an error, and without `set -e` the
+  # script would then exit with xcodebuild's own status — a false green.
+  case "$TOTAL$SKIPPED" in ''|*[!0-9]*)
+    echo "FAILED: xcresult summary lacks integer counts (total=${TOTAL:-?} skipped=${SKIPPED:-?}) — cannot verify anything ran." >&2
+    exit 2 ;;
+  esac
+  EXECUTED=$((TOTAL - SKIPPED))
   echo "executor=${EXECUTOR}  skipped=${SKIPPED}  executed=${EXECUTED}" >&2
   # "Green and empty" — everything skipped, nothing run, exit 0 — reads as success and
   # is the most dangerous result this pipeline can produce. `executed` is the number
   # that says whether anything actually happened.
-  if [ "$EXECUTED" -eq 0 ]; then
+  if [ "$EXECUTED" -le 0 ]; then
     echo "FAILED: 0 tests executed — check fixtures and -only-testing." >&2
     exit 1
   fi
 else
-  echo "(Xcode 16+ JSON format unavailable — falling back to plaintext)"
+  echo "(Xcode 16+ JSON summary unavailable — plaintext follows; the executed-count guard cannot run)" >&2
   xcrun xcresulttool get --path "$RESULT_BUNDLE" 2>/dev/null | tail -100 || true
+  [ "$TEST_STATUS" -ne 0 ] && exit "$TEST_STATUS"
+  echo "FAILED: could not verify that any test executed — exit 2 rather than a green nobody can check." >&2
+  exit 2
 fi
 
 # Exit with the REAL test status so CI / committed-regression runs fail when tests fail.

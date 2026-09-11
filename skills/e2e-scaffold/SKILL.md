@@ -106,6 +106,13 @@ Proceeding with audit + scaffold.
 - SPM: `name:` from `Package(name: ...)`
 - plain .xcodeproj: `*.xcodeproj/xcshareddata/xcschemes/*.xcscheme` filenames; fallback to the project directory name
 
+The scheme and the test-target name are substituted into a shell script (Step 11). Both
+are repository-controlled input, so validate them before anything is generated: they must
+match `^[A-Za-z0-9_.-]+( [A-Za-z0-9_.-]+)*$`. A name carrying `$`, backticks, quotes,
+semicolons or other shell-significant characters is refused with "scheme/target name
+`<name>` is not safe to embed in a shell script — rename the scheme" and nothing is
+written. The template also single-quotes the values and re-checks them at run time.
+
 ### Step 3: Find source root
 - xcodegen: `targets.<schemename>.sources.path`
 - SPM: `Sources/<TargetName>/`

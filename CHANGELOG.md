@@ -93,6 +93,11 @@ verdicts: `docs/superpowers/specs/2026-09-11-modernisering-audit.md`.
 - `MARKER_BLOCKS` and `sync-own-claude-md.py` drop `autonomy.md`; E13's guards are
   unchanged and now anchor on the Git hygiene rule as the first per-section rule.
 
+### Known
+- With gstack ≥ 1.83 installed, `spec-drift --repin` reports `ANCHORS MISSING`: upstream moved
+  the plan-completion subagent prompt into a fenced block that the anchor scan masks. Not
+  caused by this release; fix tracked in `docs/superpowers/plans/2026-09-11-modernisering.md`.
+
 ### Deferred (own PR)
 - adapt as a deterministic merge script and setup-routing folded into adapt — touches
   lint E8/E13 and six test files; the audit ranks it as Fase 4.

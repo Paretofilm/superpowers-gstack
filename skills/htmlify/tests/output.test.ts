@@ -112,3 +112,52 @@ describe("ensureGitignore", () => {
     expect(content).toBe(`node_modules\n${OUTPUT_DIR}/\n`);
   });
 });
+
+// 3.0.0 regression: openInBrowser used to co-opt Safari — `close every window`
+// via osascript, then open the file. It now hands the URL to `/usr/bin/open` and
+// never closes anything. Verified against a mocked child_process so the test
+// neither launches a browser nor touches real windows.
+describe("openInBrowser", () => {
+  test.skipIf(process.platform !== "darwin")("opens with /usr/bin/open and never scripts Safari", async () => {
+    const { mock } = await import("bun:test");
+    const calls: Array<{ file: string; args: string[] }> = [];
+    mock.module("node:child_process", () => ({
+      execFileSync: (file: string, args: string[]) => {
+        calls.push({ file, args });
+        return Buffer.from("");
+      },
+    }));
+    const { openInBrowser } = await import("../src/output.ts");
+    const target = path.join(TMP, "it's a \"page\".html");
+    openInBrowser(target);
+    expect(calls.length).toBe(1);
+    expect(calls[0].file).toBe("/usr/bin/open");
+    expect(calls[0].args[0].startsWith("file://")).toBe(true);
+    expect(calls[0].args[0]).not.toContain('"');
+    expect(calls.some((c) => c.file.includes("osascript"))).toBe(false);
+    expect(JSON.stringify(calls)).not.toContain("close every window");
+  });
+
+  test.skipIf(process.platform !== "darwin")("a failed open warns and prints the path instead of dying", async () => {
+    const { mock } = await import("bun:test");
+    mock.module("node:child_process", () => ({
+      execFileSync: () => { throw new Error("open: no default browser"); },
+    }));
+    const { openInBrowser } = await import("../src/output.ts");
+    const target = path.join(TMP, "p.html");
+    const outChunks: string[] = [];
+    const errChunks: string[] = [];
+    const so = process.stdout.write.bind(process.stdout);
+    const se = process.stderr.write.bind(process.stderr);
+    (process.stdout as any).write = (s: string) => { outChunks.push(String(s)); return true; };
+    (process.stderr as any).write = (s: string) => { errChunks.push(String(s)); return true; };
+    try {
+      openInBrowser(target);
+    } finally {
+      (process.stdout as any).write = so;
+      (process.stderr as any).write = se;
+    }
+    expect(errChunks.join("")).toContain("Warning: could not open");
+    expect(outChunks.join("")).toContain(`HTML at ${target}`);
+  });
+});

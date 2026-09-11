@@ -33,3 +33,5 @@ jobs:
         run: python3 -m pip install --quiet pytest
       - name: Unit tests (tests/unit)
         run: pytest tests/unit -q
+      - name: Skill contract tests (shell)
+        run: for t in skills/*/tests/required-sections.test.sh; do bash "$t"; done

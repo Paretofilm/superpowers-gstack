@@ -29,9 +29,9 @@ Recommended order on a fresh artifact: pitfall-verification, quality-review, app
 1. Read `.gstack/track` if it exists. `macos`, `ios`, or `both` names the platform(s) to review.
 2. Otherwise, or to confirm, scan the artifact:
    - **macOS signals:** `AppKit`, `Cocoa`, `NSWindow`, `NSView`, `NSApplication`, `NSDocument`, `MenuBarExtra`, a `Settings` scene, `.macOS(.v…)` in Package.swift, a macOS deployment target, or text such as "Mac app" or "macOS-native".
-   - **iOS/iPadOS signals:** `UIKit`, `UIViewController`, `UIScene`, `TabView`, `NavigationStack`, `NavigationSplitView`, `UIApplicationSceneManifest`, `.iOS(.v…)`, an iOS deployment target, or text such as "iPhone app", "iPad app", "iPadOS".
-   - `SwiftUI` or `WindowGroup` alone is ambiguous; look for one of the above.
-3. Decide. The track file sets the baseline; artifact signals can add a platform (a multi-target project) but never remove one.
+   - **iOS/iPadOS signals:** `UIKit`, `UIViewController`, `UIScene`, `UIApplicationSceneManifest`, `.fullScreenCover`, `.iOS(.v…)`, an iOS deployment target, or text such as "iPhone app", "iPad app", "iPadOS".
+   - `SwiftUI`, `WindowGroup`, `TabView`, `NavigationStack` and `NavigationSplitView` are cross-platform and identify neither; look for one of the above.
+3. Decide. The track file sets the baseline; artifact signals can add a platform (a multi-target project) but never remove one from the project. Within a `both` project, the artifact decides which lists apply to *it*: an artifact whose own signals name only one platform is reviewed against the shared categories plus that platform's list — a menu-bar finding on an iPhone-only feature is noise, not conformance.
    - No track file and no signals: report `Verdict: N/A — no Apple UI surfaces detected` and stop.
    - Signals only for watchOS, tvOS, or visionOS: report `N/A` naming the platform; those are out of scope.
    - Otherwise list the platform(s) under review and continue. For `both`, walk the shared categories once and each platform-specific list once.

@@ -71,7 +71,7 @@ Absent rig and failing rig are different and get opposite answers:
 | Intent | Platform | Executor |
 |---|---|---|
 | Committed regression | macOS | Entry points 1–4 below, in order. Honours `.gstack/e2e-executor`. |
-| Committed regression | iOS | the iOS runner (`scripts/run-uitests.sh` with `PLATFORM=ios`, else `scripts/run-uitests-ios.sh`) if present, else `/superpowers-gstack:e2e-scaffold` (target `<App>iOSUITests`) |
+| Committed regression | iOS | the iOS runner (`scripts/run-uitests.sh` with `PLATFORM=ios`, else `scripts/run-uitests-ios.sh`) if present; else an existing iOS UI-test target → run it directly: `xcodebuild test -scheme <Scheme> -destination 'platform=iOS Simulator,id=<UDID from xcrun simctl list devices available>' -only-testing:<Target>`; else `/superpowers-gstack:e2e-scaffold` (target `<App>iOSUITests`). A project that already has a suite is never sent to the scaffold — it refuses existing suites. |
 | Exploratory / live | macOS | XcodeBuildMCP UI automation: `snapshot_ui` → tap → `screenshot` |
 | Exploratory / live | iOS | `ios-simulator` MCP (`ui_find_element` / `ui_tap`) or `/ios-qa` |
 | Visual exploration | iOS / macOS | XcodeBuildMCP `screenshot` / `snapshot_ui`, driven by the session model |
@@ -82,6 +82,11 @@ Absent rig and failing rig are different and get opposite answers:
 `find . -maxdepth 2 -type d -name '*UITests' ! -name '*iOSUITests' | head -1` — because the
 pin is written at onboarding, before any suite exists, and a `vm` pin alone must never send
 a test-less project to the rig. If the only suite is the iOS one, this falls through to 4.
+In a multiplatform project (`.gstack/track` = `both`, or both SDKs listed) an **unsuffixed**
+`<App>UITests` target is ambiguous — it may be a pre-suffix iOS suite — so do not assume
+macOS: read its scheme's destination or ask once which platform it tests, and say so in
+the decision block. A runner with no `PLATFORM=` line (the SPM stub, or a pre-3.0.0 runner)
+counts as matching either platform; the LEGACY grep below still decides pin-awareness.
 
 1. `./scripts/run-uitests.sh` exists for this platform **and reads the pin** → run it.
    "For this platform" means its `PLATFORM=` line matches the routed platform; otherwise

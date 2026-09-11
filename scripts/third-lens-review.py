@@ -112,9 +112,12 @@ def fetch_models(key):
         return None
 
 
-def get_pricing(key, model, models=None):
+_UNSET = object()  # "caller did not supply models" — distinct from None, "fetch failed"
+
+
+def get_pricing(key, model, models=_UNSET):
     """Return (prompt_per_tok, completion_per_tok) in USD, or (None, None)."""
-    if models is None:
+    if models is _UNSET:
         models = fetch_models(key)
     for m in models or []:
         if m.get("id") == model:
@@ -126,10 +129,10 @@ def get_pricing(key, model, models=None):
     return (None, None)
 
 
-def model_is_served(key, model, models=None):
+def model_is_served(key, model, models=_UNSET):
     """Watchdog for the pinned ids in ROLE_SPEC: True/False from /models, or None
     when the list could not be fetched (network) — never block on an outage."""
-    if models is None:
+    if models is _UNSET:
         models = fetch_models(key)
     if models is None:
         return None

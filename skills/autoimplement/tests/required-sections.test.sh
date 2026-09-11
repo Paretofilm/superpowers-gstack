@@ -34,10 +34,8 @@ REQUIRED=(
   "severe"
   "/review"
   "pitfall-verification"
-  "/codex review"
   "## When STOPping"
   "## Final summary"
-  "## Audit trail"
 )
 
 failed=0

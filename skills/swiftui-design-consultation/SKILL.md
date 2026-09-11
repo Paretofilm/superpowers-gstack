@@ -345,14 +345,14 @@ Capture its verdict and findings by severity (CRITICAL, SIGNIFICANT,
 POLISH).
 
 **Code-level review** (each `.swift` under `DesignSystem/Sources/DesignSystem/`).
-The three tools are complementary; run all three in parallel per file
-with the same `swift_code` argument:
+The tools are complementary; run them in parallel per file with the same
+`swift_code` argument — but only the ones that match `$TRACK`:
 
-| Tool | Rules |
-|---|---|
-| `mcp__swiftui-rag__review_macos_hig` | full HIG ruleset (C1, C2, S1–S9) |
-| `mcp__swiftui-rag__review_accessibility` | A1–A3 |
-| `mcp__swiftui-rag__review_liquid_glass` | Liquid Glass subset (C1, S7, S8) |
+| Tool | Rules | Runs when |
+|---|---|---|
+| `mcp__swiftui-rag__review_macos_hig` | full macOS HIG ruleset (C1, C2, S1–S9) | `macos` or `both` — never on an `ios` track: its menu-bar and window findings would be fed into the fix pass and steer the proposal toward the wrong platform |
+| `mcp__swiftui-rag__review_accessibility` | A1–A3 | always |
+| `mcp__swiftui-rag__review_liquid_glass` | Liquid Glass subset (C1, S7, S8) | always |
 
 Aggregate all findings, spec-level and code-level, deduplicated by
 `(rule_id, file:line)` — the Liquid Glass tool repeats a subset of the

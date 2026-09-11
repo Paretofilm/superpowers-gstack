@@ -541,3 +541,52 @@ def test_ordering_rule_naming_a_missing_step_is_not_silent():
 
     errs = lint.check_adapt_guards(mutated)
     assert any("ordering rule names 'Step 6'" in e for e in errs), errs
+
+
+# --- 3.0.0: the denylist retires the pre-3.0.0 markers and the removed surfaces ---
+
+import pytest
+
+@pytest.mark.parametrize("line,hit,why", [
+    # retired block versions — every marker a 2.x /adapt could have emitted
+    ("## Multi-lens review <!-- gstack-multi-lens-review-v6 -->", True, "v6 multi-lens"),
+    ("## Session Continuity <!-- gstack-session-continuity-v3 -->", True, "v3 session-continuity"),
+    ("## Code reuse <!-- gstack-code-reuse-v2 -->", True, "v2 code-reuse"),
+    ("## Track routing <!-- gstack-routing-v2 -->", True, "v2 routing"),
+    ("## Companion skills <!-- gstack-companion-skills-v2 -->", True, "v2 companion-skills"),
+    ("## Git hygiene <!-- gstack-git-hygiene-v9 -->", True, "v9 git-hygiene"),
+    ("## Autonomy <!-- gstack-autonomy-v2 -->", True, "the retired autonomy block, any version"),
+    # the surfaces removed in 3.0.0
+    ("run python3 scripts/cost-ledger/cli.py status", True, "cost-ledger"),
+    ("dispatch /ios-visual-explore for exploratory runs", True, "ios-visual-explore"),
+    ("see scripts/computer_use/loop.py", True, "computer_use"),
+    ("if the frontmatter says `mode: auto`, treat it as continuous", True, "legacy handoff mode"),
+    ("route architecture to glm-5.2 at $1/$3 per Mtok", True, "hardcoded model id / price"),
+    ("then auto-chains `/codex review` on the diff", True, "chained codex review"),
+    ("run `/htmlify --open` to preview", True, "htmlify Safari flow"),
+    ("bash scripts/setup-htmlify-hook.sh", True, "htmlify PostToolUse hook"),
+    # what a 3.0.0 generator actually writes must stay clean
+    ("## Multi-lens review <!-- gstack-multi-lens-review-v7 -->", False, "current multi-lens"),
+    ("## Session Continuity <!-- gstack-session-continuity-v4 -->", False, "current session-continuity"),
+    ("## Code reuse <!-- gstack-code-reuse-v3 -->", False, "current code-reuse"),
+    ("## Track routing <!-- gstack-routing-v3 -->", False, "current routing"),
+    ("## Companion skills <!-- gstack-companion-skills-v3 -->", False, "current companion-skills"),
+    ("## Git hygiene <!-- gstack-git-hygiene-v10 --><!-- emitted=101 -->", False,
+     "v10 must not be caught by a v[0-9] class — the \\b is load-bearing"),
+    ("mode: continuous", False, "the only handoff mode still read"),
+    ("run gstack `/review` before landing", False, "the 3.0.0 wording for the Codex pass"),
+])
+def test_denylist_retires_the_pre_3_0_0_markers_and_removed_surfaces(line, hit, why):
+    """E7 scans every SKILL.md, block, CLAUDE.md and script. A pattern that misses
+    its target leaves a stale marker in the wild; one that overreaches fires on
+    the very heading the generators emit today (v10 vs v[0-9])."""
+    assert any(p.search(line) for p, _ in lint.DENYLIST) is hit, why
+
+
+def test_autonomy_block_is_gone_from_every_roster():
+    """The block file, MARKER_BLOCKS and sync's UNIVERSAL list all had to drop it
+    together — E8 flags an orphan file, and sync would fail on a missing one."""
+    assert "autonomy.md" not in lint.MARKER_BLOCKS
+    assert not (REPO / "skills" / "setup-routing" / "blocks" / "autonomy.md").exists()
+    sync_src = (REPO / "scripts" / "sync-own-claude-md.py").read_text()
+    assert '"autonomy.md"' not in sync_src
