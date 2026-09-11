@@ -669,7 +669,7 @@ def test_a_heading_in_a_fence_nested_inside_the_prompt_is_not_an_anchor(rig):
     assert "ANCHORS MISSING" in p.stderr and "### Plan File Discovery" in p.stderr
 
 
-def test_an_unclosed_prompt_fence_is_transparent_to_the_end(rig):
+def test_an_unclosed_prompt_fence_stays_masked_and_refuses(rig):
     """Only a CLOSED prompt fence is transparent. An unclosed one is a broken
     upstream: `_FENCE` masks it to EOF, the boundary heading after it disappears,
     and the check refuses — the fail-closed direction."""
@@ -691,3 +691,22 @@ def test_unfenced_keeps_offsets_with_a_prompt_fence():
     assert "### Plan File Discovery" in masked, "the prompt fence is scanned as prose"
     assert 'PLAN=$(ls' not in masked, "a fence nested in the prompt stays masked"
     assert "### Gate Logic" in masked
+
+
+def test_the_label_must_itself_be_prose_not_a_line_inside_another_fence(rig):
+    """`**Subagent prompt:**` followed by a ````text fence is transparent ONLY when
+    the label is prose. Upstream documenting its own prompt inside a ~~~ example
+    (a tilde fence swallows backtick lines without closing) carries the same label
+    and the same inner fence; a heading in that example is an illustration, and a
+    real heading renamed while the illustration keeps the old name must refuse."""
+    upstream, pin_dir = rig
+    renamed = SECTION_PROMPT_FENCED.replace(
+        "### Plan File Discovery\nline two\n", "### Plan Discovery\nline two\n")
+    example = ("~~~md\n**Subagent prompt:** for illustration:\n\n"
+               "````text\n### Plan File Discovery\n````\n~~~\n\n")
+    upstream.write_text(renamed.replace("**Subagent prompt:** Pass", example + "**Subagent prompt:** Pass", 1))
+    p = run("repin", *common(upstream, pin_dir), expect=2)
+    assert "ANCHORS MISSING" in p.stderr and "### Plan File Discovery" in p.stderr
+    masked = module().unfenced(upstream.read_text())
+    assert "### Plan File Discovery" not in masked, "a labelled fence inside an example is still an example"
+    assert "### Plan Discovery" in masked, "the real prompt fence is still transparent"

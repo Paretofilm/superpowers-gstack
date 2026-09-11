@@ -111,8 +111,10 @@ _FENCE = re.compile(r"^(?P<f>```+|~~~+)[^\n]*\n.*?(?:^(?P=f)[`~]*[ \t]*$|\Z)", r
 # gstack ≥ 1.83 hands the subagent its instructions inside a ````text fence that
 # follows the `**Subagent prompt:**` line. That fence is not an example — it IS
 # the section, the text every override in the wrapper addresses — so its body is
-# scanned like prose. Only that one fence, only when the label precedes it;
-# fences nested inside it (the prompt's own bash blocks) stay masked. An
+# scanned like prose. Only that one fence, only when the label precedes it as
+# PROSE — a label that itself sits inside another fence (upstream illustrating
+# its own prompt in a ~~~ example) opens an example, and `unfenced` skips it;
+# fences nested inside the prompt (its own bash blocks) stay masked. An
 # UNCLOSED prompt fence is not transparent: `_FENCE` masks it to EOF, the
 # boundary heading after it disappears, and the check refuses — fail-closed.
 _PROMPT_FENCE = re.compile(
@@ -229,12 +231,18 @@ def unfenced(text: str) -> str:
     newlines, so every offset and line number stays valid.
 
     The subagent-prompt fence (`_PROMPT_FENCE`) is the one exception: its body is
-    kept, with the fences nested inside it blanked. The outer `_FENCE` pass has
+    kept, with the fences nested inside it blanked — but only when its label is
+    prose. A label the outer pass already blanked lives inside another fence,
+    and that is an example of the prompt, not the prompt. The outer `_FENCE` pass has
     already swallowed the whole prompt fence — a 4-backtick opener is closed only
     by a 4-backtick line, so the inner ``` blocks never close it — which is why
     the body is re-masked on its own and spliced back over the same offsets."""
     masked = _FENCE.sub(lambda m: _blank(m.group()), text)
     for m in _PROMPT_FENCE.finditer(text):
+        if masked[m.start()] != "*":
+            # The label is already blanked: it sits inside some other fence, so
+            # this is upstream quoting its prompt as an example, not the prompt.
+            continue
         start, end = m.span("body")
         masked = masked[:start] + _FENCE.sub(lambda f: _blank(f.group()), text[start:end]) + masked[end:]
     return masked

@@ -11,8 +11,11 @@
   `tests/unit/test_spec_drift_upstream_alarm.py` stayed red on any machine with a
   current gstack. `unfenced()` now treats the one fence that follows
   `**Subagent prompt:**` as the section it is; fences nested inside it, a ````text
-  fence anywhere else, and an unclosed prompt fence all stay masked (fail-closed). The
-  pin is re-accepted at gstack 1.84.1.0 (`skills/spec-drift/pin/`).
+  fence anywhere else, and an unclosed prompt fence all stay masked (fail-closed). So
+  does a labelled prompt fence whose label itself sits inside another fence — upstream
+  quoting its own prompt in a `~~~` example — which the first cut let through (pitfall
+  round 1: a renamed real heading with the old name surviving in such an example passed
+  the anchor check). The pin is re-accepted at gstack 1.84.1.0 (`skills/spec-drift/pin/`).
 - The skill's contract prose said `deferred` counts NOT DONE "exactly as Step 8 uses
   it"; Step 8 now names that count `not_done` and adds `partial`. Override 6 keeps the
   wrapper's key set for its callers (`autoimplement` reads `deferred`) and now says so
