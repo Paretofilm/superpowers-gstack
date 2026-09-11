@@ -53,7 +53,7 @@ Only committed macOS runs read the pin. iOS, exploratory and visual rows always 
 the host — a live session and a screenshot diff both need the user's own screen.
 
 This skill is a **reader** of the pin, never its writer. `/superpowers-gstack:adapt` and
-`/superpowers-gstack:setup-routing` ask the question and write the file.
+`/superpowers-gstack:adapt` asks the question and writes the file.
 
 Absent rig and failing rig are different and get opposite answers:
 

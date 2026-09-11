@@ -2,7 +2,7 @@
 """Flag when Anthropic ships a Claude model newer than the router points to.
 
 The weekly update pipeline checks GStack / Superpowers / Claude Code versions, but
-never the Anthropic model list — so `skills/setup-routing/model-routing.md` silently
+never the Anthropic model list — so `skills/adapt/model-routing.md` silently
 went stale when Sonnet 5 shipped (2026-06-30) and sat unwired for days. This closes
 that gap: query `/v1/models`, compare per tier against what the router references,
 and open a `model-review` GitHub issue when a newer model exists.
@@ -42,7 +42,7 @@ import urllib.request
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-MODEL_ROUTING = REPO / "skills" / "setup-routing" / "model-routing.md"
+MODEL_ROUTING = REPO / "skills" / "adapt" / "model-routing.md"
 TIERS = ("fable", "opus", "sonnet", "haiku")
 ISSUE_LABEL = "model-review"
 API_URL = "https://api.anthropic.com/v1/models"

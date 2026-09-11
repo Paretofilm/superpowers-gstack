@@ -36,7 +36,7 @@ lint = load_lint()
     "line,why",
     [
         ("## Session Continuity", "plain H2"),
-        ("### Session Continuity", "H3 root, as pre-2.36.0 setup-routing emitted"),
+        ("### Session Continuity", "H3 root, as the pre-2.36.0 generator emitted"),
         ("  ## Session Continuity", "indented — the form that hid for four releases"),
         ("> ## SESSION CONTINUITY ##", "blockquote + case + ATX closing hashes"),
         ("- ## Session Continuity", "list-marker prefix"),
@@ -86,7 +86,7 @@ def test_block_headings_are_discoverable():
     """The shared blocks must all expose a parseable H2 heading — E8 builds its
     comparison set from exactly this call, so a block whose first line stopped
     parsing would disable the guard for that block without failing loudly."""
-    blocks = REPO_ROOT / "skills" / "setup-routing" / "blocks"
+    blocks = REPO_ROOT / "skills" / "adapt" / "blocks"
     for name in lint.MARKER_BLOCKS:
         first = (blocks / name).read_text().split("\n", 1)[0]
         assert lint.heading_text(first), f"{name} first line is not a parseable heading"

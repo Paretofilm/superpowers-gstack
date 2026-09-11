@@ -126,9 +126,9 @@ jobs:
           files_context = f"## .github/workflows/check-updates.yml\n```yaml\n{workflow_content}\n```\n"
 
           # Check if SKILL.md might be involved
-          skill_file = Path("skills/setup-routing/SKILL.md")
+          skill_file = Path("skills/adapt/roster.md")
           if skill_file.exists():
-              files_context += f"\n## skills/setup-routing/SKILL.md\n```markdown\n{skill_file.read_text()[:3000]}\n```\n"
+              files_context += f"\n## skills/adapt/roster.md\n```markdown\n{skill_file.read_text()[:3000]}\n```\n"
 
           prompt = f"""You are a CI/CD repair agent. A GitHub Actions workflow has failed.
           Your job is to diagnose the error and produce a minimal fix.
@@ -212,8 +212,7 @@ jobs:
           # designed to repair; reject absolute paths and traversal outright.
           ALLOWED_REPAIR_PATHS = {
               ".github/workflows/check-updates.yml",
-              "skills/setup-routing/SKILL.md",
-              "skills/adapt/SKILL.md",
+              "skills/adapt/roster.md",
               "VERSIONS.md",
               "README.md",
           }

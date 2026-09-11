@@ -5,7 +5,7 @@
 > silently a subtle error compounds). Recommendations are sensible defaults, not
 > a benchmarked skill×model matrix — override per project when you have evidence.
 >
-> **Audience:** read by `setup-routing` and `adapt`; folded into generated
+> **Audience:** read by `adapt`; folded into generated
 > `CLAUDE.md` files so orchestrator-Claude consults it when dispatching subagents.
 >
 > Routing is Claude-tier only; the tier names are stable, the ids above move.
@@ -192,7 +192,6 @@ lever.
 
 | Skill                                        | Base tier |
 |----------------------------------------------|-----------|
-| `/superpowers-gstack:setup-routing`          | sonnet    |
 | `/superpowers-gstack:adapt`                  | sonnet    |
 | `/superpowers-gstack:pitfall-verification`   | sonnet    |
 | `/superpowers-gstack:quality-review`         | sonnet    |

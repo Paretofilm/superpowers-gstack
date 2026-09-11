@@ -240,9 +240,8 @@ def test_skill_is_routed_everywhere_the_lint_does_not_check():
     table and the README are where every OTHER project learns the skill exists —
     and a row in the wrong table would be emitted under the wrong framework."""
     row = "| `/superpowers-gstack:spec-drift`"
-    for rel, after in (("skills/setup-routing/SKILL.md", "| `/superpowers-gstack:autoimplement`"),
-                       ("skills/adapt/SKILL.md", "| `/superpowers-gstack:autoimplement`"),
-                       ("skills/setup-routing/model-routing.md", "### Plugin-internal skills (superpowers-gstack)")):
+    for rel, after in (("skills/adapt/roster.md", "| `/superpowers-gstack:autoimplement`"),
+                       ("skills/adapt/model-routing.md", "### Plugin-internal skills (superpowers-gstack)")):
         text = (REPO / rel).read_text()
         assert text.index(row) > text.index(after), rel
     assert "superpowers-gstack:spec-drift" in (REPO / "README.md").read_text()

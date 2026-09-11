@@ -18,10 +18,11 @@ ERRORS (exit 1, CI-blocking):
   E7  denylist: patterns that must never reappear in instruction files
       (e.g. the third-lens `sensitive` role removed in 2.18.0)
   E8  emitted blocks are single-sourced: every shared block file in
-      skills/setup-routing/blocks/ exists, carries its version marker on the
-      H2 heading line, and is referenced by BOTH generators (setup-routing,
-      adapt); neither generator carries an inline copy (no marker heading in
-      a SKILL.md). Replaced the old byte-identity drift guard in 2.33.0 —
+      skills/adapt/blocks/ exists, carries its version marker on the H2
+      heading line, and is in the BLOCKS roster of scripts/adapt-claude-md.py
+      (the one generator since 3.1.0); adapt/SKILL.md carries no inline copy
+      (no marker heading, no bare block heading) and references
+      PLACEHOLDERS.md. Replaced the old byte-identity drift guard in 2.33.0 —
       one source can't drift from itself.
 
   E10 upstream skill references resolve: every `superpowers:<name>` names a
@@ -41,14 +42,13 @@ ERRORS (exit 1, CI-blocking):
       A heading alone does not count: `## `{{TOKEN}}`` with nothing under it
       documents nothing, and passed this rule until 2.48.0.
 
-  E13 /adapt carries its content-loss guards — the pre-write snapshot, the real
-      diff, the mandatory Removed report block, the growth check and the case-3
-      attribution check — each inside the `### Step N` region that owns it, and
-      in the right order within it. Each is prose that a reword could silently
-      drop; the 2.47.0 field run showed the failure is invisible without them
-      (skills/adapt/IMPROVEMENTS.md). Anchoring to the step is what makes the
-      check real: bare substring needles left three of the four guards
-      deletable with the lint still green.
+  E13 /adapt delegates every CLAUDE.md write to scripts/adapt-claude-md.py:
+      the skill names the script, and carries none of the hand-surgery
+      instructions the 2.x prose had (`cp CLAUDE.md`, `sed -n '<start>`, the
+      Growth / Attribution check gates). Before 3.1.0 this rule pinned twenty
+      sentences of that prose because a reword could silently delete a guard;
+      the guards are code with tests now, and the lint only has to keep the
+      model from doing the surgery itself again.
 
   E14 no block file carries the `emitted=` marker attribute. Generators write that
       count into a project's CLAUDE.md at emit time; stored in the source it is a
@@ -106,8 +106,9 @@ DENYLIST = [
     # threshold in two months of records; the Gemini computer-use loop was
     # replaced by the session model's own multimodality + XcodeBuildMCP.
     (re.compile(r"cost[-_]ledger"), "the cost-ledger adaptive lens router was removed in 3.0.0"),
-    # The lookbehind exempts /adapt's rename table, whose rows must name the old skill.
-    (re.compile(r"(?<!\| `)ios-visual-explore|computer[-_]use"), "ios-visual-explore and scripts/computer_use were removed in 3.0.0"),
+    # The lookbehinds exempt the two sites that must name the retired skill to remove
+    # it: the script's REMOVED_SKILLS roster and the adapt skill's one-line mention.
+    (re.compile(r"(?<!REMOVED_SKILLS = \(\")(?<!drops `)ios-visual-explore|computer[-_]use"), "ios-visual-explore and scripts/computer_use were removed in 3.0.0"),
     # 2.36.0 renamed the handoff persistence mode auto -> continuous; 3.0.0 dropped
     # the legacy read paths (`mode: auto`, `## Mode: auto`, typeless v1.12 frontmatter).
     (re.compile(r"auto context (guard|handoff)"),
@@ -129,10 +130,11 @@ DENYLIST = [
      "unperformable verification — diff .gstack/CLAUDE.md.pre-adapt instead (2.48.0)"),
 ]
 
-# Shared emitted blocks (skills/setup-routing/blocks/): single source for the
-# sections both generators write into a project's CLAUDE.md. Marker-carrying
+# Shared emitted blocks (skills/adapt/blocks/): single source for the sections
+# scripts/adapt-claude-md.py writes into a project's CLAUDE.md. Marker-carrying
 # blocks must have their `<!-- gstack-<name>-vN -->` marker on the H2 heading.
-BLOCKS_DIR_REL = Path("skills") / "setup-routing" / "blocks"
+BLOCKS_DIR_REL = Path("skills") / "adapt" / "blocks"
+ADAPT_SCRIPT_REL = Path("scripts") / "adapt-claude-md.py"
 MARKER_BLOCKS = [
     "git-hygiene.md",
     "multi-lens-review.md",
@@ -145,91 +147,16 @@ MARKER_BLOCKS = [
 ]
 PLAIN_BLOCKS = ["model-routing-section.md", "PLACEHOLDERS.md"]
 
-# E13: /adapt's content-loss guards. Each needle is a contract string, not a
-# phrasing preference — the snapshot path a user restores from, the report label
-# they grep for, the gate heading the per-section rules cross-reference.
-#
-# Each entry is anchored to the `### Step N` region that OWNS the guard, because
-# a bare substring check proves only that the words occur somewhere in the file.
-# Mutation-tested before this anchoring landed: deleting the whole Growth check
-# gate left the lint GREEN, since the old needle `"**Growth check"` was also a
-# substring of the 17 cross-references `Run the **Growth check** above`; deleting
-# Step 6's mandatory diff item left it GREEN and the unit suite passing, which is
-# the guard that FEEDS the Removed block; deleting the snapshot instruction left
-# it GREEN because the path string survived at two other sites. A needle must
-# prove the guard is in its own place, not that its words exist.
-ADAPT_GUARDS = [
-    ("Step 5", "cp CLAUDE.md .gstack/CLAUDE.md.pre-adapt",
-     "the pre-write snapshot that gives Step 6 a real 'before' side"),
-    ("Step 5", "are plugin-managed: /adapt replaces each one",
-     "the CLAUDE.md header telling the user which sections are volatile"),
-    ("Step 5", "**Growth check — applies to every marker-managed section",
-     "the size gate itself, not one of its cross-references"),
-    ("Step 5", "**Attribution check — applies to case 3",
-     "the rule that refuses to replace a markerless section it cannot attribute"),
-    ("Step 5", "sed -n '<start>,<end>p' CLAUDE.md",
-     "the gate reads the LIVE file — pointing it at the snapshot applies live line "
-     "numbers to a shifted file, and truncation only lowers the ratio, so it fails OPEN"),
-    ("Step 6", "3. **Diff against the snapshot and classify every removed line.**",
-     "the MANDATORY diff — the optional review's re-check runs only if the user says yes"),
-    ("Step 6", "\n   diff .gstack/CLAUDE.md.pre-adapt CLAUDE.md\n",
-     "the MANDATORY diff's own command, matched by its indented line rather than "
-     "bare — the optional review below re-runs the same command inline, and a bare "
-     "needle reported that copy after the mandatory one was deleted"),
-    ("Step 6", "> **Removed (not plugin prose):**",
-     "the only report block that can reveal a casualty — survivors lists cannot"),
-    ("Step 6", ">   `Nothing project-authored was removed.`",
-     "the sentinel that makes an empty Removed block mean 'checked', not 'skipped' — "
-     "matched inside the report template, where it has to be written"),
-    ("Step 6", "**Write the three block labels verbatim, in English",
-     "the rule that keeps the three greppable labels out of the translation the rest "
-     "of the report gets; it quotes the sentinel, which is what stopped the needle "
-     "above from pinning the template"),
-    ("Step 6", "> **Deferred (grown past its block, not upgraded):**",
-     "the label that keeps a deferral (nothing lost) out of the block that means loss"),
-    ("Step 5", "> `<heading>`: I cannot attribute this section to a past emitter",
-     "the Attribution check's report line, which turns a two-sections-now-exist state "
-     "into an actionable one"),
-    ("Step 5", "> `Session Continuity`: I cannot attribute this section to a past emitter",
-     "the same report for Session Continuity's own handoff.md sniff test, which reaches "
-     "the identical preserve-and-insert state by a different route"),
-    ("Step 5", "The gate fires when **any** of the three triggers below holds",
-     "the union that makes the gate additive — turned into a conjunction the gate "
-     "becomes unfirable, because every section written before 2.49.0 has no "
-     "`emitted=` at all and so can never satisfy all three"),
-    ("Step 5", "When you write a block into CLAUDE.md, add a SECOND HTML",
-     "the imperative that makes provenance exist at all — weakened to 'you MAY add' "
-     "or deleted outright, every other guard on this branch still passes while no "
-     "generator writes an `emitted=` for them to check"),
-    ("Step 5", "do not estimate it and do not carry a stale value forward",
-     "the only textual guard on the replace path against a stale `emitted=` riding "
-     "onto a new marker — a wrong `<N>` inside the sanity band silences the trigger "
-     "for that section"),
-    ("Step 5", "**Provenance (measured, not inferred).**",
-     "the trigger that reads what the plugin actually wrote, not a ratio against a moving block"),
-    ("Step 5", "append the provenance comment after it",
-     "the heading-level rule's own provenance write — it calls itself the general rule "
-     "for every marker-managed section, and 'copy the marker from the block' cannot "
-     "produce an `emitted=` a block file never carries"),
-    ("Step 5", "**Distrust an implausible `<N>`.**",
-     "the sanity check on a count nothing verifies — without it one wrong number "
-     "silences the gate for that section"),
-    ("Step 5", "it adds a\nreason to stop; it never removes one",
-     "the precedence rule: provenance may only ever ADD a reason to stop, so a bad "
-     "`<N>` cannot switch off the two proxies that would still have caught the growth"),
-]
-
-# E13 ordering: a guard in the right step but the wrong place is still broken.
-# (region, earlier, later, why)
-ADAPT_GUARD_ORDER = [
-    ("Step 5", "cp CLAUDE.md .gstack/CLAUDE.md.pre-adapt",
-     "**Growth check — applies to every marker-managed section",
-     "the snapshot must be written before anything reads a 'before' state"),
-    ("Step 6", "3. **Diff against the snapshot and classify every removed line.**",
-     "**STOP HERE.**",
-     "the mandatory diff must sit above the optional-review gate — below it, a user "
-     "who declines the review never gets the classification the Removed block needs"),
-]
+# E13: the hand-surgery instructions /adapt must NOT carry any more. Each was
+# the site of a guard in the 2.x prose; their presence means a model is being
+# asked to perform the merge itself, which is the failure class 3.1.0 closed.
+ADAPT_HAND_SURGERY = (
+    ("cp CLAUDE.md ", "the pre-write snapshot is the script's"),
+    ("sed -n '<start>", "the section read for the growth check is the script's"),
+    ("**Growth check —", "the growth gate is the script's"),
+    ("**Attribution check —", "the attribution rule is the script's"),
+    ("The block to insert: read `blocks/", "blocks are emitted by the script, never pasted"),
+)
 
 errors: list[str] = []
 warnings: list[str] = []
@@ -288,80 +215,35 @@ def documented_placeholders(text: str) -> set[str]:
     return out
 
 
-def step_regions(text: str) -> dict[str, str]:
-    """Split an instruction file into its `### Step N` regions.
-
-    E13's anchor. A guard's needle has to be found inside the step that owns it —
-    `**Growth check` matched 17 cross-references elsewhere in the file, so the
-    gate could be deleted outright with the lint still green.
-    """
-    marks = [(m.start(), m.group(1)) for m in re.finditer(r"^### (Step \d+)\b", text, re.M)]
-    regions: dict[str, str] = {}
-    for i, (pos, name) in enumerate(marks):
-        end = marks[i + 1][0] if i + 1 < len(marks) else len(text)
-        regions[name] = text[pos:end]
-    return regions
+def roster_path() -> Path:
+    return SKILLS / "adapt" / "roster.md"
 
 
-def check_adapt_guards(text: str) -> list[str]:
-    """E13: /adapt's content-loss guards, each in the step that owns it.
+def adapt_script_blocks() -> list[str] | None:
+    """The block file names scripts/adapt-claude-md.py emits (its BLOCKS roster),
+    or None when the script cannot be imported — E8 then reports that itself."""
+    import importlib.util
+    path = REPO / ADAPT_SCRIPT_REL
+    if not path.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("adapt_claude_md", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    try:
+        spec.loader.exec_module(mod)
+    except Exception:
+        return None
+    return [b.file for b in mod.BLOCKS] + [mod.MODEL_ROUTING_FILE]
 
-    Returns the error strings rather than appending to the module-level list, so
-    the unit suite can mutate the skill text in memory and prove each guard's
-    deletion turns the lint red — the property the guards claim and did not have.
-    """
+
+def check_adapt_delegates(text: str) -> list[str]:
+    """E13: adapt/SKILL.md must name the script and carry no hand-surgery."""
     errs: list[str] = []
-    regions = step_regions(text)
-    for step in sorted({s for s, _, _ in ADAPT_GUARDS} - set(regions)):
-        errs.append(
-            f"E13 adapt/SKILL.md has no `### {step}` heading — the content-loss "
-            f"guards anchored to it cannot be located, so nothing pins them")
-    for step, needle, why in ADAPT_GUARDS:
-        region = regions.get(step)
-        if region is None:
-            continue
-        hits = region.count(needle)
-        if hits == 0:
-            errs.append(
-                f"E13 adapt/SKILL.md: {step} is missing content-loss guard "
-                f"{needle!r} — {why}")
-        elif hits > 1:
-            # A needle matching twice reports the copy, not the site it names:
-            # delete the guard and the other occurrence keeps the lint green.
-            # Three needles were in exactly that state at 2.49.0 — two of them
-            # put there by the very branch that reviewed them — and each was
-            # found by deleting an occurrence, never by reading.
-            errs.append(
-                f"E13 adapt/SKILL.md: {step} matches content-loss guard {needle!r} "
-                f"{hits} times, so it no longer pins {why} — deleting that guard "
-                f"would leave the lint green on the other copy. Re-point the needle "
-                f"at something unique to its own site")
-    for step, first, second, why in ADAPT_GUARD_ORDER:
-        region = regions.get(step)
-        if not region:
-            # NOT already reported above: that loop only scans steps ADAPT_GUARDS
-            # names, so a step appearing solely in ADAPT_GUARD_ORDER is invisible
-            # to it — this has to say so itself, or extending the ordering list
-            # with a new step is a silent no-op the day it isn't also in ADAPT_GUARDS.
-            errs.append(
-                f"E13 adapt/SKILL.md: ordering rule names {step!r}, which has no "
-                f"`### {step}` heading — the rule cannot run, so it is reporting "
-                f"nothing rather than passing")
-            continue
-        if first not in region:
-            errs.append(
-                f"E13 adapt/SKILL.md: {step}'s ordering anchor {first!r} is gone — "
-                f"the order check cannot run, so it is reporting nothing rather "
-                f"than passing")
-        elif second not in region:
-            errs.append(
-                f"E13 adapt/SKILL.md: {step}'s ordering anchor {second!r} is gone — "
-                f"the order check cannot run, so it is reporting nothing rather "
-                f"than passing")
-        elif region.index(first) > region.index(second):
-            errs.append(
-                f"E13 adapt/SKILL.md: in {step}, {first!r} appears after "
-                f"{second!r} — {why}")
+    if str(ADAPT_SCRIPT_REL) not in text:
+        errs.append(f"E13 adapt/SKILL.md never names {ADAPT_SCRIPT_REL} — every CLAUDE.md write must go through it")
+    for needle, why in ADAPT_HAND_SURGERY:
+        if needle in text:
+            errs.append(f"E13 adapt/SKILL.md carries {needle!r} — {why}; the model must not merge by hand")
     return errs
 
 
@@ -520,6 +402,11 @@ def main() -> int:
         check_refs(skill_md, text, repo_doc=False)
         check_upstream_skills(skill_md, text)
 
+    # E2 + E10 on the roster: every skill it lists must exist
+    if roster_path().is_file():
+        check_refs(roster_path(), roster_path().read_text(), repo_doc=False)
+        check_upstream_skills(roster_path(), roster_path().read_text())
+
     # E2 on CLAUDE.md + README too
     check_refs(REPO / "CLAUDE.md", claude_md, repo_doc=True)
     check_upstream_skills(REPO / "CLAUDE.md", claude_md)
@@ -562,9 +449,13 @@ def main() -> int:
     targets += [(d / "SKILL.md", (d / "SKILL.md").read_text()) for d in skill_dirs if (d / "SKILL.md").is_file()]
     # Also scan the canonical routing table — the file most likely to regress a
     # purged local-model (Pi/MLX) pattern, yet it is not a SKILL.md.
-    _mr = REPO / "skills" / "setup-routing" / "model-routing.md"
+    _mr = REPO / "skills" / "adapt" / "model-routing.md"
     if _mr.is_file():
         targets.append((_mr, _mr.read_text()))
+    # ... and the skill roster — the one file the weekly auto-update LLM writes
+    # into, and since 3.1.0 no longer inside a SKILL.md (third house, 3.1.0).
+    if roster_path().is_file():
+        targets.append((roster_path(), roster_path().read_text()))
     # ... and the shared emitted blocks — they ARE the generated-CLAUDE.md content.
     if (REPO / BLOCKS_DIR_REL).is_dir():
         targets += [(f, f.read_text()) for f in sorted((REPO / BLOCKS_DIR_REL).glob("*.md"))]
@@ -585,15 +476,19 @@ def main() -> int:
     # byte-identity drift check — one source can't drift from itself):
     #   (a) every shared block file exists;
     #   (b) marker blocks carry `<!-- gstack-<x>-vN -->` on their H2 heading line;
-    #   (c) BOTH generators reference every block filename (no orphaned block,
-    #       no generator that forgot to emit one);
-    #   (d) NEITHER generator has an inline copy — a heading line carrying a
-    #       gstack marker inside a SKILL.md is a regression to hand-maintained
-    #       duplication (the class the 2.27.0 pre-merge review caught).
+    #   (c) the generator — scripts/adapt-claude-md.py since 3.1.0 — lists every
+    #       block in its BLOCKS roster (no orphaned block, no block it forgot);
+    #   (d) adapt/SKILL.md has no inline copy — a heading line carrying a gstack
+    #       marker inside a SKILL.md is a regression to hand-maintained
+    #       duplication (the class the 2.27.0 pre-merge review caught) — and
+    #       references PLACEHOLDERS.md, the file it resolves `--set` values from.
     blocks_dir = REPO / BLOCKS_DIR_REL
     gen_texts = {name: (SKILLS / name / "SKILL.md").read_text()
-                 for name in ("setup-routing", "adapt")
+                 for name in ("adapt",)
                  if (SKILLS / name / "SKILL.md").is_file()}
+    roster = adapt_script_blocks()
+    if roster is None:
+        errors.append(f"E8 {ADAPT_SCRIPT_REL} is missing or does not import — no generator emits the blocks")
     for fname in MARKER_BLOCKS + PLAIN_BLOCKS:
         f = blocks_dir / fname
         if not f.is_file():
@@ -603,11 +498,18 @@ def main() -> int:
             first = f.read_text().split("\n", 1)[0]
             if not re.match(r"^## .*<!-- gstack-[a-z-]+-v\d+ -->$", first):
                 errors.append(f"E8 {BLOCKS_DIR_REL}/{fname}: first line must be an H2 heading with a gstack version marker")
-        # PLACEHOLDERS.md included: a generator that stops referencing it could
-        # emit raw {{...}} tokens into a project's CLAUDE.md.
-        for gen, text in gen_texts.items():
-            if fname not in text:
-                errors.append(f"E8 {gen}/SKILL.md never references blocks/{fname} — generator would not emit/resolve it")
+            if not f.read_bytes().endswith(b"\n"):
+                errors.append(f"E8 {BLOCKS_DIR_REL}/{fname}: no trailing newline — `emitted=` is the newline count and would be one short")
+        if fname == "PLACEHOLDERS.md":
+            for gen, text in gen_texts.items():
+                if fname not in text:
+                    errors.append(f"E8 {gen}/SKILL.md never references blocks/{fname} — the skill would not resolve placeholders")
+        elif roster is not None and fname not in roster:
+            errors.append(f"E8 {ADAPT_SCRIPT_REL} never emits blocks/{fname} — not in its BLOCKS roster")
+    if roster is not None:
+        for fname in roster:
+            if fname not in MARKER_BLOCKS + PLAIN_BLOCKS:
+                errors.append(f"E8 {ADAPT_SCRIPT_REL} emits blocks/{fname}, which MARKER_BLOCKS/PLAIN_BLOCKS do not list")
     if (blocks_dir / "model-routing-section.md").is_file():
         if "## Model Routing" not in (blocks_dir / "model-routing-section.md").read_text():
             errors.append("E8 blocks/model-routing-section.md lost its `## Model Routing` anchor")
@@ -702,15 +604,15 @@ def main() -> int:
         except Exception as exc:  # never let the guard itself break the lint
             warnings.append(f"W4 could not verify own-blocks region: {exc}")
 
-    # E13 /adapt content-loss guards (2.48.0). The 2.9.0 -> 2.47.0 re-adaptation
-    # of sing-replay was correct on all nine markers and still replaced a
-    # 198-line section with a 73-line block, destroying 125 lines of project
-    # knowledge, unreported. These guards are the mechanism that makes that
-    # visible; they are prose, so nothing but a lint keeps them from being
-    # reworded away.
+    # E13 /adapt delegates to the script (3.1.0). The 2.9.0 -> 2.47.0
+    # re-adaptation of sing-replay was correct on all nine markers and still
+    # replaced a 198-line section with a 73-line block, destroying 125 lines of
+    # project knowledge, unreported. The guards that make that visible are code
+    # now (scripts/adapt-claude-md.py, tests/unit/test_adapt_script.py); this
+    # rule keeps the skill from ever asking the model to do the merge again.
     adapt_skill = SKILLS / "adapt" / "SKILL.md"
     if adapt_skill.is_file():
-        errors.extend(check_adapt_guards(adapt_skill.read_text()))
+        errors.extend(check_adapt_delegates(adapt_skill.read_text()))
 
     # E14 block files never carry the emitted= attribute (2.49.0). The count is a
     # fact about one emission, written by a generator into one project's CLAUDE.md.

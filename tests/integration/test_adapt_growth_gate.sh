@@ -88,7 +88,7 @@ fi
 # assertion 3 test a mechanism that never ran, and nothing else in this script
 # would notice. Derive both counts from the real files — never hardcode the
 # block's line count, since it grows with the block's own version bumps.
-BLOCK_FILE="$PLUGIN_DIR/skills/setup-routing/blocks/xcode-tools.md"
+BLOCK_FILE="$PLUGIN_DIR/skills/adapt/blocks/xcode-tools.md"
 SECTION_START=$(grep -n '^## Native Apple development tools' "$FIXTURE" | head -1 | cut -d: -f1)
 SECTION_END=$(awk -v start="$SECTION_START" 'NR>start && /^## /{print NR-1; exit}' "$FIXTURE")
 [ -n "$SECTION_END" ] || SECTION_END=$(wc -l < "$FIXTURE")
@@ -109,7 +109,7 @@ echo "Fixture premise verified: section is $SECTION_LINES lines against a $BLOCK
 # lines above its own emitted= count. Derive all three numbers from the real
 # files; a fixture edit that quietly breaks either half would leave the assertions
 # below testing a mechanism that never ran.
-PROV_BLOCK="$PLUGIN_DIR/skills/setup-routing/blocks/git-hygiene.md"
+PROV_BLOCK="$PLUGIN_DIR/skills/adapt/blocks/git-hygiene.md"
 PROV_START=$(grep -n '^## Git hygiene' "$FIXTURE" | head -1 | cut -d: -f1)
 PROV_END=$(awk -v start="$PROV_START" 'NR>start && /^## /{print NR-1; exit}' "$FIXTURE")
 [ -n "$PROV_END" ] || PROV_END=$(wc -l < "$FIXTURE")
@@ -144,7 +144,7 @@ echo "Provenance premise verified: Git hygiene section is $PROV_LINES lines, ${P
 # version different). If the fixture's marker ever catches up with the block's,
 # case 1 skips the section and assertion 11 passes having tested nothing — the
 # vacuous green this project has now shipped four times. Derive both markers.
-H3_BLOCK="$PLUGIN_DIR/skills/setup-routing/blocks/session-continuity.md"
+H3_BLOCK="$PLUGIN_DIR/skills/adapt/blocks/session-continuity.md"
 H3_BLOCK_LINES=$(wc -l < "$H3_BLOCK" | tr -d ' ')
 H3_BLOCK_MARKER=$(head -1 "$H3_BLOCK" | sed -nE 's/.*<!-- (gstack-[a-z-]+-v[0-9]+) -->.*/\1/p')
 H3_FIXTURE_MARKER=$(grep -E '^### Session Continuity' "$FIXTURE" | head -1 \
@@ -234,7 +234,7 @@ assert "report names Git hygiene under the Deferred block" $?
 #    are given. Headings on older markers were NOT written this run (the
 #    fixture's seeded git-hygiene v8, anything the gate deferred) and are skipped
 #    rather than compared against a block they never came from.
-BLOCKS_DIR="$PLUGIN_DIR/skills/setup-routing/blocks"
+BLOCKS_DIR="$PLUGIN_DIR/skills/adapt/blocks"
 PROV_CHECKED=0
 PROV_BAD=0
 # heredoc, not a pipe: a `while read` on the right of a pipe runs in a subshell

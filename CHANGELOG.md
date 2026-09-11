@@ -1,5 +1,64 @@
 # Changelog
 
+## [3.1.0] - 2026-09-11
+
+**`/adapt` is a script now, and `setup-routing` is gone.** Fase 4 of the 3.0.0
+modernisation (`docs/superpowers/specs/2026-09-11-adapt-merge-script-design.md`).
+
+### Removed (breaking)
+- **`/superpowers-gstack:setup-routing`.** `/adapt` on a project without a CLAUDE.md is
+  setup: same analysis, same skill selection, and the script creates the file. The skill
+  roster tables — duplicated between the two skills and kept "identical" by a workflow
+  prompt — live once, in `skills/adapt/roster.md`. `skills/setup-routing/blocks/` and
+  `model-routing.md` moved to `skills/adapt/`.
+- `skills/adapt/IMPROVEMENTS.md` (field notes from the 2.47.0 re-adaptation) — every
+  entry is implemented in the script and pinned by its tests.
+- Lint E13's twenty prose needles and two ordering rules. They pinned sentences of
+  `adapt/SKILL.md` because a reword could delete a guard; the guards are code now.
+
+### Added
+- **`scripts/adapt-claude-md.py`** — the one writer of a project's CLAUDE.md. Snapshot
+  (`.gstack/CLAUDE.md.pre-adapt`, rotated, git-excluded), two-line header, removal of a
+  marker-carrying retired `Autonomy and user interruption` section within its size
+  bound, renames of retired skill names outside managed sections and fences (rows that
+  collapse into one skill are deduplicated), `--routing-file` inserted only when
+  `## Skill routing` is absent, every block with the four cases, the growth check
+  (provenance / ratio 1.5× / volume ~20 lines — any one fires), sentinel attribution,
+  H3 demotion of root and subsections, `<!-- emitted=N -->` beside the marker, Model
+  Routing replaced only when the old section carries a model column, and a verify pass
+  that lists every removed line the new block does not carry. A grown section is always
+  deferred; `--rescue <marker>` moves the lines the block does not have (with the
+  section's own subheadings and whole fenced blocks) into
+  `## <project> — notes rescued from "<heading>"` and then upgrades. Headings inside code
+  fences are not section boundaries. `--dry-run` writes nothing; every refusal
+  (`BLOCKED`, `UNRESOLVED PLACEHOLDER`, `UNREADABLE`) is exit 2 with nothing written.
+  The report ends with one JSON line the skill reads for its questions.
+- `tests/unit/test_adapt_script.py` — 65 tests against the real block files, including
+  the two fixtures the prose could only describe: the 2.7× section that motivated the
+  gate (every sentinel line survives, the section is deferred) and the volume-neutral
+  section where only provenance can see the growth. The pre-landing lenses (self-pitfall,
+  Codex adversarial + structured, GLM architecture, DeepSeek correctness) each added
+  cases: no downgrade of a newer section, rename-collision-only row dedupe, a negation
+  guard on the reword heuristic, verbatim Removed listings, table-or-sentinel Model
+  Routing ownership, indented/Setext headings, unclosed fences and comments refused,
+  H2 placement outside H3 subtrees, atomic write with every refusal before it, pin over
+  `--set`, guarded placeholder refresh, CRLF preserved, `roster.md` inside the lint scan.
+- Lint E8 now checks the script's `BLOCKS` roster (imported) against the block files;
+  E13 now checks that `adapt/SKILL.md` names the script and carries none of the retired
+  hand-surgery instructions.
+
+### Changed
+- `skills/adapt/SKILL.md` is ~270 lines (was 769): analyze, confirm the stack, pick
+  skills from the roster, resolve the inputs (`.gstack/track`, the `.gstack/e2e-executor`
+  pin, placeholders per `blocks/PLACEHOLDERS.md`, a routing draft when the section is
+  missing), dry-run and ask — per deferred section, move or leave — then apply and relay
+  the script's report verbatim.
+- The script resolves `{{E2E_EXECUTOR}}` from the pin itself (PLACEHOLDERS.md's rule in
+  code); a malformed pin is `BLOCKED`, never a silent `host`. An unresolved placeholder
+  in a block about to be emitted refuses the whole run.
+- `check-updates.yml` and `self-repair.yml` edit `skills/adapt/roster.md` instead of two
+  SKILL.md files.
+
 ## [3.0.2] - 2026-09-11
 
 ### Fixed

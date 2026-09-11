@@ -9,7 +9,7 @@
 # passed through unchanged, so it is typically 65 — NOT 1. Check `-ne 0`, never `-eq 1`.
 #
 # Layering: this script CHOOSES the executor; `vm-e2e` OWNS the lease and the guest.
-# It only READS `.gstack/e2e-executor` — /setup-routing and /adapt write that pin.
+# It only READS `.gstack/e2e-executor` — /adapt writes that pin.
 
 set -uo pipefail
 
