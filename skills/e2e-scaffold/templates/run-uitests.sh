@@ -26,7 +26,8 @@ SCHEME='<SCHEME>'
 # PLATFORM is one of: macos, ios — e2e-route matches this line, so keep the value alone on it.
 PLATFORM='<PLATFORM>'
 TEST_TARGET='<TEST_TARGET>'    # <App>UITests, or <App>macOSUITests / <App>iOSUITests on multiplatform
-case "$SCHEME$TEST_TARGET" in *[!A-Za-z0-9_.\ -]*) echo "refusing: scheme/target name carries shell-significant characters" >&2; exit 2 ;; esac
+case "$SCHEME$TEST_TARGET" in *[![:alnum:]_.\ -]*) echo "refusing: scheme/target name carries a character outside letters, digits, _ . - and space" >&2; exit 2 ;; esac
+case "$PLATFORM" in ios|macos) ;; *) echo "refusing: PLATFORM must be ios or macos, got '$PLATFORM'" >&2; exit 2 ;; esac
 
 # --- Executor pin ---------------------------------------------------------------
 # host | vm; absence means host. Only those two exact strings are valid: a typo that
@@ -102,13 +103,20 @@ if [ "$EXECUTOR" = vm ]; then
     # never trust the rig's own field. A present-but-non-numeric `.executed` would pass
     # the guard above and then make `[ -eq 0 ]` fail with status 2; without `set -e` the
     # script would carry on and exit 0. Deriving removes it from the trust surface.
+    TOTAL=$(jq -r '.total' "$VM_JSON")
     SKIPPED=$(jq -r '.skipped // 0' "$VM_JSON")
     FAILED=$(jq -r '.failed // 0' "$VM_JSON")
-    EXECUTED=$(( $(jq -r '.total' "$VM_JSON") - SKIPPED ))
+    # jq's `type == "number"` accepts 0.5 and -3; the shell does not. Same integer guard
+    # as the host path, so a float or negative count is a rig fault, never a green.
+    case "$TOTAL$SKIPPED$FAILED" in ''|*[!0-9]*)
+      echo "E2E RIG FAILED: counts are not non-negative integers (total=${TOTAL} skipped=${SKIPPED} failed=${FAILED})." >&2
+      rm -f "$VM_JSON"; exit 2 ;;
+    esac
+    EXECUTED=$((TOTAL - SKIPPED))
     jq --argjson ex "$EXECUTED" '. + {executor: "vm", executed: $ex}' "$VM_JSON"
     rm -f "$VM_JSON"
     echo "executor=vm  skipped=${SKIPPED}  executed=${EXECUTED}" >&2
-    [ "$EXECUTED" -eq 0 ] && { echo "FAILED: 0 tests executed — green and empty is not a pass." >&2; exit 1; }
+    [ "$EXECUTED" -le 0 ] && { echo "FAILED: 0 tests executed — green and empty is not a pass." >&2; exit 1; }
     [ "$FAILED" -ne 0 ] && exit 1
     # The counts can look clean while the rig still failed — an xcodebuild
     # infrastructure error, a transfer that half-completed. The rig's own exit code

@@ -17,6 +17,9 @@ Normally reached via `/e2e-route`.
 
 ### Pick the platform (once)
 
+0. `.gstack/track` exists but holds anything other than exactly `ios`, `macos` or `both`
+   (empty, `web`, `iOS`, a stray line) → `BLOCKED — invalid .gstack/track value`, the same
+   shape as the executor-pin check. Never guess a platform from a malformed marker.
 1. `.gstack/track` says `ios` or `macos` → that is `PLATFORM`.
 2. `.gstack/track` says `both` → ask once: "Scaffold iOS or macOS this run?" Each platform
    is a separate run; the two suites coexist (see TARGET_DIR).
@@ -33,7 +36,7 @@ files modified.
 |---|---|---|
 | Swift project | `*.xcodeproj` directory or `Package.swift` in cwd | "Not a Swift project. /e2e-scaffold requires .xcodeproj or Package.swift in project root." |
 | SwiftUI app on PLATFORM | **platform-discriminating signal** (below) AND a SwiftUI scene root for PLATFORM (see Step 4) | "No <PLATFORM> SwiftUI app target detected. Check `.gstack/track`; for AppKit/UIKit-only apps this skill does not apply." |
-| Not already scaffolded | any `*UITests/` directory at depth ≤ 2 — EXCLUDING the sibling platform's suffixed one — contains > 1 `*.swift`: `find . -maxdepth 2 -type d -name '*UITests' ! -name '*<Sibling>UITests'` where `<Sibling>` is `iOS` when scaffolding macOS and `macOS` when scaffolding iOS. Name-agnostic: the scheme is not known until Step 2 | "UI test target already exists (`<found-dir>/`, N test files). Skill won't overwrite — extend manually instead." |
+| Not already scaffolded | any `*UITests/` directory at depth ≤ 2 — EXCLUDING the sibling platform's suffixed one — contains > 1 `*.swift`: `find . -maxdepth 2 -type d -name '*UITests' ! -name '*<Sibling>UITests'` where `<Sibling>` is `iOS` when scaffolding macOS and `macOS` when scaffolding iOS. Name-agnostic: the scheme is not known until Step 2 | On a multiplatform target an **unsuffixed** `<App>UITests` may be the other platform's pre-3.0.0 suite: read its scheme destination (or ask once) and, if it tests the other platform, proceed with the suffixed TARGET_DIR instead of refusing. Otherwise: "UI test target already exists (`<found-dir>/`, N test files). Skill won't overwrite — extend manually instead." |
 
 ### Platform-discriminating signal — REQUIRED
 
@@ -108,10 +111,11 @@ Proceeding with audit + scaffold.
 
 The scheme and the test-target name are substituted into a shell script (Step 11). Both
 are repository-controlled input, so validate them before anything is generated: they must
-match `^[A-Za-z0-9_.-]+( [A-Za-z0-9_.-]+)*$`. A name carrying `$`, backticks, quotes,
-semicolons or other shell-significant characters is refused with "scheme/target name
-`<name>` is not safe to embed in a shell script — rename the scheme" and nothing is
-written. The template also single-quotes the values and re-checks them at run time.
+consist only of letters (any script — `Målbar` is fine), digits, `_`, `.`, `-` and single
+spaces. A name carrying anything else (`$`, backticks, quotes, semicolons, parentheses)
+is refused with "scheme/target name `<name>` carries `<the character>`, which is not safe
+to embed in a shell script — rename the scheme" and nothing is written. The template also
+single-quotes the values and re-checks them at run time.
 
 ### Step 3: Find source root
 - xcodegen: `targets.<schemename>.sources.path`
@@ -170,8 +174,10 @@ in the project, substituting `<SCHEME>` (Step 2), `<PLATFORM>` (`ios` | `macos`)
 `<TEST_TARGET>` (`TARGET_DIR`). `chmod +x scripts/run-uitests.sh`. SPM-only projects get
 the stub in §Project-type-specific behavior instead.
 
-**Multiplatform: never overwrite the other platform's runner.** If `scripts/run-uitests.sh`
-already exists and its `PLATFORM=` line names the other platform, write this run's copy to
+**Multiplatform: never overwrite the other platform's runner.** Classify an existing
+`scripts/run-uitests.sh` by its `PLATFORM=` line, or — for a 2.x runner that has none — by
+its `-destination` line (`iOS Simulator` → ios, `platform=macOS` → macos), exactly as
+`e2e-route` does. If it names the other platform, write this run's copy to
 `scripts/run-uitests-<platform>.sh` (`-ios` or `-macos`) instead and say so in the report;
 `/superpowers-gstack:e2e-route` picks the runner whose `PLATFORM=` matches the routed
 platform. If it exists with the same `PLATFORM=`, the project is already scaffolded for

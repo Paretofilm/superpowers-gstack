@@ -59,6 +59,15 @@ verdicts: `docs/superpowers/specs/2026-09-11-modernisering-audit.md`.
   with a platform table; the runner moved to `templates/run-uitests.sh` (no version
   literal in its header); the twin drift is resolved (identifier scan depth, runner
   header).
+- **The runner validates every count on both executor paths** (integer, non-negative;
+  `executed` derived as total − skipped; `executed ≤ 0` fails), validates `PLATFORM` at
+  run time, and accepts non-ASCII letters in scheme names.
+- **`pitfall-verification` verifies that lens 2 was Codex.** gstack's `/review` echoes
+  `CODEX_MODE:` and substitutes a Claude subagent when Codex is disabled, absent or
+  unauthenticated; that no longer counts as the Codex lens — the verdict records
+  `lens 2 absent` and escalates the third house.
+- **`.gstack/track` is validated everywhere it is read** (`e2e-scaffold`, `e2e-route`,
+  `office-hours-track-aware`): anything but `ios` / `macos` / `both` is BLOCKED.
 - **gstack `/review` owns the Codex pass.** `pitfall-verification` Stage 2 invokes
   `/review` on a diff (or `/codex challenge` on a plan) and never calls `/codex review`
   itself; `autoimplement` runs `/review` first at each boundary and pitfall folds its

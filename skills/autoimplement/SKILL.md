@@ -333,7 +333,9 @@ Match by **prefix** (`startswith`), not substring — this avoids false matches 
 Run these two skills in sequence, `/review` first. gstack's `/review` owns the Codex
 pass on the diff; `/pitfall-verification` folds those findings into its synthesis and
 adds the third-lens house on high-stakes phases. Never call Codex directly here — that
-is a second Codex pass on the same diff.
+is a second Codex pass on the same diff. Read `/review`'s `CODEX_MODE:` line: if it is not
+`ready`, the phase's Codex lens is absent (a Claude subagent stood in) — record
+`codex-skipped (CODEX_MODE=<value>)` and let pitfall escalate the third house.
 After each, classify the output by **semantic judgment** — not by parsing for fixed labels. Cite the specific finding that drove your decision so the user can audit.
 
 For each review output, classify as one of:

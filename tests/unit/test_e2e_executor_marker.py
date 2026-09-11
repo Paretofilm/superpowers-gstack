@@ -114,7 +114,7 @@ def test_executed_is_derived_and_zero_is_a_failure():
     template = runner_template()
     assert "green and empty is not a pass" in template
     assert "0 tests executed" in template
-    assert "SKIPPED ))" in template, "executed must be computed from total and skipped"
+    assert "EXECUTED=$((TOTAL - SKIPPED))" in template, "executed must be computed from total and skipped"
     assert "skipped=" in template, "skipped must be printed in plain text on every run"
 
 
@@ -356,7 +356,7 @@ def test_executed_is_derived_never_taken_from_the_rig():
     skipped, then `[ -eq 0 ]` fails with status 2 — and without `set -e` the script
     continues and exits 0. Deriving removes the field from the trust surface."""
     template = runner_template()
-    assert "EXECUTED=$(( $(jq -r '.total' \"$VM_JSON\") - SKIPPED ))" in template
+    assert "EXECUTED=$((TOTAL - SKIPPED))" in template and "case \"$TOTAL$SKIPPED$FAILED\"" in template
     assert ".executed //" not in template, \
         "the rig's own executed field must not be read back as a fallback"
     assert "never trust the rig's own field" in flat(template)

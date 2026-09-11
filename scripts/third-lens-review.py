@@ -126,10 +126,12 @@ def get_pricing(key, model, models=_UNSET):
         models = fetch_models(key)
     for m in models or []:
         if m.get("id") == model:
-            p = m.get("pricing", {})
+            p = m.get("pricing")
+            if not isinstance(p, dict):
+                return (None, None)
             try:
                 return (float(p.get("prompt", 0)), float(p.get("completion", 0)))
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, AttributeError):
                 return (None, None)
     return (None, None)
 
@@ -149,12 +151,14 @@ def model_is_served(key, model, models=_UNSET):
 def get_credits(key):
     try:
         d = http_json("GET", "/credits", key, timeout=30)
-        data = d.get("data", d)
+        data = d.get("data", d) if isinstance(d, dict) else None
+        if not isinstance(data, dict):
+            return None
         total = data.get("total_credits")
         used = data.get("total_usage")
-        if total is not None and used is not None:
+        if isinstance(total, (int, float)) and isinstance(used, (int, float)):
             return total - used
-    except SystemExit:
+    except (SystemExit, AttributeError, TypeError):
         pass
     return None
 
@@ -290,8 +294,11 @@ def run_openrouter(system_prompt, user_msg, model, args, key):
     }
     resp = http_json("POST", "/chat/completions", key, payload=payload, timeout=600)
 
+    if not isinstance(resp, dict):
+        eprint(f"ERROR: unexpected response shape from OpenRouter: {str(resp)[:300]}")
+        sys.exit(4)
     choices = resp.get("choices") or []
-    if not choices:
+    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
         eprint(f"ERROR: no choices in response: {json.dumps(resp)[:500]}")
         sys.exit(4)
     choice = choices[0]
@@ -328,7 +335,10 @@ def run_openrouter(system_prompt, user_msg, model, args, key):
     if tin is not None:
         out_str = f"{tout:,}" if tout is not None else "?"
         print(f"\n[usage] in={tin:,} out={out_str} tok | cost={cost_str} | model={model}")
-    bal = get_credits(key)
+    try:  # the review is already printed; a balance lookup must never change the exit status
+        bal = get_credits(key)
+    except Exception:  # noqa: BLE001
+        bal = None
     if bal is not None:
         print(f"[balance] OpenRouter ${bal:.2f} remaining")
 

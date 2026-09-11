@@ -258,6 +258,8 @@ Run on the **patched** artifact, in order — each later lens reads a cleaner su
 
 **gstack owns the Codex pass.** For a code diff, invoke gstack's `/review`: its adversarial step runs Codex on the diff with the model gstack currently defaults to, and it is the one place Codex should run on a given patched state. For a spec or plan (no diff), invoke `/codex challenge` on the artifact. Codex catches cross-file drift, concurrency contracts, and concrete run bugs that self-review systematically misses. Fix what it finds. Run it automatically — do not ask first.
 
+**Verify that lens 2 really was Codex.** gstack's `/review` echoes a `CODEX_MODE:` line and, when it is anything but `ready` (Codex disabled in config, not installed, not authenticated, broken, or running under Codex), silently substitutes a Claude subagent — the same model family. Read that line (or the persisted `source:` field of its adversarial-review entry). If Codex did not run, the ship-worthy tier is **not** satisfied: record `lens 2 absent (CODEX_MODE=<value>)` in the Stage 4 verdict, escalate the third house as the outside read even below high-stakes, and never present the substitute's findings as Codex's.
+
 **One Codex pass per patched state.** If `/review` has already run on this exact patched artifact earlier in the flow (an orchestrator such as `/superpowers-gstack:autoimplement` runs it at every phase boundary), do **not** run it again — fold its Codex findings into the Stage 4 synthesis. Never call `/codex review` directly on a diff; that is a second pass on the same state.
 
 ### Stage 3 — third model house (high-stakes only)

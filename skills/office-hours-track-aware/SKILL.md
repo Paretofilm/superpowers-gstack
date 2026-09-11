@@ -20,6 +20,7 @@ eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
 { [ -z "$SLUG" ] || [ "$SLUG" = "/" ]; } && { echo "FATAL: could not derive SLUG" >&2; exit 1; }
 mkdir -p .gstack
 EXISTING_TRACK=$(tr -d '[:space:]' < .gstack/track 2>/dev/null || true)
+case "$EXISTING_TRACK" in ''|ios|macos|both) ;; *) echo "BLOCKED — invalid .gstack/track value '$EXISTING_TRACK' (expected ios, macos or both)" >&2; exit 2 ;; esac
 echo "SLUG=$SLUG EXISTING_TRACK=${EXISTING_TRACK:-none}"
 ```
 

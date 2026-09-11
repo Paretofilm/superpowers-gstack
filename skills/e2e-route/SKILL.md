@@ -22,7 +22,8 @@ emits one decision block and hands off. It builds, taps, asserts and writes noth
 
 Read `SUPPORTED_PLATFORMS` / `SDKROOT` via `mcp__XcodeBuildMCP__show_build_settings`; if
 MCP is unavailable, `grep -E 'SDKROOT|SUPPORTED_PLATFORMS' *.xcodeproj/project.pbxproj`,
-else read `.gstack/track`. Ask only if undetectable.
+else read `.gstack/track` — which must be exactly `ios`, `macos` or `both`; anything
+else is `BLOCKED — invalid .gstack/track value`, never a guess. Ask only if undetectable.
 
 If the target supports both (`iphoneos` and `macosx` both listed, `.gstack/track` = `both`,
 or one scheme per platform) the platform is not determined. Resolve in order: (a) the
@@ -71,7 +72,7 @@ Absent rig and failing rig are different and get opposite answers:
 | Intent | Platform | Executor |
 |---|---|---|
 | Committed regression | macOS | Entry points 1–4 below, in order. Honours `.gstack/e2e-executor`. |
-| Committed regression | iOS | the iOS runner (`scripts/run-uitests.sh` with `PLATFORM=ios`, or with no `PLATFORM=` line and an `iOS Simulator` destination — a 2.x runner; else `scripts/run-uitests-ios.sh`) if present, subject to the LEGACY pin check below; else an existing iOS UI-test target → run it directly: `xcodebuild test -scheme <Scheme> -destination 'platform=iOS Simulator,id=<UDID from xcrun simctl list devices available>' -only-testing:<Target>`; else `/superpowers-gstack:e2e-scaffold` (target `<App>iOSUITests`). A project that already has a suite is never sent to the scaffold — it refuses existing suites. |
+| Committed regression | iOS | the iOS runner (`scripts/run-uitests.sh` with `PLATFORM=ios`, or with no `PLATFORM=` line and an `iOS Simulator` destination — a 2.x runner; else `scripts/run-uitests-ios.sh`) if present (the pin does not apply to iOS, so no LEGACY check — run it); else an existing iOS UI-test target → run it directly: `xcodebuild test -scheme <Scheme> -destination 'platform=iOS Simulator,id=<UDID from xcrun simctl list devices available>' -only-testing:<Target>`; else `/superpowers-gstack:e2e-scaffold` (target `<App>iOSUITests`). A project that already has a suite is never sent to the scaffold — it refuses existing suites. |
 | Exploratory / live | macOS | XcodeBuildMCP UI automation: `snapshot_ui` → tap → `screenshot` |
 | Exploratory / live | iOS | `ios-simulator` MCP (`ui_find_element` / `ui_tap`) or `/ios-qa` |
 | Visual exploration | iOS / macOS | XcodeBuildMCP `screenshot` / `snapshot_ui`, driven by the session model |
@@ -114,9 +115,12 @@ refusing because "a UI-test target already exists" means the suite is there — 
 
 ## Fallback
 
-Degrade to the exploratory row only when the scaffold's own Phase 0 refuses: not a Swift
-project, or no SwiftUI app for the routed platform (UIKit/AppKit-only, or a pure-iOS app
-routed to macOS). Name the unmet precondition. SPM-only is **not** a fallback trigger —
+Degrade to the exploratory row only when the scaffold's own Phase 0 refuses for a
+platform the app actually has (UIKit/AppKit-only). If it refuses because there is no app
+for the routed platform at all (a `both` track on a pure-iOS project), drop that
+platform's decision block and say that `.gstack/track` or the request overstates the
+project — never route exploration at an app that does not exist. Name the unmet
+precondition. SPM-only is **not** a fallback trigger —
 the scaffold accepts `Package.swift` and writes under `Tests/<Target>/` with a warning.
 
 **Waiting.** If the executor needs a simulator, gate on a non-degenerate `snapshot_ui` /
@@ -133,7 +137,8 @@ Detected: platform=<iOS|macOS>, intent=<committed|exploratory|visual>, source=<s
 executor=<host|vm|vm→host-fallback>
 Chosen executor: <skill or MCP sequence>
 Why: <one line tying context → routing cell>
-Next action: <exact /skill to invoke OR exact MCP call sequence>
+Next action: <exact /skill to invoke OR exact MCP call sequence — when the session is known
+to be non-interactive, prefix the runner: `E2E_NONINTERACTIVE=1 ./scripts/run-uitests.sh`>
 ```
 
 `executor=` is on every block: the resolved pin for committed macOS, `host` for every

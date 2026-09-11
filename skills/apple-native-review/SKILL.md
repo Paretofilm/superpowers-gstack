@@ -44,7 +44,7 @@ Every finding cites a HIG page fetched in this run, with a short verbatim quote 
 
 Sources, in the order they are consulted:
 
-1. **The HIG page itself (the citation).** HIG pages live at `https://developer.apple.com/design/human-interface-guidelines/<slug>`. That HTML is a JavaScript-rendered shell that returns only a title, so fetch the structured form instead: WebFetch `https://developer.apple.com/tutorials/data/design/human-interface-guidelines/<slug>.json` and quote from it. Cite the HTML URL in the finding.
+1. **The HIG page itself (the citation).** HIG pages live at `https://developer.apple.com/design/human-interface-guidelines/<slug>`. That HTML is a JavaScript-rendered shell that returns only a title, so fetch the structured form instead: WebFetch `https://developer.apple.com/tutorials/data/design/human-interface-guidelines/<slug>.json` with a prompt that demands **verbatim passages under their section headings and refuses to summarise** — WebFetch otherwise returns a processed summary, and a paraphrase satisfies the citation format without being one. If the tool returns prose instead of quoted passages, tag the finding `(paraphrased)` and treat it as uncited for the verdict. Cite the HTML URL in the finding.
 2. **API reference, when the fix names an API.** `mcp__apple-docs__search_apple_docs` to find the page, `mcp__apple-docs__get_apple_doc_content` to read it (availability, declaration, discussion). This server covers `developer.apple.com/documentation/…`; it does not serve HIG pages, so it supplements a HIG citation rather than replacing it.
 3. **Current platform idiom.** `mcp__swiftui-rag__search_swiftui_corpus` with `platform` set, to check what the SwiftUI idiom for the surface looks like before proposing a fix.
 

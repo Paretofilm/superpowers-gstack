@@ -282,7 +282,7 @@ verbatim, in this order:
 Resolve `{{...}}` placeholders per `blocks/PLACEHOLDERS.md` before writing — never
 let a raw `{{...}}` token reach the generated CLAUDE.md.
 
-**`{{E2E_EXECUTOR}}` needs a pin to resolve against, and this skill writes it.** Only
+**`{{E2E_EXECUTOR}}` needs a pin to resolve against, and this skill writes it.** The placeholder is always resolved when `xcode-tools.md` is emitted (iOS-only → `host`, no file, no question); the question and the write happen only
 when `.gstack/track` is `macos` or `both` — an iOS-only project gets no file and no
 question, since the axis is macOS-only. If `.gstack/e2e-executor` exists, read and
 validate it (`host` or `vm`; anything else is `BLOCKED — invalid .gstack/e2e-executor`,
