@@ -163,6 +163,13 @@ in the project, substituting `<SCHEME>` (Step 2), `<PLATFORM>` (`ios` | `macos`)
 `<TEST_TARGET>` (`TARGET_DIR`). `chmod +x scripts/run-uitests.sh`. SPM-only projects get
 the stub in §Project-type-specific behavior instead.
 
+**Multiplatform: never overwrite the other platform's runner.** If `scripts/run-uitests.sh`
+already exists and its `PLATFORM=` line names the other platform, write this run's copy to
+`scripts/run-uitests-<platform>.sh` (`-ios` or `-macos`) instead and say so in the report;
+`/superpowers-gstack:e2e-route` picks the runner whose `PLATFORM=` matches the routed
+platform. If it exists with the same `PLATFORM=`, the project is already scaffolded for
+this platform — Phase 0 should have refused; stop and say so.
+
 ### Step 12: Generate identifier convention doc
 Write `docs/accessibility-identifiers.md`: the convention, examples, rationale, and a table of every applied identifier with its source-file:line.
 

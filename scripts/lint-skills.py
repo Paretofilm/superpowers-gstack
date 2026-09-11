@@ -117,6 +117,8 @@ DENYLIST = [
     # instruction prose or emitted blocks — they went stale within weeks every time.
     (re.compile(r"gpt-5\.5|glm-5\.2|GLM-5\.2|\$\d+/\$\d+ per Mtok"),
      "hardcoded model id / price in instruction prose — name the tier or role, let the script resolve the id (3.0.0)"),
+    (re.compile(r"(auto-)?chains? `?/codex review|`/codex review` \(Stage 2\)|invoke `/codex review`"),
+     "gstack /review owns the Codex pass since 3.0.0 — say `/review`, never chain `/codex review` on a diff"),
     (re.compile(r"setup-htmlify-hook|htmlify-posttooluse|htmlify --open|--open`"),
      "htmlify's Safari flow and PostToolUse hook were removed in 3.0.0 — previews go through the Artifact tool"),
     # 2.48.0: Step 6 used to ask for a diff against a file Step 5 had already

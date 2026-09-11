@@ -162,7 +162,7 @@ Use the same evaluation tables as `setup-routing` to determine which Superpowers
 | `/benchmark` | Projects with performance monitoring needs |
 | `/benchmark-models` | Projects comparing AI model performance |
 | `/codex` | Projects needing second opinions or adversarial code review |
-| `/superpowers-gstack:autoimplement` | Multi-phase plans where the user always confirms phase boundaries — chains `/review` + `/pitfall-verification` automatically (pitfall auto-chains `/codex review` + the third lens per tier — no separate codex step). v2.14.0+ adds active pre-flight that reviews the plan body itself before Phase 1 unless the latest plan commit matches the marker regex `^(chore\|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]\|$)` (closes the gap between writing-plans and autoimplement). Refuses on <2 phases, missing per-phase commit steps, dirty tree, main/master branch, or plans touching migrations/secrets/credentials/.env/.ssh. |
+| `/superpowers-gstack:autoimplement` | Multi-phase plans — one subagent per phase, `/review` + `/pitfall-verification` chained at every phase boundary (`/review` owns the Codex pass; pitfall adds domain inference and the third lens per tier). Active pre-flight reviews the plan body before Phase 1 unless the latest plan commit matches `^(chore\|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]\|$)`. Refuses on <2 phases, missing per-phase commit steps, dirty tree, main/master branch, or plans touching migrations/secrets/credentials/.env/.ssh. |
 | `/superpowers-gstack:office-hours-track-aware` | All new-project brainstorming — wraps `/office-hours` with track inference (web vs native), inline platform question, design-doc relocation, and an Artifact preview before the approval gate. **Intercepts `/office-hours`** — see routing-intercept rules below. |
 | `/superpowers-gstack:swiftui-design-consultation` | Native SwiftUI projects — produces DESIGN.md + Swift Package starter; equivalent to /design-consultation for web. Inlines the platform question (iOS/macOS/both) on first run if `.gstack/track` is missing. |
 | `/superpowers-gstack:apple-native-review` | iOS / iPadOS / macOS apps — pre-implementation HIG-citation-grounded review; platform from `.gstack/track` or the artifact; every finding cites a HIG page fetched this run via the apple-docs MCP. Run on PRDs/specs/plans before implementation. |
@@ -443,7 +443,7 @@ disagreeing in the field. One residual is known and accepted: the sanity band's 
 the trigger's own ~20 stack, so an `<N>` overstated by up to ~20 buys roughly 40 lines
 of growth in which only Volume — the judgement-call proxy — is still watching.
 
-**Attribution check — applies to case 3 of the six sections below that replace on a
+**Attribution check — applies to case 3 of the sections below that replace on a
 missing marker.** Three do not need it: `Code reuse discipline` already preserves,
 `Session Continuity` has its own `handoff.md` content test, and `Track-aware routing`
 carries a heading this plugin coined, which no project would write by accident.
@@ -479,7 +479,7 @@ that has drifted past its sentinel gets preserved instead of upgraded. A stale s
 costs one `/adapt` run after the user deletes it; a destroyed one costs whatever was
 in it.
 
-**Remove retired plugin sections.** The `Autonomy and user interruption` block was retired in 3.0.0: the Claude Code harness now carries the same instruction, so the section is pure context tax. Scan CLAUDE.md for a heading carrying the marker `<!-- gstack-autonomy-vN -->`. The marker is the attribution — only a past emitter wrote it — so: run the **Growth check** above; if the section has not grown past its block, delete it through the next heading of equal-or-shallower level and list it under **Changes made** as "removed the retired `Autonomy and user interruption` section (N lines, marker vX)"; if it HAS grown, leave it in place and list it under **Deferred (grown past its block, not upgraded):** so the user can move their own lines out before the next run. A markerless section with that heading is the user's and is never touched.
+**Remove retired plugin sections.** The `Autonomy and user interruption` block was retired in 3.0.0: the Claude Code harness now carries the same instruction, so the section is pure context tax. Scan CLAUDE.md for a heading carrying the marker `<!-- gstack-autonomy-vN -->`. The marker is the attribution — only a past emitter wrote it — so: the Growth check cannot run against a block that no longer ships, so the test is self-contained — the retired block was 31 lines at v2 and about 40 at v1. Count the section through the next heading of equal-or-shallower level; if it carries an `emitted=N` comment, delete it only when it is at most N+3 lines, otherwise only when it is at most 43 lines. Within that bound, delete it and list it under **Changes made** as "removed the retired `Autonomy and user interruption` section (N lines, marker vX)"; if it HAS grown, leave it in place and list it under **Deferred (grown past its block, not upgraded):** so the user can move their own lines out before the next run. A markerless section with that heading is the user's and is never touched.
 
 **Insert or upgrade the Git hygiene & commit cadence section.** This section applies to ALL projects (git is universal). Scan CLAUDE.md for heading `^#{2,3} Git hygiene` and its version marker `<!-- gstack-git-hygiene-vN -->`. Apply the same four-case logic:
 
@@ -548,7 +548,7 @@ emitted H2 as top-level), and (b) is there a version marker
 `<!-- gstack-routing-vN -->` on that heading line (currently `v3`).
 Four cases:
 
-1. **Heading present + marker matches current version (`v2`)** →
+1. **Heading present + marker matches current version (`v3`)** →
    skip (idempotent — re-running adapt does not pollute the file).
 2. **Heading present + marker present + different version** →
    REPLACE the section from the heading down to (but not including)
@@ -568,9 +568,8 @@ Four cases:
 3. **Heading present + marker absent** (legacy v2.3.0/v2.3.1
    projects) → REPLACE the section the same way as case 2. Run the
    **Growth check** above before replacing. Treats the missing
-   marker as "older than v1". This is a one-time silent upgrade;
-   the content replaced is byte-identical to what's already there
-   in v2.3.2, plus the marker. Preserve the original heading level.
+   marker as "older than v1". This is a one-time silent upgrade to
+   the current block. Preserve the original heading level.
 4. **Heading absent** → APPEND the full section as H2 (truly new
    adaptations, or projects that never had dual-track routing).
 

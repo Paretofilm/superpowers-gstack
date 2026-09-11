@@ -118,8 +118,8 @@ scan ran for those. Verify by hand that they don't write to forbidden paths."*
 codex --version 2>/dev/null
 ```
 
-If absent → set internal flag `CODEX_AVAILABLE=false`. Continue, but the `/codex
-review` step in the per-phase procedure will be skipped (with a logged note in
+If absent → set internal flag `CODEX_AVAILABLE=false`. Continue; `/review` runs
+without its Codex pass and pitfall's lens list will say self-pitfall only (logged in
 the final summary).
 
 ### Check 6: Plan review chain (pre-flight, active)
@@ -134,7 +134,7 @@ Check the *latest* commit that touched the plan path (not historical anywhere �
 last_plan_commit_subject=$(git log -1 --format=%s -- "$plan_path" 2>/dev/null || echo "")
 ```
 
-If the subject matches the marker regex `^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)` (case-insensitive, anchored at line start, requires the conventional-commit prefix, requires a word boundary after `pre-flight`) → the plan's most recent touch was a pre-flight marker commit produced by this skill (Step 6b.4); trust it and skip:
+If the subject matches the marker regex `^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)` (case-insensitive, anchored at line start, requires the conventional-commit prefix, requires a word boundary after `pre-flight`) → the plan's most recent touch was a pre-flight marker commit produced by this skill (Step 6b.3); trust it and skip:
 
 ```bash
 if echo "$last_plan_commit_subject" | grep -qiE '^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)'; then
@@ -207,7 +207,7 @@ Run ONE review chain ON THE PLAN FILE ITSELF (not on any code diff yet — there
 
    The HTML-comment sentinel is non-invasive (invisible in rendered markdown), but the commit DOES touch the plan path — so Step 6a's skip-condition will find it next time. The sentinel also doubles as a human-readable marker for anyone browsing the plan file.
 
-5. **Re-read the plan and re-validate (if pre-flight made any plan commits).**
+4. **Re-read the plan and re-validate (if pre-flight made any plan commits).**
 
    If Step 6b produced one or more commits that touched the plan path (either fix-edits from findings, or the sentinel marker), the in-memory plan content from Plan path resolution is now stale. Before building the phase queue:
 
@@ -220,9 +220,9 @@ Run ONE review chain ON THE PLAN FILE ITSELF (not on any code diff yet — there
 
    (Checks 1 and 5 don't need re-running — branch/tree state and codex availability don't change from plan edits.)
 
-   If Step 6b made zero commits (skip condition fired in Step 6a, or pre-flight was reached but produced no edits — which shouldn't happen given Step 6b.4.b always commits a sentinel), re-read is unnecessary.
+   If Step 6b made zero commits (skip condition fired in Step 6a, or pre-flight was reached but produced no edits — which shouldn't happen given Step 6b.3 always commits a sentinel), re-read is unnecessary.
 
-6. **Proceed to the policy question.**
+5. **Proceed to the policy question.**
 
 **Why the marker is a real commit on the plan path, checked on the LATEST commit only:** the skip scan is path-scoped (`git log -- "$plan_path"`), so an empty commit would be invisible; and a historical scan would skip pre-flight on a plan edited after its review. Any post-review edit therefore re-runs pre-flight. The re-read in step 5 exists because pre-flight can edit the plan in place, and the phase queue must be built from what is on disk.
 
@@ -250,7 +250,7 @@ Invoke `AskUserQuestion` with:
 **Question:** "Stop on any review issue, or treat pitfall/codex as advisory?"
 **Header:** "Stop policy"
 **Options (2):**
-- "Stop on any review issue (recommended)" — pause if `/review`, `/pitfall-verification`, OR `/codex review` flags anything actionable. Matches the manual workflow this skill is replacing.
+- "Stop on any review issue (recommended)" — pause if `/review` (including its Codex pass) or `/pitfall-verification` flags anything actionable. Matches the manual workflow this skill is replacing.
 - "Treat pitfall/codex as advisory (risky)" — `/pitfall-verification` findings (including the Codex/third-lens findings its chain produces) are surfaced but do not pause execution. Use only when you trust them to over-flag and accept the risk that a real correctness/security/data-loss finding will slip through. `/review` failures still always stop. Severe findings (security, data loss, correctness bugs in test assertions) ALWAYS block regardless of this setting — see § Per-phase procedure Step D.
 
 Store the answer as `STOP_POLICY` (string: `any-issue` or `advisory`).
@@ -332,8 +332,8 @@ Match by **prefix** (`startswith`), not substring — this avoids false matches 
 
 Run these two skills in sequence, `/review` first. gstack's `/review` owns the Codex
 pass on the diff; `/pitfall-verification` folds those findings into its synthesis and
-adds the third-lens house on high-stakes phases. Never invoke `/codex review` yourself
-here — that is a second Codex pass on the same diff.
+adds the third-lens house on high-stakes phases. Never call Codex directly here — that
+is a second Codex pass on the same diff.
 After each, classify the output by **semantic judgment** — not by parsing for fixed labels. Cite the specific finding that drove your decision so the user can audit.
 
 For each review output, classify as one of:

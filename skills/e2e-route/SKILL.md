@@ -71,7 +71,7 @@ Absent rig and failing rig are different and get opposite answers:
 | Intent | Platform | Executor |
 |---|---|---|
 | Committed regression | macOS | Entry points 1–4 below, in order. Honours `.gstack/e2e-executor`. |
-| Committed regression | iOS | `./scripts/run-uitests.sh` if it targets the iOS suite, else `/superpowers-gstack:e2e-scaffold` (target `<App>iOSUITests`) |
+| Committed regression | iOS | the iOS runner (`scripts/run-uitests.sh` with `PLATFORM=ios`, else `scripts/run-uitests-ios.sh`) if present, else `/superpowers-gstack:e2e-scaffold` (target `<App>iOSUITests`) |
 | Exploratory / live | macOS | XcodeBuildMCP UI automation: `snapshot_ui` → tap → `screenshot` |
 | Exploratory / live | iOS | `ios-simulator` MCP (`ui_find_element` / `ui_tap`) or `/ios-qa` |
 | Visual exploration | iOS / macOS | XcodeBuildMCP `screenshot` / `snapshot_ui`, driven by the session model |
@@ -83,8 +83,11 @@ Absent rig and failing rig are different and get opposite answers:
 pin is written at onboarding, before any suite exists, and a `vm` pin alone must never send
 a test-less project to the rig. If the only suite is the iOS one, this falls through to 4.
 
-1. `./scripts/run-uitests.sh` exists **and reads the pin** — check with
-   `grep -qE '\.gstack/e2e-executor' scripts/run-uitests.sh` → run it. The scaffold's
+1. `./scripts/run-uitests.sh` exists for this platform **and reads the pin** → run it.
+   "For this platform" means its `PLATFORM=` line matches the routed platform; otherwise
+   the runner is `scripts/run-uitests-<platform>.sh` (a multiplatform project keeps one per
+   platform, and the other platform's runner is not a runner for this one). Check the pin
+   with `grep -qE '\.gstack/e2e-executor' scripts/run-uitests.sh` (or the suffixed file). The scaffold's
    template reads the pin itself and dispatches to the VM or the host, so this one entry
    point covers both. A runner without that line is a LEGACY runner written before the
    pin existed: it would run `executor=vm` on the host and say nothing. With pin `host`

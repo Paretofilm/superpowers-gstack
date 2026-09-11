@@ -8,7 +8,7 @@ description: |
 
 # Third-lens review
 
-The third lens in superpowers-gstack's multi-lens review. Lenses 1–2 are **Claude self-pitfall** (`pitfall-verification`) and **Codex** (`/codex review`). This skill adds **lens 3** — a different model *house* (different training distribution → different blind spots) reading the **already-patched** artifact (via OpenRouter for distant houses, or the `codex` CLI for the countersynthesis role) — followed by a mandatory **adversarial synthesis**.
+The third lens in superpowers-gstack's multi-lens review. Lenses 1–2 are **Claude self-pitfall** (`pitfall-verification`) and **Codex** (run by gstack `/review` on a diff, `/codex challenge` on a plan). This skill adds **lens 3** — a different model *house* (different training distribution → different blind spots) reading the **already-patched** artifact (via OpenRouter for distant houses, or the `codex` CLI for the countersynthesis role) — followed by a mandatory **adversarial synthesis**.
 
 Invoke with: `/superpowers-gstack:third-lens-review`
 
