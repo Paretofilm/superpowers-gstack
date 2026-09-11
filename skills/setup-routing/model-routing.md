@@ -8,9 +8,7 @@
 > **Audience:** read by `setup-routing` and `adapt`; folded into generated
 > `CLAUDE.md` files so orchestrator-Claude consults it when dispatching subagents.
 >
-> **v0.2 changes (2026-07-04):** added Claude Fable 5 as a top tier; added the
-> domain-sensitivity axis; removed the local-model (Pi/MLX) columns — routing is
-> Claude-tier only now.
+> Routing is Claude-tier only; the tier names are stable, the ids above move.
 
 ## How orchestrator-Claude uses this
 
@@ -31,21 +29,19 @@ high-blast-radius domain is a false economy (see below).
 
 ## Model identifiers used
 
-- `fable` — `claude-fable-5` — top tier. Novel, long-horizon, autonomous work
-  where the approach must be *invented*, not mapped. ~2× Opus price ($10/$50 vs
-  $5/$25 per Mtok); its lead grows with task length. On short well-scoped tasks
-  it's close to Opus — don't pay the premium there. Safety note: Fable routes
-  cybersecurity/bio/chem to an Opus fallback, so in those domains it is literally
-  identical to Opus — never pay the Fable premium there.
+The tier names are what the emitted CLAUDE.md blocks carry; this file is the one
+place they map to model ids. Update the ids here when a new model ships
+(`scripts/check-new-models.py` opens an issue when Anthropic lists a newer one).
+
+- `fable` — `claude-fable-5-1` — top tier. Novel, long-horizon, autonomous work
+  where the approach must be *invented*, not mapped. Roughly twice the price of
+  Opus; its lead grows with task length. On short, well-scoped tasks it is close
+  to Opus — don't pay the premium there.
 - `opus` — `claude-opus-5` — heavy reasoning, novel synthesis, strategic
-  challenge, and the default for high-blast-radius coding. Same list price as the
-  Opus 4.8 it replaces ($5/$25 per Mtok), so the tier upgrade costs nothing.
+  challenge, and the default for high-blast-radius coding.
 - `sonnet` — `claude-sonnet-5` — structured engineering, code review, planning,
-  contained-blast-radius coding with tests as the net. It closed most of the gap to
-  Opus 4.8 (63.2% SWE-bench Pro at Sonnet cost, since 2026-06-30); Opus 5 reopened
-  part of it on deep reasoning and long-horizon agentic work. So the split is still
-  mostly about blast-radius — but on genuinely hard reasoning, opus now buys
-  capability again, not just caution. Opus stays the floor for high-blast work.
+  contained-blast-radius coding with tests as the net. The split against opus is
+  mostly about blast radius; on genuinely hard reasoning, opus still buys capability.
 - `haiku` — `claude-haiku-4-5` — mechanical, templated, deterministic.
 
 ## The domain-sensitivity axis
@@ -73,7 +69,7 @@ wrote the code.
 |---------------------------------------------|-------------|-------------------|-------|
 | RT audio / DSP / lock-free concurrency      | very high   | opus + verify     | silent corruption; no "safe cheap coding" |
 | Migration / data-transform logic            | high        | opus + verify     | irreversibility |
-| Auth / payments / security                  | high        | opus (Fable→Opus fallback anyway) | |
+| Auth / payments / security                  | high        | opus + verify     | |
 | App / UI feature wiring                     | medium      | sonnet            | tests catch most |
 | Format plumbing / serialization             | low         | sonnet / haiku    | round-trip tests are a strong net |
 | Templated scaffolding / mechanical refactor | low         | haiku             | deterministic |
@@ -84,7 +80,6 @@ wrote the code.
 - Technique is genuinely novel (invent the approach, not map a known one)
 - Task is long-horizon / autonomous (its lead grows with length)
 - Not cleanly chunkable into short well-scoped pieces (chunking → opus wins on cost)
-- Domain is not in the Fable→Opus safety-fallback set (sec/bio/chem)
 
 **Do NOT use `fable` for:** planning well-understood work, coding against a
 fully-pinned spec, verification (that's the multi-lens job), or anything a tight
@@ -93,7 +88,7 @@ opus spec converts "long+ambiguous" into "short+well-scoped," removing the very
 condition that justifies Fable** — so opus spec-writing is itself a Fable-cost
 lever.
 
-### Dispatching a Fable subagent (field-tested 2026-07-04)
+### Dispatching a Fable subagent
 
 1. **Scope open on approach, bounded on deliverable.** Over-specifying the
    *approach* destroys the exploration you're paying 2× for; leaving the
@@ -106,10 +101,9 @@ lever.
 3. **A subagent's self-report is a claim, not verification.** Re-read the new
    files, re-run the suite, run Codex — regardless of tier. The dispatcher owns
    verification.
-4. **Cost calibration:** one "novel-technique discovery + design doc + prototype
-   + tests" unit ≈ **150k Fable tokens, ~20 min**. Reserve it for work whose
-   novelty/blast-radius clearly clears the 2× premium; expect one focused unit,
-   not an open-ended session.
+4. **Scope one focused unit** — "novel-technique discovery + design doc +
+   prototype + tests" — not an open-ended session. Reserve it for work whose
+   novelty and blast radius clearly clear the premium.
 
 ## Base routing table (Claude tiers; apply the domain modifier above)
 
@@ -202,11 +196,8 @@ lever.
 | `/superpowers-gstack:adapt`                  | sonnet    |
 | `/superpowers-gstack:pitfall-verification`   | sonnet    |
 | `/superpowers-gstack:quality-review`         | sonnet    |
-| `/superpowers-gstack:macos-native-review`    | sonnet    |
-| `/superpowers-gstack:ios-native-review`      | sonnet    |
-| `/superpowers-gstack:macos-e2e-scaffold`     | haiku     |
-| `/superpowers-gstack:ios-e2e-scaffold`       | haiku     |
-| `/superpowers-gstack:ios-visual-explore`     | sonnet    |
+| `/superpowers-gstack:apple-native-review`    | sonnet    |
+| `/superpowers-gstack:e2e-scaffold`           | haiku     |
 | `/superpowers-gstack:spec-drift`             | sonnet    |
 | `/superpowers-gstack:e2e-route`              | haiku     |
 | `/superpowers-gstack:context-handoff`        | haiku     |
@@ -264,9 +255,8 @@ touches. A novel + high-blast-radius task is a Fable candidate — scope it per 
 
 1. **Advisory, not enforced.** Orchestrator-Claude may override — cite evidence when you do.
 2. **Empirically calibrated, not benchmarked per skill.** The base tiers come from
-   each skill's cognitive-demand profile; the domain axis and Fable calibration come
-   from a real 2026-07 dispatch (novel HPSS/SMS DSP synthesis: Fable clean under
-   independent Opus + Codex; Codex found 0 bugs in Fable's novel code but 2 in
-   adjacent Opus-authored code — confirming verification, not coder tier, is the lever).
+   each skill's cognitive-demand profile; the domain axis comes from a real dispatch
+   where an independent review found no bugs in the top tier's novel code but two in
+   adjacent lower-tier code — verification, not coder tier, is the lever.
 3. **Optimizes for capability-per-cost, not latency.** Fable's long autonomous runs
    trade wall-clock for correctness on the hardest, novelest work — reserve accordingly.

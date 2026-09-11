@@ -8,7 +8,7 @@ description: |
 
 # Third-lens review
 
-The third lens in superpowers-gstack's multi-lens review. Lenses 1–2 are **Claude self-pitfall** (`pitfall-verification`) and **Codex** (`/codex review`). This skill adds **lens 3** — a different model *house* (different training distribution → different blind spots) reading the **already-patched** artifact (via OpenRouter for distant houses, or the `codex` CLI for the countersynthesis role) — followed by a mandatory **adversarial synthesis**.
+The third lens in superpowers-gstack's multi-lens review. Lenses 1–2 are **Claude self-pitfall** (`pitfall-verification`) and **Codex** (run by gstack `/review` on a diff, `/codex challenge` on a plan). This skill adds **lens 3** — a different model *house* (different training distribution → different blind spots) reading the **already-patched** artifact (via OpenRouter for distant houses, or the `codex` CLI for the countersynthesis role) — followed by a mandatory **adversarial synthesis**.
 
 Invoke with: `/superpowers-gstack:third-lens-review`
 
@@ -41,19 +41,21 @@ If the change is not high-stakes, **do not run this skill** — it burns money a
 
 ## Model routing (which third lens, by artifact type)
 
-The script picks the lens by `--role`. `architecture` and `correctness` run via OpenRouter (ids verified 2026-06-21); `countersynthesis` runs via the `codex` CLI (subscription):
+The script picks the lens by `--role`; the concrete model id per role lives in one
+place, `ROLE_SPEC` in `scripts/third-lens-review.py`, and nowhere in prose. The script
+refuses to run a pinned id OpenRouter no longer serves, so a stale pin fails loudly.
+**When it refuses (exit 5), stop and report it** — a change of model house is a human
+decision; never pick a replacement id yourself and re-run.
 
-| `--role` | Model | House | Use when |
-|----------|-------|-------|----------|
-| `architecture` *(default)* | `z-ai/glm-5.2` | Zhipu | default 3rd lens — most distant distribution; OpenRouter |
-| `correctness` | `deepseek/deepseek-v4-pro` | DeepSeek | correctness sniper; OpenRouter |
-| `countersynthesis` | `codex` CLI | OpenAI | refutes Claude's dedup; via codex CLI (subscription, no per-call cost) |
+| `--role` | House | Use when |
+|----------|-------|----------|
+| `architecture` *(default)* | Zhipu (GLM), via OpenRouter | default 3rd lens — the most distant training distribution; whole-repo-in-context divergence finder |
+| `correctness` | DeepSeek, via OpenRouter | correctness sniper on subtle logic |
+| `countersynthesis` | OpenAI, via the `codex` CLI | refutes Claude's dedup decisions; subscription, no per-call cost |
 
-The sensitive role and its fail-closed Western-infra guard were removed in 2.18.0 (work is not sensitive; default lens is GLM-5.2).
+**Reasoning models:** the OpenRouter roles run reasoning models — they spend completion tokens *thinking* before answering. The script sends `reasoning.effort` (default `medium`; tune with `--effort low|medium|high`) and defaults `--max-tokens` to 16000 so reasoning does not exhaust the budget before the answer. If you see `finish_reason=length` / empty output, raise `--max-tokens` or lower `--effort`.
 
-**Reasoning models:** GLM-5.2 and DeepSeek are reasoning models — they spend completion tokens *thinking* before answering. The script sends `reasoning.effort` (default `medium`; tune with `--effort low|medium|high`) and defaults `--max-tokens` to 16000 so reasoning does not exhaust the budget before the answer. If you see `finish_reason=length` / empty output, raise `--max-tokens` or lower `--effort`.
-
-**Cost guardrail:** never use `*-pro` extended-reasoning tiers for routine review. At ~30k input tokens a run is well under $1; the default GLM run is ~$0.05. The only way to overspend is the wrong (extended-reasoning) model id.
+**Cost guardrail:** never use `*-pro` extended-reasoning tiers for routine review. A default run is a few cents; `--dry-run` prints the estimate for a large artifact. The only way to overspend is the wrong (extended-reasoning) model id.
 
 ## Sequence
 
@@ -71,7 +73,7 @@ The sensitive role and its fail-closed Western-infra guard were removed in 2.18.
 
 ## Step 4 — Adversarial synthesis (the part that makes the third lens worth it)
 
-A third lens **without** synthesis is noise: a different-house model over-generalizes strictness (GLM especially), and its raw verdicts are not ship decisions. But the synthesis is itself an LLM-as-judge step, and LLM judges have a documented **agreement bias** (failure-detection rates as low as ~50%) — and here Claude is partly judging its *own* earlier findings. So the synthesis must be **adversarial, not conciliatory**:
+A third lens **without** synthesis is noise: a different-house model over-generalizes strictness, and its raw verdicts are not ship decisions. But the synthesis is itself an LLM-as-judge step, and LLM judges have a documented **agreement bias** (failure-detection rates as low as ~50%) — and here Claude is partly judging its *own* earlier findings. So the synthesis must be **adversarial, not conciliatory**:
 
 - **Default: every third-lens finding is REAL until you explicitly refute it with a reason.** Do not drop a finding because it contradicts your earlier analysis — that is exactly the bias to fight.
 - **Log each dropped finding with *why*** (over-strict for this domain? already handled at file:line? factually wrong?). A silent drop is indistinguishable from a missed bug.
@@ -111,4 +113,4 @@ Always present the raw output's key findings *and* the synthesis. Never the raw 
 
 ## Why a third lens (field evidence)
 
-LiveSet Pro (2026-06-21): GLM-5.2 ran as lens 3 *after* Claude + Codex had already fixed 14 issues, and still found real new value — dead code the tested core was never wired into, a use-after-free under render, a silently-dropped scheduler overflow, a leaked late-arriving audio unit. Each lens caught what the other two missed; none was redundant. The mechanism is **training-distribution distance**, not raw model IQ — which is why the third lens is a *different house*, and why GLM (≈18 pts below Fable 5 on SWE-bench Pro) earns its place: it is the cheapest, most distribution-distant, whole-repo-in-context divergence finder available, and its over-strictness becomes useful friction once the synthesis is adversarial.
+LiveSet Pro (2026-06-21): the GLM lens ran as lens 3 *after* Claude + Codex had already fixed 14 issues, and still found real new value — dead code the tested core was never wired into, a use-after-free under render, a silently-dropped scheduler overflow, a leaked late-arriving audio unit. Each lens caught what the other two missed; none was redundant. The plugin's own lens ledger (July–September 2026) shows the same: 20 third-house runs, 96 findings, 74 surviving synthesis, at a few cents each. The mechanism is **training-distribution distance**, not raw model capability — which is why the third lens is a *different house* rather than a stronger model of the same one, and why its over-strictness becomes useful friction once the synthesis is adversarial.

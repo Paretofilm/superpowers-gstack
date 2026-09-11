@@ -82,9 +82,11 @@ so the settings.json copy causes a double nag. (`setup-hooks.sh` warns if it see
 
 ## Session continuity
 
-On session start or after /compact, classify `docs/superpowers/handoff.md` before touching it — consuming a handoff clears it, so a wrong classification destroys the contents. **Empty/whitespace-only** → say nothing, this is the resting state. **Continuous-mode stub** (frontmatter with `mode`, no `next_step`) → say nothing, leave it untouched, continuous handoff is already active. **Complete handoff** — `type: handoff` (v2.1.1+) or both `session_end` and `next_step` without `type:` (legacy v1.12.0 → v2.1.0), *and* a usable `next_step` → consume it. **Anything else** — a handoff claim with no `next_step`, a file cut off mid-write, or no frontmatter at all → say in one line that it could not be read as a handoff, do not present it, and do not clear it (pre-1.12.0 prose-only auto-consume was removed in 2.36.1; it silently destroyed project notes kept at that path). When it is a complete handoff, quote `next_step` verbatim, name the `active_task` ID, and surface `env` (venv, dev_server, test_cmd) so commands work immediately. Then proceed normally — do not ask "ready to continue?". Read the `mode:` field BEFORE clearing — clearing first destroys the value the next paragraph needs. If the handoff was in continuous mode — that is, `mode: continuous` **or** the legacy `mode: auto` — do NOT blank the file: rewrite it carrying just `type: handoff` and `mode: continuous`, so the setting survives the next compact. Otherwise clear it (write empty string) immediately after presenting the summary.
-
-After /compact: check whether continuous handoff is already active, using the `mode` you read above — YAML `mode: continuous`, or the legacy YAML value `mode: auto` (pre-2.36.0). Only when the YAML `mode:` key is absent entirely does the legacy `## Mode: auto` Markdown marker (pre-2.1.1) count; an explicit `mode: manual` beside a stale marker means manual. If none is present, ask the user once: "Context was compressed. Want me to keep handoff.md updated continuously for this session? I'll refresh it at each milestone and suggest /clear when context gets heavy." If yes, invoke the context-handoff skill. This is a handoff-persistence setting and has nothing to do with Claude Code's **auto mode**, which is a permission mode — never change one because of the other.
+The rules are the emitted `Session Continuity` block in the own-blocks region below —
+this repo follows exactly what `/adapt` writes into every other project. In short:
+classify `docs/superpowers/handoff.md` before touching it, consume only a complete
+`type: handoff` with a `next_step`, keep a `mode: continuous` stub alive, and never
+confuse continuous handoff with Claude Code's `auto` permission mode.
 
 ## Skill conversation discipline
 
@@ -97,7 +99,7 @@ tool as your FIRST action. Do NOT answer directly, do NOT use other tools first.
 The skill has specialized workflows that produce better results than ad-hoc answers.
 
 Key routing rules:
-- Product ideas, "is this worth building", brainstorming → invoke /superpowers-gstack:office-hours-track-aware (wraps /office-hours with track inference + htmlify --open + approve-before-render)
+- Product ideas, "is this worth building", brainstorming → invoke /superpowers-gstack:office-hours-track-aware (wraps /office-hours with track inference, writes `.gstack/track`, relocates the design doc into `docs/`, publishes it as an Artifact page before the Approve / Revise / Restart gate)
 - Bugs, errors, "why is this broken", 500 errors → invoke investigate
 - Ship, deploy, push, create PR → invoke ship
 - QA, test the site, find bugs → invoke qa
@@ -106,22 +108,22 @@ Key routing rules:
 - Weekly retro → invoke retro
 - Design system, brand → invoke design-consultation
 - Design system for SwiftUI projects (DESIGN.md + Swift Package) → invoke /superpowers-gstack:swiftui-design-consultation (inlines platform question on first run)
-- Autoimplement a plan, "run plan end-to-end", "auto-advance phases" → invoke /superpowers-gstack:autoimplement. Removes y/n friction at phase boundaries by chaining /review + /pitfall-verification automatically (pitfall itself auto-chains /codex review and the third lens per tier — no separate codex step, avoiding a double Codex pass). v2.14.0+ also runs an **active pre-flight chain** on the plan ITSELF (pitfall + codex on plan body) before Phase 1 unless the latest plan commit is a pre-flight marker — closes the gap between /writing-plans and autoimplement. Skip-condition (tightened in v2.14.2): latest commit subject on plan path must match `^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)` regex. Refuses on: <2 phases, missing per-phase commit steps, dirty tree, main/master branch, or plans touching migrations / secrets / credentials / .env / .ssh.
-- Multi-model verification → invoke /superpowers-gstack:pitfall-verification. It is a multi-model orchestrator: for ship-worthy changes it auto-chains `/codex review` (Stage 2), and for high-stakes changes (architecture / real-time / security / contracts / migration-logic) also `/superpowers-gstack:third-lens-review` (Stage 3, external model house via OpenRouter), ending in an adversarial synthesis (Stage 4). Stages fire automatically per tier with no confirmation prompt; trivial changes get only the free self-pitfall pass.
-- third-lens-review (normally auto-invoked by pitfall-verification Stage 3; invoke directly only for an ad-hoc third-house read) → runs an external model house on the PATCHED artifact (`scripts/third-lens-review.py`). Routing by `--role`: architecture=GLM-5.2 (default, OpenRouter), correctness=DeepSeek V4-Pro (OpenRouter), countersynthesis=OpenAI via the `codex` CLI (subscription). OpenRouter key in Keychain `openrouter-api-key`; the `sensitive` role was removed in 2.18.0.
-- After a PRD/spec/plan for a native Apple app, before implementation → invoke /superpowers-gstack:macos-native-review (macOS) or /superpowers-gstack:ios-native-review (iOS/iPadOS). HIG-citation-grounded conformance gate; complementary to pitfall-verification and quality-review.
+- Autoimplement a plan, "run plan end-to-end", "auto-advance phases" → invoke /superpowers-gstack:autoimplement. Dispatches one subagent per phase (the Workflow tool may run the loop) and chains /review + /pitfall-verification at every phase boundary — /review owns the Codex pass, pitfall adds domain inference and the third house per tier. Runs an active pre-flight chain on the plan itself before Phase 1 unless the latest plan commit matches `^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)`. Refuses on: <2 phases, missing per-phase commit steps, dirty tree, main/master branch, or plans touching migrations / secrets / credentials / .env / .ssh.
+- Multi-model verification → invoke /superpowers-gstack:pitfall-verification. Stage 0 names the target and computes the tier floor with `scripts/classify-change.py`; the self-pitfall rounds infer domain pitfalls from the code's own history; for ship-worthy changes the Codex lens runs through gstack `/review` (or `/codex challenge` on a plan), and for high-stakes changes (architecture / real-time / security / contracts / migration-logic) also `/superpowers-gstack:third-lens-review`, ending in an adversarial synthesis. Stages fire per tier with no confirmation prompt; trivial changes get only the self-pitfall pass.
+- third-lens-review (normally auto-invoked by pitfall-verification Stage 3; invoke directly only for an ad-hoc third-house read) → runs an external model house on the PATCHED artifact (`scripts/third-lens-review.py`). Routing by `--role`: `architecture` (default, Zhipu via OpenRouter), `correctness` (DeepSeek via OpenRouter), `countersynthesis` (OpenAI via the `codex` CLI). The concrete model ids live only in the script's `ROLE_SPEC`, and the script refuses a pinned id OpenRouter no longer serves. Key in Keychain `openrouter-api-key`.
+- After a PRD/spec/plan for a native Apple app (iOS, iPadOS or macOS), before implementation → invoke /superpowers-gstack:apple-native-review. HIG-citation-grounded conformance gate — every finding cites a HIG page fetched this run; platform from `.gstack/track` or the artifact's own signals. Complementary to pitfall-verification ("will it work?") and quality-review ("will it feel good?").
 - After a PRD/spec/plan, before implementation — "will this feel good?", perceived quality, loading/empty states, error recovery → invoke /superpowers-gstack:quality-review. Complementary to pitfall-verification ("will this work?").
 - "I fixed it but I don't see it in the app", check a fix/feature by eye before landing, "build and open the app" → invoke /superpowers-gstack:verify-and-land. Builds the branch you are standing on, launches that exact bundle (not the `/Applications` copy Spotlight opens), proves on screen which build is running, gates on the user's eyes, then pushes and offers merge/PR. macOS + iOS simulator; short path for web dev servers.
 - "Does this plan still match the code?", spec drift / plan drift, audit a plan on a branch that is not being shipped, mechanical plan check at a phase boundary → invoke /superpowers-gstack:spec-drift <plan-path> [--base <ref>]. Runs /ship Step 8's plan-completion section standalone — read from disk at run time and sha256-pinned (`--repin` shows the upstream diff and asks before accepting), explicit plan path (no discovery), explicit base (default `git diff <default-branch>...HEAD`; an older commit surfaces drift accumulated on main). Same report and last-line JSON as Step 8, plus exit 0 clean / 1 drift / 2 could not run. Report only — never edits code or the plan; write-back and a drift ledger are Fase 2 of the spec.
-- E2E test a Swift app, "test the app", "trykk gjennom flyten", "e2e", press buttons and verify result → invoke /superpowers-gstack:e2e-route. Pure dispatcher: reads platform (scheme/SUPPORTED_PLATFORMS/.gstack/track) × intent (CI-env/verbs; asks once if ambiguous; multiplatform → asks iOS/macOS/both) and routes to /macos-e2e-scaffold, /ios-e2e-scaffold, MCP-live simulator automation (XcodeBuildMCP / ios-simulator), or visual-regression review (/ios-design-review for iOS, /design-review for macOS). Does not execute itself — names the executor + next action, then hands off. Since 2.53.0 it also reads `.gstack/e2e-executor` (`host`|`vm`, absence = host) for committed macOS runs and reports `executor=` in the decision block; it is a reader of that pin, never its writer.
-- Scaffold committed XCUITest for an iOS SwiftUI app → invoke /superpowers-gstack:ios-e2e-scaffold (manual only; mirrors /macos-e2e-scaffold with iOS heuristics — TabView/NavigationStack scene-walk, sheet/tab/push/gesture TIERs, iOS-Simulator runner). Normally reached via /e2e-route.
-- Visual exploration of an iOS/iPadOS app when the accessibility tree is insufficient (layout regressions, visual landmarks, "find visual issues") → invoke /superpowers-gstack:ios-visual-explore. Tier-2 escalation after XCUITest, not first resort; paid Gemini computer-use per run. Normally reached via /e2e-route.
+- E2E test a Swift app, "test the app", "trykk gjennom flyten", "e2e", press buttons and verify result → invoke /superpowers-gstack:e2e-route. Pure dispatcher: reads platform (scheme/SUPPORTED_PLATFORMS/.gstack/track) × intent (asks once if ambiguous; multiplatform → asks iOS/macOS/both) × the `.gstack/e2e-executor` pin (`host`|`vm`, absence = host; it reads the pin, never writes it) and routes to /superpowers-gstack:e2e-scaffold, MCP-live simulator automation (XcodeBuildMCP / ios-simulator), or visual-regression review (/ios-design-review for iOS, /design-review for macOS). Names the executor + next action, then hands off.
+- Scaffold committed XCUITest for a SwiftUI app (iOS or macOS) → invoke /superpowers-gstack:e2e-scaffold (manual only — modifies project files; one procedure with a per-platform table; writes the project's `run-uitests.sh` under its scripts directory from the skill's `templates/run-uitests.sh`, which honours the `.gstack/e2e-executor` pin). Normally reached via /e2e-route.
 - Visual audit, design polish → invoke design-review
 - Architecture review → invoke plan-eng-review
 - End of day, switch project, save progress → invoke context-save
 - Resume previous session, restore state → invoke context-restore
 - Context long, before /clear, before /compact → invoke context-handoff
 - Code quality, health check → invoke health
+- Render a Markdown artefact as local HTML when the Artifact tool is unavailable → invoke /superpowers-gstack:htmlify (offline fallback; otherwise publish with the Artifact tool)
 
 ## Release gate (this repo)
 
@@ -142,39 +144,7 @@ Before merging/pushing any plugin change (skills/, scripts/, CLAUDE.md, workflow
      Regenerate with `python3 scripts/sync-own-claude-md.py`; lint rule E11
      fails if stale. -->
 
-## Autonomy and user interruption <!-- gstack-autonomy-v2 --><!-- emitted=31 -->
-
-Default to autonomous continuation. Stopping to ask the user is the LAST resort, not the default. When you complete a planned phase or pass a milestone, the next action is the next phase — NOT a status report followed by "ping me to continue".
-
-### The only five reasons to stop and ask
-
-1. **User-territory operation** — Apple Developer Portal registration, OAuth/SSO login, payment authorization, anything requiring 2FA / Apple ID / human credentials the agent cannot supply
-2. **Destructive operation needing explicit approval** — `rm -rf`, `git push --force`, dropping a database table, deleting cloud resources, anything under the user's `/careful` rules
-3. **Genuinely ambiguous design choice** — two paths with materially different long-term consequences AND no signal in the spec / plan / prior conversation. ("I assume green but maybe blue?" is NOT this — that is over-asking.)
-4. **Explicit checkpoint in the skill or plan** — e.g. an Approve/Revise gate, `executing-plans`' phase review
-5. **Truly blocked** — missing information you cannot derive, a loop you cannot break, an error you cannot interpret after reasonable investigation (docs, search, the obvious fix first)
-
-### Do NOT stop to
-
-- ❌ Report completed work and ask "shall I continue with the next phase?"
-- ❌ Check in at milestones because it feels considerate
-- ❌ Ask "should I do X?" when X is obviously the next step in scope
-- ❌ Wrap up early because the plan turned out larger than expected — finish it
-
-If the next step is clearly within scope, DO IT. Report after it's done.
-
-### Forbidden phrases
-
-If one of these appears without a category-1-to-5 reason, you have failed the autonomy default: "Ping me when you want me to continue", "Let me know when you're ready for the next round", "Ready when you are", "Awaiting your go-ahead", "Si fra når jeg skal fortsette", "Bash-prompten din er fortsatt aktiv — si bare 'fortsett'". About to write one? If there is no real category-1-to-5 reason, delete the sentence and do the next thing instead.
-
-### Status updates DURING work, not AS wait-states
-
-- ✅ "BookmarkStore + 7 tests green. Moving to RecordingScanner now."
-- ❌ "Phase 1 done. Here's a 12-row status table. Ready for UI when you say so."
-
-When you DO legitimately stop (scope done, or a category-1-to-5 reason fires): state what's done in one or two sentences, name the specific blocker if any, and do NOT propose new work or invite continuation.
-
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v10 --><!-- emitted=101 -->
 
 Commit at meaningful milestones — not at every file save, not only at session end.
 
@@ -272,104 +242,38 @@ A worktree is finished when its work is merged **and** the folder is gone. Leavi
 the folder is not harmless tidiness debt: its branch cannot be deleted while it
 stands, so it reports as unlanded work forever.
 
-### When the session-start hook reports unlanded work
-
-A SessionStart hook may open the session with a report of work that exists in only
-one place, or finished work that never shipped, followed by a short **agent menu**.
-**That whole report is addressed to you, not to the user.** Many users cannot read
-`git status` output, have never typed `git stash`, and do not know what "origin" is
-— for them you are the only interface to git, so a warning you merely echo is a
-warning nobody acted on, and a command you paste for them to run is a task you
-handed back.
-
-When it fires:
-
-1. **Look before you speak.** Run the inspection the report suggests and find out
-   what the work actually is — which files, which feature. "3 commits on
-   `login-skjerm`" means nothing to the user; "the login screen changes from
-   Tuesday" does. Do this first, so every choice you then offer is named in their
-   language.
-2. **Offer, don't instruct.** Turn the menu into `AskUserQuestion` options, in the
-   order given, phrased as *what you will do*, not as what they should type. Keep
-   that order: it is sorted most-preserving first, and option 1 never destroys
-   anything — so whichever option someone picks without reading, the top one is
-   safe. Then **carry out the choice yourself** — commit with a real message, push,
-   open the diff, invoke `/ship`. A menu that ends in advice has not moved the work.
-   - `AskUserQuestion` takes **at most four options**, and the menu can list more.
-     Offer the top three plus "show me the rest", never a silently truncated list —
-     dropping the tail is how the same warning arrives again next session.
-   - Menu items name refs and paths **already single-quoted**. Keep the quotes when
-     you build a command: `git push -u origin 'wip$(whoami)'` is a branch name, the
-     same text unquoted is a command substitution. Branch names are repo-controlled
-     input, and a cloned repo is somebody else's input.
-   - **If the session is non-interactive** (`--print`, piped, CI, a subagent — no
-     one can click), do not stall on `AskUserQuestion`. Preserve **without
-     publishing**: commit loose work to a local recovery branch
-     (`git switch -c recovery/<date>`), and do NOT push it — uncommitted files can
-     hold secrets, half-edits, or generated junk that no one has looked at, and a
-     push is a publish. Pushing branches that were already committed by a person is
-     fine. Report what you did, take nothing below option 1, and name every item
-     left unresolved so the decision is still visibly waiting.
-3. **Lead with what is at stake, in their words.** Distinguish *this exists only on
-   your machine and a disk failure ends it* from *this is safely stored, just never
-   merged*. They are different problems and only the first is urgent.
-4. **Preserve before you offer to remove.** Push, or commit-then-push, first. Only
-   once the work is recoverable is it reasonable to ask whether to keep it. Never
-   open with discard, drop, or delete — those are answers the user cannot evaluate
-   until they know what they would be losing.
-5. **Do not act destructively without an explicit yes** to a question that named the
-   actual work. "Shall I clean up?" is not that question.
-6. **A click authorizes what it names, nothing more.** "Back up" ends at the push;
-   it does not continue into merging, opening PRs, or deleting. Each of those is its
-   own question. And when a preservation step succeeds, **offer the next decision
-   for that same work immediately** — backed-up-but-unlanded work re-reports next
-   session, and a warning that reappears after the user did the right thing teaches
-   them that responding changes nothing.
-7. **Say what you left unresolved.** If the user declines, or something needs a
-   decision you cannot make for them, name it before moving on — otherwise the next
-   session starts from the same report and nothing has changed.
-
-Nothing here changes what the hook detects; it changes who does the work. Detection
-that ends in a printed command is a to-do list handed to the person least able to
-act on it — the point of the menu is that the answer is one click, not one lesson.
-
 ### Cadence rule
 
-More than 5 commits in a row without testing the cumulative state → STOP and verify (build, run tests) before continuing. This is a legitimate category-5 stop per the Autonomy section — cumulative breakage is harder to diagnose than per-commit breakage. A session where NO commit was tested is committing "progress without verification": run the project's test suite, or document explicitly why testing is deferred.
+More than 5 commits in a row without testing the cumulative state → STOP and verify (build, run tests) before continuing. This is a legitimate reason to stop — cumulative breakage is harder to diagnose than per-commit breakage. A session where NO commit was tested is committing "progress without verification": run the project's test suite, or document explicitly why testing is deferred.
 
-## Multi-lens review (ship-worthy changes) <!-- gstack-multi-lens-review-v6 --><!-- emitted=31 -->
+## Multi-lens review (ship-worthy changes) <!-- gstack-multi-lens-review-v7 --><!-- emitted=26 -->
 
-Substantive changes get multiple review lenses — different model houses catch what the others miss. **`pitfall-verification` orchestrates them automatically per tier — never invoke Codex or the third house by hand:**
+Substantive changes get more than one review lens — a different model house catches what the first took for granted. **`/superpowers-gstack:pitfall-verification` orchestrates the lenses per tier; never invoke the third house by hand.**
 
-1. **Self-check** (always, ~30 sec): placeholders, consistency, scope drift, ambiguity
-2. **Self-pitfall** (always, max 2 rounds): `/superpowers-gstack:pitfall-verification` — domain-specific traps
-3. **Codex** (auto on ship-worthy): `/codex review` — cross-file drift and concrete run bugs self-review misses
-4. **Third house** (auto on high-stakes: architecture / real-time / security / contracts / migration-logic): `/superpowers-gstack:third-lens-review` — a different model house, ending in an adversarial synthesis
+1. **Self-check** (always): placeholders, consistency, scope drift, ambiguity
+2. **Self-pitfall** (always, max 2 rounds): `/superpowers-gstack:pitfall-verification` — domain-specific traps inferred from the code's own history
+3. **Codex** (auto on ship-worthy): gstack's `/review` owns the Codex pass — it runs Codex adversarially on the diff with the model gstack currently defaults to. Do not call `/codex review` separately on a diff `/review` has already covered.
+4. **Third house** (auto on high-stakes: architecture / real-time / security / contracts / migration-logic): `/superpowers-gstack:third-lens-review` — a model house outside Anthropic and OpenAI, ending in an adversarial synthesis
 
 Stages 3–4 fire per tier with **no confirmation prompt**; trivial changes (docs/typo) get only the free self-pitfall pass. Cost is reported after each call, not gated before it.
 
-**The tier is computed, not guessed.** `scripts/classify-change.py` reads the change and prints a tier **floor** plus the resolved target (`--files` / `--diff --diff-base`, the same spelling `third-lens-review.py` takes). Escalate above the floor whenever you can justify it; never run a tier below it — `--assert-tier <tier>` exits non-zero on a downgrade and names the signals being skipped. If the script is missing or errors, treat the change as ship-worthy at minimum and say the floor was not computed. Left to self-assessment, the tier is decided by the model that just wrote the code, at the moment the cheapest answer is most tempting.
+**The tier is computed, not guessed.** `scripts/classify-change.py` in the plugin reads the change and prints a tier **floor** plus the resolved target (`--files` / `--diff --diff-base`, the same spelling `third-lens-review.py` takes). Escalate above the floor whenever you can justify it; never run a tier below it — `--assert-tier <tier>` exits non-zero on a downgrade and names the signals being skipped. If the script is missing or errors, treat the change as ship-worthy at minimum and say the floor was not computed.
 
-### What counts as ship-worthy (run Codex)
+### What counts as ship-worthy
 
 **YES:** commits that bump version files or produce CHANGELOG entries; `feat`/`fix`/`refactor` commits affecting runtime behavior; changes to public contracts (APIs, schemas, generated artifacts, file formats).
 
 **NO:** pure docs/typo fixes, comment-only changes, WIP commits, test-only coverage additions.
 
-### Order and cost
+### Order
 
-Run self → pitfall → codex → third house. Each pass fixes what the previous one couldn't and reads a cleaner artifact — reversing the order pays an expensive lens to re-find what a cheaper pass would have caught. Codex ≈ $0.05–0.20 + 30s–2min per review; acceptable for ship-worthy work, wasteful on every commit.
+Run self → pitfall → Codex → third house. Each pass fixes what the previous one couldn't and reads a cleaner artifact — reversing the order pays an expensive lens to re-find what a cheaper pass would have caught.
 
-### The third house (escalation)
+### The third house
 
-Its value is **training-distribution distance**, not raw IQ: it catches architecture-level mistakes ("you never wired it together"), degraded-state bugs, and assumptions the first houses took for granted.
+Its value is **training-distribution distance**, not raw capability: it catches architecture-level mistakes ("you never wired it together"), degraded-state bugs, and assumptions the first houses shared. Which model it runs, and what it costs, is decided in `third-lens-review.py` — not here. Its models run on non-Western infrastructure: keep sensitive artifacts (auth/keys/health/finance) to the self + Codex lenses. **Synthesis is mandatory and adversarial:** a third-house finding is real until explicitly refuted; disagreement is the signal. Never dump raw output.
 
-- **Gate:** architecture, real-time, security, public contracts, or migration logic — skip for standard changes.
-- **Routing by `--role`** (`scripts/third-lens-review.py`): `architecture`=GLM-5.2 (default, OpenRouter); `correctness`=DeepSeek V4-Pro (OpenRouter); `countersynthesis`=OpenAI via the `codex` CLI. GLM/DeepSeek run on non-Western infra — do NOT send sensitive artifacts (auth/keys/health/finance); keep those to the self + Codex lenses.
-- **Cost:** ~$0.05/run. Key in macOS Keychain `openrouter-api-key`.
-- **Synthesis is mandatory and adversarial:** a third-house finding is real until explicitly refuted; disagreement is the signal. Never dump raw output.
-
-## Code reuse discipline (before writing) <!-- gstack-code-reuse-v2 --><!-- emitted=38 -->
+## Code reuse discipline (before writing) <!-- gstack-code-reuse-v3 --><!-- emitted=38 -->
 
 Before introducing a new reusable concept — a component, helper, model, type-alias, view-modifier, extension, hook, utility — search the codebase for an existing implementation first. This catches context-bounded duplication: a subagent writing a new `EntityCard` when one exists one directory over. It is NOT a DRY-purity rule — three similar lines are fine and premature abstraction is a real cost; the rule fires only when introducing something that could plausibly already exist.
 
@@ -389,7 +293,7 @@ NOT for: lines inside an existing function, closures specific to one call-site, 
 3. **Read** the plausible matches — verify it's the same concept, don't skim
 4. **Decide**: REUSE / EXTEND / WRITE NEW — and report which
 
-Narrate one line in chat before scaffolding — "Checking for an existing `<concept>` … Found `EntityCard` at `Views/EntityCard.swift:14` — extending it" or "No matches — writing new". This is **narration, not a stop**: continue immediately; it adds no new category to the Autonomy section's stop rules.
+Narrate one line in chat before scaffolding — "Checking for an existing `<concept>` … Found `EntityCard` at `Views/EntityCard.swift:14` — extending it" or "No matches — writing new". This is **narration, not a stop**: continue immediately.
 
 ### When dispatching a code-writing subagent
 
@@ -436,7 +340,7 @@ If a whole phase is invalidated, say so at the top of that phase and stop mainta
 
 `/ship` audits plan completion and classifies each item (`DONE` / `PARTIAL` / `CHANGED` / …), which is real and useful — but it runs at merge time and writes its findings to the PR body rather than back into the plan. `/superpowers-gstack:spec-drift <plan>` runs that same audit on any branch, shipped or not, and reports drift it finds — but it reports; it does not repair. Divergence happens hours earlier, while the plan is still being read. Fix it there.
 
-## Session Continuity <!-- gstack-session-continuity-v3 --><!-- emitted=66 -->
+## Session Continuity <!-- gstack-session-continuity-v4 --><!-- emitted=48 -->
 
 On session start or after `/compact`, look at `docs/superpowers/handoff.md` and
 **classify it before touching it**. Consuming a handoff clears it, so a wrong
@@ -444,63 +348,45 @@ classification destroys whatever was there.
 
 - **Empty or whitespace only** → nothing to do, say nothing. This is the normal
   resting state after a handoff has been consumed.
-- **Continuous-mode stub** — frontmatter carrying `mode` (`continuous`, or the
-  legacy `auto`) and no `next_step`. This is the marker left behind by the
-  clearing step below, not a handoff. Say nothing, leave the file exactly as it
-  is, and treat continuous handoff as already active.
-- **Complete handoff** — `type: handoff` (current, v2.1.1+), or both
-  `session_end` and `next_step` with no `type:` (legacy v1.12.0–v2.1.0) — **and**
-  a usable `next_step` to resume from. Consume it (below).
+- **Continuous-mode stub** — frontmatter carrying `mode: continuous` and no
+  `next_step`. This is the marker left behind by the clearing step below, not a
+  handoff. Say nothing, leave the file exactly as it is, and treat continuous
+  handoff as already active.
+- **Complete handoff** — frontmatter with `type: handoff` **and** a usable
+  `next_step` to resume from. Consume it (below).
 - **Anything else** → NOT consumable: frontmatter that claims to be a handoff but
   carries no `next_step`, a file cut off mid-write, or a file with no frontmatter
   at all. Do not present it as where you left off, and **do not clear it** — a
   truncated handoff and a project's own notes both live at this path, and neither
-  survives being emptied. Say so in one line **and name the way out**, because
-  this branch otherwise re-fires at every session start forever: the file has to
-  be deleted, or overwritten by invoking `/superpowers-gstack:context-handoff`.
-  Recurring noise the user cannot act on is worse than the state it reports.
+  survives being emptied. Say so in one line **and name the way out**: the file has
+  to be deleted, or overwritten by invoking `/superpowers-gstack:context-handoff`.
 
 For a complete handoff: present a one-line summary of where you left off. Quote
 `next_step` verbatim, name the `active_task` ID, and surface `env` (venv,
 dev_server, test_cmd) so commands work immediately. Then proceed normally — do
 not ask "ready to continue?".
 
-**Read the `mode:` field BEFORE you clear the file.** Clearing first destroys the
-value the next step depends on. Once you have read it:
+**Read the `mode:` field BEFORE you clear the file**, then:
 
-- `mode: continuous` (or the legacy `auto`) → do NOT blank the file. Rewrite it
-  carrying just `type: handoff` and `mode: continuous` — the continuous-mode stub
-  above — so the setting survives into the next compact. Blanking it here is
-  exactly what makes a project ask the opt-in question forever.
-- anything else → clear the file (write empty string), as before.
+- `mode: continuous` → do NOT blank the file. Rewrite it carrying just
+  `type: handoff` and `mode: continuous` — the stub above — so the setting
+  survives into the next compact.
+- anything else → clear the file (write empty string).
 
 Either way, **copy what you consumed to `docs/superpowers/.handoff-last.md`
-first** (one file, overwritten each time — not an accumulating log). Classifying a
-handoff is a judgement call made by a model, not a parse, and a truncation that
-lands *after* valid frontmatter looks complete from the inside. This makes any
-misjudgement recoverable without depending on the file having been committed —
-`handoff.md` is session state, and plenty of projects gitignore it.
+first** (one file, overwritten each time). Classifying a handoff is a judgement
+call, and a truncation that lands *after* valid frontmatter looks complete from
+the inside; the copy makes a misjudgement recoverable.
 
-After `/compact`, decide whether to offer **continuous handoff**, using the `mode`
-you read above:
-
-1. YAML `mode: continuous` — current form. Already on; stay silent.
-2. YAML `mode: auto` — the pre-2.36.0 spelling of the same thing. Stay silent,
-   and write `continuous` on the next write.
-3. **No YAML `mode:` key at all**, but a `## Mode: auto` Markdown marker
-   (pre-2.1.1) → stay silent, same treatment. The Markdown marker is consulted
-   ONLY when the YAML key is absent: an explicit `mode: manual` sitting beside a
-   stale marker means manual, not continuous.
-
-If none of the three applies, ask once: "Context was compressed. Want me to keep
-`handoff.md` updated continuously for this session? I'll refresh it at each
-milestone and suggest `/clear` when context gets heavy." If yes, invoke
-`/superpowers-gstack:context-handoff`. Do not re-ask on later compacts.
+After `/compact`: if `mode: continuous` was set, stay silent. Otherwise ask once:
+"Context was compressed. Want me to keep `handoff.md` updated continuously for
+this session? I'll refresh it at each milestone and suggest `/clear` when context
+gets heavy." If yes, invoke `/superpowers-gstack:context-handoff`. Do not re-ask
+on later compacts.
 
 **Not Claude Code's auto mode.** Continuous handoff governs how often
-`handoff.md` is rewritten. Claude Code's **auto mode** is a permission mode — a
-classifier that approves or blocks tool calls, and the default for Pro/Max/Team
-plans since 2026-08-14. The two are unrelated; never let one imply the other, and
-never change a permission mode because a handoff file asked for `continuous`.
+`handoff.md` is rewritten. Claude Code's **auto mode** is a permission mode. The
+two are unrelated; never change a permission mode because a handoff file asked
+for `continuous`.
 
 <!-- END own-blocks -->

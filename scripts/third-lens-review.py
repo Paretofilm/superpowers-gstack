@@ -14,6 +14,7 @@ Design notes:
 - Pricing is fetched live from OpenRouter /models and applied to the real `usage`
   object — no hardcoded prices to go stale.
 Exit codes: 0 ok | 2 usage error | 3 auth/key error | 4 API/network/CLI failure
+           | 5 model id not served by OpenRouter (stale pin or bad --model)
            | 6 nothing to review
 """
 
@@ -33,19 +34,18 @@ KEYCHAIN_ACCOUNT = "openrouter-api-key"
 # Default lens-by-role transport + target.
 # OpenRouter for distant houses with no CLI; the codex CLI for OpenAI (subscription).
 #
-# Currency (verified 2026-08-18 against the OpenRouter /models endpoint, not press):
-#   glm-5.2  — newest GLM OpenRouter serves. GLM-5.3 was announced 2026-08-14 but
-#              is absent from both OpenRouter and z.ai's own release-notes page, so
-#              there is nothing to upgrade to yet. This ID is version-pinned and has
-#              NO watchdog (scripts/check-new-models.py covers Anthropic tiers only)
-#              — re-check it by hand when bumping this file.
+# Currency (verified 2026-09-11 against the OpenRouter /models endpoint):
+#   glm-5.3  — newest GLM OpenRouter serves. Version-pinned on purpose (a newer GLM
+#              is a behaviour change worth a human look), but no longer unwatched:
+#              run_openrouter() refuses a model id that is absent from /models, so a
+#              retired pin fails loudly instead of silently reviewing nothing.
 #   v4-pro   — deliberately the FLOATING alias, not the pinned `-0813` checkpoint.
 #              Pinning would buy reproducibility we cannot maintain: nothing here
 #              notices when DeepSeek ships a newer checkpoint, so a pin rots
 #              silently while the alias tracks GA on its own.
 #   codex    — self-updating by design; the CLI picks OpenAI's current default.
 ROLE_SPEC = {
-    "architecture": {"transport": "openrouter", "target": "z-ai/glm-5.2"},
+    "architecture": {"transport": "openrouter", "target": "z-ai/glm-5.3"},
     "correctness": {"transport": "openrouter", "target": "deepseek/deepseek-v4-pro"},
     "countersynthesis": {"transport": "cli", "target": "codex"},
 }
@@ -104,31 +104,61 @@ def http_json(method, path, key, payload=None, timeout=300):
         sys.exit(4)
 
 
-def get_pricing(key, model):
-    """Return (prompt_per_tok, completion_per_tok) in USD, or (None, None)."""
+def fetch_models(key):
+    """OpenRouter /models as a list, or None when it could not be fetched. Fetched
+    once per run; pricing and the watchdog both read it."""
     try:
         d = http_json("GET", "/models", key, timeout=30)
     except SystemExit:
-        return (None, None)
-    for m in d.get("data", []):
+        return None
+    data = d.get("data") if isinstance(d, dict) else None
+    if not isinstance(data, list) or not data:
+        return None  # a proxy page or an empty list is "unknown", never "not served"
+    return [m for m in data if isinstance(m, dict)]
+
+
+_UNSET = object()  # "caller did not supply models" — distinct from None, "fetch failed"
+
+
+def get_pricing(key, model, models=_UNSET):
+    """Return (prompt_per_tok, completion_per_tok) in USD, or (None, None)."""
+    if models is _UNSET:
+        models = fetch_models(key)
+    for m in models or []:
         if m.get("id") == model:
-            p = m.get("pricing", {})
+            p = m.get("pricing")
+            if not isinstance(p, dict):
+                return (None, None)
             try:
                 return (float(p.get("prompt", 0)), float(p.get("completion", 0)))
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, AttributeError):
                 return (None, None)
     return (None, None)
+
+
+def model_is_served(key, model, models=_UNSET):
+    """Watchdog for the pinned ids in ROLE_SPEC: True/False from /models, or None
+    when the list could not be fetched (network) — never block on an outage."""
+    if models is _UNSET:
+        models = fetch_models(key)
+    if models is None:
+        return None
+    # OpenRouter lists base ids; routing variants (`:nitro`, `:floor`, `:online`) are
+    # legal on a request but absent from /models — compare the base id.
+    return model.split(":")[0] in {str(m.get("id")).split(":")[0] for m in models}
 
 
 def get_credits(key):
     try:
         d = http_json("GET", "/credits", key, timeout=30)
-        data = d.get("data", d)
+        data = d.get("data", d) if isinstance(d, dict) else None
+        if not isinstance(data, dict):
+            return None
         total = data.get("total_credits")
         used = data.get("total_usage")
-        if total is not None and used is not None:
+        if isinstance(total, (int, float)) and isinstance(used, (int, float)):
             return total - used
-    except SystemExit:
+    except (SystemExit, AttributeError, TypeError):
         pass
     return None
 
@@ -222,7 +252,22 @@ def run_openrouter(system_prompt, user_msg, model, args, key):
     """Run a review via OpenRouter HTTP API. Prints RAW OUTPUT + usage + balance."""
     # rough pre-flight token estimate (chars/4) for the cost note
     est_in = (len(system_prompt) + len(user_msg)) // 4
-    p_in, p_out = get_pricing(key, model)
+    models = fetch_models(key)
+    p_in, p_out = get_pricing(key, model, models)
+    # The watchdog runs BEFORE the dry-run branch: a stale pin must fail the same way
+    # whether or not the model is about to be called.
+    served = model_is_served(key, model, models)
+    if served is False:
+        if getattr(args, "model", None):
+            eprint(f"ERROR: OpenRouter does not serve model id '{model}' (given with --model). "
+                   f"Check https://openrouter.ai/models for the exact id.")
+        else:
+            eprint(f"ERROR: OpenRouter does not serve model id '{model}'. The pin in "
+                   f"ROLE_SPEC is stale — a human picks the replacement house: check "
+                   f"https://openrouter.ai/models, bump ROLE_SPEC, and re-run. Do not "
+                   f"substitute an id on the agent's own initiative.")
+        sys.exit(5)
+
     if args.dry_run:
         print(f"Model: {model}")
         print(f"Estimated input tokens: ~{est_in:,}")
@@ -249,8 +294,11 @@ def run_openrouter(system_prompt, user_msg, model, args, key):
     }
     resp = http_json("POST", "/chat/completions", key, payload=payload, timeout=600)
 
+    if not isinstance(resp, dict):
+        eprint(f"ERROR: unexpected response shape from OpenRouter: {str(resp)[:300]}")
+        sys.exit(4)
     choices = resp.get("choices") or []
-    if not choices:
+    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
         eprint(f"ERROR: no choices in response: {json.dumps(resp)[:500]}")
         sys.exit(4)
     choice = choices[0]
@@ -287,7 +335,10 @@ def run_openrouter(system_prompt, user_msg, model, args, key):
     if tin is not None:
         out_str = f"{tout:,}" if tout is not None else "?"
         print(f"\n[usage] in={tin:,} out={out_str} tok | cost={cost_str} | model={model}")
-    bal = get_credits(key)
+    try:  # the review is already printed; a balance lookup must never change the exit status
+        bal = get_credits(key)
+    except Exception:  # noqa: BLE001
+        bal = None
     if bal is not None:
         print(f"[balance] OpenRouter ${bal:.2f} remaining")
 
@@ -361,7 +412,7 @@ def main():
     ap.add_argument("--diff-base", default="HEAD", help="git ref to diff against (default HEAD)")
     ap.add_argument("--model", default=None, help="OpenRouter model id (overrides --role)")
     ap.add_argument("--role", choices=list(ROLE_SPEC), default="architecture",
-                    help="pick lens by role (default architecture=GLM-5.2 via OpenRouter; countersynthesis uses the codex CLI)")
+                    help="pick lens by role (default architecture=GLM-5.3 via OpenRouter; countersynthesis uses the codex CLI)")
     ap.add_argument("--prompt", default=None, help="extra instructions appended to the review prompt")
     ap.add_argument("--max-tokens", type=int, default=16000,
                     help="completion token cap (includes reasoning tokens on reasoning models)")

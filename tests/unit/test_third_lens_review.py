@@ -43,7 +43,7 @@ def test_western_prefixes_gone():
 
 
 def test_resolve_transport_openrouter_roles():
-    assert tlr.resolve_transport("architecture", None) == ("openrouter", "z-ai/glm-5.2")
+    assert tlr.resolve_transport("architecture", None) == ("openrouter", "z-ai/glm-5.3")
     assert tlr.resolve_transport("correctness", None) == ("openrouter", "deepseek/deepseek-v4-pro")
 
 
@@ -64,15 +64,16 @@ def test_run_openrouter_prints_framing(monkeypatch, capsys):
     monkeypatch.setattr(tlr, "http_json", lambda *a, **k: fake_resp)
     monkeypatch.setattr(tlr, "get_pricing", lambda *a, **k: (1e-6, 2e-6))
     monkeypatch.setattr(tlr, "get_credits", lambda *a, **k: 4.47)
+    monkeypatch.setattr(tlr, "model_is_served", lambda *a, **k: True)
 
     class Args:
         max_tokens = 16000
         effort = "medium"
         dry_run = False
         prompt = None
-    tlr.run_openrouter("SYS", "USER", "z-ai/glm-5.2", Args(), "fakekey")
+    tlr.run_openrouter("SYS", "USER", "z-ai/glm-5.3", Args(), "fakekey")
     out = capsys.readouterr().out
-    assert "===== THIRD-LENS RAW OUTPUT (z-ai/glm-5.2) =====" in out
+    assert "===== THIRD-LENS RAW OUTPUT (z-ai/glm-5.3) =====" in out
     assert "P2 finding here" in out
     assert "END RAW OUTPUT" in out
 
@@ -212,3 +213,132 @@ def test_main_cli_dry_run_skips_key(monkeypatch, capsys):
     monkeypatch.setattr(tlr, "resolve_key", boom)
     tlr.main()
     assert "codex CLI" in capsys.readouterr().out
+
+
+def test_run_openrouter_refuses_unserved_model(monkeypatch):
+    """The pinned id is version-locked; a retired pin must fail loudly, not review nothing."""
+    monkeypatch.setattr(tlr, "fetch_models", lambda *a, **k: [{"id": "z-ai/glm-5.3"}])
+    monkeypatch.setattr(tlr, "http_json", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not call the model")))
+
+    class Args:
+        max_tokens = 16000
+        effort = "medium"
+        dry_run = False
+        prompt = None
+    with pytest.raises(SystemExit) as e:
+        tlr.run_openrouter("SYS", "USER", "z-ai/glm-0.0", Args(), "fakekey")
+    assert e.value.code == 5
+
+
+def test_dry_run_surfaces_a_stale_pin_the_same_way(monkeypatch):
+    """--dry-run must not soften a retired pin into 'pricing unavailable'."""
+    monkeypatch.setattr(tlr, "fetch_models", lambda *a, **k: [{"id": "z-ai/glm-5.3"}])
+
+    class Args:
+        max_tokens = 16000
+        effort = "medium"
+        dry_run = True
+        prompt = None
+    with pytest.raises(SystemExit) as e:
+        tlr.run_openrouter("SYS", "USER", "z-ai/glm-0.0", Args(), "fakekey")
+    assert e.value.code == 5
+
+
+def test_routing_variants_are_served_by_their_base_id():
+    assert tlr.model_is_served("k", "z-ai/glm-5.3:nitro", models=[{"id": "z-ai/glm-5.3"}]) is True
+    assert tlr.model_is_served("k", "z-ai/glm-9.9", models=[{"id": "z-ai/glm-5.3"}]) is False
+
+
+def test_malformed_models_response_is_unknown_not_unserved(monkeypatch):
+    for bad in (["x"], {"data": "oops"}, {"data": []}, {"nodata": 1}):
+        monkeypatch.setattr(tlr, "http_json", lambda *a, **k: bad)
+        assert tlr.fetch_models("k") is None
+
+
+# --- 3.0.0: /models is fetched once and shared by pricing + the watchdog ---------
+
+@pytest.mark.parametrize("models,expect,why", [
+    ([{"id": "z-ai/glm-5.3", "pricing": {"prompt": "0.000001", "completion": "0.000002"}}],
+     "Estimated max cost", "pricing found → the cost estimate is printed"),
+    (None, "Pricing unavailable", "/models unreachable → say so instead of guessing"),
+], ids=["priced", "models-outage"])
+def test_run_openrouter_dry_run_reports_pricing_or_its_absence(monkeypatch, capsys, models, expect, why):
+    """--dry-run must never reach the chat endpoint, whatever /models returned."""
+    monkeypatch.setattr(tlr, "fetch_models", lambda *a, **k: models)
+    monkeypatch.setattr(tlr, "http_json",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("dry-run must not call the model")))
+
+    class Args:
+        max_tokens = 1000
+        effort = "medium"
+        dry_run = True
+        prompt = None
+    tlr.run_openrouter("SYS", "USER", "z-ai/glm-5.3", Args(), "fakekey")
+    out = capsys.readouterr().out
+    assert "Model: z-ai/glm-5.3" in out
+    assert expect in out, why
+    # the pure helpers agree with what was printed
+    assert (tlr.get_pricing("k", "z-ai/glm-5.3", models) == (1e-6, 2e-6)) is (expect == "Estimated max cost")
+
+
+def test_model_watchdog_never_blocks_on_a_models_outage(monkeypatch, capsys):
+    """A /models fetch failure is a network event, not a stale pin: model_is_served()
+    answers None and run_openrouter() proceeds to the review — only a definite
+    False (id absent from a list we DID get) is allowed to refuse."""
+    # http_json() sys.exit(4)s on any HTTP/network error; fetch_models must turn that
+    # into None so neither the pricing lookup nor the watchdog can abort the run.
+    monkeypatch.setattr(tlr, "http_json", lambda *a, **k: {"data": [{"id": "x"}]})
+    assert tlr.fetch_models("k") == [{"id": "x"}]
+    fake_resp = {
+        "choices": [{"message": {"content": "reviewed despite outage"}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.001},
+    }
+    calls = []
+
+    def dead_models_live_chat(method, path, *a, **k):
+        calls.append((method, path))
+        if path == "/models":
+            raise SystemExit(4)
+        return fake_resp
+    monkeypatch.setattr(tlr, "http_json", dead_models_live_chat)
+    assert tlr.fetch_models("k") is None
+    assert tlr.model_is_served("k", "z-ai/glm-5.3") is None          # fetched itself → outage → None
+    assert tlr.model_is_served("k", "z-ai/glm-5.3", [{"id": "z-ai/glm-5.3"}]) is True
+    assert tlr.model_is_served("k", "z-ai/glm-5.3", [{"id": "other"}]) is False
+    assert tlr.get_pricing("k", "z-ai/glm-5.3") == (None, None)       # fetched itself → outage
+    calls.clear()
+    monkeypatch.setattr(tlr, "get_credits", lambda *a, **k: 1.0)
+
+    class Args:
+        max_tokens = 1000
+        effort = "medium"
+        dry_run = False
+        prompt = None
+    tlr.run_openrouter("SYS", "USER", "z-ai/glm-5.3", Args(), "fakekey")
+    out = capsys.readouterr().out
+    assert "reviewed despite outage" in out
+    assert ("POST", "/chat/completions") in calls, "the review must still run when /models is down"
+
+
+
+def test_model_list_outage_is_fetched_once_and_fails_open(monkeypatch, capsys):
+    """A failed /models fetch returns None; that None must not be mistaken for
+    'not supplied' and refetched by pricing and the watchdog (three 30 s waits)."""
+    calls = {"n": 0}
+
+    def fake_fetch(key):
+        calls["n"] += 1
+        return None
+    monkeypatch.setattr(tlr, "fetch_models", fake_fetch)
+    fake_resp = {"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}], "usage": {}}
+    monkeypatch.setattr(tlr, "http_json", lambda *a, **k: fake_resp)
+    monkeypatch.setattr(tlr, "get_credits", lambda *a, **k: None)
+
+    class Args:
+        max_tokens = 16000
+        effort = "medium"
+        dry_run = False
+        prompt = None
+    tlr.run_openrouter("SYS", "USER", "z-ai/glm-5.3", Args(), "fakekey")
+    assert calls["n"] == 1
+    assert "RAW OUTPUT" in capsys.readouterr().out

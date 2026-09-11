@@ -1,5 +1,125 @@
 # Changelog
 
+## [3.0.0] - 2026-09-11
+
+**Modernisering.** The plugin was designed for models that skipped steps and needed
+a second house to catch them; Claude 5-era models verify their own work, Claude Code
+ships review, workflow and session tooling natively, and gstack 1.84.1 picks its own
+review models. This release removes what those changes made redundant and keeps what
+nothing upstream provides: the third model house, the domain-inferred pitfall pass,
+the mechanical tier floor, HIG-cited native review, XCUITest scaffolding,
+verify-and-land, and CLAUDE.md routing. Rationale, ledger numbers and the per-skill
+verdicts: `docs/superpowers/specs/2026-09-11-modernisering-audit.md`.
+
+### Removed (breaking — run `/adapt` in every project after upgrading)
+- **`ios-visual-explore`** and `scripts/computer_use/` — a paid Gemini computer-use loop
+  for what the session model does natively through XcodeBuildMCP `screenshot` /
+  `snapshot_ui`. The `live-swiftui`-vs-cliclick note in `IDEAS.md` is closed with it.
+- **cost-ledger** (`scripts/cost-ledger/`, its pytest suite, the pitfall-verification
+  wiring, the session-start notices). Two months of records (91 rows) show it could
+  never reach its own skip threshold: the lens name was logged in five spellings, the
+  domain in two, and with 89 % of Codex findings surviving synthesis there were almost
+  no "clean" reviews to count. It skipped nothing, ever.
+- **The `Autonomy and user interruption` block** (`gstack-autonomy-v2`). The Claude Code
+  harness now carries the same instruction verbatim; the block was 31 lines of context
+  tax per project. `/adapt` deletes a marker-carrying copy (growth check applies; a
+  grown section is deferred, never destroyed) and never touches a markerless one.
+- **htmlify's Safari takeover and PostToolUse hook** (`scripts/setup-htmlify-hook.sh`,
+  `scripts/htmlify-posttooluse.sh`). `--open` now opens the file in the default browser
+  and closes nothing. If you ran `setup-htmlify-hook.sh` on 2.x, remove the
+  `PostToolUse` entry it wrote to `~/.claude/settings.json` — it points at a script
+  that no longer exists. Previews of design docs and proposals go through Claude Code's
+  Artifact tool; htmlify remains as the offline fallback, and `styles/companion.css`
+  stays the canonical house style.
+- **Legacy handoff spellings** — `mode: auto`, the `## Mode: auto` Markdown marker and
+  the typeless v1.12 frontmatter are no longer read. `mode: continuous` is the only form.
+- Review history embedded in skills (autoimplement's audit-trail table and regex
+  convergence story, the seven "(Codex, 2.53.0)" notes in the generated runner,
+  adapt's rationale essays) — roughly 250 lines the executing model never needed.
+  The autoimplement history, for the record: five Codex rounds on v2.14.x converged the
+  pre-flight skip regex to `^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)`
+  and fixed a stale-plan-content bug (re-read after pre-flight edits).
+- Hard-coded model ids, prices, benchmarks and launch dates in prose and emitted
+  blocks (`codex (gpt-5.5)`, `claude-fable-5`, "$10/$50 per Mtok", "63.2 % SWE-bench
+  Pro", "GLM ≈18 pts below Fable 5"). Tier *names* stay in the blocks; ids live in
+  `model-routing.md` and `third-lens-review.py` only. Lint E7 now refuses them.
+- Personal paths (`~/super-me/brain/ideas/seeds`) from `office-hours-track-aware`.
+
+### Changed
+- **`/adapt` renames retired skill names** in the non-marker part of a project's
+  `## Skill routing` (`macos-/ios-native-review` → `apple-native-review`,
+  `macos-/ios-e2e-scaffold` → `e2e-scaffold`, `ios-visual-explore` rows removed) and
+  removes a marker-carrying `Autonomy and user interruption` section, sized per marker
+  version (v1 = 56 lines, v2 = 31), H3 roots included.
+- **`apple-native-review`** replaces `macos-native-review` + `ios-native-review`: one
+  procedure, per-platform category tables, one stated source chain (the HIG page's
+  structured form for the citation, the apple-docs MCP for API reference, the
+  swiftui-rag corpus for the idiom — the MCP was verified not to serve HIG pages).
+- **`e2e-scaffold`** replaces `macos-e2e-scaffold` + `ios-e2e-scaffold`: one procedure
+  with a platform table; the runner moved to `templates/run-uitests.sh` (no version
+  literal in its header); the twin drift is resolved (identifier scan depth, runner
+  header).
+- **The runner validates every count on both executor paths** (integer, non-negative;
+  `executed` derived as total − skipped; `executed ≤ 0` fails), validates `PLATFORM` at
+  run time, and accepts non-ASCII letters in scheme names.
+- **`pitfall-verification` verifies that lens 2 was Codex.** gstack's `/review` echoes
+  `CODEX_MODE:` and substitutes a Claude subagent when Codex is disabled, absent or
+  unauthenticated; that no longer counts as the Codex lens — the verdict records
+  `lens 2 absent` and escalates the third house.
+- **`.gstack/track` is validated everywhere it is read** (`e2e-scaffold`, `e2e-route`,
+  `office-hours-track-aware`): anything but `ios` / `macos` / `both` is BLOCKED.
+- **gstack `/review` owns the Codex pass.** `pitfall-verification` Stage 2 invokes
+  `/review` on a diff (or `/codex challenge` on a plan) and never calls `/codex review`
+  itself; `autoimplement` runs `/review` first at each boundary and pitfall folds its
+  findings in. One Codex pass per patched state, whichever skill asked.
+- **`third-lens-review`** pins `z-ai/glm-5.3` (served by OpenRouter since late August;
+  the 5.2 pin was already a generation behind) and gains a watchdog: `run_openrouter()` refuses a model id absent from
+  OpenRouter `/models`, so a stale pin fails loudly instead of reviewing nothing. Prose
+  names roles, not ids.
+- **Emitted CLAUDE.md is ~40 % smaller.** `git-hygiene` v10 drops the 60-line "when the
+  session-start hook reports unlanded work" consumer section — that guidance now
+  prints from `check-branch-hygiene.sh` itself, only when the report fires.
+  `session-continuity` v4 has one read path. `multi-lens-review` v7 names no model ids
+  or prices. `code-reuse` v3 and `track-routing` v3 lose their references to the
+  retired autonomy block and to htmlify. `model-routing-section` carries tier names
+  only.
+- `autoimplement` may hand the per-phase dispatch loop to the Claude Code Workflow
+  tool when available; the review chain and stop policy stay with the skill.
+- `swiftui-design-consultation` slimmed: the YAML schema pipeline, the monotonicity
+  guard and the MCP parameter-verification table are gone; the proposal is Markdown,
+  previewed as an Artifact page, and the native-review chain targets
+  `apple-native-review`.
+- `e2e-route` is a routing table plus the executor-pin rules; the readiness ladder is
+  replaced by the Monitor tool. `office-hours-track-aware` is track inference,
+  `.gstack/track`, design-doc relocation and an Artifact preview before the gate.
+- `quality-review` category 12 points at the `claude-api` skill instead of carrying
+  numeric claims about failure rates and cache thresholds.
+- `context-handoff` documents the current contract only.
+- `check-plugin-version.sh` no longer prints cost-ledger notices.
+
+### Fixed
+- `/adapt` compared the `Keep the plan true to the code` section against marker `v2`
+  while the block has carried `v3` since 2.52.0, and the Multi-lens rule against `v5`
+  while the block was `v6` — every run re-replaced a current section. Both literals now
+  match their blocks (v3, v7).
+
+### Lint
+- E7 denylist: `cost-ledger`, `ios-visual-explore` / `computer_use`, `gstack-autonomy-v*`,
+  legacy handoff spellings, hard-coded model ids / prices, htmlify's Safari flow, and
+  the previous block versions (`multi-lens-review` ≤ v6, `session-continuity` ≤ v3,
+  `code-reuse` ≤ v2, `git-hygiene` ≤ v9, `routing` ≤ v2).
+- `MARKER_BLOCKS` and `sync-own-claude-md.py` drop `autonomy.md`; E13's guards are
+  unchanged and now anchor on the Git hygiene rule as the first per-section rule.
+
+### Known
+- With gstack ≥ 1.83 installed, `spec-drift --repin` reports `ANCHORS MISSING`: upstream moved
+  the plan-completion subagent prompt into a fenced block that the anchor scan masks. Not
+  caused by this release; fix tracked in `docs/superpowers/plans/2026-09-11-modernisering.md`.
+
+### Deferred (own PR)
+- adapt as a deterministic merge script and setup-routing folded into adapt — touches
+  lint E8/E13 and six test files; the audit ranks it as Fase 4.
+
 ## [2.53.3] - 2026-09-09
 
 ### Fixed

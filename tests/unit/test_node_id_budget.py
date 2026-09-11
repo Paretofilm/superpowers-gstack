@@ -28,7 +28,7 @@ MAX_NODE_ID = 4096
 
 def test_no_test_id_can_blow_up_a_subprocess_environment():
     p = subprocess.run(
-        [sys.executable, "-m", "pytest", "tests/unit", "scripts/cost-ledger",
+        [sys.executable, "-m", "pytest", "tests/unit",
          "-q", "--collect-only", "-p", "no:cacheprovider"],
         cwd=REPO, capture_output=True, text=True,
     )

@@ -528,3 +528,20 @@ def test_one_click_is_one_action_boundary_is_stated(tmp_path, repo):
     with_remote(tmp_path, repo)
     (repo / "loose.txt").write_text("x")
     assert "anything further is a new question" in run_hook(repo)
+
+
+def test_menu_briefs_the_agent_on_how_to_turn_it_into_choices(tmp_path, repo):
+    """3.0.0 moved the agent brief out of the emitted CLAUDE.md block and into the
+    report itself, so the rules travel with the menu they govern: option 1 never
+    destroys, a click authorizes only what it names, and a non-interactive session
+    takes no action at all (a recovery branch would switch a shared worktree and could
+    commit untracked secrets)."""
+    with_remote(tmp_path, repo)
+    (repo / "loose.txt").write_text("x")
+    menu = run_hook(repo).split(MENU)[1]
+    assert "Addressed to the agent" in menu
+    assert "AskUserQuestion" in menu
+    assert "option 1 never" in menu and "destroys anything" in menu
+    assert "a click authorizes only what it names" in menu
+    assert "in a non-interactive session take no action" in menu
+    assert "say what you left unresolved" in menu

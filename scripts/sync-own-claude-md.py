@@ -30,7 +30,6 @@ BLOCKS = REPO / "skills" / "setup-routing" / "blocks"
 CLAUDE_MD = REPO / "CLAUDE.md"
 
 UNIVERSAL = [
-    "autonomy.md",
     "git-hygiene.md",
     "multi-lens-review.md",
     "code-reuse.md",
@@ -42,7 +41,7 @@ def emitted_heading(raw: str) -> str:
     """The block's first line as a GENERATOR writes it into a project's CLAUDE.md.
 
     /adapt and setup-routing append a second HTML comment carrying the block's
-    line count — `<!-- gstack-git-hygiene-v9 --><!-- emitted=162 -->` — beside the
+    line count — `<!-- gstack-git-hygiene-v10 --><!-- emitted=101 -->` — beside the
     marker, never inside it, so every reader that knows only the bare marker keeps
     matching. Doing the same here is what keeps this region's claim true: what
     this repo follows is what /adapt emits elsewhere, provenance included.

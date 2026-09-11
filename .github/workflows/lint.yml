@@ -6,7 +6,7 @@ name: Lint + unit tests
 # no API calls). Added by the 2026-07-03 system review: 5 700 lines of
 # instruction surface previously had zero validation.
 #
-# Also runs the pytest suites (tests/unit + scripts/cost-ledger) — stdlib-only,
+# Also runs the pytest suite (tests/unit) — stdlib-only,
 # no API calls. Added by the 2026-07-05 audit: 153 tests previously ran only
 # when someone remembered to run them locally.
 
@@ -31,5 +31,7 @@ jobs:
           python-version: "3.12"
       - name: Install pytest
         run: python3 -m pip install --quiet pytest
-      - name: Unit tests (tests/unit + cost-ledger)
-        run: pytest tests/unit scripts/cost-ledger -q
+      - name: Unit tests (tests/unit)
+        run: pytest tests/unit -q
+      - name: Skill contract tests (shell)
+        run: for t in skills/*/tests/required-sections.test.sh; do bash "$t"; done

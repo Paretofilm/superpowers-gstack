@@ -1,4 +1,4 @@
-## Companion skills (discovery — not routing) <!-- gstack-companion-skills-v2 -->
+## Companion skills (discovery — not routing) <!-- gstack-companion-skills-v3 -->
 
 The two-framework story (Superpowers + GStack) is what this plugin routes. But other ecosystem-specific expert skills exist that complement the workflow. They are NOT auto-invoked; the plugin doesn't depend on them; they are listed here so any agent reading this CLAUDE.md knows they exist and how to install them when relevant.
 
@@ -17,7 +17,7 @@ The Antoine skills operate at **code review time**, complementing the pre-implem
 
 | Stage | This plugin | Companion (Antoine) |
 |---|---|---|
-| Spec / plan validation (pre-code) | `macos-native-review`, `ios-native-review` | — |
+| Spec / plan validation (pre-code) | `/superpowers-gstack:apple-native-review` | — |
 | Code-level review (post-code) | — | `swiftui-expert-skill`, `swift-concurrency-expert-skill`, `core-data-expert-skill`, `swift-testing-expert-skill` |
 
 Install separately — they live in their own marketplace, not bundled with superpowers-gstack.

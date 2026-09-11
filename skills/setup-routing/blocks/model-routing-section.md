@@ -4,7 +4,7 @@ When dispatching a subagent (Claude Code `Agent` tool, `model:` parameter), pick
 
 **This project's domain sensitivity: {{DOMAIN_SENSITIVITY}}** (how silently a subtle bug compounds).
 
-**Tiers:** `fable` = claude-fable-5 (novel + long-horizon + not chunkable; ~2× Opus, safety-fallbacks to Opus for sec/bio/chem — never pay the premium there); `opus` = claude-opus-5 (heavy reasoning, high-blast-radius coding); `sonnet` = claude-sonnet-5 (structured engineering, contained-blast-radius coding with tests as the net; near-Opus at Sonnet cost); `haiku` = claude-haiku-4-5 (mechanical/deterministic).
+**Tiers** (names, not model ids — the plugin's `model-routing.md` maps them to current ids): `fable` = novel + long-horizon + not chunkable work where the approach must be invented; `opus` = heavy reasoning and high-blast-radius coding; `sonnet` = structured engineering and contained-blast-radius coding with tests as the net; `haiku` = mechanical / deterministic.
 
 **Modifier by sensitivity:**
 - **very high / high** — floor coding at `opus` + mandatory `/superpowers-gstack:pitfall-verification`; use `fable` only when the technique is *also* genuinely novel and not cleanly chunkable (scope it open-on-approach, bounded-on-deliverable).

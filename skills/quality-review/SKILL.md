@@ -122,15 +122,11 @@ Risk surfaces: any sheet present/dismiss, any list reorder, any state change tha
 
 ### 12. AI-specific pitfalls
 
-If the artifact involves LLM calls:
+If the artifact involves LLM calls, load the `claude-api` skill for current API facts before judging, then check:
 
-- Is structured output (JSON) implemented via prompt-engineered "respond with JSON" (~5–15% failure rate) or via native tool_use / structured output API (~0%)? In 2026, the latter is table stakes.
-- Is fence-stripping (` ```json ... ``` `) and schema validation explicit?
-- Is there a cap on output size (token limit, character limit)?
-- Is there a fallback when the model returns malformed output?
-- Is prompt caching used where the prompt has stable prefixes (>1024 tokens)?
-
-If unsure of current best practice — use WebSearch on Anthropic docs.
+- Structured output via the native structured-output / tool-use API, not a prompt-engineered "respond with JSON"?
+- Fence-stripping and schema validation explicit, with a fallback when the model returns malformed output?
+- A cap on output size, and prompt caching where the prompt has a stable prefix?
 
 Risk surfaces: any AI call in the spec.
 

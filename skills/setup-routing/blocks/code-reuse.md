@@ -1,4 +1,4 @@
-## Code reuse discipline (before writing) <!-- gstack-code-reuse-v2 -->
+## Code reuse discipline (before writing) <!-- gstack-code-reuse-v3 -->
 
 Before introducing a new reusable concept — a component, helper, model, type-alias, view-modifier, extension, hook, utility — search the codebase for an existing implementation first. This catches context-bounded duplication: a subagent writing a new `EntityCard` when one exists one directory over. It is NOT a DRY-purity rule — three similar lines are fine and premature abstraction is a real cost; the rule fires only when introducing something that could plausibly already exist.
 
@@ -18,7 +18,7 @@ NOT for: lines inside an existing function, closures specific to one call-site, 
 3. **Read** the plausible matches — verify it's the same concept, don't skim
 4. **Decide**: REUSE / EXTEND / WRITE NEW — and report which
 
-Narrate one line in chat before scaffolding — "Checking for an existing `<concept>` … Found `EntityCard` at `Views/EntityCard.swift:14` — extending it" or "No matches — writing new". This is **narration, not a stop**: continue immediately; it adds no new category to the Autonomy section's stop rules.
+Narrate one line in chat before scaffolding — "Checking for an existing `<concept>` … Found `EntityCard` at `Views/EntityCard.swift:14` — extending it" or "No matches — writing new". This is **narration, not a stop**: continue immediately.
 
 ### When dispatching a code-writing subagent
 

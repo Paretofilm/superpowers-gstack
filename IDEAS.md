@@ -37,7 +37,7 @@ When a skill ships, its entry moves to the "Shipped" section below with the comm
 - `macos-native-review` = "is this Apple-native on Mac?"
 - `ios-native-review` = "is this iOS-native?" (touch-first, navigation paradigm, modal detents)
 
-**Status.** ✅ Shipped in v2.4.0. Mirror of macos-native-review structure with 13 iOS-specific categories (vocabulary, controls/touch targets, navigation, modal presentation, gestures, system surfaces, keyboard, haptics, semantic colors, animation, privileged ops, accessibility, lifecycle). Closes backlog S2 from v1.1-backlog. See `skills/ios-native-review/SKILL.md`.
+**Status.** ✅ Shipped in v2.4.0. Mirror of macos-native-review structure with 13 iOS-specific categories (vocabulary, controls/touch targets, navigation, modal presentation, gestures, system surfaces, keyboard, haptics, semantic colors, animation, privileged ops, accessibility, lifecycle). Closes backlog S2 from v1.1-backlog. Merged into `skills/apple-native-review/` in 3.0.0; was `skills/ios-native-review/SKILL.md`.
 
 ---
 
@@ -57,9 +57,9 @@ When a skill ships, its entry moves to the "Shipped" section below with the comm
 - **Accessibility** — Narrator support, high-contrast theme, focus visuals
 - **Window management** — snap layouts, multi-window, restore
 
-**Method.** WebFetch against `learn.microsoft.com/en-us/windows/apps/design/...` (Fluent Design and WinUI 3 docs). Same severity tiers and citation discipline as `macos-native-review`. Phase 0 detects Windows signals (`.csproj` with `TargetFramework` net8.0-windows, `Microsoft.UI.Xaml`, `WinUI`, etc.).
+**Method.** WebFetch against `learn.microsoft.com/en-us/windows/apps/design/...` (Fluent Design and WinUI 3 docs). Same severity tiers and citation discipline as `apple-native-review`. Phase 0 detects Windows signals (`.csproj` with `TargetFramework` net8.0-windows, `Microsoft.UI.Xaml`, `WinUI`, etc.).
 
-**Differentiation.** Same shape as `macos-native-review` but Windows-platform; uses Microsoft docs as the source of truth instead of Apple HIG.
+**Differentiation.** Same shape as `apple-native-review` but Windows-platform; uses Microsoft docs as the source of truth instead of Apple HIG.
 
 **Status.** Deferred — no observed need. Likely longer wait than `ios-native-review` given current project portfolio's Apple lean.
 
@@ -81,9 +81,9 @@ When a skill ships, its entry moves to the "Shipped" section below with the comm
 - **Edge-to-edge** — gesture insets, system bars handling
 - **App bar / scrolling behavior** — collapsing toolbars, tonal elevation on scroll
 
-**Method.** WebFetch against `m3.material.io/...` (Material Design 3 docs). Same severity tiers and citation discipline as `macos-native-review`. Phase 0 detects Android signals (`build.gradle` with Android plugin, `androidx.compose.*` imports, `.kt` Android-tagged files).
+**Method.** WebFetch against `m3.material.io/...` (Material Design 3 docs). Same severity tiers and citation discipline as `apple-native-review`. Phase 0 detects Android signals (`build.gradle` with Android plugin, `androidx.compose.*` imports, `.kt` Android-tagged files).
 
-**Differentiation.** Same shape as `macos-native-review` but Android-platform; uses Material Design 3 as the source of truth.
+**Differentiation.** Same shape as `apple-native-review` but Android-platform; uses Material Design 3 as the source of truth.
 
 **Status.** Deferred — no observed need.
 
@@ -108,7 +108,7 @@ Out: macOS, watchOS, AppKit.
 
 **Differentiation.** Different heuristic targets (iOS top-flows differ from macOS), different runner-script destination, different identifier examples. Not a wrapper around macos-e2e-scaffold — distinct heuristic with iOS-specific TIER mappings.
 
-**Status.** Shipped 2026-06-25 (v2.19.0). See `skills/ios-e2e-scaffold/SKILL.md`. Phase 0 hardened beyond the original proposal: `WindowGroup` is cross-platform, so iOS detection requires an iOS-discriminating signal (`SDKROOT = iphoneos` / `.iOS(` / `platform: iOS`), not `WindowGroup` alone. Multiplatform targets pass with a note. Runner picks `iPhone 15` else falls back to first available iOS Simulator.
+**Status.** Shipped 2026-06-25 (v2.19.0). Merged into `skills/e2e-scaffold/` in 3.0.0. Phase 0 hardened beyond the original proposal: `WindowGroup` is cross-platform, so iOS detection requires an iOS-discriminating signal (`SDKROOT = iphoneos` / `.iOS(` / `platform: iOS`), not `WindowGroup` alone. Multiplatform targets pass with a note. Runner picks `iPhone 15` else falls back to first available iOS Simulator.
 
 ---
 
@@ -126,7 +126,7 @@ Out: macOS, watchOS, AppKit.
 
 ## `swiftui-snapshot-scaffold` (proposed 2026-04-29, deferred)
 
-**Gap.** Snapshot-test scaffolding via `swift-snapshot-testing` (Pointfree). Catches visual regressions XCUITest misses — wrong color, wrong margin, cut-off text, dark-mode rendering bugs. Complementary to `macos-e2e-scaffold` and `ios-e2e-scaffold`, not a replacement.
+**Gap.** Snapshot-test scaffolding via `swift-snapshot-testing` (Pointfree). Catches visual regressions XCUITest misses — wrong color, wrong margin, cut-off text, dark-mode rendering bugs. Complementary to `e2e-scaffold` (iOS and macOS), not a replacement.
 
 **Scope.** Cross-platform (macOS + iOS). Adds `swift-snapshot-testing` Package.swift dependency. Generates baseline snapshots for top 5 views (heuristic same as e2e-scaffold but ranked by render-complexity rather than interaction-density). First run produces baselines; subsequent runs verify diffs.
 
@@ -146,7 +146,7 @@ Out: macOS, watchOS, AppKit.
 
 **Method.** Grep for `NSWindow`, `NSViewController`, `NSButton(`, `NSTextField(`, `NSTableView`. Walk controller hierarchy from `NSStoryboard` references. Different identifier convention applied via Swift code rather than modifier-chain.
 
-**Differentiation.** AppKit-only. Won't work for SwiftUI projects (use `macos-e2e-scaffold`). Useful for legacy apps that haven't migrated to SwiftUI, or hybrid SwiftUI-on-AppKit projects where critical surfaces are still AppKit.
+**Differentiation.** AppKit-only. Won't work for SwiftUI projects (use `e2e-scaffold`). Useful for legacy apps that haven't migrated to SwiftUI, or hybrid SwiftUI-on-AppKit projects where critical surfaces are still AppKit.
 
 **Status.** Deferred until observed need (most modern macOS apps are SwiftUI-first).
 
@@ -164,7 +164,7 @@ Out: macOS, watchOS, AppKit.
 
 **Trade-off å avveie.** `live-swiftui` driver et rendret `#Preview` (in-/sub-prosess NSHostingView), ikke nødvendigvis hele den launchede appen — så den passer **komponent-/view-nivå** macOS-utforsking. cliclick driver et hvilket som helst ekte app-vindu (helhetlig, men skjørt). De kan sameksistere som to macOS-executorer for ulike behov; poenget er at cliclick-investeringen ikke bør gjøres *uten* å vurdere `live-swiftui`-stien først.
 
-**Status.** Open — beslutning ønskes **før** computer-use Fase 4 (cliclick) bygges, og **før** `live-swiftui` v0.5 bygger sine interaksjons-tools (så kontrakten koordineres én gang, ikke to). Ikke blokkerende for Fase 1–3 (iOS/iPadOS via idb).
+**Status.** Lukket 2026-09-11 (3.0.0): computer-use-sløyfen og `ios-visual-explore` ble fjernet — sesjonsmodellen er multimodal og XcodeBuildMCP gir skjermbilder og UI-tre direkte, så Fase 4 (cliclick) bygges ikke. `live-swiftui` sine interaksjons-tools står fritt.
 
 ---
 
@@ -207,6 +207,6 @@ Out: macOS, watchOS, AppKit.
 
 ## Shipped
 
-- `macos-native-review` — shipped in v1.9.0 (2026-04-28). See `skills/macos-native-review/SKILL.md`.
-- `macos-e2e-scaffold` — shipped in v1.10.0 (2026-04-29). See `skills/macos-e2e-scaffold/SKILL.md`.
-- `ios-native-review` — shipped in v2.4.0 (2026-05-18). Mirror of macos-native-review with 13 iOS-specific categories. See `skills/ios-native-review/SKILL.md`. (Body entry above retained for proposal-vs-shipped record.)
+- `macos-native-review` — shipped in v1.9.0 (2026-04-28); merged into `skills/apple-native-review/` in 3.0.0.
+- `macos-e2e-scaffold` — shipped in v1.10.0 (2026-04-29); merged into `skills/e2e-scaffold/` in 3.0.0.
+- `ios-native-review` — shipped in v2.4.0 (2026-05-18). Mirror of macos-native-review with 13 iOS-specific categories. Merged into `skills/apple-native-review/` in 3.0.0; was `skills/ios-native-review/SKILL.md`. (Body entry above retained for proposal-vs-shipped record.)

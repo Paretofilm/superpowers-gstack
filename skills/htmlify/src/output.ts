@@ -95,17 +95,12 @@ export function writeCompanion(
   return { outPath, written: true, reason: "wrote" };
 }
 
-// Open the HTML companion in Safari as a distraction-free viewer.
-// The user does not normally use Safari, so Safari is co-opted as a dedicated
-// reader: all existing Safari windows are closed before the new URL is loaded,
-// ensuring the user's default-browser tabs are untouched.
+// Open the HTML companion in the user's default browser. Earlier versions took
+// over Safari (closed every window, then opened the file); that was replaced in
+// 3.0.0 — the Artifact tool is the preferred preview surface, and a local render
+// should never close windows it did not open.
 //
-// D11: URL-encode paths via pathToFileURL before shelling out. The resulting
-// file URL never contains AppleScript-significant characters (`"` and `\` get
-// percent-encoded), so direct interpolation into the AppleScript literal is
-// safe.
-//
-// macOS-only by design in V1. On other platforms, just print the path.
+// macOS-only by design. On other platforms, just print the path.
 export function openInBrowser(filePath: string): void {
   if (process.platform !== "darwin") {
     process.stdout.write(
@@ -119,37 +114,10 @@ export function openInBrowser(filePath: string): void {
   } catch (err: any) {
     die(EXIT.IO, `Cannot convert path to URL: ${filePath} — ${err?.message ?? err}`);
   }
-  // Order matters: if Safari was not running, `activate` launches it and
-  // macOS's "reopen tabs from last session" may restore previous tabs/windows
-  // asynchronously. We activate first, wait briefly for restoration to settle,
-  // then close everything, then open our URL in a fresh window. The
-  // `with timeout` block keeps a slow restore from hanging the CLI.
   try {
-    execFileSync(
-      "/usr/bin/osascript",
-      [
-        "-e", `with timeout of 5 seconds`,
-        "-e", `tell application "Safari" to activate`,
-        "-e", `delay 0.7`,
-        "-e", `tell application "Safari"`,
-        "-e", `close every window`,
-        "-e", `open location "${url}"`,
-        "-e", `end tell`,
-        "-e", `end timeout`,
-      ],
-      { stdio: ["ignore", "ignore", "pipe"] }
-    );
+    execFileSync("/usr/bin/open", [url], { stdio: "ignore" });
   } catch (err: any) {
-    const stderrOut = err?.stderr?.toString?.() ?? "";
-    process.stderr.write(
-      `Warning: osascript (Safari) failed for ${url}: ${err?.message ?? err}\n` +
-        (stderrOut ? `osascript stderr: ${stderrOut}\n` : "")
-    );
-    // Fallback to default browser so the user still gets the HTML somewhere.
-    try {
-      execFileSync("/usr/bin/open", [url], { stdio: "ignore" });
-    } catch {
-      // Already warned.
-    }
+    process.stderr.write(`Warning: could not open ${url}: ${err?.message ?? err}\n`);
+    process.stdout.write(`HTML at ${filePath}\n`);
   }
 }
