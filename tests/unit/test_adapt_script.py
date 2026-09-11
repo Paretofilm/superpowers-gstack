@@ -260,7 +260,9 @@ def test_rescue_moves_the_at_risk_lines_into_an_unmarked_section_then_upgrades(t
         assert f"SENTINEL-LINE-00{n}" in after
     assert "### Provisioning and signing, the hard way" in after, "the section's own headings travel with their lines"
     body = after.split("\n## ", 1)[0]
-    assert "MUST be performed by the agent" not in body, "block prose does not travel"
+    # over-inclusive by design: a line the block does not carry VERBATIM travels,
+    # even when it reads like reworded plugin prose — the user trims, nothing is lost
+    assert "Xcode-related operations MUST be performed by the agent — never delegated to the user." in body
     removed = p.stdout[p.stdout.index(REMOVED):p.stdout.index(DEFERRED)] if DEFERRED in p.stdout else p.stdout[p.stdout.index(REMOVED):]
     assert "moved to" in removed and "Native Apple development tools" in removed
     # git-hygiene was not rescued, so it is still deferred
@@ -602,3 +604,210 @@ def test_heading_match_is_case_insensitive_for_attribution(tmp_path):
     p = run(proj, *WEB_SETS)
     assert "cannot attribute" in p.stdout
     assert "## Git Hygiene\n\nours\n" in (proj / "CLAUDE.md").read_text()
+
+
+# --- Codex adversarial + structured review (3.1.0) ---------------------------------
+
+def test_table_rows_are_deduplicated_only_when_a_rename_collided(tmp_path):
+    """An ordinary table whose first cells start with `/` is not a skill roster."""
+    api = "# P\n\n## API\n\n| Route | Method |\n|---|---|\n| `/users` | GET |\n| `/users` | DELETE |\n"
+    proj = project(tmp_path, claude_md=api)
+    run(proj, *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert "| `/users` | GET |" in text and "| `/users` | DELETE |" in text
+
+
+def test_a_contradicting_rule_is_not_mistaken_for_plugin_prose(tmp_path):
+    """Word overlap is not authorship: prefixing a shipped sentence with `Never`
+    makes a project rule, and it must be at risk, listed, and rescued."""
+    raw = block("git-hygiene.md")
+    head, _, body = raw.rstrip("\n").partition("\n")
+    first = next(l for l in body.splitlines() if l.startswith("Commit at meaningful"))
+    sec = re.sub(r"-v\d+ -->", "-v1 -->", head) + "\n" + body.replace(first, "Never " + first[0].lower() + first[1:]) + "\n"
+    proj = project(tmp_path, claude_md="# P\n\n" + sec)
+    p = run(proj, "--rescue", "gstack-git-hygiene", *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert "Never commit at meaningful milestones" in text, "the contradicting rule must survive (rescued)"
+    assert "Never commit at meaningful milestones" in p.stdout, "and be listed verbatim in the report"
+
+
+def test_the_removed_report_lists_the_lines_not_only_a_count(tmp_path):
+    legacy = "## Git hygiene & commit cadence <!-- gstack-git-hygiene-v1 -->\n\n### Hygiene rules (NEVER violate)\n\nOUR-RULE-42: tag every release.\n"
+    proj = project(tmp_path, claude_md="# P\n\n" + legacy)
+    p = run(proj, *WEB_SETS)
+    removed = p.stdout[p.stdout.index(REMOVED):p.stdout.index("**Snapshot")]
+    assert "OUR-RULE-42" in removed
+    assert any("OUR-RULE-42" in l for r in last_json(p)["removed"] for l in r["lines"])
+
+
+def test_rescue_works_even_when_the_gate_did_not_fire(tmp_path):
+    legacy = "## Git hygiene & commit cadence <!-- gstack-git-hygiene-v1 -->\n\nOUR-RULE-42: tag every release.\n"
+    proj = project(tmp_path, claude_md="# P\n\n" + legacy)
+    run(proj, "--rescue", "gstack-git-hygiene", *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert marker("git-hygiene.md") in text and "OUR-RULE-42" in text
+    assert "notes rescued from" in text
+
+
+def test_model_routing_ownership_needs_a_real_table_or_the_emitted_sentinel(tmp_path):
+    own = "## Model Routing\n\nNever use Pi/MLX here: PRIVATE_POLICY applies.\n"
+    proj = project(tmp_path, claude_md="# P\n\n" + own)
+    run(proj, *WEB_SETS)
+    assert own in (proj / "CLAUDE.md").read_text()
+    # the plugin's own emitted block is recognised without a table: a changed
+    # sensitivity on a later run replaces it
+    proj2 = project(tmp_path / "b")
+    run(proj2, *WEB_SETS)
+    run(proj2, "--set", "DOMAIN_SENSITIVITY=high")
+    text = (proj2 / "CLAUDE.md").read_text()
+    assert "domain sensitivity: high" in text and "domain sensitivity: low" not in text
+    assert len([h for h in headings(text) if "Model Routing" in h]) == 1
+
+
+def test_an_implausible_autonomy_emitted_count_is_ignored(tmp_path):
+    sec = _autonomy(100, "gstack-autonomy-v2 --><!-- emitted=99999")
+    proj = project(tmp_path, claude_md="# P\n\n" + sec)
+    p = run(proj, *WEB_SETS)
+    assert "## Autonomy and user interruption" in (proj / "CLAUDE.md").read_text()
+    assert "Autonomy" in p.stdout[p.stdout.index(DEFERRED):]
+
+
+def test_a_prose_line_mentioning_a_retired_skill_is_kept_and_reported(tmp_path):
+    prose = "# P\n\n## Ops\n\nNever run /ios-visual-explore in prod; MUST_GET_CHANGE_APPROVAL for every deploy.\n\n- /ios-visual-explore for exploring\n"
+    proj = project(tmp_path, claude_md=prose)
+    p = run(proj, *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert "MUST_GET_CHANGE_APPROVAL" in text
+    assert "- /ios-visual-explore for exploring" not in text, "a list item that IS the reference goes"
+    assert "retired skill" in p.stdout and "by hand" in p.stdout
+
+
+def test_indented_and_setext_headings_end_a_section(tmp_path):
+    legacy = "## Git hygiene & commit cadence <!-- gstack-git-hygiene-v1 -->\n\nold\n\n  ## App deployment\n\nDEPLOY-RULE\n\nProject rules\n-------------\n\nSETEXT-RULE\n"
+    proj = project(tmp_path, claude_md="# P\n\n" + legacy)
+    run(proj, *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert "DEPLOY-RULE" in text and "SETEXT-RULE" in text and "old\n" not in text
+
+
+def test_headings_inside_html_comments_are_not_boundaries(tmp_path):
+    user = "## Ours\n\n<!--\n## not a heading\n-->\n\nstill ours\n"
+    proj = project(tmp_path, claude_md="# P\n\n" + user)
+    run(proj, *WEB_SETS)
+    assert user in (proj / "CLAUDE.md").read_text()
+
+
+def test_mkdirs_failure_refuses_before_any_write(tmp_path):
+    proj = project(tmp_path, claude_md="# P\n\nkeep\n")
+    (proj / "docs").write_text("a file where a directory belongs")
+    p = run(proj, "--mkdirs", *WEB_SETS, expect=2)
+    assert (proj / "CLAUDE.md").read_text() == "# P\n\nkeep\n"
+    assert not (proj / ".gstack").exists()
+    assert "docs" in p.stderr
+
+
+def test_set_e2e_executor_is_validated_and_the_pin_wins(tmp_path):
+    proj = project(tmp_path, track="macos")
+    p = run(proj, "--set", "E2E_EXECUTOR=potato", *NATIVE_SETS, expect=2)
+    assert "E2E_EXECUTOR" in p.stderr
+    (proj / ".gstack" / "e2e-executor").write_text("vm\n")
+    p = run(proj, "--set", "E2E_EXECUTOR=host", *NATIVE_SETS, expect=2)
+    assert "pin" in p.stderr.lower()
+
+
+def test_a_changed_pin_refreshes_a_current_native_block(tmp_path):
+    proj = project(tmp_path, track="macos")
+    run(proj, *NATIVE_SETS)
+    assert "run on: **host**" in (proj / "CLAUDE.md").read_text()
+    (proj / ".gstack" / "e2e-executor").write_text("vm\n")
+    p = run(proj, *NATIVE_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert "run on: **vm**" in text and "run on: **host**" not in text
+    assert "placeholder" in p.stdout.lower()
+
+
+def test_an_unclosed_fence_is_refused(tmp_path):
+    proj = project(tmp_path, claude_md="# P\n\n```bash\necho never closed\n")
+    p = run(proj, *WEB_SETS, expect=2)
+    assert "fence" in p.stderr and (proj / "CLAUDE.md").read_text() == "# P\n\n```bash\necho never closed\n"
+
+
+def test_inserted_h2_sections_land_after_the_enclosing_subtree(tmp_path):
+    md = ("# P\n\n## Skill routing\n\n### Git hygiene & commit cadence\n\nours only\n\n### Routing Logic\n\ntree\n\n## Tail\n\nt\n")
+    proj = project(tmp_path, claude_md=md)
+    run(proj, *WEB_SETS)
+    hs = headings((proj / "CLAUDE.md").read_text())
+    plugin = next(h for h in hs if h.startswith("## Git hygiene"))
+    assert hs.index("### Routing Logic") < hs.index(plugin) < hs.index("## Tail")
+    grown = (FIXTURE.read_text())
+    proj2 = project(tmp_path / "b", claude_md=grown, track="ios")
+    run(proj2, "--rescue", "gstack-session-continuity", *NATIVE_SETS)   # H3 root under Skill routing
+    hs = headings((proj2 / "CLAUDE.md").read_text())
+    rescued = [h for h in hs if "rescued" in h and "Session Continuity" in h]
+    assert rescued, hs
+    sc = next(i for i, h in enumerate(hs) if h.startswith("### Session Continuity"))
+    between = hs[sc + 1:hs.index(rescued[0])]
+    assert all(h.startswith("## ") for h in between), (
+        f"the rescue H2 must sit after the Skill routing subtree, not among its H3s: {between}")
+
+
+def test_rescue_keeps_fenced_block_bytes_intact(tmp_path):
+    fence = "```text\nalpha\n# exact literal line\nomega\n```"
+    sec = f"## Git hygiene & commit cadence <!-- gstack-git-hygiene-v1 -->\n\nintro\n\n{fence}\n"
+    proj = project(tmp_path, claude_md="# P\n\n" + sec)
+    run(proj, "--rescue", "gstack-git-hygiene", *WEB_SETS)
+    assert fence in (proj / "CLAUDE.md").read_text()
+
+
+def test_a_set_value_may_not_carry_a_placeholder(tmp_path):
+    proj = project(tmp_path, track="ios")
+    p = run(proj, "--set", "IOS_SIMULATOR={{UNKNOWN}}", "--set", "DEVELOPMENT_TEAM=X",
+            "--set", "DOMAIN_SENSITIVITY=low", expect=2)
+    assert "UNKNOWN" in p.stderr or "placeholder" in p.stderr.lower()
+
+
+def test_a_malformed_block_file_is_refused_not_a_traceback(tmp_path):
+    import shutil
+    blocks = tmp_path / "blocks"
+    shutil.copytree(BLOCKS, blocks)
+    (blocks / "git-hygiene.md").write_text("no heading here\n")
+    proj = project(tmp_path)
+    p = run(proj, "--blocks", str(blocks), *WEB_SETS, expect=2)
+    assert "git-hygiene.md" in p.stderr
+
+
+def test_routing_file_and_plugin_version_are_validated(tmp_path):
+    routing = tmp_path / "r.md"
+    routing.write_text("DRAFT\n")
+    proj = project(tmp_path)
+    p = run(proj, "--routing-file", str(routing), *WEB_SETS, expect=2)
+    assert "Skill routing" in p.stderr
+    p = subprocess.run([sys.executable, str(SCRIPT), "--project-dir", str(proj), "--plugin-version", "3.1.0-beta", *WEB_SETS],
+                       capture_output=True, text=True)
+    assert p.returncode == 2 and "version" in p.stderr
+
+
+def test_header_cleanup_only_touches_the_leading_comment_block(tmp_path):
+    md = "# P\n\n```html\n<!-- superpowers-gstack: 1.2.3 -->\n```\n"
+    proj = project(tmp_path, claude_md=md)
+    run(proj, *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert "```html\n<!-- superpowers-gstack: 1.2.3 -->\n```" in text
+    assert text.startswith("<!-- superpowers-gstack: 9.9.9 -->\n")
+
+
+def test_crlf_files_keep_their_line_endings(tmp_path):
+    proj = project(tmp_path)
+    (proj / "CLAUDE.md").write_bytes(b"# P\r\n\r\nkeep me\r\n")
+    run(proj, *WEB_SETS)
+    data = (proj / "CLAUDE.md").read_bytes()
+    assert b"# P\r\n\r\nkeep me\r\n" in data
+    assert b"\n" not in data.replace(b"\r\n", b""), "every line ends CRLF"
+
+
+def test_an_empty_development_team_emits_the_no_account_form(tmp_path):
+    proj = project(tmp_path, track="macos")
+    p = run(proj, "--set", "IOS_SIMULATOR=iPhone 17", "--set", "DEVELOPMENT_TEAM=", "--set", "DOMAIN_SENSITIVITY=low")
+    text = (proj / "CLAUDE.md").read_text()
+    assert "DEVELOPMENT_TEAM: {{" not in text and "DEVELOPMENT_TEAM: \n" not in text and "DEVELOPMENT_TEAM: `,\n" not in text
+    assert "no paid developer account" in text.lower() or "no paid developer account" in p.stdout.lower()

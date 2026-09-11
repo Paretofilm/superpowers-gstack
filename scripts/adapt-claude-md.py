@@ -11,17 +11,23 @@ touches the file, deterministically:
   2. header     the two HTML comment lines at the top, rewritten every run
   3. retired    a marker-carrying `Autonomy and user interruption` section is
                 removed within its size bound; a grown one is deferred
-  4. renames    retired skill names outside marker-managed sections and fences
+  4. renames    retired skill names outside marker-managed sections and fences;
+                a roster row or list item that IS a removed skill goes, a prose
+                line that mentions one is kept and reported
   5. routing    `--routing-file` is inserted only when `## Skill routing` is absent
   6. blocks     every block in BLOCKS: skip / replace / attribute-then-replace /
                 append, with the growth check (provenance, ratio, volume — any one
                 fires), sentinel attribution, H3 demotion, `<!-- emitted=N -->`
-  7. model      Model Routing: a stale table is replaced, a user's own is kept
-  8. verify     every removed line the new block does not carry is reported
+  7. model      Model Routing: an emitted or table-shaped section is replaced, a
+                user's own is kept
+  8. verify     every removed line the new block does not carry verbatim is
+                listed, in full, under "Removed (not plugin prose)"
 
 Exit 0: written (or --dry-run completed). Exit 2: refused — nothing written; the
-reason is on stderr (BLOCKED, UNRESOLVED PLACEHOLDER, UNREADABLE, INTERNAL). Never
-a traceback. The report ends with one JSON line the skill reads for its questions.
+reason is on stderr (BLOCKED, UNRESOLVED PLACEHOLDER, UNREADABLE, USAGE ERROR,
+INTERNAL). Never a traceback. Every check that can refuse runs BEFORE the first
+write, and the write itself is atomic. The report ends with one JSON line the
+skill reads for its questions.
 
 Why a script: the prose version of these rules was ~550 lines and lint E13 pinned
 twenty of its sentences because a reword could delete a guard. A model performing
@@ -32,9 +38,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -57,19 +65,30 @@ HEADER_LINE2 = (
     "project's name and none of them can collide. -->")
 HEADER_VERSION_RE = re.compile(r"^<!-- superpowers-gstack: \d+\.\d+\.\d+ -->[ \t]*$")
 HEADER_WARN_PREFIX = "<!-- Sections whose heading carries"
+VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 NATIVE = frozenset({"ios", "macos", "both"})
 TRACKS = NATIVE | {"web"}
 SENSITIVITIES = ("very high", "high", "medium", "low")
+EXECUTORS = ("host", "vm")
+NO_TEAM_TEXT = "<none — no paid developer account was found; stable signing requires a Team ID>"
 
 RATIO = 1.5          # section more than 1.5x the block's line count
 GROWTH_LINES = 20    # more than ~20 lines over `emitted=`, or ~20 lines the block lacks
 PLAUSIBLE_BAND = 20  # an `emitted=` more than this above the block is a miscount
+REWORD_OVERLAP = 0.85
+NEGATIONS = frozenset({"never", "not", "no", "don't", "dont", "avoid", "must", "always", "only", "except", "unless"})
 
 MARKER_RE = re.compile(r"<!-- (gstack-[a-z-]+)-v(\d+) -->")
 EMITTED_RE = re.compile(r"<!-- emitted=(\d+) -->")
-HEADING_RE = re.compile(r"^(#{1,6}) (.*)$")
+HEADING_RE = re.compile(r"^ {0,3}(#{1,6})[ \t]+(.*)$")
+SETEXT_H1_RE = re.compile(r"^ {0,3}=+[ \t]*$")
+SETEXT_H2_RE = re.compile(r"^ {0,3}-+[ \t]*$")
 PLACEHOLDER_RE = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
+
+
+class Refusal(Exception):
+    pass
 
 
 @dataclass(frozen=True)
@@ -99,10 +118,16 @@ BLOCKS = (
           ("swiftui-expert-skill", "discovery — not routing"), tracks=NATIVE),
 )
 MODEL_ROUTING_FILE = "model-routing-section.md"
-MODEL_ROUTING_TABLE_RE = re.compile(r"Pi/MLX|\|\s*(Model|Sensitivity|Base tier|Claude)\s*\|")
+# A Model Routing section is the plugin's when its body carries the emitted block's
+# own sentence, or a routing TABLE (header row with a model/tier column, then a
+# separator row). A bare mention of `Pi/MLX` in prose is the project's.
+MODEL_ROUTING_SENTINEL = "**This project's domain sensitivity:"
+MODEL_ROUTING_HEADER_RE = re.compile(r"^\s*\|.*\b(Model|Sensitivity|Base tier|Pi/MLX)\b.*\|\s*$")
+TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$")
 
 # The retired autonomy block: shipped 56 lines at v1 and 31 at v2. Removed only
-# within `emitted`+3, else the marker version's size +3; a grown one is deferred.
+# within `emitted`+3 (when that count is plausible), else the marker version's
+# size +3; a grown one is deferred.
 AUTONOMY_HEADING = "Autonomy and user interruption"
 AUTONOMY_MARKER = "gstack-autonomy"
 AUTONOMY_SIZE = {1: 56, 2: 31}
@@ -126,16 +151,25 @@ def _skill_ref(names) -> re.Pattern:
 # --- document primitives ---------------------------------------------------------
 
 def fence_mask(lines: list[str]) -> list[bool]:
-    """True for every line inside a fenced code block, fence lines included. A
-    `# comment` inside a bash block is not a heading; the prose never said so."""
+    """True for every line inside a fenced code block or a multi-line HTML
+    comment, delimiters included. A `# comment` inside a bash block is not a
+    heading, and neither is a heading commented out; the prose never said so."""
     mask = [False] * len(lines)
-    open_char, open_len = None, 0
+    open_char, open_len, in_comment = None, 0, False
     for i, line in enumerate(lines):
+        if in_comment:
+            mask[i] = True
+            if "-->" in line:
+                in_comment = False
+            continue
         m = re.match(r"^[ \t]{0,3}(`{3,}|~{3,})(.*)$", line)
         if open_char is None:
             if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
                 open_char, open_len = m.group(1)[0], len(m.group(1))
                 mask[i] = True
+            elif "<!--" in line and "-->" not in line[line.index("<!--") + 4:]:
+                mask[i] = True
+                in_comment = True
         else:
             mask[i] = True
             if m and m.group(1)[0] == open_char and len(m.group(1)) >= open_len and not m.group(2).strip():
@@ -143,16 +177,32 @@ def fence_mask(lines: list[str]) -> list[bool]:
     return mask
 
 
+def unclosed_fence(lines: list[str]) -> int | None:
+    """1-based line of a fence that never closes, or None. Appending below an
+    open fence would put every block inside it, invisible to the next run."""
+    open_at, open_char, open_len = None, None, 0
+    for i, line in enumerate(lines):
+        m = re.match(r"^[ \t]{0,3}(`{3,}|~{3,})(.*)$", line)
+        if open_char is None:
+            if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
+                open_at, open_char, open_len = i + 1, m.group(1)[0], len(m.group(1))
+        elif m and m.group(1)[0] == open_char and len(m.group(1)) >= open_len and not m.group(2).strip():
+            open_char = None
+    return open_at if open_char is not None else None
+
+
 def heading_text(line: str) -> str:
     """The heading's words: level stripped, HTML comments and ATX closers removed."""
     m = HEADING_RE.match(line)
     t = m.group(2) if m else line
     t = re.sub(r"<!--.*?-->", "", t)
-    return re.sub(r"\s+#+\s*$", "", t).strip()
+    return re.sub(r"(^|\s+)#+\s*$", "", t).strip()
 
 
 def headings(lines: list[str]) -> list[tuple[int, int, str]]:
-    """(index, level, raw line) for every heading outside a fence."""
+    """(index, level, raw line) for every heading outside a fence or comment —
+    ATX with up to three leading spaces, and Setext (`====` / `----` under a
+    text line)."""
     mask = fence_mask(lines)
     out = []
     for i, line in enumerate(lines):
@@ -161,6 +211,14 @@ def headings(lines: list[str]) -> list[tuple[int, int, str]]:
         m = HEADING_RE.match(line)
         if m:
             out.append((i, len(m.group(1)), line))
+            continue
+        if (line.strip() and i + 1 < len(lines) and not mask[i + 1]
+                and not line.lstrip().startswith(("|", "-", "*", "+", ">", "<"))):
+            nxt = lines[i + 1]
+            if SETEXT_H1_RE.match(nxt):
+                out.append((i, 1, line))
+            elif SETEXT_H2_RE.match(nxt) and len(nxt.strip()) >= 3:
+                out.append((i, 2, line))
     return out
 
 
@@ -179,6 +237,21 @@ def content_end(lines: list[str], start: int, end: int) -> int:
     return end
 
 
+def enclosing_end(lines: list[str], idx: int, level: int) -> int:
+    """Where a NEW H2 may go when the section at `idx` is rooted deeper than H2:
+    after the enclosing H2 subtree, so an inserted H2 never reparents the H3
+    siblings that follow the section."""
+    if level <= 2:
+        return section_end(lines, idx, level)
+    parent = None
+    for i, lvl, _ in headings(lines):
+        if i < idx and lvl <= 2:
+            parent = (i, lvl)
+    if parent is None:
+        return section_end(lines, idx, level)
+    return section_end(lines, parent[0], parent[1])
+
+
 def norm(line: str) -> str:
     return " ".join(line.split())
 
@@ -187,19 +260,28 @@ def words(line: str) -> set[str]:
     return {w for w in re.findall(r"[\w'`./-]+", line.lower()) if len(w) > 2}
 
 
-def is_plugin_prose(line: str, block_norm: set[str], block_words: list[set[str]]) -> bool:
-    """A section line the block carries — verbatim, or reworded (four of five of
-    its words sit in one block line). Everything else is at risk. Short lines
-    match verbatim only; a five-word line has too few words to reword."""
-    n = norm(line)
-    if not n:
-        return True
-    if n in block_norm:
-        return True
-    w = words(n)
-    if len(w) < 5:
-        return False
-    return any(len(w & bw) / len(w) >= 0.8 for bw in block_words)
+class BlockText:
+    """A block's lines in the forms the checks need."""
+
+    def __init__(self, raw: str):
+        self.lines = raw.rstrip("\n").split("\n")
+        self.norm = {norm(l) for l in self.lines}
+        self.words = [(words(norm(l)), words(norm(l)) & NEGATIONS) for l in self.lines if norm(l)]
+        self.count = raw.count("\n")
+
+    def verbatim(self, line: str) -> bool:
+        return not norm(line) or norm(line) in self.norm
+
+    def reworded(self, line: str) -> bool:
+        """Four of five words in one block line, with the SAME negation words —
+        `Never commit at meaningful milestones` is not a reword of `Commit at
+        meaningful milestones`, it is the opposite rule. Used only to size the
+        Volume trigger; the report and the rescue never rely on it."""
+        w = words(norm(line))
+        if len(w) < 5:
+            return False
+        neg = w & NEGATIONS
+        return any(len(w & bw) / len(w) >= REWORD_OVERLAP and bneg == neg for bw, bneg in self.words)
 
 
 def demote(block_lines: list[str]) -> list[str]:
@@ -208,9 +290,7 @@ def demote(block_lines: list[str]) -> list[str]:
     mask = fence_mask(block_lines)
     out = []
     for i, line in enumerate(block_lines):
-        if not mask[i] and line.startswith("## "):
-            line = "#" + line
-        elif not mask[i] and line.startswith("### "):
+        if not mask[i] and (line.startswith("## ") or line.startswith("### ")):
             line = "#" + line
         out.append(line)
     return out
@@ -231,7 +311,7 @@ class Report:
     applied: bool = False
     changes: list = field(default_factory=list)
     preserved: list = field(default_factory=list)
-    removed: list = field(default_factory=list)      # {"section", "lines", "where"}
+    removed: list = field(default_factory=list)      # {"section", "lines": [...], "where"}
     deferred: list = field(default_factory=list)     # {"marker","heading","lines","block_lines","emitted","at_risk"}
     unattributed: list = field(default_factory=list) # {"heading", "reason"}
     notes: list = field(default_factory=list)
@@ -264,8 +344,7 @@ class Context:
 
 def _block_meta(raw: str) -> tuple[str, int, int]:
     """(marker name, version, emitted line count) of a block file."""
-    head = raw.split("\n", 1)[0]
-    m = MARKER_RE.search(head)
+    m = MARKER_RE.search(raw.split("\n", 1)[0])
     return m.group(1), int(m.group(2)), raw.count("\n")
 
 
@@ -296,6 +375,12 @@ def _splice(lines: list[str], start: int, end: int, new: list[str]) -> list[str]
     return lines[:start] + new + tail
 
 
+def _insert_after(lines: list[str], at: int, new: list[str]) -> list[str]:
+    while at > 0 and not lines[at - 1].strip():
+        at -= 1
+    return _splice(lines, at, at, [""] + new)
+
+
 def _append(lines: list[str], new: list[str]) -> list[str]:
     while lines and not lines[-1].strip():
         lines.pop()
@@ -303,11 +388,17 @@ def _append(lines: list[str], new: list[str]) -> list[str]:
 
 
 def apply_header(lines: list[str], ctx: Context, report: Report) -> list[str]:
-    head = lines[:6]
-    kept = [l for l in head if not HEADER_VERSION_RE.match(l) and not l.startswith(HEADER_WARN_PREFIX)]
-    new = [f"<!-- superpowers-gstack: {ctx.version} -->", HEADER_LINE2] + kept + lines[6:]
+    """The two comment lines at the very top. Only the LEADING comment block is
+    touched — a version comment quoted in a fenced example further down is the
+    project's."""
+    i = 0
+    old = None
+    while i < len(lines) and (HEADER_VERSION_RE.match(lines[i]) or lines[i].startswith(HEADER_WARN_PREFIX)):
+        if HEADER_VERSION_RE.match(lines[i]):
+            old = lines[i]
+        i += 1
+    new = [f"<!-- superpowers-gstack: {ctx.version} -->", HEADER_LINE2] + lines[i:]
     if new != lines:
-        old = next((l for l in head if HEADER_VERSION_RE.match(l)), None)
         report.changes.append(f"header: {old.strip('<!-> ') if old else 'none'} -> superpowers-gstack {ctx.version}")
     return new
 
@@ -328,14 +419,12 @@ def _find_section(lines: list[str], marker: str | None, heading_re: str):
     return (by_marker or by_text or [None])[0]
 
 
-def growth(lines: list[str], start: int, end: int, raw_block: str) -> dict:
+def growth(lines: list[str], start: int, end: int, blk: BlockText) -> dict:
     sec = lines[start:content_end(lines, start, end)]
     body = sec[1:]
-    block_lines = raw_block.rstrip("\n").split("\n")
-    block_norm = {norm(l) for l in block_lines}
-    block_words = [words(norm(l)) for l in block_lines if norm(l)]
-    at_risk = [l for l in body if not is_plugin_prose(l, block_norm, block_words)]
-    n_sec, n_block = len(sec), raw_block.count("\n")
+    at_risk = [l for l in body if not blk.verbatim(l)]
+    volume = [l for l in at_risk if not blk.reworded(l)]
+    n_sec, n_block = len(sec), blk.count
     m = EMITTED_RE.search(sec[0])
     emitted = int(m.group(1)) if m else None
     triggers = []
@@ -345,20 +434,19 @@ def growth(lines: list[str], start: int, end: int, raw_block: str) -> dict:
             triggers.append("provenance")
     if n_sec > RATIO * n_block:
         triggers.append("ratio")
-    if len(at_risk) > GROWTH_LINES:
+    if len(volume) > GROWTH_LINES:
         triggers.append("volume")
     return {"lines": n_sec, "block_lines": n_block, "emitted": emitted,
             "at_risk": at_risk, "triggers": triggers}
 
 
-def rescue_section(lines: list[str], start: int, end: int, raw_block: str, ctx: Context) -> list[str]:
-    """The old section's own lines — everything the block does not carry, with
-    the section's headings and whole fenced blocks that hold any such line — under
-    a new unmarked H2 the plugin will never manage."""
+def rescue_section(lines: list[str], start: int, end: int, blk: BlockText, ctx: Context) -> list[str]:
+    """The old section's own lines — everything the block does not carry
+    VERBATIM, with the section's headings and whole fenced blocks that hold any
+    such line, bytes intact — under a new unmarked H2 the plugin will never
+    manage. Over-inclusive on purpose: reworded plugin prose lands here too, and
+    the user trims; a project rule never disappears."""
     body = lines[start + 1:end]
-    block_lines = raw_block.rstrip("\n").split("\n")
-    block_norm = {norm(l) for l in block_lines}
-    block_words = [words(norm(l)) for l in block_lines if norm(l)]
     mask = fence_mask(body)
     keep = [False] * len(body)
     i = 0
@@ -367,23 +455,22 @@ def rescue_section(lines: list[str], start: int, end: int, raw_block: str, ctx: 
             j = i
             while j < len(body) and mask[j]:
                 j += 1
-            if any(not is_plugin_prose(body[k], block_norm, block_words) and body[k].strip()
-                   for k in range(i, j)):
+            if any(body[k].strip() and not blk.verbatim(body[k]) for k in range(i, j)):
                 for k in range(i, j):
                     keep[k] = True
             i = j
             continue
-        if HEADING_RE.match(body[i]) or (body[i].strip() and not is_plugin_prose(body[i], block_norm, block_words)):
+        if HEADING_RE.match(body[i]) or (body[i].strip() and not blk.verbatim(body[i])):
             keep[i] = True
         i += 1
     out = [f'## {ctx.project} — notes rescued from "{heading_text(lines[start])}"', ""]
     prev_blank = True
     for k, line in enumerate(body):
         if keep[k]:
-            if HEADING_RE.match(line) and not prev_blank:
+            if not mask[k] and HEADING_RE.match(line) and not prev_blank:
                 out.append("")
             out.append(line)
-            prev_blank = False
+            prev_blank = not line.strip()
         elif not prev_blank and not line.strip():
             out.append("")
             prev_blank = True
@@ -392,9 +479,26 @@ def rescue_section(lines: list[str], start: int, end: int, raw_block: str, ctx: 
     return out
 
 
+def _placeholder_refresh(sec: list[str], raw: str, ctx: Context, level: int) -> list[str] | None:
+    """A current-version section whose only differences from a fresh emission sit
+    on the block's placeholder lines has stale placeholder VALUES (the executor pin
+    changed, say). Return the fresh emission then; None means leave it alone."""
+    new = _emitted_block(raw, ctx, level)
+    if sec == new or len(sec) != len(new):
+        return None
+    template = raw.rstrip("\n").split("\n")
+    if level == 3:
+        template = demote(template)
+    for a, b, t in zip(sec, new, template):
+        if a != b and "{{" not in t:
+            return None
+    return new
+
+
 def apply_block(lines: list[str], blk: Block, ctx: Context, report: Report) -> list[str]:
     raw = ctx.blocks[blk.file]
     marker, cur_version, _ = _block_meta(raw)
+    bt = BlockText(raw)
     name = heading_text(raw.split("\n", 1)[0])
     found = _find_section(lines, marker, blk.heading)
     wanted = blk.tracks is None or ctx.track in blk.tracks
@@ -407,6 +511,11 @@ def apply_block(lines: list[str], blk: Block, ctx: Context, report: Report) -> l
     end = section_end(lines, start, level)
     head_name = heading_text(raw_head)
     if version == cur_version:
+        if "{{" in raw:
+            refreshed = _placeholder_refresh(lines[start:content_end(lines, start, end)], raw, ctx, level)
+            if refreshed is not None:
+                report.changes.append(f"{name}: placeholder values refreshed ({marker}-v{cur_version})")
+                return _splice(lines, start, content_end(lines, start, end), refreshed)
         report.preserved.append(f"{head_name}: already at {marker}-v{cur_version}")
         return lines
     if version is not None and version > cur_version:
@@ -431,9 +540,8 @@ def apply_block(lines: list[str], blk: Block, ctx: Context, report: Report) -> l
                 f"If it *is* an old plugin section, delete your copy and re-run `/adapt` and it will "
                 f"upgrade cleanly.")})
             report.changes.append(f"{name}: inserted below your unmarked `{head_name}` ({marker}-v{cur_version})")
-            block_lines = [""] + _emitted_block(raw, ctx, 2)
-            return _splice(lines, end, end, block_lines)
-    g = growth(lines, start, end, raw)
+            return _insert_after(lines, enclosing_end(lines, start, level), _emitted_block(raw, ctx, 2))
+    g = growth(lines, start, end, bt)
     if g["triggers"] and marker not in ctx.rescue:
         report.deferred.append({"marker": marker, "heading": head_name, "lines": g["lines"],
                                 "block_lines": g["block_lines"], "emitted": g["emitted"],
@@ -441,16 +549,17 @@ def apply_block(lines: list[str], blk: Block, ctx: Context, report: Report) -> l
                                 "at_risk": g["at_risk"]})
         return lines
     new = _emitted_block(raw, ctx, level)
-    if g["triggers"]:
-        rescued = rescue_section(lines, start, end, raw, ctx)
-        report.removed.append({"section": head_name, "lines": len(g["at_risk"]),
-                               "where": f"moved to `{rescued[0]}`"})
-        new = new + [""] + rescued
-    elif g["at_risk"]:
-        report.removed.append({"section": head_name, "lines": len(g["at_risk"]),
-                               "where": "not in the new block — review them in the snapshot"})
     was = f"{marker}-v{version}" if version is not None else "no marker"
     report.changes.append(f"{name}: {was} -> {marker}-v{cur_version}" + (" (H3 root, demoted)" if level == 3 else ""))
+    if marker in ctx.rescue and g["at_risk"]:
+        rescued = rescue_section(lines, start, end, bt, ctx)
+        report.removed.append({"section": head_name, "lines": g["at_risk"],
+                               "where": f"moved to `{rescued[0]}` — review and trim the plugin prose that travelled with them"})
+        lines = _splice(lines, start, end, new)
+        return _insert_after(lines, enclosing_end(lines, start, level), rescued)
+    if g["at_risk"]:
+        report.removed.append({"section": head_name, "lines": g["at_risk"],
+                               "where": "not in the new block — old plugin prose or yours; the snapshot has every line"})
     return _splice(lines, start, end, new)
 
 
@@ -477,20 +586,23 @@ def apply_autonomy(lines: list[str], report: Report) -> list[str]:
             version = 1
         else:
             continue   # the user's own section — never touched
+        size = AUTONOMY_SIZE.get(version, AUTONOMY_SIZE[1])
         e = EMITTED_RE.search(raw_head)
-        bound = (int(e.group(1)) if e else AUTONOMY_SIZE.get(version, AUTONOMY_SIZE[1])) + AUTONOMY_TOLERANCE
+        emitted = int(e.group(1)) if e else None
+        # an `emitted=` is a number a past run wrote; one above what the block ever
+        # was is a miscount (or a forgery) and must not widen the bound
+        bound = (emitted if emitted is not None and 0 < emitted <= size + PLAUSIBLE_BAND else size) + AUTONOMY_TOLERANCE
         n = content_end(lines, i, end) - i
         if n <= bound:
             report.changes.append(
-                f"removed the retired `{AUTONOMY_HEADING}` section ({n} lines, marker v{version})")
+                f"removed the retired `{AUTONOMY_HEADING}` section ({n} lines, marker v{version}; the snapshot has it)")
             lines = _splice(lines, i, end, [])
             while len(lines) > i > 0 and not lines[i].strip() and not lines[i - 1].strip():
                 del lines[i]
         else:
             report.deferred.append({"marker": AUTONOMY_MARKER, "heading": AUTONOMY_HEADING,
-                                    "lines": n, "block_lines": AUTONOMY_SIZE.get(version, 0),
-                                    "emitted": int(e.group(1)) if e else None, "old_version": version,
-                                    "triggers": ["retired block, grown"], "at_risk": []})
+                                    "lines": n, "block_lines": size, "emitted": emitted,
+                                    "old_version": version, "triggers": ["retired block, grown"], "at_risk": []})
     return lines
 
 
@@ -502,30 +614,48 @@ def _managed_ranges(lines: list[str]) -> list[tuple[int, int]]:
     return out
 
 
+def _is_reference_line(line: str, pat: re.Pattern) -> bool:
+    """A table row whose FIRST cell is the reference, or a list item that starts
+    with it. Those are roster entries and go. A prose sentence that mentions the
+    skill is the project's and stays."""
+    s = line.strip()
+    if s.startswith("|"):
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        return bool(cells) and bool(pat.search(cells[0]))
+    m = re.match(r"^[-*+]\s+`?(/\S+)", s)
+    return bool(m) and bool(pat.match(m.group(1)))
+
+
 def apply_renames(lines: list[str], report: Report) -> list[str]:
     mask = fence_mask(lines)
     managed = _managed_ranges(lines)
     editable = [not mask[i] and not any(a <= i < b for a, b in managed) for i in range(len(lines))]
     counts: dict[str, int] = {}
-    removed = 0
-    out = []
+    removed_rows = 0
+    kept_mentions: list[int] = []
+    renamed_at: set[int] = set()
+    out: list[str] = []
+    removed_pat = _skill_ref(REMOVED_SKILLS)
     for i, line in enumerate(lines):
         if not editable[i]:
             out.append(line)
             continue
-        if _skill_ref(REMOVED_SKILLS).search(line):
-            removed += 1
-            continue
+        if removed_pat.search(line):
+            if _is_reference_line(line, removed_pat):
+                removed_rows += 1
+                continue
+            kept_mentions.append(len(out) + 1)
         for olds, new in RENAMES:
-            pat = _skill_ref(olds)
-            line, k = pat.subn(lambda m: f"/{m.group(1) or ''}{new}", line)
+            line, k = _skill_ref(olds).subn(lambda m: f"/{m.group(1) or ''}{new}", line)
             if k:
                 counts[new] = counts.get(new, 0) + k
+                renamed_at.add(len(out))
         out.append(line)
     lines = out
-    # rows that collapsed into the same skill become one row (keep the first)
+    # rows that collapsed into the same skill become one row (keep the first) —
+    # only rows a rename touched THIS run, only within one table
     mask = fence_mask(lines)
-    result, seen, in_table = [], set(), False
+    result, seen, in_table, removed_dupes = [], set(), False, 0
     for i, line in enumerate(lines):
         is_row = not mask[i] and line.lstrip().startswith("|")
         if is_row and not in_table:
@@ -533,19 +663,21 @@ def apply_renames(lines: list[str], report: Report) -> list[str]:
         elif not is_row:
             in_table = False
         if is_row:
-            cells = [c.strip() for c in line.strip().strip("|").split("|")]
-            key = cells[0] if cells else ""
-            if key and re.search(r"/(superpowers-gstack:)?[a-z0-9-]+", key) and not re.fullmatch(r"[-: ]+", key):
-                if key in seen:
-                    removed += 1
-                    continue
-                seen.add(key)
+            key = [c.strip() for c in line.strip().strip("|").split("|")][0]
+            if key in seen and i in renamed_at:
+                removed_dupes += 1
+                continue
+            seen.add(key)
         result.append(line)
     for new, k in sorted(counts.items()):
         olds = next(o for o, n in RENAMES if n == new)
         report.changes.append(f"renamed `{'`/`'.join(olds)}` -> `{new}` ({k} places)")
-    if removed:
-        report.changes.append(f"removed {removed} row(s)/line(s) naming a retired skill or duplicating a renamed one")
+    if removed_rows:
+        report.changes.append(f"removed {removed_rows} roster row(s)/list item(s) naming a retired skill")
+    if removed_dupes:
+        report.changes.append(f"collapsed {removed_dupes} row(s) that a rename made identical to an earlier row")
+    for n in kept_mentions:
+        report.notes.append(f"line {n} mentions a retired skill in prose; kept as written — edit it by hand")
     return result
 
 
@@ -562,32 +694,45 @@ def apply_routing(lines: list[str], ctx: Context, report: Report) -> list[str]:
     else:
         first = hs[0]
         at = next((i for i, lvl, _ in hs if i > first[0]), len(lines))
-    while at > 0 and not lines[at - 1].strip():
-        at -= 1
     report.changes.append("Skill routing: added")
-    return _splice(lines, at, at, [""] + new)
+    return _insert_after(lines, at, new)
+
+
+def _model_routing_is_emitted(body_lines: list[str]) -> bool:
+    if any(MODEL_ROUTING_SENTINEL in l for l in body_lines):
+        return True
+    for a, b in zip(body_lines, body_lines[1:]):
+        if MODEL_ROUTING_HEADER_RE.match(a) and TABLE_SEPARATOR_RE.match(b):
+            return True
+    return False
 
 
 def apply_model_routing(lines: list[str], ctx: Context, report: Report) -> list[str]:
-    raw = ctx.blocks[MODEL_ROUTING_FILE].rstrip("\n").split("\n")
+    raw = ctx.blocks[MODEL_ROUTING_FILE]
+    bt = BlockText(raw)
     found = [(i, lvl, h) for i, lvl, h in headings(lines) if lvl in (2, 3) and heading_text(h) == "Model Routing"]
     if found:
         i, lvl, h = found[0]
         end = section_end(lines, i, lvl)
-        body = "\n".join(lines[i + 1:end])
-        if not MODEL_ROUTING_TABLE_RE.search(body):
+        body = lines[i + 1:end]
+        if not _model_routing_is_emitted(body):
             report.preserved.append(
-                "`Model Routing`: the heading is yours — it carries no routing table with a model column, "
-                "so it was left untouched and the plugin's Model Routing was not emitted. To get the "
-                "plugin-managed section, rename yours and re-run `/adapt`.")
+                "`Model Routing`: the heading is yours — it carries neither the plugin's own sentence nor a "
+                "routing table with a model column, so it was left untouched and the plugin's Model Routing "
+                "was not emitted. To get the plugin-managed section, rename yours and re-run `/adapt`.")
             return lines
         if not ctx.model_routing:
             return lines
-        new = _resolve("\n".join(raw), ctx).split("\n")
-        if lines[i:end] == new or lines[i:end] == new + [""]:
+        new = _resolve("\n".join(bt.lines), ctx).split("\n")
+        if lines[i:content_end(lines, i, end)] == new:
             report.preserved.append("Model Routing: already current")
             return lines
-        # delete the stale section first, then place the new one where it belongs:
+        resolved = BlockText(_resolve(raw, ctx))
+        at_risk = [l for l in body if l.strip() and not bt.verbatim(l) and not resolved.verbatim(l)]
+        if at_risk:
+            report.removed.append({"section": "Model Routing", "lines": at_risk,
+                                   "where": "not in the new block — old plugin prose or yours; the snapshot has every line"})
+        # delete the old section first, then place the new one where it belongs:
         # replacing an H3 in place would put an H2 inside the Skill routing subtree
         # and reparent every H3 after it
         lines = _splice(lines, i, end, [])
@@ -596,23 +741,24 @@ def apply_model_routing(lines: list[str], ctx: Context, report: Report) -> list[
         return lines
     else:
         report.changes.append("Model Routing: added")
-    new = _resolve("\n".join(raw), ctx).split("\n")
+    new = _resolve("\n".join(bt.lines), ctx).split("\n")
     sr = next(((i, lvl) for i, lvl, h in headings(lines) if lvl == 2 and heading_text(h) == "Skill routing"), None)
     if sr is None:
         return _append(lines, new)
-    at = section_end(lines, sr[0], sr[1])
-    while at > 0 and not lines[at - 1].strip():
-        at -= 1
-    return _splice(lines, at, at, [""] + new)
+    return _insert_after(lines, section_end(lines, sr[0], sr[1]), new)
 
 
 def merge(text: str | None, ctx: Context) -> tuple[str, Report]:
     report = Report()
-    lines = (text or "").split("\n") if text else []
+    lines = text.split("\n") if text else []
     if lines and lines[-1] == "":
         lines.pop()
     if text is None:
         report.notes.append("no prior CLAUDE.md — nothing to snapshot; the file is created")
+    open_at = unclosed_fence(lines)
+    if open_at is not None:
+        raise Refusal(f"BLOCKED — CLAUDE.md has a code fence opened at line {open_at} that never closes; "
+                      f"everything appended below it would land inside the fence. Close it and re-run")
     lines = apply_header(lines, ctx, report)
     lines = apply_autonomy(lines, report)
     lines = apply_renames(lines, report)
@@ -633,7 +779,12 @@ def render(report: Report, ctx: Context, dry_run: bool) -> str:
         out += ["", "> " + u["reason"]]
     out += ["", REMOVED_LABEL]
     if report.removed:
-        out += [f"- `{r['section']}`: {r['lines']} line(s) — {r['where']}" for r in report.removed]
+        for r in report.removed:
+            out.append(f"- `{r['section']}`: {len(r['lines'])} line(s) — {r['where']}")
+            for l in r["lines"][:12]:
+                out.append(f"    | {l}")
+            if len(r["lines"]) > 12:
+                out.append(f"    | … and {len(r['lines']) - 12} more (all in the JSON below and in the snapshot)")
     else:
         out.append(f"- {NOTHING_REMOVED}")
     if report.deferred:
@@ -657,7 +808,7 @@ def render(report: Report, ctx: Context, dry_run: bool) -> str:
     elif dry_run:
         out.append("**Snapshot:** none written (dry run).")
     else:
-        out.append("**Snapshot:** none — " + (report.notes[0] if report.notes else "no prior CLAUDE.md"))
+        out.append("**Snapshot:** none — " + (report.notes[0] if report.notes else "the file was not rewritten"))
     for n in report.notes:
         out.append(f"Note: {n}")
     out.append("")
@@ -667,19 +818,33 @@ def render(report: Report, ctx: Context, dry_run: bool) -> str:
 
 # --- I/O ------------------------------------------------------------------------------
 
-def snapshot(project: Path, report: Report) -> None:
+def _atomic_write(path: Path, data: bytes) -> None:
+    mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".adapt-")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def snapshot(project: Path, original: bytes, report: Report) -> None:
     gstack = project / ".gstack"
     gstack.mkdir(exist_ok=True)
     snap = gstack / "CLAUDE.md.pre-adapt"
     if snap.exists():
-        rotated = gstack / f"CLAUDE.md.pre-adapt.{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        rotated = gstack / f"CLAUDE.md.pre-adapt.{stamp}"
         k = 0
         while rotated.exists():
             k += 1
-            rotated = gstack / f"CLAUDE.md.pre-adapt.{datetime.now().strftime('%Y%m%d-%H%M%S')}-{k}"
+            rotated = gstack / f"CLAUDE.md.pre-adapt.{stamp}-{k}"
         snap.rename(rotated)
         report.rotated = str(rotated.relative_to(project))
-    snap.write_bytes((project / "CLAUDE.md").read_bytes())
+    _atomic_write(snap, original)
     report.snapshot = str(snap.relative_to(project))
     try:
         excl = subprocess.run(["git", "rev-parse", "--git-path", "info/exclude"], cwd=project,
@@ -706,18 +871,58 @@ def read_track(project: Path, override: str | None) -> str:
     return value
 
 
-def read_executor(project: Path) -> str:
+def read_executor(project: Path) -> str | None:
+    """The pin's value, None when there is no pin. Exactly `host` or `vm`; the
+    file's newline is the only thing stripped, so `vm ` is refused, never repaired."""
     f = project / ".gstack" / "e2e-executor"
     if not f.is_file():
-        return "host"
+        return None
     value = f.read_text().removesuffix("\n")
-    if value not in ("host", "vm"):
+    if value not in EXECUTORS:
         raise Refusal(f"BLOCKED — invalid .gstack/e2e-executor {value!r}: must be exactly host or vm")
     return value
 
 
-class Refusal(Exception):
-    pass
+def load_blocks(blocks_dir: Path) -> dict[str, str]:
+    blocks = {}
+    for blk in BLOCKS:
+        f = blocks_dir / blk.file
+        if not f.is_file():
+            raise Refusal(f"UNREADABLE: block file {f} is missing — run `/plugin update superpowers-gstack`")
+        raw = f.read_text(encoding="utf-8")
+        head = raw.split("\n", 1)[0]
+        m = MARKER_RE.search(head)
+        if not head.startswith("## ") or not m or m.group(1) != blk.marker or raw.count("\n") < 3:
+            raise Refusal(f"UNREADABLE: block file {f} is not a block — its first line must be an H2 heading "
+                          f"carrying `<!-- {blk.marker}-vN -->` and it must have a body")
+        blocks[blk.file] = raw
+    f = blocks_dir / MODEL_ROUTING_FILE
+    if not f.is_file() or not f.read_text(encoding="utf-8").startswith("## Model Routing"):
+        raise Refusal(f"UNREADABLE: block file {f} is missing or does not start with `## Model Routing`")
+    blocks[MODEL_ROUTING_FILE] = f.read_text(encoding="utf-8")
+    return blocks
+
+
+def parse_sets(items: list[str]) -> dict[str, str]:
+    sets = {}
+    for s in items:
+        if "=" not in s:
+            raise Refusal(f"USAGE ERROR: --set needs TOKEN=value, got {s!r}")
+        k, v = s.split("=", 1)
+        k = k.strip()
+        if "\n" in v or "\r" in v:
+            raise Refusal(f"BLOCKED — --set {k} carries a newline; a value is spliced into a block verbatim "
+                          f"and a line break in it could forge a heading or a marker")
+        if "{{" in v:
+            raise Refusal(f"BLOCKED — --set {k} carries a `{{{{` placeholder; a value must be resolved, not another token")
+        sets[k] = v
+    if "DOMAIN_SENSITIVITY" in sets and sets["DOMAIN_SENSITIVITY"] not in SENSITIVITIES:
+        raise Refusal(f"BLOCKED — DOMAIN_SENSITIVITY must be one of {', '.join(SENSITIVITIES)}")
+    if "E2E_EXECUTOR" in sets and sets["E2E_EXECUTOR"] not in EXECUTORS:
+        raise Refusal("BLOCKED — E2E_EXECUTOR must be exactly host or vm")
+    if sets.get("DEVELOPMENT_TEAM", None) == "":
+        sets["DEVELOPMENT_TEAM"] = NO_TEAM_TEXT
+    return sets
 
 
 def main(argv=None) -> int:
@@ -738,31 +943,46 @@ def main(argv=None) -> int:
         project = Path(a.project_dir).expanduser().resolve()
         if not project.is_dir():
             raise Refusal(f"UNREADABLE: {project} is not a directory")
-        blocks_dir = Path(a.blocks).expanduser()
-        blocks = {}
-        for blk in BLOCKS + (Block(MODEL_ROUTING_FILE, "", "", None),):
-            f = blocks_dir / blk.file
-            if not f.is_file():
-                raise Refusal(f"UNREADABLE: block file {f} is missing — run `/plugin update superpowers-gstack`")
-            blocks[blk.file] = f.read_text(encoding="utf-8")
+        blocks = load_blocks(Path(a.blocks).expanduser())
         version = a.plugin_version or json.loads(PLUGIN_JSON.read_text())["version"]
-        sets = {}
-        for s in a.set:
-            if "=" not in s:
-                raise Refusal(f"USAGE ERROR: --set needs TOKEN=value, got {s!r}")
-            k, v = s.split("=", 1)
-            if "\n" in v or "\r" in v:
-                raise Refusal(f"BLOCKED — --set {k.strip()} carries a newline; a value is spliced into a block "
-                              f"verbatim and a line break in it could forge a heading or a marker")
-            sets[k.strip()] = v
-        if "DOMAIN_SENSITIVITY" in sets and sets["DOMAIN_SENSITIVITY"] not in SENSITIVITIES:
-            raise Refusal(f"BLOCKED — DOMAIN_SENSITIVITY must be one of {', '.join(SENSITIVITIES)}")
+        if not VERSION_RE.match(version):
+            raise Refusal(f"USAGE ERROR: --plugin-version must be X.Y.Z, got {version!r} — the header the "
+                          f"next run looks for would not match it")
+        sets = parse_sets(a.set)
         track = read_track(project, a.track)
-        # the pin is a macOS-only axis; a web project's stray file must not block it
-        sets.setdefault("E2E_EXECUTOR", read_executor(project) if track in NATIVE else "host")
+        if track in NATIVE:
+            # the pin is authoritative; --set may only agree with it or stand in for it
+            pin = read_executor(project)
+            if pin is not None and "E2E_EXECUTOR" in sets and sets["E2E_EXECUTOR"] != pin:
+                raise Refusal(f"BLOCKED — --set E2E_EXECUTOR={sets['E2E_EXECUTOR']} contradicts the pin "
+                              f".gstack/e2e-executor ({pin}); the pin file is the project's decision")
+            sets.setdefault("E2E_EXECUTOR", pin or "host")
+        else:
+            sets.setdefault("E2E_EXECUTOR", "host")
         claude = project / "CLAUDE.md"
-        text = claude.read_text(encoding="utf-8") if claude.is_file() else None
-        routing = Path(a.routing_file).expanduser().read_text(encoding="utf-8") if a.routing_file else None
+        original = claude.read_bytes() if claude.is_file() else None
+        newline = "\n"
+        text = None
+        if original is not None:
+            try:
+                text = original.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise Refusal(f"UNREADABLE: CLAUDE.md is not valid UTF-8 ({exc})")
+            if "\r\n" in text:
+                newline = "\r\n"
+                text = text.replace("\r\n", "\n")
+        routing = None
+        if a.routing_file:
+            routing = Path(a.routing_file).expanduser().read_text(encoding="utf-8")
+            first = next((l for l in routing.splitlines() if l.strip()), "")
+            if not (first.lstrip().startswith("## ") and heading_text(first) == "Skill routing"):
+                raise Refusal("BLOCKED — the --routing-file must start with `## Skill routing`; anything else "
+                              "would be inserted again on every run")
+        if a.mkdirs:
+            for d in ("docs", "docs/superpowers", "docs/superpowers/specs", "docs/superpowers/plans"):
+                p = project / d
+                if p.exists() and not p.is_dir():
+                    raise Refusal(f"BLOCKED — --mkdirs needs {d}/ to be a directory, but a file is in the way")
         ctx = Context(blocks=blocks, version=version, track=track, sets=sets, rescue=set(a.rescue),
                       routing=routing, model_routing=not a.no_model_routing,
                       project=a.project_name or project_name(text or "", project))
@@ -771,14 +991,19 @@ def main(argv=None) -> int:
         if unresolved:
             raise Refusal("UNRESOLVED PLACEHOLDER: " + ", ".join(unresolved) +
                           " — pass --set TOKEN=value for each (see skills/adapt/blocks/PLACEHOLDERS.md); nothing was written")
+        if NO_TEAM_TEXT in new_text and NO_TEAM_TEXT not in (text or ""):
+            report.notes.append("DEVELOPMENT_TEAM was empty: the signing example names no Team ID and says "
+                                "why — stable signing requires a paid developer account")
         changed = text is None or new_text != text
         if not changed:
             report.changes = []   # every step was a no-op; the file is not rewritten
         if not a.dry_run:
-            if changed and text is not None:
-                snapshot(project, report)
+            if changed and claude.is_file() and claude.read_bytes() != original:
+                raise Refusal("BLOCKED — CLAUDE.md changed on disk while this run was computing; nothing was written. Re-run")
+            if changed and original is not None:
+                snapshot(project, original, report)
             if changed:
-                claude.write_text(new_text, encoding="utf-8")
+                _atomic_write(claude, new_text.replace("\n", newline).encode("utf-8"))
             if a.mkdirs:
                 made = []
                 for d in ("specs", "plans"):
@@ -795,7 +1020,7 @@ def main(argv=None) -> int:
     except Refusal as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    except (OSError, UnicodeDecodeError, ValueError, KeyError) as exc:
+    except (OSError, UnicodeDecodeError, ValueError, KeyError, AttributeError, IndexError) as exc:
         print(f"INTERNAL: {type(exc).__name__}: {exc} — nothing was written", file=sys.stderr)
         return 2
 
