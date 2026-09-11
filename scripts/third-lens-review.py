@@ -103,16 +103,20 @@ def http_json(method, path, key, payload=None, timeout=300):
         sys.exit(4)
 
 
-def get_pricing(key, model):
-    """Return (prompt_per_tok, completion_per_tok) in USD, or (None, None).
-
-    (None, None) means either the /models call failed or the id is not served —
-    model_is_served() tells the two apart for the watchdog."""
+def fetch_models(key):
+    """OpenRouter /models as a list, or None when it could not be fetched. Fetched
+    once per run; pricing and the watchdog both read it."""
     try:
-        d = http_json("GET", "/models", key, timeout=30)
+        return http_json("GET", "/models", key, timeout=30).get("data", [])
     except SystemExit:
-        return (None, None)
-    for m in d.get("data", []):
+        return None
+
+
+def get_pricing(key, model, models=None):
+    """Return (prompt_per_tok, completion_per_tok) in USD, or (None, None)."""
+    if models is None:
+        models = fetch_models(key)
+    for m in models or []:
         if m.get("id") == model:
             p = m.get("pricing", {})
             try:
@@ -122,15 +126,14 @@ def get_pricing(key, model):
     return (None, None)
 
 
-def model_is_served(key, model):
+def model_is_served(key, model, models=None):
     """Watchdog for the pinned ids in ROLE_SPEC: True/False from /models, or None
     when the list could not be fetched (network) — never block on an outage."""
-    try:
-        d = http_json("GET", "/models", key, timeout=30)
-    except SystemExit:
+    if models is None:
+        models = fetch_models(key)
+    if models is None:
         return None
-    ids = {m.get("id") for m in d.get("data", [])}
-    return model in ids
+    return model in {m.get("id") for m in models}
 
 
 def get_credits(key):
@@ -235,7 +238,8 @@ def run_openrouter(system_prompt, user_msg, model, args, key):
     """Run a review via OpenRouter HTTP API. Prints RAW OUTPUT + usage + balance."""
     # rough pre-flight token estimate (chars/4) for the cost note
     est_in = (len(system_prompt) + len(user_msg)) // 4
-    p_in, p_out = get_pricing(key, model)
+    models = fetch_models(key)
+    p_in, p_out = get_pricing(key, model, models)
     if args.dry_run:
         print(f"Model: {model}")
         print(f"Estimated input tokens: ~{est_in:,}")
@@ -248,7 +252,7 @@ def run_openrouter(system_prompt, user_msg, model, args, key):
             print("Pricing unavailable for this model id — verify it exists on OpenRouter.")
         return
 
-    served = model_is_served(key, model)
+    served = model_is_served(key, model, models)
     if served is False:
         eprint(f"ERROR: OpenRouter does not serve model id '{model}'. The pin in "
                f"ROLE_SPEC is stale — check https://openrouter.ai/models and bump it, "

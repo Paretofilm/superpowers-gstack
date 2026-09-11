@@ -56,8 +56,8 @@ verdicts: `docs/superpowers/specs/2026-09-11-modernisering-audit.md`.
   `/review` on a diff (or `/codex challenge` on a plan) and never calls `/codex review`
   itself; `autoimplement` runs `/review` first at each boundary and pitfall folds its
   findings in. One Codex pass per patched state, whichever skill asked.
-- **`third-lens-review`** pins `z-ai/glm-5.3` (OpenRouter retired 5.2's successor gap
-  on 2026-08-28) and gains a watchdog: `run_openrouter()` refuses a model id absent from
+- **`third-lens-review`** pins `z-ai/glm-5.3` (served by OpenRouter since late August;
+  the 5.2 pin was already a generation behind) and gains a watchdog: `run_openrouter()` refuses a model id absent from
   OpenRouter `/models`, so a stale pin fails loudly instead of reviewing nothing. Prose
   names roles, not ids.
 - **Emitted CLAUDE.md is ~40 % smaller.** `git-hygiene` v10 drops the 60-line "when the
@@ -80,6 +80,10 @@ verdicts: `docs/superpowers/specs/2026-09-11-modernisering-audit.md`.
   numeric claims about failure rates and cache thresholds.
 - `context-handoff` documents the current contract only.
 - `check-plugin-version.sh` no longer prints cost-ledger notices.
+
+### Fixed
+- `/adapt` compared the `Keep the plan true to the code` section against marker `v2`
+  while the block has carried `v3` since 2.52.0 — every run re-replaced a current section.
 
 ### Lint
 - E7 denylist: `cost-ledger`, `ios-visual-explore` / `computer_use`, `gstack-autonomy-v*`,

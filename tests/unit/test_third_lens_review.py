@@ -217,8 +217,7 @@ def test_main_cli_dry_run_skips_key(monkeypatch, capsys):
 
 def test_run_openrouter_refuses_unserved_model(monkeypatch):
     """The pinned id is version-locked; a retired pin must fail loudly, not review nothing."""
-    monkeypatch.setattr(tlr, "get_pricing", lambda *a, **k: (None, None))
-    monkeypatch.setattr(tlr, "model_is_served", lambda *a, **k: False)
+    monkeypatch.setattr(tlr, "fetch_models", lambda *a, **k: [{"id": "z-ai/glm-5.3"}])
     monkeypatch.setattr(tlr, "http_json", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not call the model")))
 
     class Args:

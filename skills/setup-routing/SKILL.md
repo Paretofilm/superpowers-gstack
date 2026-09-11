@@ -407,7 +407,7 @@ Ready to ship        → /ship
 - Omit entire sections that don't apply (no empty "QA: N/A" sections)
 - **Model Routing section:** emit the `## Model Routing` block verbatim (from Step 5.5) with `{{DOMAIN_SENSITIVITY}}` replaced by the inferred value. If the user opted out of model routing in Step 5.5, omit the entire `## Model Routing` section.
 - **Phase sub-tables:** include inline only for multi-phase skills selected in Step 5 (e.g. skip the TDD sub-table if `/superpowers:test-driven-development` is not in the selected set).
-- Target 100-180 lines total (was 60-100 in v1.10.0 — Model Routing adds ~20 lines). Projects with many multi-phase skills can legitimately reach 200 lines. The 150-line "compliance budget" from v1.10.0 is officially relaxed to 200 lines starting v1.11.0 when Model Routing is present. To stay tight: omit phase sub-tables for skills not selected.
+- Target 100-180 lines total; projects with many multi-phase skills can legitimately reach 200 with Model Routing present. To stay tight: omit phase sub-tables for skills not selected.
 
 ### Step 7: Confirm
 
