@@ -13,7 +13,7 @@ tests/
     └── test_track_aware_dispatch.sh   ← verifies track-aware routing dispatches correctly
 ```
 
-Unit tests live in `tests/unit/` — all stdlib-only pytest, no API calls. htmlify has its own `skills/htmlify/tests/` Bun suite.
+Unit tests live in `tests/unit/` — all stdlib-only pytest, no API calls. `--unit` also runs the skill-level shell contract tests (`skills/*/tests/required-sections.test.sh`, plain bash, no deps). htmlify has its own `skills/htmlify/tests/` Bun suite.
 
 ## Running
 
@@ -65,6 +65,6 @@ These would be additional `tests/integration/test_*.sh` files following the same
 
 ## CI
 
-The pytest suite runs on every push/PR (`.github/workflows/lint.yml` runs `pytest tests/unit -q` after the instruction-surface lint — free, stdlib-only).
+The pytest suite runs on every push/PR (`.github/workflows/lint.yml` runs `pytest tests/unit -q` after the instruction-surface lint, then the `skills/*/tests/required-sections.test.sh` shell contract tests — free, stdlib-only).
 
 The `claude --print` integration tests do NOT run in CI. That would require `ANTHROPIC_API_KEY` as a repo secret and a willingness to spend on every PR. If/when that's set up, the natural entry is `bash tests/run.sh --integration` in a GitHub Actions workflow.

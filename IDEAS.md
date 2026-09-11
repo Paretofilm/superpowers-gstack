@@ -57,9 +57,9 @@ When a skill ships, its entry moves to the "Shipped" section below with the comm
 - **Accessibility** — Narrator support, high-contrast theme, focus visuals
 - **Window management** — snap layouts, multi-window, restore
 
-**Method.** WebFetch against `learn.microsoft.com/en-us/windows/apps/design/...` (Fluent Design and WinUI 3 docs). Same severity tiers and citation discipline as `macos-native-review`. Phase 0 detects Windows signals (`.csproj` with `TargetFramework` net8.0-windows, `Microsoft.UI.Xaml`, `WinUI`, etc.).
+**Method.** WebFetch against `learn.microsoft.com/en-us/windows/apps/design/...` (Fluent Design and WinUI 3 docs). Same severity tiers and citation discipline as `apple-native-review`. Phase 0 detects Windows signals (`.csproj` with `TargetFramework` net8.0-windows, `Microsoft.UI.Xaml`, `WinUI`, etc.).
 
-**Differentiation.** Same shape as `macos-native-review` but Windows-platform; uses Microsoft docs as the source of truth instead of Apple HIG.
+**Differentiation.** Same shape as `apple-native-review` but Windows-platform; uses Microsoft docs as the source of truth instead of Apple HIG.
 
 **Status.** Deferred — no observed need. Likely longer wait than `ios-native-review` given current project portfolio's Apple lean.
 
@@ -81,9 +81,9 @@ When a skill ships, its entry moves to the "Shipped" section below with the comm
 - **Edge-to-edge** — gesture insets, system bars handling
 - **App bar / scrolling behavior** — collapsing toolbars, tonal elevation on scroll
 
-**Method.** WebFetch against `m3.material.io/...` (Material Design 3 docs). Same severity tiers and citation discipline as `macos-native-review`. Phase 0 detects Android signals (`build.gradle` with Android plugin, `androidx.compose.*` imports, `.kt` Android-tagged files).
+**Method.** WebFetch against `m3.material.io/...` (Material Design 3 docs). Same severity tiers and citation discipline as `apple-native-review`. Phase 0 detects Android signals (`build.gradle` with Android plugin, `androidx.compose.*` imports, `.kt` Android-tagged files).
 
-**Differentiation.** Same shape as `macos-native-review` but Android-platform; uses Material Design 3 as the source of truth.
+**Differentiation.** Same shape as `apple-native-review` but Android-platform; uses Material Design 3 as the source of truth.
 
 **Status.** Deferred — no observed need.
 
@@ -126,7 +126,7 @@ Out: macOS, watchOS, AppKit.
 
 ## `swiftui-snapshot-scaffold` (proposed 2026-04-29, deferred)
 
-**Gap.** Snapshot-test scaffolding via `swift-snapshot-testing` (Pointfree). Catches visual regressions XCUITest misses — wrong color, wrong margin, cut-off text, dark-mode rendering bugs. Complementary to `macos-e2e-scaffold` and `ios-e2e-scaffold`, not a replacement.
+**Gap.** Snapshot-test scaffolding via `swift-snapshot-testing` (Pointfree). Catches visual regressions XCUITest misses — wrong color, wrong margin, cut-off text, dark-mode rendering bugs. Complementary to `e2e-scaffold` (iOS and macOS), not a replacement.
 
 **Scope.** Cross-platform (macOS + iOS). Adds `swift-snapshot-testing` Package.swift dependency. Generates baseline snapshots for top 5 views (heuristic same as e2e-scaffold but ranked by render-complexity rather than interaction-density). First run produces baselines; subsequent runs verify diffs.
 
@@ -146,7 +146,7 @@ Out: macOS, watchOS, AppKit.
 
 **Method.** Grep for `NSWindow`, `NSViewController`, `NSButton(`, `NSTextField(`, `NSTableView`. Walk controller hierarchy from `NSStoryboard` references. Different identifier convention applied via Swift code rather than modifier-chain.
 
-**Differentiation.** AppKit-only. Won't work for SwiftUI projects (use `macos-e2e-scaffold`). Useful for legacy apps that haven't migrated to SwiftUI, or hybrid SwiftUI-on-AppKit projects where critical surfaces are still AppKit.
+**Differentiation.** AppKit-only. Won't work for SwiftUI projects (use `e2e-scaffold`). Useful for legacy apps that haven't migrated to SwiftUI, or hybrid SwiftUI-on-AppKit projects where critical surfaces are still AppKit.
 
 **Status.** Deferred until observed need (most modern macOS apps are SwiftUI-first).
 

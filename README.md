@@ -125,8 +125,7 @@ This generates a CLAUDE.md with routing rules tailored to your project type, tec
 │  /pitfall-verification → "will this work?"       │
 │  /quality-review       → "will this feel good?"  │
 │  /apple-native-review  → "is this Apple-native?" │
-│                          (macOS projects only)   │
-│                          (iOS/iPadOS only)       │
+│                          (iOS, iPadOS, macOS)    │
 ├─────────────────────────────────────────────────┤
 │  PHASE 2: IMPLEMENTATION (Superpowers)           │
 │                                                  │
