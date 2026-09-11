@@ -505,3 +505,100 @@ def test_a_project_name_prefixes_the_rescue_heading_and_defaults_to_the_h1(tmp_p
     m = module()
     assert m.project_name("<!-- x -->\n# My App\n\ntext\n", Path("/tmp/dir-name")) == "My App"
     assert m.project_name("no heading at all\n", Path("/tmp/dir-name")) == "dir-name"
+
+
+# --- pitfall round 1 (3.1.0 review) ------------------------------------------------
+
+def test_a_section_newer_than_the_block_is_never_downgraded(tmp_path):
+    """"Different" is not "older" (2.53.3): a project adapted by a newer plugin,
+    then visited by an older cache, must keep its newer section."""
+    name = "git-hygiene.md"
+    raw = block(name)
+    head, _, body = raw.rstrip("\n").partition("\n")
+    newer = re.sub(r"-v(\d+) -->", lambda m: f"-v{int(m.group(1)) + 5} -->", head) + "\n" + body + "\n"
+    proj = project(tmp_path, claude_md="# P\n\n" + newer)
+    p = run(proj, *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert newer in text
+    assert marker(name) not in text
+    assert "newer than this plugin's block" in p.stdout
+
+
+def test_a_stale_model_routing_in_the_middle_of_skill_routing_moves_to_the_subtree_end(tmp_path):
+    """Replacing in place would put an H2 inside the Skill routing subtree and
+    reparent every H3 after it."""
+    proj = project(tmp_path, claude_md=(
+        "# P\n\n## Skill routing\n\n### Model Routing\n\n| Skill | Model |\n|---|---|\n| /review | sonnet |\n\n"
+        "### Rules\n\nr\n\n## Tail\n\nt\n"))
+    run(proj, *WEB_SETS)
+    hs = headings((proj / "CLAUDE.md").read_text())
+    assert hs.index("## Model Routing") == hs.index("### Rules") + 1
+    assert "Pi/MLX" not in (proj / "CLAUDE.md").read_text()
+    assert [h for h in hs if "Model Routing" in h] == ["## Model Routing"]
+
+
+def test_a_web_project_ignores_a_malformed_executor_pin(tmp_path):
+    """The pin is a macOS-only axis; a stray file must not block a web project."""
+    proj = project(tmp_path)
+    (proj / ".gstack").mkdir()
+    (proj / ".gstack" / "e2e-executor").write_text("garbage\n")
+    run(proj, *WEB_SETS)
+    assert (proj / "CLAUDE.md").is_file()
+
+
+def test_a_set_value_with_a_newline_is_refused(tmp_path):
+    """A value is spliced into a block verbatim; a newline in it could inject a
+    heading — or a marker — the growth check would then trust."""
+    proj = project(tmp_path, track="ios")
+    p = run(proj, "--set", "IOS_SIMULATOR=iPhone 17\n## injected", "--set", "DEVELOPMENT_TEAM=X",
+            "--set", "DOMAIN_SENSITIVITY=low", expect=2)
+    assert "newline" in p.stderr and not (proj / "CLAUDE.md").exists()
+
+
+def test_a_projects_own_prose_may_quote_a_placeholder_token(tmp_path):
+    """Only tokens in the blocks being emitted must resolve; a user's CLAUDE.md that
+    mentions `{{IOS_SIMULATOR}}` in its own text is not an unresolved placeholder."""
+    proj = project(tmp_path, claude_md="# P\n\nOur docs say `{{IOS_SIMULATOR}}` and `{{DOMAIN_SENSITIVITY}}`.\n")
+    run(proj, *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert "Our docs say `{{IOS_SIMULATOR}}` and `{{DOMAIN_SENSITIVITY}}`." in text
+    assert "domain sensitivity: low" in text
+
+
+def test_an_h3_rooted_autonomy_section_with_same_level_subsections_is_removed_whole(tmp_path):
+    """Pre-2.36.1 emitters left the block's subsections at the root's level."""
+    sec = ("### Autonomy and user interruption <!-- gstack-autonomy-v1 -->\n\nintro\n\n"
+           "### The only five reasons to stop and ask\n\n- a\n- b\n\n### Do NOT stop to\n\n- c\n\n"
+           "### Forbidden phrases\n\n- d\n\n### Status updates DURING work, not AS wait-states\n\n- epsilon\n")
+    proj = project(tmp_path, claude_md="# P\n\n## Skill routing\n\nrows\n\n" + sec + "\n### Routing Logic\n\ntree\n")
+    p = run(proj, *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert "Autonomy" not in text and "Forbidden phrases" not in text and "- epsilon" not in text
+    assert "### Routing Logic\n\ntree\n" in text
+    assert "removed the retired" in p.stdout
+
+
+def test_a_deferred_retired_section_is_not_offered_a_rescue_that_does_not_exist(tmp_path):
+    sec = _autonomy(60, "gstack-autonomy-v2")
+    proj = project(tmp_path, claude_md="# P\n\n" + sec)
+    p = run(proj, *WEB_SETS)
+    deferred = p.stdout[p.stdout.index(DEFERRED):]
+    assert "--rescue gstack-autonomy" not in deferred
+    assert "move" in deferred and "delete" in deferred
+
+
+def test_mkdirs_is_reported_only_when_it_created_something(tmp_path):
+    proj = project(tmp_path)
+    p = run(proj, "--mkdirs", *WEB_SETS)
+    assert "created docs/superpowers" in p.stdout
+    p = run(proj, "--mkdirs", *WEB_SETS)
+    assert "created docs/superpowers" not in p.stdout and last_json(p)["changes"] == []
+
+
+def test_heading_match_is_case_insensitive_for_attribution(tmp_path):
+    """`## Git Hygiene` (capital H) with no sentinel is the user's; it must get the
+    preserve-and-insert notice, not a silent second section with no explanation."""
+    proj = project(tmp_path, claude_md="# P\n\n## Git Hygiene\n\nours\n")
+    p = run(proj, *WEB_SETS)
+    assert "cannot attribute" in p.stdout
+    assert "## Git Hygiene\n\nours\n" in (proj / "CLAUDE.md").read_text()

@@ -323,7 +323,7 @@ def _find_section(lines: list[str], marker: str | None, heading_re: str):
         m = MARKER_RE.search(raw)
         if marker and m and m.group(1) == marker:
             by_marker.append((i, lvl, raw, int(m.group(2))))
-        elif re.match(heading_re, heading_text(raw)):
+        elif re.match(heading_re, heading_text(raw), re.I):
             by_text.append((i, lvl, raw, None))
     return (by_marker or by_text or [None])[0]
 
@@ -409,6 +409,12 @@ def apply_block(lines: list[str], blk: Block, ctx: Context, report: Report) -> l
     if version == cur_version:
         report.preserved.append(f"{head_name}: already at {marker}-v{cur_version}")
         return lines
+    if version is not None and version > cur_version:
+        # "Different" is not "older" (2.53.3): a newer plugin wrote this section and
+        # an older cache is running now. Never downgrade it.
+        report.preserved.append(f"{head_name}: {marker}-v{version} is newer than this plugin's block "
+                                f"(v{cur_version}); not downgraded — run /adapt from the newer plugin")
+        return lines
     if version is None:
         body = "\n".join(lines[start + 1:end])
         if blk.case3 == "preserve":
@@ -455,18 +461,15 @@ def apply_autonomy(lines: list[str], report: Report) -> list[str]:
         m = MARKER_RE.search(raw_head)
         if m and m.group(1) != AUTONOMY_MARKER:
             continue
-        # the block's own subsections sat at the root's level in pre-2.36.1 emits
-        end = i + 1
-        hs = headings(lines)
-        for j, lvl, h in hs:
-            if j <= i:
+        # the block's own subsections sat at the root's level in pre-2.36.1 emits:
+        # keep walking through deeper headings and through same-level headings
+        # that are the block's own; stop at the first heading that is neither
+        end = len(lines)
+        for j, lvl, h in headings(lines):
+            if j <= i or lvl > level or (lvl == level and heading_text(h) in AUTONOMY_SUBSECTIONS):
                 continue
-            if lvl > level or (lvl == level and heading_text(h) in AUTONOMY_SUBSECTIONS):
-                end = section_end(lines, j, lvl) if lvl == level else max(end, j + 1)
-                continue
+            end = j
             break
-        end = max(end, section_end(lines, i, level) if all(
-            heading_text(h) not in AUTONOMY_SUBSECTIONS for j, lvl, h in hs if j > i and lvl == level) else end)
         body = "\n".join(lines[i + 1:end])
         if m:
             version = int(m.group(2))
@@ -584,13 +587,17 @@ def apply_model_routing(lines: list[str], ctx: Context, report: Report) -> list[
         if lines[i:end] == new or lines[i:end] == new + [""]:
             report.preserved.append("Model Routing: already current")
             return lines
+        # delete the stale section first, then place the new one where it belongs:
+        # replacing an H3 in place would put an H2 inside the Skill routing subtree
+        # and reparent every H3 after it
+        lines = _splice(lines, i, end, [])
         report.changes.append("Model Routing: replaced the older block")
-        return _splice(lines, i, end, new)
-    if not ctx.model_routing:
+    elif not ctx.model_routing:
         return lines
+    else:
+        report.changes.append("Model Routing: added")
     new = _resolve("\n".join(raw), ctx).split("\n")
     sr = next(((i, lvl) for i, lvl, h in headings(lines) if lvl == 2 and heading_text(h) == "Skill routing"), None)
-    report.changes.append("Model Routing: added")
     if sr is None:
         return _append(lines, new)
     at = section_end(lines, sr[0], sr[1])
@@ -634,10 +641,14 @@ def render(report: Report, ctx: Context, dry_run: bool) -> str:
         for d in report.deferred:
             was = f"marker {d['marker']}-v{d['old_version']}" if d.get("old_version") is not None else "no marker"
             prov = f", emitted={d['emitted']}" if d.get("emitted") is not None else ""
+            if d["marker"] == AUTONOMY_MARKER:
+                hint = ("This block is retired, so there is nothing to upgrade to: move your own lines out of "
+                        "it into an unmarked section (or delete the section) and re-run.")
+            else:
+                hint = (f"Left at its old version. Re-run with `--rescue {d['marker']}` to move those lines into an "
+                        f"unmarked section and upgrade.")
             out.append(f"- `{d['heading']}`: {d['lines']} lines against the {d['block_lines']}-line block "
-                       f"({was}{prov}; fired: {', '.join(d['triggers'])}); {len(d['at_risk'])} line(s) at risk. "
-                       f"Left at its old version. Re-run with `--rescue {d['marker']}` to move those lines into an "
-                       f"unmarked section and upgrade.")
+                       f"({was}{prov}; fired: {', '.join(d['triggers'])}); {len(d['at_risk'])} line(s) at risk. {hint}")
     out.append("")
     if report.snapshot:
         out.append(f"**Snapshot:** `{report.snapshot}` holds CLAUDE.md exactly as it was before this run. "
@@ -740,11 +751,15 @@ def main(argv=None) -> int:
             if "=" not in s:
                 raise Refusal(f"USAGE ERROR: --set needs TOKEN=value, got {s!r}")
             k, v = s.split("=", 1)
+            if "\n" in v or "\r" in v:
+                raise Refusal(f"BLOCKED — --set {k.strip()} carries a newline; a value is spliced into a block "
+                              f"verbatim and a line break in it could forge a heading or a marker")
             sets[k.strip()] = v
         if "DOMAIN_SENSITIVITY" in sets and sets["DOMAIN_SENSITIVITY"] not in SENSITIVITIES:
             raise Refusal(f"BLOCKED — DOMAIN_SENSITIVITY must be one of {', '.join(SENSITIVITIES)}")
         track = read_track(project, a.track)
-        sets.setdefault("E2E_EXECUTOR", read_executor(project))
+        # the pin is a macOS-only axis; a web project's stray file must not block it
+        sets.setdefault("E2E_EXECUTOR", read_executor(project) if track in NATIVE else "host")
         claude = project / "CLAUDE.md"
         text = claude.read_text(encoding="utf-8") if claude.is_file() else None
         routing = Path(a.routing_file).expanduser().read_text(encoding="utf-8") if a.routing_file else None
@@ -756,25 +771,25 @@ def main(argv=None) -> int:
         if unresolved:
             raise Refusal("UNRESOLVED PLACEHOLDER: " + ", ".join(unresolved) +
                           " — pass --set TOKEN=value for each (see skills/adapt/blocks/PLACEHOLDERS.md); nothing was written")
-        if PLACEHOLDER_RE.search("\n".join(l for l in new_text.split("\n") if "{{" in l and "PLACEHOLDERS" not in l)) \
-                and set(PLACEHOLDER_RE.findall(new_text)) & ctx.needed:
-            raise Refusal("INTERNAL: a placeholder survived resolution; nothing was written")
-        if not a.dry_run and (text is None or new_text != text or a.mkdirs):
-            if text is not None and new_text != text:
+        changed = text is None or new_text != text
+        if not changed:
+            report.changes = []   # every step was a no-op; the file is not rewritten
+        if not a.dry_run:
+            if changed and text is not None:
                 snapshot(project, report)
-            if text is None or new_text != text:
+            if changed:
                 claude.write_text(new_text, encoding="utf-8")
             if a.mkdirs:
+                made = []
                 for d in ("specs", "plans"):
                     p = project / "docs" / "superpowers" / d
-                    p.mkdir(parents=True, exist_ok=True)
-                    (p / ".gitkeep").touch()
-                report.changes.append("created docs/superpowers/specs and docs/superpowers/plans")
+                    if not (p / ".gitkeep").exists():
+                        p.mkdir(parents=True, exist_ok=True)
+                        (p / ".gitkeep").touch()
+                        made.append(f"docs/superpowers/{d}")
+                if made:
+                    report.changes.append("created " + " and ".join(made))
             report.applied = True
-        elif not a.dry_run:
-            report.applied = True
-        if text is not None and new_text == text:
-            report.changes = []
         print(render(report, ctx, a.dry_run))
         return 0
     except Refusal as exc:
