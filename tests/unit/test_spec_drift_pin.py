@@ -598,3 +598,96 @@ def test_unfenced_preserves_offsets_and_line_numbers(rig):
         masked = m.unfenced(text)
         assert len(masked) == len(text)
         assert masked.count("\n") == text.count("\n")
+
+
+# --- gstack ≥ 1.83: the subagent prompt lives inside a ````text fence -----------
+#
+# Upstream 1.83 moved Step 8's subagent prompt out of a `> ` blockquote and into a
+# four-backtick `text` fence, so the prompt's own headings (`### Plan File
+# Discovery`, `**Validator detection.**`) now sit inside a fence. The fence mask
+# that keeps a heading in a ``` example from counting as structure blanked the
+# prompt too, and `repin` refused every 1.83+ install with ANCHORS MISSING. The
+# prompt fence IS the section — the text the wrapper's overrides address — so it is
+# scanned like prose, while fences nested inside it stay masked.
+
+SECTION_PROMPT_FENCED = (
+    "## Step 8: Plan Completion Audit\n\n"
+    "**Subagent prompt:** Pass these instructions to the subagent:\n\n"
+    "````text\n"
+    "You are running a ship-workflow plan completion audit. The base branch is `<base>`.\n\n"
+    "### Plan File Discovery\n"
+    "line two\n"
+    "```bash\n"
+    "PLAN=$(ls -t \"$PLAN_DIR\"/*.md)\n"
+    "```\n"
+    "**Validator detection.** ... scan the target repo's `package.json` ...\n"
+    '{"total_items":N,"done":N,"changed":N,"partial":N,"not_done":N}\n'
+    "````\n\n"
+    "**Parent processing:**\n\n"
+    "### Gate Logic\n"
+    "**Include in PR body (Step 19):** ...\n"
+    "\n## Step 8.1: Plan Verification\n"
+    "line three\n"
+)
+
+
+def test_the_subagent_prompt_fence_is_the_section_not_an_example(rig):
+    """The shape gstack 1.84.1 ships: every anchor is present, two of them only
+    inside the prompt fence. repin must show the diff and hand out a token."""
+    upstream, pin_dir = rig
+    upstream.write_text(SECTION_PROMPT_FENCED)
+    p = run("repin", *common(upstream, pin_dir), expect=3)
+    assert "ANCHORS: all present" in p.stdout, p.stderr
+    accept(upstream, pin_dir)
+    p = run("check", *common(upstream, pin_dir), expect=0)
+    assert "PIN OK" in p.stdout
+
+
+def test_a_text_fence_without_the_subagent_prompt_label_is_still_masked(rig):
+    """Only the fence that follows `**Subagent prompt:**` is transparent. A
+    ````text block anywhere else is an example, and a heading inside it is not
+    structure."""
+    upstream, pin_dir = rig
+    upstream.write_text(SECTION_PROMPT_FENCED.replace(
+        "**Subagent prompt:** Pass these instructions to the subagent:\n\n", ""))
+    p = run("repin", *common(upstream, pin_dir), expect=2)
+    assert "ANCHORS MISSING" in p.stderr and "### Plan File Discovery" in p.stderr
+
+
+def test_a_heading_in_a_fence_nested_inside_the_prompt_is_not_an_anchor(rig):
+    """The prompt fence is transparent; fences INSIDE it are not. A renamed real
+    heading with the old name surviving in the prompt's own bash example must
+    still refuse."""
+    upstream, pin_dir = rig
+    nested = SECTION_PROMPT_FENCED.replace(
+        "### Plan File Discovery\nline two\n",
+        "### Plan Discovery\nline two\n").replace(
+        "PLAN=$(ls -t \"$PLAN_DIR\"/*.md)\n",
+        "PLAN=$(ls -t \"$PLAN_DIR\"/*.md)\n### Plan File Discovery\n")
+    upstream.write_text(nested)
+    p = run("repin", *common(upstream, pin_dir), expect=2)
+    assert "ANCHORS MISSING" in p.stderr and "### Plan File Discovery" in p.stderr
+
+
+def test_an_unclosed_prompt_fence_is_transparent_to_the_end(rig):
+    """Only a CLOSED prompt fence is transparent. An unclosed one is a broken
+    upstream: `_FENCE` masks it to EOF, the boundary heading after it disappears,
+    and the check refuses — the fail-closed direction."""
+    upstream, pin_dir = rig
+    upstream.write_text(SECTION_PROMPT_FENCED.replace("````\n\n**Parent processing:**", "**Parent processing:**", 1))
+    p = run("repin", *common(upstream, pin_dir), expect=2)
+    assert "ANCHORS MISSING" in p.stderr and "## Step 8.1" in p.stderr
+
+
+def test_unfenced_keeps_offsets_with_a_prompt_fence():
+    m = module()
+    for text in (SECTION_PROMPT_FENCED,
+                 SECTION_PROMPT_FENCED + "\n~~~\nunclosed\n",
+                 SECTION_PROMPT_FENCED.replace("````\n\n**Parent", "**Parent", 1)):
+        masked = m.unfenced(text)
+        assert len(masked) == len(text)
+        assert masked.count("\n") == text.count("\n")
+    masked = m.unfenced(SECTION_PROMPT_FENCED)
+    assert "### Plan File Discovery" in masked, "the prompt fence is scanned as prose"
+    assert 'PLAN=$(ls' not in masked, "a fence nested in the prompt stays masked"
+    assert "### Gate Logic" in masked

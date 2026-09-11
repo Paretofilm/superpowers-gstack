@@ -75,9 +75,11 @@ ENCODING = "utf-8"
 MAX_UPSTREAM_BYTES = 4 * 1024 * 1024    # the real section is ~15 KB; anything near this is not it
 
 # Text the wrapper's overrides name: (name shown in messages, regex). Headings
-# are line-anchored (an optional "> " blockquote prefix allowed) so a copy of the
-# words inside a comment or a code fence does not satisfy them, and Step 8 must
-# precede Step 8.1 because the wrapper stops at the second heading.
+# are line-anchored (an optional "> " blockquote prefix allowed — how gstack
+# ≤ 1.82 quoted the subagent prompt) so a copy of the words inside a comment or
+# a code fence does not satisfy them, and Step 8 must precede Step 8.1 because
+# the wrapper stops at the second heading. Since gstack 1.83 the prompt sits in a
+# ````text fence instead; `unfenced` treats that one fence as prose.
 ANCHORS = (
     ("## Step 8: Plan Completion Audit", r"^(> )?## Step 8: Plan Completion Audit"),
     ("## Step 8.1", r"^(> )?## Step 8\.1(?![0-9])"),
@@ -106,6 +108,16 @@ BOUNDARY = ("## Step 8: Plan Completion Audit", "## Step 8.1")
 # would break the check on the real section.
 HEADING_ANCHORS = frozenset(name for name, pat in ANCHORS if pat.startswith("^"))
 _FENCE = re.compile(r"^(?P<f>```+|~~~+)[^\n]*\n.*?(?:^(?P=f)[`~]*[ \t]*$|\Z)", re.M | re.S)
+# gstack ≥ 1.83 hands the subagent its instructions inside a ````text fence that
+# follows the `**Subagent prompt:**` line. That fence is not an example — it IS
+# the section, the text every override in the wrapper addresses — so its body is
+# scanned like prose. Only that one fence, only when the label precedes it;
+# fences nested inside it (the prompt's own bash blocks) stay masked. An
+# UNCLOSED prompt fence is not transparent: `_FENCE` masks it to EOF, the
+# boundary heading after it disappears, and the check refuses — fail-closed.
+_PROMPT_FENCE = re.compile(
+    r"^\*\*Subagent prompt:\*\*[^\n]*\n[ \t]*\n*(?P<f>`{4,})text[ \t]*\n"
+    r"(?P<body>.*?)^(?P=f)[ \t]*$", re.M | re.S)   # closed only: an unclosed one stays masked
 
 EXIT_OK, EXIT_DRIFT, EXIT_CANNOT, EXIT_CONFIRM = 0, 1, 2, 3
 COUNT_KEYS = ("total_items", "done", "changed", "deferred", "unverifiable")
@@ -208,10 +220,24 @@ def visible(line: str) -> str:
     return _CONTROL.sub(escape, line)
 
 
+def _blank(s: str) -> str:
+    return re.sub(r"[^\n]", " ", s)
+
+
 def unfenced(text: str) -> str:
     """`text` with fenced code blocks blanked to spaces. Same length and the same
-    newlines, so every offset and line number stays valid."""
-    return _FENCE.sub(lambda m: re.sub(r"[^\n]", " ", m.group()), text)
+    newlines, so every offset and line number stays valid.
+
+    The subagent-prompt fence (`_PROMPT_FENCE`) is the one exception: its body is
+    kept, with the fences nested inside it blanked. The outer `_FENCE` pass has
+    already swallowed the whole prompt fence — a 4-backtick opener is closed only
+    by a 4-backtick line, so the inner ``` blocks never close it — which is why
+    the body is re-masked on its own and spliced back over the same offsets."""
+    masked = _FENCE.sub(lambda m: _blank(m.group()), text)
+    for m in _PROMPT_FENCE.finditer(text):
+        start, end = m.span("body")
+        masked = masked[:start] + _FENCE.sub(lambda f: _blank(f.group()), text[start:end]) + masked[end:]
+    return masked
 
 
 def missing_anchors(text: str) -> list[str]:

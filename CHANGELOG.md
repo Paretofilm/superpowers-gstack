@@ -1,5 +1,23 @@
 # Changelog
 
+## [3.0.2] - 2026-09-11
+
+### Fixed
+- **`spec-drift` re-pins against gstack ≥ 1.83.** Upstream moved Step 8's subagent prompt
+  out of a `> ` blockquote into a ````text fence, and the anchor scan — which masks code
+  fences so a heading in an example cannot pass as structure — blanked the prompt with
+  them. `### Plan File Discovery` and `**Validator detection.**` live inside that
+  prompt, so `repin` refused every 1.83+ install with `ANCHORS MISSING` and
+  `tests/unit/test_spec_drift_upstream_alarm.py` stayed red on any machine with a
+  current gstack. `unfenced()` now treats the one fence that follows
+  `**Subagent prompt:**` as the section it is; fences nested inside it, a ````text
+  fence anywhere else, and an unclosed prompt fence all stay masked (fail-closed). The
+  pin is re-accepted at gstack 1.84.1.0 (`skills/spec-drift/pin/`).
+- The skill's contract prose said `deferred` counts NOT DONE "exactly as Step 8 uses
+  it"; Step 8 now names that count `not_done` and adds `partial`. Override 6 keeps the
+  wrapper's key set for its callers (`autoimplement` reads `deferred`) and now says so
+  explicitly, so a subagent reading both does not follow the upstream spelling.
+
 ## [3.0.1] - 2026-09-11
 
 ### Fixed
@@ -125,7 +143,7 @@ verdicts: `docs/superpowers/specs/2026-09-11-modernisering-audit.md`.
 ### Known
 - With gstack ≥ 1.83 installed, `spec-drift --repin` reports `ANCHORS MISSING`: upstream moved
   the plan-completion subagent prompt into a fenced block that the anchor scan masks. Not
-  caused by this release; fix tracked in `docs/superpowers/plans/2026-09-11-modernisering.md`.
+  caused by this release; fixed in 3.0.2.
 
 ### Deferred (own PR)
 - adapt as a deterministic merge script and setup-routing folded into adapt — touches
