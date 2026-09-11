@@ -342,3 +342,31 @@ def test_model_list_outage_is_fetched_once_and_fails_open(monkeypatch, capsys):
     tlr.run_openrouter("SYS", "USER", "z-ai/glm-5.3", Args(), "fakekey")
     assert calls["n"] == 1
     assert "RAW OUTPUT" in capsys.readouterr().out
+
+
+def test_main_openrouter_dry_run_needs_no_key(monkeypatch, capsys):
+    """#63: estimating what a call would cost must not require the credential you are
+    deciding whether to spend. The OpenRouter dry-run path resolves no key and fetches
+    nothing; the estimate is token count only."""
+    monkeypatch.setattr("sys.argv", ["tlr", "--role", "architecture", "--files", "x", "--dry-run"])
+    monkeypatch.setattr(tlr, "gather_content", lambda args: "some artifact")
+
+    def boom(*a, **k):
+        raise AssertionError("resolve_key() must not be called on the OpenRouter dry-run path")
+    monkeypatch.setattr(tlr, "resolve_key", boom)
+    monkeypatch.setattr(tlr, "fetch_models", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no fetch without a key")))
+    tlr.main()
+    out = capsys.readouterr().out
+    assert "Estimated input tokens" in out and "Pricing skipped" in out
+
+
+def test_dry_run_with_a_key_still_reports_pricing(monkeypatch, capsys):
+    monkeypatch.setattr(tlr, "fetch_models", lambda *a, **k: [{"id": "z-ai/glm-5.3", "pricing": {"prompt": "0.000001", "completion": "0.000002"}}])
+
+    class Args:
+        max_tokens = 1000
+        effort = "medium"
+        dry_run = True
+        prompt = None
+    tlr.run_openrouter("SYS", "USER", "z-ai/glm-5.3", Args(), "fakekey")
+    assert "Estimated max cost" in capsys.readouterr().out

@@ -252,11 +252,13 @@ def run_openrouter(system_prompt, user_msg, model, args, key):
     """Run a review via OpenRouter HTTP API. Prints RAW OUTPUT + usage + balance."""
     # rough pre-flight token estimate (chars/4) for the cost note
     est_in = (len(system_prompt) + len(user_msg)) // 4
-    models = fetch_models(key)
-    p_in, p_out = get_pricing(key, model, models)
+    # A keyless dry run is legal (main() skips resolve_key for it): the estimate is
+    # then token-count only — nothing is fetched, because /models needs the key.
+    models = fetch_models(key) if key else None
+    p_in, p_out = get_pricing(key, model, models) if key else (None, None)
     # The watchdog runs BEFORE the dry-run branch: a stale pin must fail the same way
     # whether or not the model is about to be called.
-    served = model_is_served(key, model, models)
+    served = model_is_served(key, model, models) if key else None
     if served is False:
         if getattr(args, "model", None):
             eprint(f"ERROR: OpenRouter does not serve model id '{model}' (given with --model). "
@@ -276,6 +278,9 @@ def run_openrouter(system_prompt, user_msg, model, args, key):
             print(f"Estimated max cost: ~${est_cost:.4f} "
                   f"(in ${p_in*1e6:.2f}/Mtok, out ${p_out*1e6:.2f}/Mtok, "
                   f"assuming full {args.max_tokens} output tokens)")
+        elif not key:
+            print("Pricing skipped — no OpenRouter key on this machine; the estimate above is "
+                  "token count only. Add the key to see the cost.")
         else:
             print("Pricing unavailable for this model id — verify it exists on OpenRouter.")
         return
@@ -443,7 +448,10 @@ def main():
     user_msg = f"Review the following artifact:\n\n{content}"
 
     if transport == "openrouter":
-        key = resolve_key()  # lazy — CLI role needs no OpenRouter key (P1)
+        # Lazy — the CLI role needs no OpenRouter key (P1), and neither does a dry run:
+        # estimating what a call would cost must not require the credential you are
+        # deciding whether to spend (#63).
+        key = None if args.dry_run else resolve_key()
         run_openrouter(system_prompt, user_msg, target, args, key)
     else:
         run_codex(system_prompt, user_msg, target, args)

@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.1] - 2026-09-11
+
+### Fixed
+- **`third-lens-review.py --dry-run` no longer requires the OpenRouter key it helps you
+  decide whether to spend.** The OpenRouter path resolved the key before dispatching, so a
+  keyless machine could not even estimate a run — the failure that turned the 2.51.0
+  equivalence test red in CI. The key is now resolved only for a real call; a keyless dry
+  run prints the token estimate and says pricing was skipped. Re-lands PR #63 on top of
+  3.0.0's `/models` watchdog (a keyless dry run fetches nothing and the watchdog stays
+  silent, since it cannot know).
+
 ## [3.0.0] - 2026-09-11
 
 **Modernisering.** The plugin was designed for models that skipped steps and needed
