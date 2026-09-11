@@ -188,7 +188,7 @@ awk '/[Dd]eferred \(grown past its block/{f=1; next} f' "$WORK/run.log" \
   | head -20 | grep -qi "Native Apple development tools"
 assert "report names the deferred section under the Deferred block" $?
 
-# 6. The gate fired on a section at 1.23x its block — invisible to the Ratio proxy,
+# 6. The gate fired on a section under 1.5x its block — invisible to the Ratio proxy,
 #    so the old signal was blind to it. It does NOT establish WHICH trigger fired.
 #    Volume fires here on its own: this fixture's section shares almost nothing with
 #    git-hygiene.md (~160 of its lines are absent from the block entirely), and under
@@ -200,7 +200,7 @@ MISSING_PROV=0
 for n in 001 002 003 004 005; do
   grep -q "PROV-SENTINEL-$n" "$WORK/CLAUDE.md" || { echo "  lost PROV-SENTINEL-$n"; MISSING_PROV=1; }
 done
-[ "$MISSING_PROV" -eq 0 ]; assert "provenance-marked section survives at 1.23x, below the ratio proxy" $?
+[ "$MISSING_PROV" -eq 0 ]; assert "provenance-marked section survives under 1.5x, below the ratio proxy" $?
 
 # 7-9. Survival alone does not prove the gate ran. There is a second route to
 #    those five lines being intact: if the marker were read as ABSENT, this

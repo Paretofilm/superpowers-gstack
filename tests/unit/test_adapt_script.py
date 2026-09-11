@@ -491,7 +491,8 @@ def test_the_report_ends_with_one_json_line_the_skill_can_read(tmp_path):
     d = {x["marker"]: x for x in j["deferred"]}
     assert d["gstack-xcode-tools"]["heading"].startswith("Native Apple development tools")
     assert d["gstack-xcode-tools"]["lines"] > d["gstack-xcode-tools"]["block_lines"]
-    assert d["gstack-git-hygiene"]["emitted"] == 162
+    emitted_in_fixture = int(re.search(r"gstack-git-hygiene-v\d+ --><!-- emitted=(\d+) -->", FIXTURE.read_text()).group(1))
+    assert d["gstack-git-hygiene"]["emitted"] == emitted_in_fixture
 
 
 def test_the_blocks_roster_is_exactly_the_marker_blocks_on_disk():
