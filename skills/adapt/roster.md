@@ -30,7 +30,7 @@ a skill. Rows are `| skill | consider relevant when... |`.
 | `/plan-ceo-review` | Projects with strategic decisions or significant scope |
 | `/plan-eng-review` | Projects needing architecture decisions |
 | `/plan-design-review` | Projects with UI/UX components |
-| `/design-consultation` | New projects defining a design system from scratch (creates DESIGN.md) |
+| `/design-consultation` | New projects defining a design system from scratch (creates DESIGN.md in open format compatible with impeccable and Google Stitch) |
 | `/design-shotgun` | When you want multiple design variants to compare before committing |
 | `/plan-devex-review` | Projects with developer-facing surfaces (APIs, CLIs, SDKs, libraries) |
 | `/plan-tune` | Tune plan-skill question preferences (one-time, per-project) |
@@ -40,22 +40,22 @@ a skill. Rows are `| skill | consider relevant when... |`.
 
 | Skill | Consider relevant when... |
 |---|---|
-| `/review` | Almost always — pre-merge code review |
-| `/qa <url>` | Projects with a browser-accessible UI (include the URL) |
+| `/review` | Almost always — pre-merge code review; runs design detector scan first when frontend files are in scope |
+| `/qa <url>` | Projects with a browser-accessible UI (include the URL); drives Aside first, bundled Chromium as fallback |
 | `/qa-only <url>` | Same, but report-only (no auto-fixes) |
 | `/cso` | Projects handling auth, user data, payments, or external APIs. For security-critical features, run BEFORE `/review` |
-| `/design-review` | Projects with visual UI — catches spacing, alignment, inconsistencies |
-| `/design-html` | When you have an approved design and need production HTML/CSS |
-| `/devex-review` | Developer-facing projects — live audit of onboarding flow, docs, CLI help |
+| `/design-review` | Projects with visual UI — runs 61 deterministic checks (impeccable engine, consent-gated) before the LLM pass; also scans the rendered DOM on a live URL |
+| `/design-html` | When you have an approved design and need production HTML/CSS; slop gate runs before screenshots |
+| `/devex-review` | Developer-facing projects — live audit of onboarding flow, docs, CLI help; drives Aside first |
 | `/investigate` | Bugs discovered AFTER Phase 2 — in QA, staging, or production. Do NOT use during Phase 2 implementation (use `/superpowers:systematic-debugging` instead) |
 
 **GStack skills — Phase 4 (Ship & Monitor):**
 
 | Skill | Consider relevant when... |
 |---|---|
-| `/ship` | Projects using git with feature branches and PRs |
-| `/land-and-deploy` | Projects with CI/CD deployment pipelines |
-| `/canary` | Projects with production monitoring needs |
+| `/ship` | Projects using git with feature branches and PRs; design detector scan runs first when frontend files are in scope |
+| `/land-and-deploy` | Projects with CI/CD deployment pipelines; post-deploy check drives Aside first |
+| `/canary` | Projects with production monitoring needs; drives Aside first, bundled Chromium as fallback |
 | `/landing-report` | Read-only PR queue + sibling-workspace dashboard (workspace-aware ship) |
 | `/setup-deploy` | One-time: configure deploy platform (Fly.io, Vercel, Render, etc.) for `/land-and-deploy` |
 | `/document-release` | Projects with documentation to maintain |
@@ -64,7 +64,7 @@ a skill. Rows are `| skill | consider relevant when... |`.
 | `/setup-gbrain` | Long-running projects wanting cross-session memory (PGLite local or Supabase) |
 | `/sync-gbrain` | Long-running projects with gbrain — keeps the brain current with this repo's code and refreshes CLAUDE.md search guidance |
 | `/health` | Projects with existing linting, type checking, or test suites |
-| `/make-pdf` | Projects needing publication-quality documentation or reports |
+| `/make-pdf` | Projects needing publication-quality documentation or reports; renders through Aside when available |
 
 **GStack skills — Utility:**
 
@@ -74,8 +74,8 @@ a skill. Rows are `| skill | consider relevant when... |`.
 | `/freeze` | Monorepos or projects where edits should be restricted TO a specific directory (allow-list, not block-list) |
 | `/unfreeze` | Clear the `/freeze` boundary mid-session without ending the session |
 | `/guard` | Production / shared-infra work — combines `/careful` warnings with `/freeze` directory lock |
-| `/browse` | Projects needing headless browser interaction beyond QA |
-| `/scrape` | Projects pulling data from web pages — prototypes a flow once, codifies it via `/skillify` |
+| `/browse` | Projects needing headless browser interaction beyond QA; drives Aside first, bundled Chromium as fallback |
+| `/scrape` | Projects pulling data from web pages — prototypes a flow once, codifies it via `/skillify`; drives Aside first |
 | `/skillify` | After a successful `/scrape` — persists the flow as a permanent browser-skill so future calls run in ~200ms |
 | `/open-gstack-browser` | Projects wanting a visible AI-controlled Chromium with live activity feed |
 | `/pair-agent` | When pairing a remote AI agent with your browser session |
@@ -84,9 +84,9 @@ a skill. Rows are `| skill | consider relevant when... |`.
 | `/superpowers-gstack:htmlify` | Offline HTML rendering of MD artefacts when the Artifact tool is unavailable; otherwise prefer the Artifact tool. |
 | `/context-save` | Save progress and working state |
 | `/context-restore` | Resume where you left off |
-| `/benchmark` | Projects with performance monitoring needs |
+| `/benchmark` | Projects with performance monitoring needs; drives Aside first |
 | `/benchmark-models` | Projects comparing AI model performance |
-| `/codex` | Projects needing second opinions or adversarial code review |
+| `/codex` | Projects needing second opinions or adversarial code review; defaults to GPT-6 Astra (override with `GSTACK_CODEX_MODEL`) |
 | `/superpowers-gstack:autoimplement` | Multi-phase plans — one subagent per phase, `/review` + `/pitfall-verification` chained at every phase boundary (`/review` owns the Codex pass; pitfall adds domain inference and the third lens per tier). Active pre-flight reviews the plan body before Phase 1 unless the latest plan commit matches `^(chore\|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]\|$)`. Refuses on <2 phases, missing per-phase commit steps, dirty tree, main/master branch, or plans touching migrations/secrets/credentials/.env/.ssh. |
 | `/superpowers-gstack:office-hours-track-aware` | All new-project brainstorming — wraps `/office-hours` with track inference (web vs native), inline platform question, design-doc relocation, and an Artifact preview before the approval gate. **Intercepts `/office-hours`** — see routing-intercept rules below. |
 | `/superpowers-gstack:swiftui-design-consultation` | Native SwiftUI projects — produces DESIGN.md + Swift Package starter; equivalent to /design-consultation for web. Inlines the platform question (iOS/macOS/both) on first run if `.gstack/track` is missing. |

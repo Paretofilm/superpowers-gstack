@@ -134,7 +134,8 @@ This generates a CLAUDE.md with routing rules tailored to your project type, tec
 │  /review          → Pre-landing code review      │
 │  /qa <url>        → Browser-based testing        │
 │  /cso             → Security audit               │
-│  /design-review   → Visual audit                 │
+│  /design-review   → Visual audit (61 deterministic│
+│                     checks via impeccable engine) │
 ├─────────────────────────────────────────────────┤
 │  PHASE 4: SHIP & MONITOR (GStack)                │
 │                                                  │
@@ -276,13 +277,13 @@ Review passed? → /qa → /cso → /ship
 | `/review` | Pre-merge code review (8 lenses, incl. advisory simplification) |
 | `/qa <url>` | Browser-based testing |
 | `/cso` | Security audit |
-| `/design-review` | Visual audit |
-| `/design-consultation` | Design system from scratch |
+| `/design-review` | Visual audit; runs 61 deterministic checks (impeccable engine, consent-gated) before the LLM pass |
+| `/design-consultation` | Design system from scratch; writes open DESIGN.md format |
 | `/design-shotgun` | Generate multiple design variants |
-| `/design-html` | Finalize design as production HTML/CSS |
+| `/design-html` | Finalize design as production HTML/CSS; slop gate runs before screenshots |
 | `/devex-review` | Live developer experience audit |
 | `/investigate` | Bug root cause (QA/production) |
-| `/ship` | Create PR and deploy |
+| `/ship` | Create PR and deploy; design pass runs mechanical scan first |
 | `/land-and-deploy` | Merge and verify |
 | `/canary` | Post-deploy monitoring |
 | `/landing-report` | Read-only PR queue + sibling-workspace dashboard |
@@ -297,7 +298,7 @@ Review passed? → /qa → /cso → /ship
 | `/freeze` | Restrict edits to one directory |
 | `/unfreeze` | Clear the freeze boundary mid-session |
 | `/guard` | Full safety: `/careful` + `/freeze` combined |
-| `/browse` | Headless browser |
+| `/browse` | Headless browser (Aside first, bundled Chromium fallback) |
 | `/open-gstack-browser` | Launch GStack Browser (Chromium + sidebar) |
 | `/pair-agent` | Pair a remote AI agent with your browser; a re-pair with the same `--client` and a narrower `--restrict` revokes the old session immediately |
 | `/setup-browser-cookies` | Import cookies for authenticated tests |
@@ -306,7 +307,7 @@ Review passed? → /qa → /cso → /ship
 | `/make-pdf` | Markdown to publication-quality PDFs |
 | `/learn` | Save cross-session learnings |
 | `/setup-gbrain` | Onboard cross-session memory (gbrain) |
-| `/codex` | OpenAI Codex CLI second opinion |
+| `/codex` | OpenAI Codex CLI second opinion; defaults to GPT-6 Astra (override with `GSTACK_CODEX_MODEL`) |
 
 ### Superpowers Commands
 
