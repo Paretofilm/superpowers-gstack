@@ -100,12 +100,18 @@ shortpath() {
 # so a session with nothing to report still makes no network call. Bounded and
 # non-interactive: a SessionStart hook has a 10 s budget and nobody to type a password.
 SERVER_CHECK_SECS=3
-server_state=""; server_heads=""; server_unsure=0   # state: "" not asked | ok | unreachable
+server_state=""; server_unsure=0      # state: "" not asked | ok | unreachable
+server_raw=""; server_heads=""        # temp files: ls-remote output, then one ref per line
 server_has() {   # $1 = branch name on origin → 0 there, 1 not there, 2 could not tell
   if [ -z "$server_state" ]; then
     server_state=unreachable
-    local out pid dog sha name
-    out=$(mktemp "${TMPDIR:-/tmp}/gstack-heads.XXXXXX" 2>/dev/null) || { server_unsure=1; return 2; }
+    local pid dog
+    server_raw=$(mktemp "${TMPDIR:-/tmp}/gstack-heads.XXXXXX" 2>/dev/null) || server_raw=""
+    server_heads=$(mktemp "${TMPDIR:-/tmp}/gstack-heads.XXXXXX" 2>/dev/null) || server_heads=""
+    # Two named files and `rm -f`, never a directory and `rm -rf`: a variable that came
+    # back empty must not be able to reach a recursive delete.
+    trap '[ -n "$server_raw" ] && rm -f "$server_raw"; [ -n "$server_heads" ] && rm -f "$server_heads"' EXIT
+    { [ -n "$server_raw" ] && [ -n "$server_heads" ]; } || { server_unsure=1; return 2; }
     (
       export GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never
       # BatchMode fails instead of asking for a passphrase, unless the user routes ssh
@@ -113,26 +119,23 @@ server_has() {   # $1 = branch name on origin → 0 there, 1 not there, 2 could 
       [ -z "${GIT_SSH_COMMAND:-}" ] && [ -z "$(git config --get core.sshCommand 2>/dev/null)" ] \
         && export GIT_SSH_COMMAND="ssh -o BatchMode=yes"
       exec git ls-remote --heads origin
-    ) >"$out" 2>/dev/null </dev/null &
+    ) >"$server_raw" 2>/dev/null </dev/null &
     pid=$!
     # The watchdog's own fds go nowhere: one it held open would keep the hook's stdout
     # open, and the session would wait for it.
     ( sleep "$SERVER_CHECK_SECS"; kill "$pid" ) >/dev/null 2>&1 </dev/null &
     dog=$!
-    if wait "$pid" 2>/dev/null; then
-      server_state=ok
-      while IFS=$'\t' read -r sha name; do
-        server_heads="${server_heads}${name#refs/heads/}"$'\n'
-      done <"$out"
-    fi
+    wait "$pid" 2>/dev/null && cut -f2 <"$server_raw" >"$server_heads" 2>/dev/null && server_state=ok
     kill "$dog" 2>/dev/null; wait "$dog" 2>/dev/null
-    rm -f "$out"
   fi
   [ "$server_state" = ok ] || { server_unsure=1; return 2; }
-  # Matched without a pipe: under pipefail a `grep -q` that exits early can fail the
-  # printf with SIGPIPE, which would read as "not there" and silently drop a real row.
-  case $'\n'"$server_heads" in *$'\n'"$1"$'\n'*) return 0 ;; esac
-  return 1
+  # One grep over a file. Building the list in a shell string was quadratic: 20 000
+  # server branches took 145 s (measured), far past the 10 s budget, and a hook killed
+  # for time reports nothing. No pipe either: under pipefail an early-exiting grep can
+  # fail its writer with SIGPIPE, which would read as "not there" and drop a real row.
+  grep -qxF -- "refs/heads/$1" "$server_heads" 2>/dev/null
+  case $? in 0) return 0 ;; 1) return 1 ;; esac
+  server_unsure=1; return 2
 }
 cutoff=$(( $(date +%s) - IDLE_DAYS * 86400 ))
 

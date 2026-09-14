@@ -765,3 +765,32 @@ def test_a_server_that_never_answers_cannot_stall_the_session(tmp_path, repo):
     findings = findings_of(run_hook(repo))
     assert time.monotonic() - start < 6
     assert "orphan" in findings and "as of the last fetch" in findings
+
+
+def test_nothing_to_report_means_no_network_call(tmp_path, repo):
+    """The server is asked only when a row is about to claim something about it. A clean
+    repo whose remote would hang must stay silent and fast, or every session pays."""
+    with_remote(tmp_path, repo)
+    hang = tmp_path.parent / f"{tmp_path.name}-hang.sh"
+    hang.write_text("#!/bin/sh\nexec sleep 8\n"); hang.chmod(0o755)
+    git(repo, "config", "core.sshCommand", str(hang))
+    git(repo, "remote", "set-url", "origin", "ssh://example.invalid/x.git")
+    start = time.monotonic()
+    assert run_hook(repo) == ""
+    assert time.monotonic() - start < 2
+
+
+def test_a_server_with_thousands_of_branches_stays_inside_the_budget(tmp_path, repo):
+    """Built up in a shell string, the server's branch list was quadratic: 20 000 names took
+    145 s (measured), far past the 10 s a SessionStart hook gets, and a hook killed for
+    time reports nothing at all. 6 000 would have taken about 13 s."""
+    bare = with_remote(tmp_path, repo)
+    pushed_idle_branch(repo, "orphan")
+    git(repo, "branch", "-qD", "orphan")
+    head = git(repo, "rev-parse", "main").stdout.strip()
+    refs = "".join(f"create refs/heads/bulk/branch-with-a-longish-name-{n:05d} {head}\n" for n in range(6000))
+    subprocess.run(["git", "-C", str(bare), "update-ref", "--stdin"], input=refs, text=True, check=True)
+    start = time.monotonic()
+    findings = findings_of(run_hook(repo))
+    assert time.monotonic() - start < 5
+    assert "orphan" in findings and "as of the last fetch" not in findings
