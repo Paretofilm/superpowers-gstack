@@ -545,3 +545,130 @@ def test_menu_briefs_the_agent_on_how_to_turn_it_into_choices(tmp_path, repo):
     assert "a click authorizes only what it names" in menu
     assert "in a non-interactive session take no action" in menu
     assert "say what you left unresolved" in menu
+
+
+# --- parked work and local-only repos (3.1.2) -----------------------------------
+# git-hygiene v11 parks unfinished work on wip/<topic> instead of the shared stash.
+# The report had one bucket for idle unmerged branches, headed "On the server" and
+# answered with /ship: wrong for a parked branch, and wrong in a repo with no remote.
+
+
+def old_commit(repo, msg="old"):
+    old = "2020-01-01T00:00:00"
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", msg, "--date", old], check=True,
+                   env={"PATH": "/usr/bin:/bin", "HOME": str(repo), "GIT_COMMITTER_DATE": old,
+                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t.t",
+                        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t.t"})
+
+
+def test_parked_wip_branch_is_offered_a_resume_not_a_ship(tmp_path, repo):
+    """A pushed wip/ branch idle past the threshold was listed with unlanded features
+    and offered '/ship ... opens a PR': a PR, every session, for work nobody meant to
+    ship yet."""
+    with_remote(tmp_path, repo)
+    git(repo, "checkout", "-qb", "wip/parked")
+    (repo / "half.txt").write_text("half done"); git(repo, "add", "-A"); old_commit(repo)
+    git(repo, "push", "-q", "-u", "origin", "wip/parked")
+    git(repo, "checkout", "-q", "main")
+    out = run_hook(repo)
+    findings, menu = findings_of(out), out.split(MENU)[1]
+    assert "Parked on wip/ branches" in findings and "wip/parked" in findings
+    assert "never merged into" not in findings
+    assert "git worktree add" in menu
+    assert "/ship" not in menu and "finish" not in menu
+
+
+def test_feature_branch_next_to_a_parked_one_is_still_offered_finish(tmp_path, repo):
+    """Splitting the bucket must not swallow real unlanded work."""
+    with_remote(tmp_path, repo)
+    for name in ("wip/parked", "feature"):
+        git(repo, "checkout", "-qb", name)
+        (repo / f"{name.replace('/', '-')}.txt").write_text("x"); git(repo, "add", "-A"); old_commit(repo)
+        git(repo, "push", "-q", "-u", "origin", name)
+        git(repo, "checkout", "-q", "main")
+    menu = run_hook(repo).split(MENU)[1]
+    finish_line = [l for l in menu.splitlines() if "finish" in l][0]
+    assert "'feature'" in finish_line
+    assert "wip/parked" not in finish_line
+    assert "'wip/parked'" in menu               # offered, just not as something to ship
+
+
+def test_no_remote_idle_branch_is_not_called_on_the_server(repo):
+    """With no remote configured nothing is on a server; saying so is the false safety
+    this report exists to remove."""
+    git(repo, "checkout", "-qb", "feature")
+    (repo / "g.txt").write_text("x"); git(repo, "add", "-A"); old_commit(repo)
+    git(repo, "checkout", "-q", "main")
+    git(repo, "checkout", "-qb", "wip/local-only")
+    (repo / "h.txt").write_text("y"); git(repo, "add", "-A"); old_commit(repo)
+    git(repo, "checkout", "-q", "main")
+    out = run_hook(repo)
+    assert "On the server" not in out
+    assert "no remote is configured" in out and "never merged into" in out
+    assert "so they exist only here" in out and "wip/local-only" in findings_of(out)
+
+
+def test_server_only_wip_branch_is_parked_too(tmp_path, repo):
+    """A wip/ branch whose local copy is gone went through the remote-orphan check
+    instead, and came back as 'On the server' with the /ship offer."""
+    with_remote(tmp_path, repo)
+    git(repo, "checkout", "-qb", "wip/remote-only")
+    (repo / "half.txt").write_text("half done"); git(repo, "add", "-A"); old_commit(repo)
+    git(repo, "push", "-q", "origin", "wip/remote-only")
+    git(repo, "checkout", "-q", "main"); git(repo, "branch", "-qD", "wip/remote-only")
+    out = run_hook(repo)
+    findings, menu = findings_of(out), out.split(MENU)[1]
+    assert "Parked on wip/ branches" in findings and "server-only" in findings
+    assert "On the server" not in findings
+    assert "finish" not in menu
+    # inspected by its remote name: no local branch called wip/remote-only exists
+    assert "'origin/wip/remote-only'" in menu and "without origin/" in menu
+
+
+def test_pipe_in_a_ref_name_does_not_abort_the_session(tmp_path, repo):
+    """git allows `|` in a ref name. Split on `|`, `x|UNBOUND` put a variable name into
+    the age arithmetic; set -u stopped the hook there, still exiting 0, and none of the
+    idle branches was reported, so the session looked clean. Measured on bash 3.2.
+    Found by Codex in the 3.1.2 review; it predates that release."""
+    with_remote(tmp_path, repo)
+    for i, name in enumerate(("old|UNBOUND", "gone|UNBOUND")):
+        git(repo, "checkout", "-qb", name)
+        (repo / f"p{i}.txt").write_text("x"); git(repo, "add", "-A"); old_commit(repo)
+        git(repo, "push", "-q", "-u", "origin", name)
+        git(repo, "checkout", "-q", "main")
+    git(repo, "branch", "-qD", "gone|UNBOUND")
+    out = run_hook(repo)                      # run_hook asserts exit 0
+    assert "old|UNBOUND" in out and "gone|UNBOUND" in out
+
+
+def test_parked_branch_checked_out_in_a_worktree_is_resumed_there(tmp_path, repo):
+    """git refuses `worktree add` for a branch another worktree holds, so offering it
+    was an action that fails when run. The offer names that folder instead."""
+    with_remote(tmp_path, repo)
+    wt = add_worktree(repo, tmp_path.parent / f"{tmp_path.name}-wt", "wip/parked")
+    (wt / "half.txt").write_text("x"); git(wt, "add", "-A"); old_commit(wt)
+    git(wt, "push", "-q", "-u", "origin", "wip/parked")
+    menu = run_hook(repo).split(MENU)[1]
+    look = [l for l in menu.splitlines() if "look at" in l][0]
+    assert "-wt" in look and "git worktree add" not in look
+
+
+def test_parked_rows_are_bounded_across_both_loops(tmp_path, repo):
+    """Server-only parked branches skipped the eight-row bound the remote-orphan list
+    has, so a repo full of old bot branches could flood every session. Local and
+    server-only parked branches share one counter, so the bound has to hold across
+    both loops, and a mixed menu still has to say how to resume an origin/ one."""
+    with_remote(tmp_path, repo)
+    for n in range(10):
+        git(repo, "checkout", "-qb", f"wip/p{n}")
+        (repo / f"p{n}.txt").write_text("x"); git(repo, "add", "-A"); old_commit(repo)
+        git(repo, "push", "-q", "-u", "origin", f"wip/p{n}")
+        git(repo, "checkout", "-q", "main")
+        if n >= 5:
+            git(repo, "branch", "-qD", f"wip/p{n}")    # p5-p9 live only on the server
+    out = run_hook(repo)
+    findings, menu = findings_of(out), out.split(MENU)[1]
+    assert findings.count("wip/p") == 8                # 5 local rows + 3 server-only
+    assert findings.count("server-only") == 3
+    assert "2 more parked branch(es)" in findings
+    assert "without origin/" in menu

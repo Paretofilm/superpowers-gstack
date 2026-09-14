@@ -103,8 +103,14 @@ if [ "$current" = "HEAD" ]; then
 fi
 
 stale=""; stale_n=0; stale_first=""; stale_names=""
-while IFS='|' read -r ref ts; do
+parked=""; parked_n=0; parked_names=""; parked_first=""; parked_remote=0   # wip/* — set aside on purpose, not unlanded features
+while IFS=$'\t' read -r ref ts; do
   [ -z "$ref" ] && continue
+  # Tab-separated, not `|`: git allows `|` in a ref name, and `x|UNBOUND` split on it
+  # put a variable name into the age arithmetic below; set -u stopped the hook there,
+  # exit 0, and no idle branch was reported at all. A ref cannot contain a control
+  # character, and the timestamp is checked too.
+  case "$ts" in ''|*[!0-9]*) continue ;; esac
   [ "$ref" = "$default_ref" ] && continue
   [ "$ref" = "$current" ] && continue          # you are working here right now
   [ "$ts" -ge "$cutoff" ] 2>/dev/null && continue
@@ -123,11 +129,23 @@ while IFS='|' read -r ref ts; do
   fi
   ahead=$(git rev-list --count "$base..$ref" 2>/dev/null || echo "?")
   age=$(( ( $(date +%s) - ts ) / 86400 ))
+  # A wip/* branch is work set aside on purpose: git-hygiene v11 parks unfinished work
+  # there instead of in the stash every worktree shares. Listed with the unlanded
+  # features it was offered "/ship ... opens a PR" every session, for work nobody meant
+  # to ship. It gets its own heading and a resume offer instead.
+  case "$ref" in
+    wip/*)
+      [ "$parked_n" -lt 8 ] && parked="${parked}$(row "$ref" "${ahead} commit(s), idle ${age}d")\n"
+      parked_n=$((parked_n + 1))
+      [ -z "$parked_first" ] && parked_first="$ref"
+      [ "$parked_n" -le 3 ] && parked_names="${parked_names} $(shq "$ref")"
+      continue ;;
+  esac
   stale="${stale}$(row "$ref" "${ahead} commit(s), idle ${age}d")\n"
   stale_n=$((stale_n + 1))
   [ -z "$stale_first" ] && stale_first="$ref"
   [ "$stale_n" -le 3 ] && stale_names="${stale_names} $(shq "$ref")"
-done < <(git for-each-ref --format='%(refname:short)|%(committerdate:unix)' refs/heads 2>/dev/null)
+done < <(git for-each-ref --format='%(refname:short)%09%(committerdate:unix)' refs/heads 2>/dev/null)
 
 # Uncommitted changes AT SESSION START are leftovers, not work in progress —
 # whatever this was, the last session ended without committing it. This is the
@@ -246,17 +264,30 @@ done < <(git worktree list --porcelain 2>/dev/null; echo)
 # six branches in this very repo: a bot opened them, the PRs were closed, and the
 # branches outlived both.
 remote_orphans=""; remote_n=0
-while IFS='|' read -r ref ts; do
+while IFS=$'\t' read -r ref ts; do
   [ -z "$ref" ] && continue
+  # Tab-separated, not `|`: git allows `|` in a ref name, and `x|UNBOUND` split on it
+  # put a variable name into the age arithmetic below; set -u stopped the hook there,
+  # exit 0, and no idle branch was reported at all. A ref cannot contain a control
+  # character, and the timestamp is checked too.
+  case "$ts" in ''|*[!0-9]*) continue ;; esac
   short="${ref#origin/}"
   [ "$short" = "$default_ref" ] || [ "$short" = "HEAD" ] && continue
   git show-ref --verify -q "refs/heads/$short" && continue      # has a local twin, counted above
   [ "$ts" -ge "$cutoff" ] 2>/dev/null && continue
   git merge-base --is-ancestor "$ref" "$base" 2>/dev/null && continue
   age=$(( ( $(date +%s) - ts ) / 86400 ))
+  case "$short" in
+    wip/*)   # parked work only the server still holds. Named origin/..., since no local
+             # branch of that name exists for `git log` to find.
+      [ "$parked_n" -lt 8 ] && parked="${parked}$(row "$ref" "server-only, idle ${age}d")\n"
+      parked_n=$((parked_n + 1)); parked_remote=1
+      [ "$parked_n" -le 3 ] && parked_names="${parked_names} $(shq "$ref")"
+      continue ;;
+  esac
   [ "$remote_n" -lt 8 ] && remote_orphans="${remote_orphans}$(row "$short" "server-only, idle ${age}d")\n"
   remote_n=$((remote_n + 1))
-done < <(git for-each-ref --format='%(refname:short)|%(committerdate:unix)' refs/remotes/origin 2>/dev/null)
+done < <(git for-each-ref --format='%(refname:short)%09%(committerdate:unix)' refs/remotes/origin 2>/dev/null)
 
 # Commits that exist only on this machine. Found as a blind spot on 2026-08-22:
 # a branch fully merged locally but never pushed reported nothing, because every
@@ -271,7 +302,7 @@ unpushed=""; unpushed_n=0; push_first=""; push_names=""; current_unpushed=0
 # What this adds is the case every other check misses — commits merged locally and
 # never pushed, which look landed from every branch-comparison angle.
 if git remote 2>/dev/null | grep -q .; then
-  while IFS='|' read -r ref up; do
+  while IFS=$'\t' read -r ref up; do
     [ -z "$ref" ] && continue
     if [ -z "$up" ]; then
       # Never pushed anywhere. 2.40.0 excluded this as "already covered by the
@@ -299,7 +330,7 @@ if git remote 2>/dev/null | grep -q .; then
     fi
     unpushed_n=$((unpushed_n + 1))
     [ "$ref" = "$current" ] && current_unpushed=1
-  done < <(git for-each-ref --format='%(refname:short)|%(upstream:short)' refs/heads 2>/dev/null)
+  done < <(git for-each-ref --format='%(refname:short)%09%(upstream:short)' refs/heads 2>/dev/null)
 fi
 
 # Stashes. git-hygiene steers agents to WIP branches, never a stash (every worktree
@@ -346,7 +377,7 @@ report_gstack() {
   esac
 }
 
-if [ "$stale_n" = "0" ] && [ "$remote_n" = "0" ] && [ "${dirty_n:-0}" = "0" ] \
+if [ "$stale_n" = "0" ] && [ "${parked_n:-0}" = "0" ] && [ "$remote_n" = "0" ] && [ "${dirty_n:-0}" = "0" ] \
    && [ "${other_wt_n:-0}" = "0" ] \
    && [ "${unpushed_n:-0}" = "0" ] && [ "${detached_n:-0}" = "0" ] \
    && [ "${wt_det_n:-0}" = "0" ] && [ "${wt_done_n:-0}" = "0" ] \
@@ -402,9 +433,24 @@ if [ "$at_risk" -gt 0 ]; then
 fi
 
 if [ "$stale_n" != "0" ] || [ "$remote_n" != "0" ]; then
-  echo "  On the server, never merged into ${default_ref}:"
+  # With no remote, nothing is "on the server". A heading that says so is the false
+  # safety the has_remote gate exists to prevent, and the one a user would act on.
+  if [ "$has_remote" = "1" ]; then
+    echo "  On the server, never merged into ${default_ref}:"
+  else
+    echo "  Kept in this repo only (no remote is configured), never merged into ${default_ref}:"
+  fi
   [ "$stale_n" != "0" ] && printf "%b" "$stale"
   [ "$remote_n" != "0" ] && printf "%b" "$remote_orphans"
+  echo
+fi
+
+if [ "${parked_n:-0}" != "0" ]; then
+  parked_where=""
+  [ "$has_remote" = "0" ] && parked_where=" (no remote is configured, so they exist only here)"
+  echo "  Parked on wip/ branches, untouched for ${IDLE_DAYS}+ days${parked_where}:"
+  printf "%b" "$parked"
+  [ "$parked_n" -gt 8 ] && printf "%b\n" "$(row "..." "$((parked_n - 8)) more parked branch(es)")"
   echo
 fi
 
@@ -496,6 +542,19 @@ fi
 [ "${dirty_n:-0}" != "0" ] && act "show" "what those ${dirty_n} file(s) actually change, before deciding"
 [ "${other_wt_n:-0}" != "0" ] && act "look at" "$(shortpath "$wt_first") — a second working folder (git worktree list), ${wt_first_n} loose file(s)"
 [ "$stash_oldest" -ge "$IDLE_DAYS" ] && act "look at" "the ${stash_n} parked change set(s) — git stash list, then git stash show -p"
+# Parked work is offered a look and a resume, never /ship: it was set aside unfinished.
+# Resuming has two dead ends to route around. A branch another worktree holds cannot be
+# added again, so name that folder; a server-only one has no local name yet, and
+# `git worktree add` creates the tracking branch only from the name without origin/.
+if [ "${parked_n:-0}" != "0" ]; then
+  resume="resume it in its own folder (git worktree add <path> <branch>; if git worktree list shows it checked out already, resume in that folder)"
+  if [ "$parked_n" = "1" ] && [ -n "$parked_first" ]; then
+    p_where=$(printf '%s' "$wt_map" | awk -F'\t' -v b="$parked_first" '$1 == b { print $2; exit }')
+    [ -n "$p_where" ] && resume="resume it in $(shortpath "$p_where"), the folder it is already checked out in"
+  fi
+  [ "${parked_remote:-0}" = "1" ] && resume="${resume}; for an origin/ one, give git worktree add the name without origin/ so it creates the local branch"
+  act "look at" "the parked work in${parked_names}$(more "$parked_n") — git log $(shq "$base")..<branch>; then offer to ${resume}, or to delete the branch if nothing in it is still wanted"
+fi
 if [ -n "$stale_names" ] || [ "$remote_n" != "0" ]; then
   target="${stale_names}$(more "$stale_n")"
   [ -z "$stale_names" ] && target=" the ${remote_n} server-only branch(es)"

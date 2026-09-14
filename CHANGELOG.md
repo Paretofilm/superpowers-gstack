@@ -1,5 +1,32 @@
 # Changelog
 
+## [3.1.2] - 2026-09-14
+
+**The unlanded-work report tells parked work and local-only repos apart.**
+
+### Fixed
+- **Parked `wip/*` branches are no longer offered `/ship`.** git-hygiene v11 parks
+  unfinished work on `wip/<topic>`. `check-branch-hygiene.sh` listed such a branch, once
+  idle past the threshold, together with unlanded features and offered "/ship ... opens
+  a PR" every session, for work nobody meant to ship. It now gets its own "Parked on
+  wip/ branches" heading and a look-at offer: resume it in its own folder
+  (`git worktree add`), or delete the branch if nothing in it is still wanted. Other
+  idle branches keep the finish offer. A `wip/` branch that only the server still
+  holds is treated the same way, inspected by its `origin/` name. A parked branch
+  already checked out in a worktree is offered that folder, since git refuses to add
+  it again, and parked rows stop at eight like the server-only list.
+- **A `|` in a branch name no longer silences the report.** Git allows `|` in ref
+  names. The hook split `for-each-ref` output on it, so `x|UNBOUND` put a variable name
+  into its age arithmetic. `set -u` stopped the hook there with an error on stderr and
+  exit status 0, and none of the repo's idle branches was reported: a clean-looking
+  session over unlanded work. Measured on bash 3.2. Fields are tab-separated now (a ref
+  cannot contain a control character) and timestamps are checked. Predates 3.1.2;
+  found by Codex in its review.
+- **No "On the server" in a repo without a remote.** Idle unmerged branches in a
+  local-only repo were headed "On the server, never merged into ...", a false statement
+  of safety about work on one disk. The heading now says no remote is configured.
+- Both were listed as known limitations in 3.1.1.
+
 ## [3.1.1] - 2026-09-14
 
 **git-hygiene no longer tells agents to park work in `git stash`** (`gstack-git-hygiene-v11`).
