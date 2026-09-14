@@ -1,5 +1,75 @@
 # Changelog
 
+## [3.2.0] - 2026-09-14
+
+**GStack v1.84.1.0: design detector, Memorable workflow memory bridge, and Aside as the primary browser driver.**
+
+Three upstream releases land together. The design skills now front-load 61 deterministic
+anti-pattern checks via the impeccable engine (one consent-gated download). Memorable
+workflow memory plugs into Claude Code through gstack behind an off-by-default consent
+key. Aside becomes the first browser driver for every browsing skill, with the bundled
+Chromium as an automatic fallback.
+
+### Changed (upstream GStack — affects routing descriptions)
+
+- **`/design-review`** now runs 61 deterministic checks (impeccable engine, consent-gated)
+  before the LLM pass. On a live URL it scans the rendered DOM. Findings are emitted as
+  `FINDING-NNN [rule-id]` rows with file:line and a handoff command. Say no to the
+  install prompt and the skill behaves as in v1.81; `gstack-config set design_detector off`
+  silences every trace.
+- **`/design-html`** runs a bounded slop gate before screenshots, then one fix pass;
+  accepted-with-reason rows follow.
+- **`/review` and `/ship`** run the design detector scan first when frontend files are
+  in scope; detector hits deduplicated against the checklist.
+- **`/design-consultation`** writes the open DESIGN.md format (impeccable and Google
+  Stitch compatible); existing files converted only on explicit request.
+- **`/codex`** (and Codex reviews, consultations, evals) default to GPT-6 Astra.
+  Override with `GSTACK_CODEX_MODEL` or an explicit model in the request.
+- **Claude outside voices and eval judging** default to Fable 5.1. Outside voices
+  accept `GSTACK_CLAUDE_MODEL`.
+- **All browsing skills** (`/qa`, `/qa-only`, `/design-review`, `/scrape`, `/benchmark`,
+  `/canary`, `/browse`, `/devex-review`, `/land-and-deploy` post-deploy check,
+  `/design-consultation` competitor research) now drive Aside first (macOS 15+), with
+  the bundled headless Chromium as an automatic fallback. `/make-pdf`, `/diagram`,
+  `/design-html` viewport screenshots, and `/office-hours` sketches also go through
+  Aside when available. Linux and Windows users keep the bundled browser unchanged.
+
+### Added (upstream GStack)
+
+- **Memorable workflow memory bridge** (`gstack-memorable enable | disable | status`,
+  off by default, Claude Code only). When enabled: egress receipts before every
+  hand-off (fail-closed), HIGH-tier credential scan on every prompt, trust-envelope
+  wrapping of recalled text, 4.5 s process-group budget for the vendor binary. The
+  `memorable_recall` consent key appears in `gstack-egress grants` with its revoke
+  command. Contributed upstream by @AdvaiytSane and @NIkhil-cmd-cmd.
+- **Design detector** (`gstack-design-detect probe | scan | rules`): reports
+  `IMPECCABLE_READY | NOT_CACHED | NOT_AVAILABLE | DISABLED`; scan runs the
+  user-installed engine over repo files, changed frontend files, or DOM dumps; findings
+  capped and sanitized; exit 3 marks a gstack bug.
+- **Open DESIGN.md format** (`lib/design-md.ts`): read, write, convert legacy files
+  (backup kept), flatten tokens for calibration, persist the one-time format choice.
+- **Typed design catalog** (`lib/design-catalog.ts`): 86 entries (57 slop, 29 quality)
+  with rule ids, impact, tier, confidence, detection method, handoff, and the ten
+  `mockupNever` patterns. `review/design-checklist.md` generated from it.
+- **`gstack-settings-hook list-items --event <E>`**: read-only identity view of
+  registered hooks — one JSON string per match, exit 3/4 on parse errors.
+- **Redaction scan speedup**: line/column location now uses binary search over a
+  per-scan line index (was quadratic); 256 KiB log-like prompt: 1,573 ms → 65 ms (24×);
+  512 KiB: 6,182 ms → 126 ms (49×). Every caller of `lib/redact-engine.ts` benefits.
+
+### Fixed (upstream GStack — noted for awareness)
+
+- Native Codex reviews honour the selected model even when the CLI has a separate
+  review-model pin; Claude judges parse text after thinking blocks; frontier judges have
+  enough output budget for thinking and JSON.
+- Ship and plan reviews keep approval gates with the parent agent and use project-native
+  test commands; QA scoring and monitoring rules are explicit.
+- Benchmark timing uses the navigation entry's actual fields; failed vendored upgrades
+  restore their backup.
+- Retro reports distinguish verified merges from PR references and use the session date
+  for snapshots; the quality eval includes compare-mode instructions.
+- Documentation review runs before publication so approved fixes reach the PR.
+
 ## [3.1.2] - 2026-09-14
 
 **The unlanded-work report tells parked work and local-only repos apart.**
