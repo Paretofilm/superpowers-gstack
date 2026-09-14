@@ -143,7 +143,7 @@ Before merging/pushing any plugin change (skills/, scripts/, CLAUDE.md, workflow
      Regenerate with `python3 scripts/sync-own-claude-md.py`; lint rule E11
      fails if stale. -->
 
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v10 --><!-- emitted=101 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v11 --><!-- emitted=101 -->
 
 Commit at meaningful milestones — not at every file save, not only at session end.
 
@@ -154,7 +154,7 @@ Commit at meaningful milestones — not at every file save, not only at session 
 - After a reversible decision (so `git revert` works cleanly later)
 - Before long-running or risky operations (rollback point)
 
-Do NOT commit mid-task, just to "save progress" (use `git stash` for holds of minutes-to-hours; a WIP branch for anything longer), or with unrelated changes batched together — split them.
+Do NOT commit to the task branch mid-task just to "save progress", or with unrelated changes batched together — split them. **Never park work in `git stash`**: every worktree of a repository shares one stash, so a parallel session's `git stash pop` or `git stash clear` takes your changes, and a stash is never pushed. To switch tasks, leave unfinished work where it is and open a second checkout (`git worktree add`); only when this checkout itself must change branch, first move the work onto its own branch (`git switch -c wip/<topic>`, commit, push) — and if a commit hook rejects that WIP commit, stop and say so rather than bypass it.
 
 **Then push. Committing is not backing up.** A commit lives on one disk until it is
 pushed; a dead laptop takes it with it. Push after committing — `git push -u origin
@@ -173,7 +173,7 @@ Follow the convention established in the repo (`git log --oneline -10` first). I
 - ❌ `git commit --no-verify` — if a hook fails, fix the root cause
 - ❌ `git commit --amend` on already-pushed commits — rewrites shared history
 - ❌ `git push --force` to `main` or shared branches
-- ❌ `git reset --hard` without stashing or committing first — silent work loss
+- ❌ `git reset --hard` on uncommitted work — commit it first, unfinished work on its own branch (`git switch -c wip/<topic>`, commit, `git switch -` back), never on the branch being reset — silent work loss
 - ❌ `git add -A` / `git add .` when secrets, large binaries, or build artifacts may be present — stage specific paths
 
 ### Landing the branch

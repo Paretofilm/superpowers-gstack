@@ -1,5 +1,44 @@
 # Changelog
 
+## [3.1.1] - 2026-09-14
+
+**git-hygiene no longer tells agents to park work in `git stash`** (`gstack-git-hygiene-v11`).
+
+### Fixed
+- **Every worktree of a repository shares one stash.** `refs/stash` lives in the common
+  `.git`, so v10's "use `git stash` for holds of minutes-to-hours" let a parallel
+  session's `git stash pop` apply another session's changes in its own checkout, and its
+  `git stash clear` delete them. Parallel sessions in worktrees are the normal shape now
+  (Claude Code's background sessions move into one before editing — see
+  code.claude.com/docs/en/agent-view), which turned the advice into a work-loss path.
+  v11 never parks work in `git stash`. To switch tasks it leaves the work where it is and
+  opens a second checkout (`git worktree add`); only when the checkout itself must change
+  branch does it move the work onto a `wip/<topic>` branch, and it stops rather than
+  bypass a commit hook that rejects that WIP commit. "Do NOT commit mid-task" now names
+  the task branch, so the WIP commit no longer contradicts it. Same line count, so
+  `emitted=101` still holds.
+- **`git reset --hard` rule** drops "stashing" and says where unfinished work goes first:
+  onto its own branch, then back — never a commit on the branch about to be reset.
+- `/autoimplement`'s dirty-tree refusal said "Commit or stash, then re-invoke." It now
+  says commit here if the changes belong to the plan, otherwise move them to their own
+  branch and switch back — so the re-invocation runs on the feature branch, not the
+  parking branch.
+- Lint E7 denylists `gstack-git-hygiene-v10` too, the stash-advising version.
+- `check-branch-hygiene.sh` and its test no longer cite the retired minutes-to-hours rule
+  as their premise. Behaviour is unchanged: a fresh hand-typed stash is not reported, a
+  stale one is.
+
+### Known limitations
+- A project whose git-hygiene section grew past its block is deferred, not upgraded, and
+  keeps v10's stash advice until `/adapt --rescue gstack-git-hygiene` runs. Rescue keeps
+  every line the new block does not carry verbatim, by design — including v10's "use
+  `git stash` for holds of minutes-to-hours" and "without stashing or committing first".
+  Delete those two from the rescued section, or edit them to v11's text by hand first.
+- `check-branch-hygiene.sh` lists a parked `wip/*` branch idle past the threshold under
+  "never merged", with `/ship` as the way forward, and heads it "On the server" even in a
+  repo with no remote. Both predate 3.1.1 (v10 already sent longer holds to a WIP
+  branch); v11 makes WIP branches rarer but does not change the report.
+
 ## [3.1.0] - 2026-09-11
 
 **`/adapt` is a script now, and `setup-routing` is gone.** Fase 4 of the 3.0.0

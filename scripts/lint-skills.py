@@ -91,7 +91,7 @@ DENYLIST = [
      "spec-drift --sha was replaced by the one-time --token in 2.52.0"),
     (re.compile(r"gstack-routing-v[12]\b"), "stale track-routing marker (current: v3+, 3.0.0)"),
     (re.compile(r"gstack-companion-skills-v[12]\b"), "stale companion-skills marker (current: v3+, 3.0.0)"),
-    (re.compile(r"gstack-git-hygiene-v[0-9]\b"), "stale git-hygiene marker (current: v10+, 3.0.0)"),
+    (re.compile(r"gstack-git-hygiene-v(?:[0-9]|10)\b"), "stale git-hygiene marker (current: v11+, 3.1.1 — v10 told agents to park work in git stash)"),
     (re.compile(r"gstack-xcode-tools-v[0-6]\b"), "stale xcode-tools marker (current: v7+, 2.53.0)"),
     # v5 hardcoded `name=iPhone 16`; Xcode had already dropped it on the author's
     # own machine, and the resulting "Unable to find a device matching the

@@ -41,7 +41,7 @@ def emitted_heading(raw: str) -> str:
     """The block's first line as a GENERATOR writes it into a project's CLAUDE.md.
 
     scripts/adapt-claude-md.py appends a second HTML comment carrying the block's
-    line count — `<!-- gstack-git-hygiene-v10 --><!-- emitted=101 -->` — beside the
+    line count — `<!-- gstack-git-hygiene-v11 --><!-- emitted=101 -->` — beside the
     marker, never inside it, so every reader that knows only the bare marker keeps
     matching. Doing the same here is what keeps this region's claim true: what
     this repo follows is what /adapt emits elsewhere, provenance included.
