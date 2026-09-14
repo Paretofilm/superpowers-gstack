@@ -302,9 +302,10 @@ if git remote 2>/dev/null | grep -q .; then
   done < <(git for-each-ref --format='%(refname:short)|%(upstream:short)' refs/heads 2>/dev/null)
 fi
 
-# Stashes. git-hygiene tells users a stash is for "holds of minutes-to-hours" — so
-# a stash older than the idle threshold is not a hold, it is forgotten work. And a
-# stash is invisible to every branch-based check: it is not a branch.
+# Stashes. git-hygiene steers agents to WIP branches, never a stash (every worktree
+# shares one stash), but people still stash by hand — so a stash older than the idle
+# threshold is not a hold, it is forgotten work. And a stash is invisible to every
+# branch-based check: it is not a branch.
 stash_n=0; stash_oldest=0
 if git rev-parse --verify -q refs/stash >/dev/null 2>&1; then
   while read -r ts; do

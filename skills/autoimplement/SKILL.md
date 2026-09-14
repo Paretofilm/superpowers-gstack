@@ -47,7 +47,7 @@ git_status=$(git status --porcelain 2>/dev/null || echo "GIT_FAIL")
 
 Refuse if:
 - `git_branch` is empty, `main`, `master`, or `GIT_FAIL` → "autoimplement runs only on a feature branch in a git repo. You are on '<branch>'. Create a feature branch first; suggested name: `feat/<plan-slug>`."
-- `git_status` is non-empty → "working tree has uncommitted changes — autoimplement requires a clean tree (so phase commits are unambiguous). Commit or stash, then re-invoke."
+- `git_status` is non-empty → "working tree has uncommitted changes — autoimplement requires a clean tree (so phase commits are unambiguous). Commit them here if they belong to this plan; otherwise move them onto their own branch (`git switch -c wip/<topic>`, commit, `git switch <branch>`). Then re-invoke on '<branch>'."
 
 ### Check 2: Phase count is at least 2
 

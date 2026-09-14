@@ -174,8 +174,8 @@ def test_disable_switch_is_not_advertised_to_the_user(tmp_path, repo):
 
 
 def test_fresh_stash_is_not_nagged(tmp_path, repo):
-    """git-hygiene tells users a stash is for holds of minutes-to-hours — so a fresh
-    one is the tool being used correctly, not debt."""
+    """A fresh stash is a short hold typed by hand (git-hygiene steers agents to WIP
+    branches instead) — not debt until it outlives the idle threshold."""
     with_remote(tmp_path, repo)
     (repo / "f.txt").write_text("wip"); git(repo, "stash", "-q")
     assert "stashed changes" not in run_hook(repo)
