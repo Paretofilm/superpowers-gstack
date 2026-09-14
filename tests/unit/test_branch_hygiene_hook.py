@@ -8,6 +8,7 @@ actually been left behind.
 
 import subprocess
 import pathlib
+import time
 import pytest
 
 HOOK = pathlib.Path(__file__).resolve().parents[2] / "scripts" / "check-branch-hygiene.sh"
@@ -672,3 +673,95 @@ def test_parked_rows_are_bounded_across_both_loops(tmp_path, repo):
     assert findings.count("server-only") == 3
     assert "2 more parked branch(es)" in findings
     assert "without origin/" in menu
+
+
+# --- the server is not what the last fetch said (3.2.1) -------------------------------
+# Remote-tracking refs change only on fetch, and fetch.prune is off by default. A branch
+# deleted on GitHub stayed in refs/remotes/origin and was offered /ship as "server-only"
+# every session. A pushed branch whose server copy was deleted stayed under "On the
+# server", even after `fetch --prune` had marked it [gone]: work on one disk, called safe.
+
+
+def pushed_idle_branch(repo, name):
+    git(repo, "checkout", "-qb", name)
+    (repo / f"{name}.txt").write_text("x"); git(repo, "add", "-A"); old_commit(repo)
+    git(repo, "push", "-q", "-u", "origin", name)
+    git(repo, "checkout", "-q", "main")
+
+
+def test_branch_deleted_on_the_server_is_not_reported_server_only(tmp_path, repo):
+    """Observed 2026-09-14 in this repo: two bot branches already deleted on GitHub were
+    offered /ship at session start, because their refs/remotes copies were never pruned."""
+    bare = with_remote(tmp_path, repo)
+    pushed_idle_branch(repo, "gone-feature")
+    git(repo, "branch", "-qD", "gone-feature")
+    git(bare, "branch", "-qD", "gone-feature")               # on the server; no fetch here
+    assert git(repo, "show-ref", "-q", "refs/remotes/origin/gone-feature").returncode == 0
+    assert "gone-feature" not in run_hook(repo)
+
+
+def test_server_only_branch_that_still_exists_is_still_reported(tmp_path, repo):
+    """Checking the server must not swallow a real orphan."""
+    with_remote(tmp_path, repo)
+    pushed_idle_branch(repo, "orphan")
+    git(repo, "branch", "-qD", "orphan")
+    findings = findings_of(run_hook(repo))
+    assert "On the server" in findings and "orphan" in findings and "server-only" in findings
+
+
+@pytest.mark.parametrize("pruned", [True, False], ids=["after-fetch-prune", "no-fetch"])
+def test_branch_whose_server_copy_was_deleted_is_not_called_safe(tmp_path, repo, pruned):
+    """An idle unmerged branch whose upstream is gone holds the only copy of its commits.
+    It was listed under "On the server" both before and after `fetch --prune`."""
+    bare = with_remote(tmp_path, repo)
+    pushed_idle_branch(repo, "local-gone")
+    git(bare, "branch", "-qD", "local-gone")
+    if pruned:
+        git(repo, "fetch", "-q", "--prune")
+    out = run_hook(repo)
+    findings, menu = findings_of(out), out.split(MENU)[1]
+    assert "On the server" not in findings
+    assert "Only on this computer" in findings and "deleted from the server" in findings
+    assert action_label(menu, 1) == "back" and "'local-gone'" in menu
+
+
+def test_squash_merged_branch_deleted_on_the_server_is_not_called_at_risk(tmp_path, repo):
+    """[gone] usually means a PR was squash-merged and GitHub deleted its branch. Once the
+    default branch moves on, `diff --quiet` no longer sees the work as landed, and the
+    branch was offered a push that re-creates merged work on the server."""
+    bare = with_remote(tmp_path, repo)
+    pushed_idle_branch(repo, "squashed")
+    git(repo, "merge", "-q", "--squash", "squashed"); git(repo, "commit", "-qm", "squash (#1)")
+    (repo / "later.txt").write_text("y"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "later")
+    git(repo, "push", "-q", "origin", "main")
+    git(bare, "branch", "-qD", "squashed")
+    git(repo, "fetch", "-q", "--prune")
+    assert git(repo, "diff", "--quiet", "origin/main", "squashed").returncode != 0
+    assert "squashed" not in run_hook(repo)
+
+
+def test_unreachable_server_keeps_the_rows_and_says_so(tmp_path, repo):
+    """Offline, the last fetch is the best evidence there is: keep the rows, but do not
+    present them as the server's current state."""
+    with_remote(tmp_path, repo)
+    pushed_idle_branch(repo, "orphan")
+    git(repo, "branch", "-qD", "orphan")
+    git(repo, "remote", "set-url", "origin", str(tmp_path.parent / "no-such-remote.git"))
+    findings = findings_of(run_hook(repo))
+    assert "orphan" in findings and "as of the last fetch" in findings
+
+
+def test_a_server_that_never_answers_cannot_stall_the_session(tmp_path, repo):
+    """SessionStart hooks run on a 10 s budget. A remote that connects and then hangs must
+    cost at most the check's own bound, never a prompt or a stall."""
+    with_remote(tmp_path, repo)
+    pushed_idle_branch(repo, "orphan")
+    git(repo, "branch", "-qD", "orphan")
+    hang = tmp_path.parent / f"{tmp_path.name}-hang.sh"
+    hang.write_text("#!/bin/sh\nexec sleep 8\n"); hang.chmod(0o755)
+    git(repo, "config", "core.sshCommand", str(hang))
+    git(repo, "remote", "set-url", "origin", "ssh://example.invalid/x.git")
+    start = time.monotonic()
+    findings = findings_of(run_hook(repo))
+    assert time.monotonic() - start < 6
+    assert "orphan" in findings and "as of the last fetch" in findings

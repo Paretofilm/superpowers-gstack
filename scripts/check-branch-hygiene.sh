@@ -91,6 +91,49 @@ shortpath() {
   [ "${#p}" -le 34 ] && { printf '%s' "$p"; return; }
   printf '.../%s/%s' "$(basename "$(dirname "$p")")" "$(basename "$p")"
 }
+
+# What the server holds NOW. Remote-tracking refs are only as fresh as the last fetch,
+# and fetch.prune is off by default: a branch deleted on GitHub stayed in
+# refs/remotes/origin and was reported "server-only" every session, and a pushed branch
+# whose server copy was deleted stayed under "On the server" (observed 2026-09-14).
+# Asked lazily and once, only when a row is about to claim something about the server,
+# so a session with nothing to report still makes no network call. Bounded and
+# non-interactive: a SessionStart hook has a 10 s budget and nobody to type a password.
+SERVER_CHECK_SECS=3
+server_state=""; server_heads=""; server_unsure=0   # state: "" not asked | ok | unreachable
+server_has() {   # $1 = branch name on origin → 0 there, 1 not there, 2 could not tell
+  if [ -z "$server_state" ]; then
+    server_state=unreachable
+    local out pid dog sha name
+    out=$(mktemp "${TMPDIR:-/tmp}/gstack-heads.XXXXXX" 2>/dev/null) || { server_unsure=1; return 2; }
+    (
+      export GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never
+      # BatchMode fails instead of asking for a passphrase, unless the user routes ssh
+      # through a command of their own, which this must not override.
+      [ -z "${GIT_SSH_COMMAND:-}" ] && [ -z "$(git config --get core.sshCommand 2>/dev/null)" ] \
+        && export GIT_SSH_COMMAND="ssh -o BatchMode=yes"
+      exec git ls-remote --heads origin
+    ) >"$out" 2>/dev/null </dev/null &
+    pid=$!
+    # The watchdog's own fds go nowhere: one it held open would keep the hook's stdout
+    # open, and the session would wait for it.
+    ( sleep "$SERVER_CHECK_SECS"; kill "$pid" ) >/dev/null 2>&1 </dev/null &
+    dog=$!
+    if wait "$pid" 2>/dev/null; then
+      server_state=ok
+      while IFS=$'\t' read -r sha name; do
+        server_heads="${server_heads}${name#refs/heads/}"$'\n'
+      done <"$out"
+    fi
+    kill "$dog" 2>/dev/null; wait "$dog" 2>/dev/null
+    rm -f "$out"
+  fi
+  [ "$server_state" = ok ] || { server_unsure=1; return 2; }
+  # Matched without a pipe: under pipefail a `grep -q` that exits early can fail the
+  # printf with SIGPIPE, which would read as "not there" and silently drop a real row.
+  case $'\n'"$server_heads" in *$'\n'"$1"$'\n'*) return 0 ;; esac
+  return 1
+}
 cutoff=$(( $(date +%s) - IDLE_DAYS * 86400 ))
 
 # Commits made on a detached HEAD live in no branch at all, so every check below —
@@ -103,6 +146,7 @@ if [ "$current" = "HEAD" ]; then
 fi
 
 stale=""; stale_n=0; stale_first=""; stale_names=""
+gone=""; gone_n=0; gone_names=""   # pushed once, server copy since deleted: the only copy is here
 parked=""; parked_n=0; parked_names=""; parked_first=""; parked_remote=0   # wip/* — set aside on purpose, not unlanded features
 while IFS=$'\t' read -r ref ts; do
   [ -z "$ref" ] && continue
@@ -116,19 +160,42 @@ while IFS=$'\t' read -r ref ts; do
   [ "$ts" -ge "$cutoff" ] 2>/dev/null && continue
   git merge-base --is-ancestor "$ref" "$base" 2>/dev/null && continue   # already landed
   git diff --quiet "$base" "$ref" 2>/dev/null && continue                # squash-merged: same content
+  # Squash-merged, and the default branch has moved on since: no longer the same content,
+  # but merging the branch in would change nothing. That is the usual story behind an
+  # upstream the server deleted, which without this read as unlanded work on one disk.
+  # Needs git 2.38 (--write-tree); older git fails the call and falls through to report.
+  mt=$(git merge-tree --write-tree --no-messages "$base" "$ref" 2>/dev/null) \
+    && [ "${mt%%$'\n'*}" = "$(git rev-parse -q --verify "$base^{tree}" 2>/dev/null)" ] && continue
   # Already counted under "only on this computer" if it has no upstream, or sits
   # ahead of one. Reporting it here too put the SAME branch under a heading that
   # says it is safe on the server when it has never been on a server — a false
   # statement of safety, and the one a user would act on. Only applied when a remote
   # exists: in a local-only repo no branch has an upstream, and skipping them all
   # would silence this check completely.
+  gone_here=0
   if [ "$has_remote" = "1" ]; then
     up_of=$(git for-each-ref --format='%(upstream:short)' "refs/heads/$ref" 2>/dev/null)
     [ -z "$up_of" ] && continue
-    [ "$(git rev-list --count "$up_of..$ref" 2>/dev/null || echo 0)" -gt 0 ] && continue
+    # An upstream the server no longer has is not "on the server". `fetch --prune` marks
+    # it [gone]; without a prune the local copy of the ref still looks in sync, so ask.
+    if [ "$(git for-each-ref --format='%(upstream:track)' "refs/heads/$ref" 2>/dev/null)" = "[gone]" ]; then
+      gone_here=1
+    else
+      [ "$(git rev-list --count "$up_of..$ref" 2>/dev/null || echo 0)" -gt 0 ] && continue
+      if [ "$(git for-each-ref --format='%(upstream:remotename)' "refs/heads/$ref" 2>/dev/null)" = "origin" ]; then
+        up_name=$(git for-each-ref --format='%(upstream:remoteref)' "refs/heads/$ref" 2>/dev/null)
+        server_has "${up_name#refs/heads/}"; [ $? -eq 1 ] && gone_here=1
+      fi
+    fi
   fi
   ahead=$(git rev-list --count "$base..$ref" 2>/dev/null || echo "?")
   age=$(( ( $(date +%s) - ts ) / 86400 ))
+  if [ "$gone_here" = "1" ]; then
+    gone="${gone}$(row "$ref" "${ahead} commit(s), deleted from the server, idle ${age}d")\n"
+    gone_n=$((gone_n + 1))
+    [ "$gone_n" -le 3 ] && gone_names="${gone_names} $(shq "$ref")"
+    continue
+  fi
   # A wip/* branch is work set aside on purpose: git-hygiene v11 parks unfinished work
   # there instead of in the stash every worktree shares. Listed with the unlanded
   # features it was offered "/ship ... opens a PR" every session, for work nobody meant
@@ -259,10 +326,11 @@ while IFS= read -r line; do
   esac
 done < <(git worktree list --porcelain 2>/dev/null; echo)
 
-# Remote branches with no local counterpart, unmerged — the true orphans. Uses
-# already-fetched refs only, so no network call. This is the shape that stranded
-# six branches in this very repo: a bot opened them, the PRs were closed, and the
-# branches outlived both.
+# Remote branches with no local counterpart, unmerged — the true orphans. Found from
+# already-fetched refs, then confirmed with the server (server_has) before they are
+# reported: a branch deleted there outlives its refs/remotes copy until a prune. This is
+# the shape that stranded six branches in this very repo: a bot opened them, the PRs
+# were closed, and the branches outlived both.
 remote_orphans=""; remote_n=0
 while IFS=$'\t' read -r ref ts; do
   [ -z "$ref" ] && continue
@@ -276,6 +344,7 @@ while IFS=$'\t' read -r ref ts; do
   git show-ref --verify -q "refs/heads/$short" && continue      # has a local twin, counted above
   [ "$ts" -ge "$cutoff" ] 2>/dev/null && continue
   git merge-base --is-ancestor "$ref" "$base" 2>/dev/null && continue
+  server_has "$short"; [ $? -eq 1 ] && continue                  # deleted on the server
   age=$(( ( $(date +%s) - ts ) / 86400 ))
   case "$short" in
     wip/*)   # parked work only the server still holds. Named origin/..., since no local
@@ -378,6 +447,7 @@ report_gstack() {
 }
 
 if [ "$stale_n" = "0" ] && [ "${parked_n:-0}" = "0" ] && [ "$remote_n" = "0" ] && [ "${dirty_n:-0}" = "0" ] \
+   && [ "${gone_n:-0}" = "0" ] \
    && [ "${other_wt_n:-0}" = "0" ] \
    && [ "${unpushed_n:-0}" = "0" ] && [ "${detached_n:-0}" = "0" ] \
    && [ "${wt_det_n:-0}" = "0" ] && [ "${wt_done_n:-0}" = "0" ] \
@@ -412,7 +482,7 @@ if [ "$current" != "$default_ref" ] && [ "$current" != "HEAD" ]; then
   [ "$unlanded_here" -gt 0 ] && git diff --quiet "$base" HEAD 2>/dev/null && unlanded_here=0
 fi
 
-at_risk=$(( ${dirty_n:-0} + ${other_wt_n:-0} + ${unpushed_n:-0} + ${detached_n:-0} + ${wt_det_n:-0} ))
+at_risk=$(( ${dirty_n:-0} + ${other_wt_n:-0} + ${unpushed_n:-0} + ${detached_n:-0} + ${wt_det_n:-0} + ${gone_n:-0} ))
 [ "$stash_oldest" -ge "$IDLE_DAYS" ] && at_risk=$((at_risk + 1))
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -423,6 +493,7 @@ echo
 if [ "$at_risk" -gt 0 ]; then
   echo "  Only on this computer — gone if the disk dies:"
   [ "${unpushed_n:-0}" != "0" ] && printf "%b" "$unpushed"
+  [ "${gone_n:-0}" != "0" ] && printf "%b" "$gone"
   [ "${detached_n:-0}" != "0" ] && printf "%b\n" "$(row "detached HEAD" "${detached_n} commit(s), in no branch")"
   [ "${wt_det_n:-0}" != "0" ] && printf "%b" "$wt_det"
   [ "${dirty_n:-0}" != "0" ] && printf "%b\n" "$(row "$current" "${dirty_n} file(s) not committed")"
@@ -435,7 +506,10 @@ fi
 if [ "$stale_n" != "0" ] || [ "$remote_n" != "0" ]; then
   # With no remote, nothing is "on the server". A heading that says so is the false
   # safety the has_remote gate exists to prevent, and the one a user would act on.
-  if [ "$has_remote" = "1" ]; then
+  if [ "$has_remote" = "1" ] && [ "$server_unsure" = "1" ]; then
+    # The server was asked and did not answer: these rows are the last fetch's word.
+    echo "  On the server as of the last fetch (it did not answer just now), never merged into ${default_ref}:"
+  elif [ "$has_remote" = "1" ]; then
     echo "  On the server, never merged into ${default_ref}:"
   else
     echo "  Kept in this repo only (no remote is configured), never merged into ${default_ref}:"
@@ -448,6 +522,8 @@ fi
 if [ "${parked_n:-0}" != "0" ]; then
   parked_where=""
   [ "$has_remote" = "0" ] && parked_where=" (no remote is configured, so they exist only here)"
+  [ "${parked_remote:-0}" = "1" ] && [ "$server_unsure" = "1" ] && \
+    parked_where=" (server-only rows as of the last fetch; the server did not answer)"
   echo "  Parked on wip/ branches, untouched for ${IDLE_DAYS}+ days${parked_where}:"
   printf "%b" "$parked"
   [ "$parked_n" -gt 8 ] && printf "%b\n" "$(row "..." "$((parked_n - 8)) more parked branch(es)")"
@@ -507,6 +583,8 @@ if [ "${dirty_n:-0}" != "0" ]; then
 fi
 [ "${unpushed_n:-0}" != "0" ] && [ "$has_remote" = "1" ] && \
   step "push${push_names}$(more "$unpushed_n") — every branch listed above as unpushed$([ "${dirty_n:-0}" != "0" ] && [ "${current_unpushed:-0}" = "1" ] && printf ', after the commit above')"
+[ "${gone_n:-0}" != "0" ] && \
+  step "push${gone_names}$(more "$gone_n") again — deleted from the server, so this computer holds the only copy"
 if [ "${wt_det_n:-0}" != "0" ]; then
   det_wt_tail=" — otherwise removing that folder makes them unreachable"
   [ "$has_remote" = "1" ] && det_wt_tail=", then push it${det_wt_tail}"

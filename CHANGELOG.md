@@ -1,5 +1,36 @@
 # Changelog
 
+## [3.2.1] - 2026-09-14
+
+**The unlanded-work report checks the server before it says anything about it.**
+
+### Fixed
+- **Branches already deleted on the server are no longer reported as "server-only".**
+  `check-branch-hygiene.sh` read `refs/remotes/origin` as the server's current state.
+  Those refs change only on fetch, and `fetch.prune` is off by default, so a branch
+  deleted on GitHub stayed in the report, offered `/ship`, every session. Observed in
+  this repo on 2026-09-14 with two bot branches deleted days earlier. Before a row
+  claims something about the server, the hook now asks it once with
+  `git ls-remote --heads origin`: bounded to 3 s, and it never prompts
+  (`GIT_TERMINAL_PROMPT=0`, `GCM_INTERACTIVE=never`, ssh `BatchMode` unless you route ssh
+  through a command of your own). A session with nothing to report still makes no
+  network call. If the server does not answer, the rows stay and the heading says
+  "as of the last fetch".
+- **A pushed branch whose server copy was deleted is no longer called safe.** An idle
+  unmerged branch with a deleted upstream was listed under "On the server", both before
+  and after `fetch --prune` had marked it `[gone]`, while its commits existed only on
+  this computer. It now shows under "Only on this computer" as "deleted from the
+  server", and the back-up option pushes it again.
+- **A squash-merged branch counts as landed after the default branch moves on.** The
+  content test (`git diff --quiet`) caught a squash merge only while nothing else had
+  landed since. The hook now also asks whether merging the branch in would change
+  anything (`git merge-tree --write-tree`, git 2.38 or newer). A squash merge is the
+  usual story behind a deleted upstream, so without this the fix above would have told
+  people to push merged work back to the server.
+- Not covered: an upstream on a remote other than `origin` is judged from local refs
+  only (`[gone]` still counts), and the default branch is still compared as of the last
+  fetch.
+
 ## [3.2.0] - 2026-09-14
 
 **GStack v1.84.1.0: design detector, Memorable workflow memory bridge, and Aside as the primary browser driver.**
