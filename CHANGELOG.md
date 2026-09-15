@@ -18,28 +18,33 @@
   the server) was listed under "On the server". It now shows under "Deleted on the
   server, and the work was not found in main", with an offer to look at its commits: if
   the work is already in main, delete the local branch; if not, ask whether the deletion
-  was deliberate before pushing it back. It is never part of the back-up option. The hook
+  was deliberate before pushing it back. It is never part of the back-up option, also when
+  the branch has local commits its upstream never had. The hook
   cannot tell a squash merge GitHub cleaned up from a deliberate deletion (a leaked
   secret) or from lost work, so a person decides.
 - **A squash-merged branch counts as landed after main moves on**, when every file it
   changed is identical in main. One test (`landed()`) now serves the idle-branch list,
   server-only branches, worktrees and the current branch, which used to disagree. It is
   plumbing only (`git diff-tree`): no merge driver, textconv or external diff runs,
-  nothing is fetched in a partial clone, and nothing is written. If main changed one of
-  those files again, the branch is still reported.
+  nothing is fetched in a partial clone (`GIT_NO_LAZY_FETCH`; older git skips the
+  content test there), and nothing is written. It gives the same answer from a
+  subdirectory, and passes long path lists in batches under `ARG_MAX`. If main changed
+  one of those files again, the branch is still reported.
 - **The server check cannot stall the session or prompt.** It runs in its own process
   group, bounded to 3 s, then TERM and KILL go to the whole group, so a transport that
-  ignores TERM or leaves an ssh child cannot hold the hook. It is not started once the
-  hook has used 5 s. Prompts are off: `GIT_TERMINAL_PROMPT=0`, `GIT_ASKPASS` set but
+  ignores TERM or leaves an ssh child cannot hold the hook. It must be over six seconds
+  into the hook: it is bounded by what is left, and not started with less than a second
+  to go. Prompts are off: `GIT_TERMINAL_PROMPT=0`, `GIT_ASKPASS` set but
   empty (git runs askpass before it looks at the terminal setting), `GCM_INTERACTIVE=never`,
   `SSH_ASKPASS_REQUIRE=never`, and ssh `BatchMode` unless you route ssh yourself
   (`GIT_SSH_COMMAND`, `GIT_SSH` or `core.sshCommand`). Credential helpers still run, so
   private repos stay checkable. `GSTACK_BRANCH_SERVER_CHECK=0` turns the network call
   off. If the server does not answer, rows stay and the heading says "as of the last
   fetch".
-- **No slower than 3.2.0.** Upstream fields come from one `for-each-ref`, and upstream
-  tips and server branches from one join each. Measured on 50 and 100 idle unmerged
-  branches: 6.8 s and 13.7 s on 3.2.0, 6.6 s and 11.5 s now.
+- **No slower than 3.2.0 when the server answers.** Upstream fields come from one
+  `for-each-ref`, and upstream tips and server branches from one join each. Measured on
+  50 and 100 idle unmerged branches: 6.8 s and 13.7 s on 3.2.0, 6.6 s and 11.5 s now. A
+  server that hangs costs up to 3 s more, inside the six-second deadline above.
 - Server-only rows survive a custom fetch refspec and a tag named like `origin/<branch>`;
   both used to drop the row. A stacked branch whose upstream is another local branch is
   never called deleted on the server, and the server check's bound holds even when

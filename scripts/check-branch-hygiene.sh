@@ -101,15 +101,15 @@ shortpath() {
 #
 # Bounded: its own process group, polled against a deadline, then TERM and KILL to the
 # whole group. A single TERM to git left an ssh child running, and a transport that
-# ignores TERM held the hook until Claude Code killed it, which prints nothing. Not
-# started at all once the hook has used SERVER_CHECK_LATEST seconds, for the same reason.
+# ignores TERM held the hook until Claude Code killed it, which prints nothing. It must
+# also be over by SERVER_CHECK_DEADLINE seconds into the hook, for the same reason.
 #
 # Non-interactive: nobody is there to type a password. GIT_ASKPASS set but empty makes
 # git skip GIT_ASKPASS, core.askPass and SSH_ASKPASS alike; git runs askpass BEFORE it
 # looks at GIT_TERMINAL_PROMPT (measured). Credential helpers still run, so private
 # repos stay checkable; GSTACK_BRANCH_SERVER_CHECK=0 turns the network call off.
 SERVER_CHECK_SECS=3
-SERVER_CHECK_LATEST=5
+SERVER_CHECK_DEADLINE=6   # seconds into the hook by which the server check must be over
 server_state=""; server_unsure=0; server_sha=""   # state: "" not asked | ok | unreachable
 # One named temp file and `rm -f`, never a directory and `rm -rf`: a variable that came
 # back empty must not be able to reach a recursive delete.
@@ -119,7 +119,12 @@ server_fetch() {   # once per run: $server_raw gets `ls-remote --heads origin`; 
   [ -n "$server_state" ] && return 0
   server_state=unreachable
   [ "${GSTACK_BRANCH_SERVER_CHECK:-1}" != "0" ] || return 0
-  [ "$SECONDS" -lt "$SERVER_CHECK_LATEST" ] || return 0
+  # Over by SERVER_CHECK_DEADLINE seconds into the hook, not a flat 3 s from whenever it
+  # starts: begun at 4 s, a hanging server plus the rest of the report passed the 10 s
+  # budget. Bounded by what is left, and not started with less than a second to go.
+  local secs=$(( SERVER_CHECK_DEADLINE - SECONDS ))
+  [ "$secs" -gt "$SERVER_CHECK_SECS" ] && secs=$SERVER_CHECK_SECS
+  [ "$secs" -ge 1 ] || return 0
   server_raw=$(mktemp "${TMPDIR:-/tmp}/gstack-heads.XXXXXX" 2>/dev/null) || { server_raw=""; return 0; }
   local pid n=0
   set -m
@@ -129,7 +134,7 @@ server_fetch() {   # once per run: $server_raw gets `ls-remote --heads origin`; 
     # ConnectTimeout) ran on unbounded (measured). `set +m` keeps the watchdog in THIS
     # group, so `kill 0` takes git and every transport child with it.
     set +m
-    ( sleep $((SERVER_CHECK_SECS + 2)); kill -KILL 0 ) >/dev/null 2>&1 </dev/null &
+    ( sleep $((secs + 2)); kill -KILL 0 ) >/dev/null 2>&1 </dev/null &
     export GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never SSH_ASKPASS_REQUIRE=never GIT_ASKPASS=""
     unset SSH_ASKPASS
     # BatchMode fails instead of asking for a passphrase, unless the user routes ssh
@@ -137,13 +142,13 @@ server_fetch() {   # once per run: $server_raw gets `ls-remote --heads origin`; 
     # which a GIT_SSH_COMMAND of ours would silently take precedence over.
     if [ -z "${GIT_SSH_COMMAND:-}" ] && [ -z "${GIT_SSH:-}" ] \
        && [ -z "$(git config --get core.sshCommand 2>/dev/null)" ]; then
-      export GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=$SERVER_CHECK_SECS"
+      export GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=$secs"
     fi
     exec git ls-remote --heads origin
   ) >"$server_raw" 2>/dev/null </dev/null &
   pid=$!
   set +m
-  while kill -0 "$pid" 2>/dev/null && [ "$n" -lt $((SERVER_CHECK_SECS * 10)) ]; do
+  while kill -0 "$pid" 2>/dev/null && [ "$n" -lt $((secs * 10)) ]; do
     sleep 0.1; n=$((n + 1))
   done
   if kill -0 "$pid" 2>/dev/null; then
@@ -182,23 +187,39 @@ origin_std_map=0
 # unmerged work landed. Conservative: if the default branch changed one of those paths
 # again later, the branch is not called landed.
 LANDED_MAX_PATHS=2000
+LANDED_BATCH_BYTES=100000
 # `diff-tree --merge-base` (git 2.30) finds the fork point itself: one git call per
 # branch instead of two. Older git gets the two-call form.
 difftree_mb=0
 git diff-tree --merge-base HEAD HEAD >/dev/null 2>&1 && difftree_mb=1
+# A partial clone can lack the trees this test compares, and git would fetch them on
+# demand: a network call outside the server check's bound, its prompt settings and the
+# opt-out. GIT_NO_LAZY_FETCH (git 2.45) forbids that. Older git in a partial clone
+# skips the content test, which reports the branch rather than guess.
+partial_clone=0; lazy_off=1
+if [ -n "$(git config --get extensions.partialClone 2>/dev/null)" ]; then
+  partial_clone=1
+  git --no-lazy-fetch version >/dev/null 2>&1 || lazy_off=0
+fi
 landed_by_content() {   # $1 = full ref → 0 when every path it changed is the same in $base
-  local mb="" p t n=0
-  local -a paths rng
+  [ "$partial_clone" = "1" ] && [ "$lazy_off" = "0" ] && return 1
+  local mb="" p q t n=0 bytes=0
+  local -a paths rng batch
+  batch=()
   if [ "$difftree_mb" = "1" ]; then
     rng=(--merge-base "$base" "$1")
   else
     mb=$(git merge-base "$base" "$1" 2>/dev/null) || return 1
     rng=("$mb" "$1")
   fi
+  # :(top,literal) — diff-tree lists paths from the repository root, but a pathspec is
+  # read from the current directory. Started in a subdirectory, root.txt named
+  # sub/root.txt, which does not exist, compared equal, and real unlanded work was
+  # called landed (reproduced).
   while IFS= read -r -d '' p; do
     [ "$n" -ge "$LANDED_MAX_PATHS" ] && return 1
-    paths[n]=":(literal)$p"; n=$((n + 1))
-  done < <(git diff-tree -r -z --name-only --no-renames "${rng[@]}" 2>/dev/null)
+    paths[n]=":(top,literal)$p"; n=$((n + 1))
+  done < <(GIT_NO_LAZY_FETCH=1 git diff-tree -r -z --name-only --no-renames "${rng[@]}" 2>/dev/null)
   if [ "$n" -eq 0 ]; then
     # Nothing listed: it changed nothing since it forked, or diff-tree failed. Only the
     # first is landed, and only two equal, non-empty trees prove it.
@@ -207,13 +228,16 @@ landed_by_content() {   # $1 = full ref → 0 when every path it changed is the 
     [ -n "$t" ] && [ "$t" = "$(git rev-parse -q --verify "$1^{tree}" 2>/dev/null)" ]
     return
   fi
-  # In pieces of 256: a wide branch's paths in one argv can pass ARG_MAX, and E2BIG
-  # would read as "not landed" for a branch that is.
-  local i=0
-  while [ "$i" -lt "$n" ]; do
-    git diff-tree --quiet -r --no-renames "$base" "$1" -- "${paths[@]:i:256}" 2>/dev/null || return 1
-    i=$((i + 256))
+  # In batches of at most LANDED_BATCH_BYTES of arguments, counted in bytes rather than
+  # paths: 256 long paths in one argv hit E2BIG (measured), which read as "not landed".
+  for q in "${paths[@]}"; do
+    if [ "${#batch[@]}" -gt 0 ] && [ $((bytes + ${#q} + 1)) -gt "$LANDED_BATCH_BYTES" ]; then
+      GIT_NO_LAZY_FETCH=1 git diff-tree --quiet -r --no-renames "$base" "$1" -- "${batch[@]}" 2>/dev/null || return 1
+      batch=(); bytes=0
+    fi
+    batch[${#batch[@]}]="$q"; bytes=$((bytes + ${#q} + 1))
   done
+  GIT_NO_LAZY_FETCH=1 git diff-tree --quiet -r --no-renames "$base" "$1" -- "${batch[@]}" 2>/dev/null
 }
 landed() { git merge-base --is-ancestor "$1" "$base" 2>/dev/null || landed_by_content "$1"; }
 
@@ -230,6 +254,7 @@ fi
 
 stale=""; stale_n=0; stale_first=""; stale_names=""
 gone=""; gone_n=0; gone_names=""   # server copy deleted, work not found in the default branch
+gone_list=$'\n'                    # their names, one per line: kept out of the push below
 parked=""; parked_n=0; parked_names=""; parked_first=""; parked_remote=0   # wip/* — set aside on purpose, not unlanded features
 # Upstream fields come from this one listing, not from a for-each-ref per branch: four
 # per idle branch doubled the hook's cost (50 idle branches went from 6.9 s to 13.0 s,
@@ -294,12 +319,20 @@ while IFS=$'\t' read -r ref ts sha up_full up_remote up_name up_tip; do
   else
     up_sha=""
   fi
+  ahead_up=0
   if [ -n "$up_sha" ] && [ "$up_sha" != "$sha" ]; then
-    [ "$(git rev-list --count "$up_sha..refs/heads/$ref" 2>/dev/null || echo 0)" -gt 0 ] && continue
+    [ "$(git rev-list --count "$up_sha..refs/heads/$ref" 2>/dev/null || echo 0)" -gt 0 ] && ahead_up=1
   fi
-  landed_by_content "refs/heads/$ref" && continue                         # squash-merged
+  if [ "$ahead_up" = "1" ]; then
+    # Ahead of its upstream: the unpushed check lists it and offers a push. Unless the
+    # server deleted that upstream, when the push would re-create a branch someone may
+    # have removed on purpose: so an origin one still goes to the server in pass 4.
+    { [ "$up_remote" = "origin" ] && [ -n "$up_name" ]; } || continue
+  else
+    landed_by_content "refs/heads/$ref" && continue                       # squash-merged
+  fi
   [ "$up_remote" = "origin" ] && [ -n "$up_name" ] && ask_server=1
-  survivors="${survivors}${ref}"$'\t'"${ts}"$'\t'"t${up_sha}"$'\t'"r${up_remote}"$'\t'"n${up_name}"$'\n'
+  survivors="${survivors}${ref}"$'\t'"${ts}"$'\t'"t${up_sha}"$'\t'"r${up_remote}"$'\t'"n${up_name}"$'\t'"a${ahead_up}"$'\n'
 done <<<"$cands"
 
 # Pass 4: the server, asked once and only when a remaining row depends on it, in one join.
@@ -316,9 +349,13 @@ if [ "$ask_server" = "1" ]; then
 fi
 
 # Pass 5: the rows.
-while IFS=$'\t' read -r ref ts up_tip up_remote up_name srv; do
+while IFS=$'\t' read -r ref ts up_tip up_remote up_name ahead_up srv; do
   [ -z "$ref" ] && continue
-  up_sha="${up_tip#t}"; up_remote="${up_remote#r}"; up_name="${up_name#n}"; srv="${srv#h}"
+  up_sha="${up_tip#t}"; up_remote="${up_remote#r}"; up_name="${up_name#n}"
+  ahead_up="${ahead_up#a}"; srv="${srv#h}"
+  # Ahead of its upstream: the unpushed check reports it, unless the server no longer
+  # has that upstream (below, as a look-first row kept out of the push).
+  [ "$ahead_up" = "1" ] && [ "$srv" != "-" ] && continue
   # An upstream the server no longer has is not "on the server": its tracking ref is
   # gone (fetch --prune deleted it), or the server no longer lists it (no prune yet).
   # Asked by the name the config gives, which need not match the local branch name.
@@ -345,7 +382,7 @@ while IFS=$'\t' read -r ref ts up_tip up_remote up_name srv; do
   age=$(( ( $(date +%s) - ts ) / 86400 ))
   if [ "$gone_here" = "1" ]; then
     [ "$gone_n" -lt 8 ] && gone="${gone}$(row "$ref" "${ahead} commit(s) not in ${default_ref}, idle ${age}d${gone_note}")\n"
-    gone_n=$((gone_n + 1))
+    gone_n=$((gone_n + 1)); gone_list="${gone_list}${ref}"$'\n'
     [ "$gone_n" -le 3 ] && gone_names="${gone_names} $(shq "$ref")"
     continue
   fi
@@ -533,6 +570,8 @@ unpushed=""; unpushed_n=0; push_first=""; push_names=""; current_unpushed=0
 if git remote 2>/dev/null | grep -q .; then
   while IFS=$'\t' read -r ref up; do
     [ -z "$ref" ] && continue
+    # Deleted on the server: a look-first row above, never part of the push.
+    case "$gone_list" in *$'\n'"$ref"$'\n'*) continue ;; esac
     if [ -z "$up" ]; then
       # Never pushed anywhere. 2.40.0 excluded this as "already covered by the
       # stale-unmerged check" — but that check skips the branch you are standing

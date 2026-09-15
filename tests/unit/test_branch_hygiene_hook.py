@@ -21,8 +21,8 @@ def git(repo, *args, **kw):
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, **kw)
 
 
-def run_hook(repo, idle_days="7", **extra_env):
-    r = subprocess.run(["bash", str(HOOK)], cwd=str(repo), capture_output=True, text=True,
+def run_hook(repo, idle_days="7", cwd=None, **extra_env):
+    r = subprocess.run(["bash", str(HOOK)], cwd=str(cwd or repo), capture_output=True, text=True,
                        env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": str(repo),
                             "GSTACK_BRANCH_IDLE_DAYS": idle_days, **extra_env})
     assert r.returncode == 0, f"hook must never fail a session: {r.stderr}"
@@ -772,13 +772,16 @@ def test_squash_merged_branch_deleted_on_the_server_is_silent(tmp_path, repo):
     assert "squashed" not in run_hook(repo)
 
 
-def test_a_wide_squash_merged_branch_is_checked_in_pieces(tmp_path, repo):
-    """The landed test passes changed paths as argv in pieces of 256; 300 paths cross the
-    boundary, and every piece has to agree before the branch counts as landed."""
+def test_a_wide_squash_merged_branch_is_checked_in_batches(tmp_path, repo):
+    """Changed paths go to argv in batches bounded by bytes: 256 long paths hit E2BIG
+    (measured). 300 paths of about 400 bytes cross the batch size, and every batch has to
+    agree before the branch counts as landed."""
     bare = with_remote(tmp_path, repo)
     git(repo, "checkout", "-qb", "wide")
+    deep = repo / ("d" * 200)
+    deep.mkdir()
     for n in range(300):
-        (repo / f"w{n:03d}.txt").write_text(str(n))
+        (deep / f"{'n' * 190}{n:03d}.txt").write_text(str(n))
     git(repo, "add", "-A"); old_commit(repo)
     git(repo, "push", "-q", "-u", "origin", "wide"); git(repo, "checkout", "-q", "main")
     git(repo, "merge", "-q", "--squash", "wide"); git(repo, "commit", "-qm", "squash (#1)")
@@ -786,9 +789,36 @@ def test_a_wide_squash_merged_branch_is_checked_in_pieces(tmp_path, repo):
     git(repo, "push", "-q", "origin", "main")
     git(bare, "branch", "-qD", "wide")
     assert "wide" not in run_hook(repo)
-    (repo / "w299.txt").write_text("changed on main"); git(repo, "commit", "-qam", "edit last piece")
+    (deep / f"{'n' * 190}299.txt").write_text("changed on main"); git(repo, "commit", "-qam", "edit last batch")
     git(repo, "push", "-q", "origin", "main")
     assert "wide" in findings_of(run_hook(repo))
+
+
+def test_started_in_a_subdirectory_unlanded_work_is_not_called_landed(tmp_path, repo):
+    """diff-tree lists paths from the root, but a pathspec is read from the current
+    directory. From a subdirectory, f.txt became sub/f.txt, which does not exist, compared
+    equal, and the unlanded branch vanished from the report."""
+    (repo / "sub").mkdir(); (repo / "sub" / "keep.txt").write_text("k")
+    git(repo, "add", "-A"); git(repo, "commit", "-qm", "sub")
+    git(repo, "checkout", "-qb", "unlanded")
+    (repo / "f.txt").write_text("real work"); git(repo, "add", "-A"); old_commit(repo)
+    git(repo, "checkout", "-q", "main")
+    assert "unlanded" in findings_of(run_hook(repo, cwd=repo / "sub"))
+
+
+def test_an_ahead_branch_deleted_on_the_server_is_never_in_the_backup_push(tmp_path, repo):
+    """With one more local commit than its upstream, the branch skipped the server check,
+    and the unpushed check offered to push it: a branch someone deleted, re-created."""
+    bare = with_remote(tmp_path, repo)
+    pushed_idle_branch(repo, "feature")
+    git(repo, "checkout", "-q", "feature")
+    (repo / "more.txt").write_text("m"); git(repo, "add", "-A"); old_commit(repo, "never pushed")
+    git(repo, "checkout", "-q", "main")
+    git(bare, "branch", "-qD", "feature")
+    out = run_hook(repo)
+    findings, menu = findings_of(out), out.split(MENU)[1]
+    assert "Deleted on the server" in findings and "not pushed" not in findings
+    assert "back up" not in menu and "never push it back unasked" in menu
 
 
 def test_squash_merge_then_the_same_file_changed_again_is_never_offered_a_push(tmp_path, repo):
