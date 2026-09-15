@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.2.1] - 2026-09-14
+## [3.2.1] - 2026-09-15
 
 **The unlanded-work report checks the server before it says anything about it.**
 
@@ -9,27 +9,44 @@
   `check-branch-hygiene.sh` read `refs/remotes/origin` as the server's current state.
   Those refs change only on fetch, and `fetch.prune` is off by default, so a branch
   deleted on GitHub stayed in the report, offered `/ship`, every session. Observed in
-  this repo on 2026-09-14 with two bot branches deleted days earlier. Before a row
-  claims something about the server, the hook now asks it once with
-  `git ls-remote --heads origin`: bounded to 3 s, and it never prompts
-  (`GIT_TERMINAL_PROMPT=0`, `GCM_INTERACTIVE=never`, ssh `BatchMode` unless you route ssh
-  through a command of your own). A session with nothing to report still makes no
-  network call. If the server does not answer, the rows stay and the heading says
-  "as of the last fetch".
-- **A pushed branch whose server copy was deleted is no longer called safe.** An idle
-  unmerged branch with a deleted upstream was listed under "On the server", both before
-  and after `fetch --prune` had marked it `[gone]`, while its commits existed only on
-  this computer. It now shows under "Only on this computer" as "deleted from the
-  server", and the back-up option pushes it again.
-- **A squash-merged branch counts as landed after the default branch moves on.** The
-  content test (`git diff --quiet`) caught a squash merge only while nothing else had
-  landed since. The hook now also asks whether merging the branch in would change
-  anything (`git merge-tree --write-tree`, git 2.38 or newer). A squash merge is the
-  usual story behind a deleted upstream, so without this the fix above would have told
-  people to push merged work back to the server.
+  this repo on 2026-09-14 with two bot branches deleted days earlier. When a row depends
+  on the server, the hook now asks it once with `git ls-remote --heads origin` and
+  compares commit ids, not only names, so a force-pushed branch is not called safe
+  either. A session with nothing to report makes no network call.
+- **A branch deleted on the server gets its own heading and a look first.** An idle
+  unmerged branch whose upstream is gone (`[gone]` after a prune, or no longer listed by
+  the server) was listed under "On the server". It now shows under "Deleted on the
+  server, and the work was not found in main", with an offer to look at its commits: if
+  the work is already in main, delete the local branch; if not, ask whether the deletion
+  was deliberate before pushing it back. It is never part of the back-up option. The hook
+  cannot tell a squash merge GitHub cleaned up from a deliberate deletion (a leaked
+  secret) or from lost work, so a person decides.
+- **A squash-merged branch counts as landed after main moves on**, when every file it
+  changed is identical in main. One test (`landed()`) now serves the idle-branch list,
+  server-only branches, worktrees and the current branch, which used to disagree. It is
+  plumbing only (`git diff-tree`): no merge driver, textconv or external diff runs,
+  nothing is fetched in a partial clone, and nothing is written. If main changed one of
+  those files again, the branch is still reported.
+- **The server check cannot stall the session or prompt.** It runs in its own process
+  group, bounded to 3 s, then TERM and KILL go to the whole group, so a transport that
+  ignores TERM or leaves an ssh child cannot hold the hook. It is not started once the
+  hook has used 5 s. Prompts are off: `GIT_TERMINAL_PROMPT=0`, `GIT_ASKPASS` set but
+  empty (git runs askpass before it looks at the terminal setting), `GCM_INTERACTIVE=never`,
+  `SSH_ASKPASS_REQUIRE=never`, and ssh `BatchMode` unless you route ssh yourself
+  (`GIT_SSH_COMMAND`, `GIT_SSH` or `core.sshCommand`). Credential helpers still run, so
+  private repos stay checkable. `GSTACK_BRANCH_SERVER_CHECK=0` turns the network call
+  off. If the server does not answer, rows stay and the heading says "as of the last
+  fetch".
+- **No slower than 3.2.0.** Upstream fields come from one `for-each-ref`, and upstream
+  tips and server branches from one join each. Measured on 50 and 100 idle unmerged
+  branches: 6.8 s and 13.7 s on 3.2.0, 6.6 s and 11.5 s now.
+- Server-only rows survive a custom fetch refspec and a tag named like `origin/<branch>`;
+  both used to drop the row.
 - Not covered: an upstream on a remote other than `origin` is judged from local refs
-  only (`[gone]` still counts), and the default branch is still compared as of the last
-  fetch.
+  only. A recently committed branch whose upstream was deleted is not reported, since
+  only idle branches are. The default branch is still compared as of the last fetch.
+  Around 90 idle unmerged branches still exceed the 10 s SessionStart budget (about 70
+  on 3.2.0), tracked in #84.
 
 ## [3.2.0] - 2026-09-14
 
