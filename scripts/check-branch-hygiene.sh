@@ -124,6 +124,12 @@ server_fetch() {   # once per run: $server_raw gets `ls-remote --heads origin`; 
   local pid n=0
   set -m
   (
+    # A bound that outlives the hook. If Claude Code kills the hook mid-check, nothing
+    # signals this group, and a transport of the user's own (no BatchMode, no
+    # ConnectTimeout) ran on unbounded (measured). `set +m` keeps the watchdog in THIS
+    # group, so `kill 0` takes git and every transport child with it.
+    set +m
+    ( sleep $((SERVER_CHECK_SECS + 2)); kill -KILL 0 ) >/dev/null 2>&1 </dev/null &
     export GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never SSH_ASKPASS_REQUIRE=never GIT_ASKPASS=""
     unset SSH_ASKPASS
     # BatchMode fails instead of asking for a passphrase, unless the user routes ssh
@@ -190,8 +196,8 @@ landed_by_content() {   # $1 = full ref → 0 when every path it changed is the 
     rng=("$mb" "$1")
   fi
   while IFS= read -r -d '' p; do
-    n=$((n + 1)); [ "$n" -gt "$LANDED_MAX_PATHS" ] && return 1
-    paths[n]=":(literal)$p"
+    [ "$n" -ge "$LANDED_MAX_PATHS" ] && return 1
+    paths[n]=":(literal)$p"; n=$((n + 1))
   done < <(git diff-tree -r -z --name-only --no-renames "${rng[@]}" 2>/dev/null)
   if [ "$n" -eq 0 ]; then
     # Nothing listed: it changed nothing since it forked, or diff-tree failed. Only the
@@ -201,7 +207,13 @@ landed_by_content() {   # $1 = full ref → 0 when every path it changed is the 
     [ -n "$t" ] && [ "$t" = "$(git rev-parse -q --verify "$1^{tree}" 2>/dev/null)" ]
     return
   fi
-  git diff-tree --quiet -r --no-renames "$base" "$1" -- "${paths[@]}" 2>/dev/null
+  # In pieces of 256: a wide branch's paths in one argv can pass ARG_MAX, and E2BIG
+  # would read as "not landed" for a branch that is.
+  local i=0
+  while [ "$i" -lt "$n" ]; do
+    git diff-tree --quiet -r --no-renames "$base" "$1" -- "${paths[@]:i:256}" 2>/dev/null || return 1
+    i=$((i + 256))
+  done
 }
 landed() { git merge-base --is-ancestor "$1" "$base" 2>/dev/null || landed_by_content "$1"; }
 
@@ -264,7 +276,7 @@ tips_joined=0
 if [ -n "$cands" ] && [ "$has_remote" = "1" ]; then
   if j=$(awk -F'\t' 'FILENAME == ARGV[1] { tip[$1] = $2; next }
          $1 != "" { up = substr($4, 2); print $0 "\tt" ((up != "" && (up in tip)) ? tip[up] : "") }' \
-         <(git for-each-ref --format='%(refname)%09%(objectname)' refs/remotes 2>/dev/null) - <<<"$cands"); then
+         <(git for-each-ref --format='%(refname)%09%(objectname)' refs/remotes refs/heads 2>/dev/null) - <<<"$cands"); then
     cands="$j"$'\n'; tips_joined=1
   fi
 fi
@@ -323,7 +335,9 @@ while IFS=$'\t' read -r ref ts up_tip up_remote up_name srv; do
              server_unsure=1
            fi ;;
       esac
-    elif [ -z "$up_sha" ]; then
+    elif [ "$up_remote" != "." ] && [ -z "$up_sha" ]; then
+      # The tracking ref of another remote is gone. Never for "." (a stacked branch
+      # whose upstream is a local branch, which pass 2 also looks up): no server there.
       gone_here=1; gone_note=", as of the last fetch"
     fi
   fi

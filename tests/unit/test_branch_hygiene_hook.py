@@ -6,6 +6,8 @@ design: silent on a clean repo and on work in progress, loud only on work that h
 actually been left behind.
 """
 
+import os
+import signal
 import subprocess
 import pathlib
 import re
@@ -770,6 +772,25 @@ def test_squash_merged_branch_deleted_on_the_server_is_silent(tmp_path, repo):
     assert "squashed" not in run_hook(repo)
 
 
+def test_a_wide_squash_merged_branch_is_checked_in_pieces(tmp_path, repo):
+    """The landed test passes changed paths as argv in pieces of 256; 300 paths cross the
+    boundary, and every piece has to agree before the branch counts as landed."""
+    bare = with_remote(tmp_path, repo)
+    git(repo, "checkout", "-qb", "wide")
+    for n in range(300):
+        (repo / f"w{n:03d}.txt").write_text(str(n))
+    git(repo, "add", "-A"); old_commit(repo)
+    git(repo, "push", "-q", "-u", "origin", "wide"); git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "--squash", "wide"); git(repo, "commit", "-qm", "squash (#1)")
+    (repo / "later.txt").write_text("y"); git(repo, "add", "-A"); git(repo, "commit", "-qm", "later")
+    git(repo, "push", "-q", "origin", "main")
+    git(bare, "branch", "-qD", "wide")
+    assert "wide" not in run_hook(repo)
+    (repo / "w299.txt").write_text("changed on main"); git(repo, "commit", "-qam", "edit last piece")
+    git(repo, "push", "-q", "origin", "main")
+    assert "wide" in findings_of(run_hook(repo))
+
+
 def test_squash_merge_then_the_same_file_changed_again_is_never_offered_a_push(tmp_path, repo):
     """The content test is conservative: once main changes a squashed file again it cannot
     call the branch landed. It must then fall under the look-at offer, never a push."""
@@ -879,6 +900,48 @@ def test_a_transport_that_ignores_TERM_is_still_cut_off(tmp_path, repo):
     findings = findings_of(run_hook(repo))
     assert time.monotonic() - start < SERVER_CHECK_SECS + 3
     assert "orphan" in findings and "as of the last fetch" in findings
+
+
+def test_a_killed_hook_leaves_no_transport_running(tmp_path, repo):
+    """If Claude Code kills the hook mid-check, nothing signals the check's process group,
+    and a transport of the user's own ran on with no bound. The bound lives in the group."""
+    with_remote(tmp_path, repo)
+    server_only_orphan(repo)
+    pidfile = tmp_path.parent / f"{tmp_path.name}-transport-pid"
+    fake_ssh(tmp_path, repo, f"echo $$ > '{pidfile}'\ntrap '' TERM\nsleep {SERVER_CHECK_SECS + 20}")
+    git(repo, "remote", "set-url", "origin", "ssh://example.invalid/x.git")
+    hook = subprocess.Popen(["bash", str(HOOK)], cwd=str(repo),
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": str(repo),
+                                 "GSTACK_BRANCH_IDLE_DAYS": "7"})
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and not (pidfile.exists() and pidfile.read_text().strip()):
+        time.sleep(0.05)
+    assert pidfile.exists(), "the transport never started"
+    hook.kill(); hook.wait()
+    pid = int(pidfile.read_text())
+    time.sleep(SERVER_CHECK_SECS + 3)
+    try:
+        os.kill(pid, 0)
+        alive = True
+    except ProcessLookupError:
+        alive = False
+    if alive:
+        os.kill(pid, signal.SIGKILL)
+    assert not alive
+
+
+def test_a_stacked_branch_with_a_local_upstream_is_not_called_deleted_on_the_server(tmp_path, repo):
+    """branch.<name>.remote = . makes another local branch the upstream. Tips were looked up
+    under refs/remotes only, so that upstream looked gone and the branch was filed under
+    "Deleted on the server", where no server was involved."""
+    with_remote(tmp_path, repo)
+    pushed_idle_branch(repo, "base-feat")
+    git(repo, "checkout", "-qb", "stacked", "base-feat")
+    (repo / "b.txt").write_text("b"); git(repo, "add", "-A"); old_commit(repo)
+    git(repo, "branch", "-q", "--set-upstream-to=base-feat", "stacked")
+    git(repo, "checkout", "-q", "main")
+    assert "Deleted on the server" not in findings_of(run_hook(repo))
 
 
 def test_nothing_to_report_means_no_network_call(tmp_path, repo):

@@ -41,7 +41,9 @@
   tips and server branches from one join each. Measured on 50 and 100 idle unmerged
   branches: 6.8 s and 13.7 s on 3.2.0, 6.6 s and 11.5 s now.
 - Server-only rows survive a custom fetch refspec and a tag named like `origin/<branch>`;
-  both used to drop the row.
+  both used to drop the row. A stacked branch whose upstream is another local branch is
+  never called deleted on the server, and the server check's bound holds even when
+  Claude Code kills the hook mid-check, so no transport process is left running.
 - Not covered: an upstream on a remote other than `origin` is judged from local refs
   only. A recently committed branch whose upstream was deleted is not reported, since
   only idle branches are. The default branch is still compared as of the last fetch.
