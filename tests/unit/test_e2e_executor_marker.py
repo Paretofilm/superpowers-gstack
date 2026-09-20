@@ -144,13 +144,13 @@ def test_the_axis_is_macos_only():
 
 
 def test_block_marker_and_placeholder_are_wired():
-    assert "<!-- gstack-xcode-tools-v7 -->" in XCODE_BLOCK
+    assert "<!-- gstack-xcode-tools-v8 -->" in XCODE_BLOCK
     assert "{{E2E_EXECUTOR}}" in XCODE_BLOCK
     assert "{{E2E_EXECUTOR}}" in PLACEHOLDERS, "every placeholder needs a resolution rule"
     # the version ladder is derived, not written: the script compares the section's
-    # marker to the block's, so a v7 block skips v7 and replaces v1-v6 by construction
+    # marker to the block's, so a v8 block skips v8 and replaces v1-v7 by construction
     assert 'Block("xcode-tools.md", "gstack-xcode-tools"' in ADAPT_SCRIPT
-    assert "gstack-xcode-tools-v7" in XCODE_BLOCK.split("\n", 1)[0]
+    assert "gstack-xcode-tools-v8" in XCODE_BLOCK.split("\n", 1)[0]
 
 
 def test_route_decision_block_carries_the_executor_field():

@@ -1,4 +1,4 @@
-## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v7 -->
+## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v8 -->
 
 Xcode-related operations MUST be performed by the agent — NEVER delegated to the user; the user should never need to open Xcode to verify your work. Prefer MCP tools, falling back to CLI otherwise. Check MCP availability via `ToolSearch` first (deferred tools load on demand); drop to CLI only if the search returns nothing.
 
@@ -62,6 +62,18 @@ takes over the screen cannot fight the user for focus, two runs cannot collide o
 machine, and an unattended run does not depend on anyone being logged in. Nothing in
 this file needs to know how the rig works — only that `vm-e2e` is on `PATH` and speaks
 JSON.
+
+**An explicit request from the user overrides the pin.** The pin routes *committed* UI
+tests, and it exists so an unattended suite does not grab the keyboard while someone is
+working — not to put the user's own machine off limits. When the user asks for a run on
+their machine, do it: the app may not be installed in the guest, may not be installable
+there, or may need their logins, licences or documents, none of which a fresh guest has.
+Say in one line what you are about to drive and roughly how long it will take, so they
+can leave the keyboard and mouse alone — that is a heads-up, not a request for
+permission, and you do not wait for an answer — then say when you are done. Two caveats
+survive, because they are technical rather than policy: a screenshot taken on the host
+captures a screen region and can catch the wrong display, and two UI-test runs can never
+share one macOS instance.
 
 **Reading the marker.** Only the exact strings `host` and `vm` are valid. Anything else
 — `VM`, a trailing space, an empty file, a stray comment — is an invalid pin, not a

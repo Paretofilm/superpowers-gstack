@@ -1,5 +1,30 @@
 # Changelog
 
+## [3.3.0] - 2026-09-20
+
+**The E2E executor pin routes committed suites; it never overrules the user.**
+
+### Changed
+- **`vm` no longer reads as "the user's own machine is off limits".** The Xcode block
+  explained the pin's purpose as isolation — a UI test "cannot fight the user for
+  focus" — and said nothing about what happens when the user asks for a run on their own
+  machine. Read together with a stricter house rule in a personal CLAUDE.md, that was
+  enough for an agent to decline the request outright. The block now states the case
+  explicitly: an explicit request from the user overrides the pin, because the pin routes
+  *committed* suites and exists so an unattended run does not grab the keyboard while
+  someone is working. Reported from a live session on 2026-09-20, where the user asked
+  for GUI automation against an app that is not installed in the guest and cannot
+  sensibly be installed there.
+- **The heads-up replaces the refusal.** Before taking keyboard and mouse on the user's
+  machine, say in one line what will be driven and roughly for how long, and say when it
+  is over. It is a notification, not a permission request, and the agent does not wait
+  for an answer. Two caveats are kept because they are technical rather than policy: a
+  host screenshot captures a screen region and can catch the wrong display, and two
+  UI-test runs can never share one macOS instance.
+- Marker bumped `gstack-xcode-tools-v7` → `v8`, so `/superpowers-gstack:adapt` replaces
+  the section in projects already carrying v7. `scripts/lint-skills.py` flags v0–v7 as
+  stale.
+
 ## [3.2.1] - 2026-09-15
 
 **The unlanded-work report checks the server before it says anything about it.**
