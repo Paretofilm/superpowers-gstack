@@ -157,6 +157,38 @@ def test_route_decision_block_carries_the_executor_field():
     assert "executor=<host|vm|vm→host-fallback>" in ROUTE
 
 
+# --- an explicit user request overrides the pin (3.3.0) ---------------------------
+
+def test_explicit_user_request_overrides_the_pin():
+    """Reported from a live session on 2026-09-20: read together with a stricter
+    house rule, the v7 prose was enough for an agent to decline a user's explicit
+    request to run GUI automation on their own machine. The pin routes *committed*
+    suites; it was never meant to put the user's machine off limits — and that has
+    to be stated, not inferred, or the next read of "isolation" regresses to the
+    same refusal."""
+    t = flat(XCODE_BLOCK)
+    assert "explicit request from the user overrides the pin" in t
+    assert "not to put the user's own machine off limits" in t
+
+
+def test_the_override_is_a_heads_up_not_a_permission_request():
+    """The agent states what it is about to drive and does not wait for an answer —
+    an override that still blocks on a reply reintroduces the same stall under a
+    different name."""
+    t = flat(XCODE_BLOCK)
+    assert "not a request for permission" in t
+    assert "do not wait for an answer" in t
+
+
+def test_the_two_technical_caveats_survive_the_override():
+    """Both caveats are technical (a host screenshot can catch the wrong display; two
+    UI-test runs cannot share one macOS instance), not policy — the override must not
+    read as erasing them too."""
+    t = flat(XCODE_BLOCK)
+    assert "screen region and can catch the wrong display" in t
+    assert "two UI-test runs can never share one macOS instance" in t
+
+
 # --- the shipped hook actually behaves ---------------------------------------------
 
 @pytest.mark.parametrize("pin,why", [

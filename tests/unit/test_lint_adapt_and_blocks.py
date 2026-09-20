@@ -185,6 +185,8 @@ def test_denylist_catches_a_hardcoded_simulator_model():
     ("## Git hygiene <!-- gstack-git-hygiene-v9 -->", True, "v9 git-hygiene"),
     ("## Git hygiene <!-- gstack-git-hygiene-v10 --><!-- emitted=101 -->", True,
      "v10 told agents to park work in git stash, retired in 3.1.1"),
+    ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v7 -->", True,
+     "v7 xcode-tools, retired in 3.3.0 — missed the user-override case"),
     ("## Autonomy <!-- gstack-autonomy-v2 -->", True, "the retired autonomy block, any version"),
     ("run python3 scripts/cost-ledger/cli.py status", True, "cost-ledger"),
     ("dispatch /ios-visual-explore for exploratory runs", True, "ios-visual-explore"),
@@ -202,6 +204,8 @@ def test_denylist_catches_a_hardcoded_simulator_model():
     ("## Companion skills <!-- gstack-companion-skills-v3 -->", False, "current companion-skills"),
     ("## Git hygiene <!-- gstack-git-hygiene-v11 --><!-- emitted=101 -->", False,
      "v11 must not be caught by the v10 alternation — the \\b is load-bearing"),
+    ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v8 -->", False,
+     "current xcode-tools, carries the user-override paragraph"),
     ("mode: continuous", False, "the only handoff mode still read"),
     ("run gstack `/review` before landing", False, "the 3.0.0 wording for the Codex pass"),
     # the two sites that must name the retired skill in order to remove it
