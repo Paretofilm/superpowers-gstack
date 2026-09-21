@@ -8,19 +8,20 @@ a skill. Rows are `| skill | consider relevant when... |`.
 
 | Skill | Consider relevant when... |
 |---|---|
-| `/superpowers:brainstorming` | Almost always — skip only for trivial projects |
-| `/superpowers:writing-plans` | Almost always — skip only for single-file changes |
+| `/superpowers:brainstorming` | Almost always — skip only for trivial projects; finds out why you want the thing before proposing features |
+| `/superpowers:writing-plans` | Almost always — skip only for single-file changes; you review the saved plan before anything runs |
 | `/superpowers:subagent-driven-development` | Projects with 5+ tasks, benefits from parallel TDD |
-| `/superpowers:executing-plans` | Smaller projects (< 5 tasks), or when user wants more control |
+| `/superpowers:executing-plans` | Smaller projects (< 5 tasks), or when user wants more control; runs the whole plan then one review at the end |
 | `/superpowers:systematic-debugging` | Any project with code that can have bugs |
 | `/superpowers:dispatching-parallel-agents` | Projects with clearly independent modules |
 | `/superpowers:using-git-worktrees` | Projects where feature isolation matters |
 | `/superpowers:finishing-a-development-branch` | Projects using feature branches and PRs |
-| `/superpowers:test-driven-development` | Projects with testable code (most projects) |
+| `/superpowers:test-driven-development` | Projects with testable code (most projects); runs the project's full test suite, not just the named file |
 | `/superpowers:verification-before-completion` | Complex projects where correctness is critical |
 | `/superpowers:requesting-code-review` | Multi-file changes (runs automatically during SDD, but can be invoked manually) |
 | `/superpowers:receiving-code-review` | After `/review` or PR feedback requires code changes — structures the response with TDD |
 | `/superpowers:writing-skills` | Only for Claude Code plugin/skill projects |
+| `/diagnosing-superpowers` | When a session goes wrong — repeated work, ignored plan, skill that didn't fire, surprising bill; reads transcripts on disk with path:line evidence |
 
 **GStack skills — Phase 1 (Planning):**
 
@@ -63,7 +64,7 @@ a skill. Rows are `| skill | consider relevant when... |`.
 | `/learn` | Long-running projects (> 2 weeks) — saves cross-session learnings |
 | `/setup-gbrain` | Long-running projects wanting cross-session memory (PGLite local or Supabase) |
 | `/sync-gbrain` | Long-running projects with gbrain — keeps the brain current with this repo's code and refreshes CLAUDE.md search guidance |
-| `/health` | Projects with existing linting, type checking, or test suites |
+| `/health` | Projects with existing linting, type checking, or test suites; scores disclose coverage (checked and unavailable categories); runs with no checks report N/A |
 | `/make-pdf` | Projects needing publication-quality documentation or reports; renders through Aside when available |
 
 **GStack skills — Utility:**
@@ -96,3 +97,4 @@ a skill. Rows are `| skill | consider relevant when... |`.
 | `/superpowers-gstack:e2e-route` | Swift projects — pure dispatcher for E2E test requests: reads platform × intent and routes to the right executor (scaffold skill, MCP-live simulator automation, visual review). |
 | `/superpowers-gstack:e2e-scaffold` | iOS or macOS SwiftUI apps — one-shot XCUITest scaffolding (scene-walk, TIER-ranked stubs, identifier suggestions, xcresult runner from `templates/run-uitests.sh` honouring `.gstack/e2e-executor`). Manual only; normally reached via /e2e-route. |
 | `/superpowers-gstack:spec-drift` | Any project with plans in `docs/superpowers/plans/` — standalone "does this plan still match the code?" audit: runs `/ship` Step 8's plan-completion section from disk (hash-pinned) against an explicit plan and base, on any branch, shipped or not. Report + JSON + exit 0/1/2; never edits code. |
+| `/diagnosing-superpowers` | Any project — when a session goes wrong (repeated work, ignored plan, skill that didn't fire, surprising bill). Reads transcripts on disk, reports findings with path:line evidence, optionally builds a scrubbed bundle or drafts a GitHub issue. |

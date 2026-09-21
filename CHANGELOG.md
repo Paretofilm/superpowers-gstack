@@ -1,5 +1,32 @@
 # Changelog
 
+## [3.4.0] - 2026-09-21
+
+**New `diagnosing-superpowers` skill. `executing-plans` rebuilt as Native. GStack health scores now disclose coverage.**
+
+### Added
+
+- **`/diagnosing-superpowers`** (Superpowers v6.4.1): when a session goes wrong — repeated work, an ignored plan, a skill that didn't fire, a surprising bill — ask your agent to "figure out what went wrong with superpowers in this session." It reads transcripts on disk and reports findings with `path:line` evidence. On request builds a scrubbed bundle or drafts a GitHub issue for your approval. Works on the current session or a past one. README gains a "When Something Goes Wrong" section pointing at the skill.
+- New harness support in Superpowers v6.4.1: **OpenCode 2.0** (V2 native API, bootstrap survives continuation/restart/forks/compaction), **Muse** (native plugin manifest + SessionStart hook), and **Qwen Code** (`qwen extensions install obra/superpowers`).
+
+### Changed
+
+- **`/superpowers:executing-plans`** rebuilt (Superpowers v6.4.1): was a 64-line stub measuring the same as no plugin. Now implements every task itself under the same workspace, ledger, and stopping rules as subagent-driven development, then dispatches one fresh whole-branch review on the most capable model. The plan handoff offers two approaches (Subagent-driven and Native), says what each costs, and recommends one with a reason drawn from the plan. No longer stops every few tasks to check in — runs the whole plan, then one review at the end.
+- **`/superpowers:writing-plans`** (Superpowers v6.4.1): you now review the saved plan before anything runs; approving an idea or scope no longer counts as approving a plan you haven't seen. Plans carry a new Review Focus section (up to five inputs or failure modes the spec implies but no task's tests exercise).
+- **`/superpowers:brainstorming`** (Superpowers v6.4.1): finds out why you want the thing before proposing features, reflects intent back for correction, and ties approval to the actual design and planning stages.
+- **`/superpowers:subagent-driven-development`** (Superpowers v6.4.1): plans with the same basename no longer share a workspace (collision gets its own directory); `review-package` rejects empty or non-descendant `BASE..HEAD` ranges (exit 3); on Claude Code the controller can run one layer down as a nested subagent on a mid-tier model (opt-in).
+- **`/superpowers:test-driven-development`** (Superpowers v6.4.1): runs the project's full test suite (not just the named file) and reports every failure by name, including ones not caused by the current task.
+- **`/review`** code review (Superpowers v6.4.1): multi-commit `BASE_SHA` alternative is now `git merge-base origin/main HEAD`; reviewers judge behavior the spec doesn't mention by what a reasonable user would expect; a "Declined to judge" list shows what the reviewer skipped.
+- **`/health`** (GStack v1.87.4.0): failed checks stay failed — exit status is preserved and diagnostic counts come from the checker's complete output, not just `tail`. Scores disclose coverage: partial runs list checked and unavailable categories; runs with no checks report `N/A — no checks ran` and leave numeric history unchanged. Trends compare only matching categories.
+- **`/review` freshness** (GStack v1.87.3.0): each diff pass is bound to the content captured before it starts; edits during review, incomplete passes, and older log-only records stay STALE or UNVERIFIED even when HEAD has not moved. Codex readiness keeps unresolved advisory findings visible.
+- **GStack browser isolation** (GStack v1.87.2.0): headless daemon startup, stop, disconnect, and crash cleanup no longer kill another project's headed browser or remove its shared profile locks. Headed launches retain stale-lock cleanup.
+- **GStack dependency security** (GStack v1.87.1.0): Sharp resolved to 0.35.4 (fixes vulnerable libheif bundle); adm-zip resolved to 0.6.1 (rejects extraction through destination symlinks). Zero unsuppressed OSV findings.
+- Routing evaluations (GStack v1.87.4.0) now choose among installed GStack skills only; built-in CLI skills remain outside the evaluated catalog.
+
+### Fixed
+
+- Superpowers v6.4.1: skills work when a packager strips executable bits (Codex marketplace, MiniMax Code). Skill prose now invokes bundled scripts through their interpreter.
+
 ## [3.3.0] - 2026-09-20
 
 **The E2E executor pin routes committed suites; it never overrules the user.**
