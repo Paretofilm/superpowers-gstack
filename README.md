@@ -29,10 +29,11 @@ They never overlap. GStack focuses on *what roles review the work*. Superpowers 
 
 ## What's Included
 
-- **Claude Code Plugin** with fourteen skills:
+- **Claude Code Plugin** with fifteen skills:
   - `/adapt` — Sets up a new project's CLAUDE.md or upgrades an existing one without losing its content. The analysis and skill selection are the skill's; every write is `scripts/adapt-claude-md.py` — deterministic, idempotent, with a growth gate that defers (never destroys) a section you have written into, `--rescue` to move such content into an unmarked section, and a Removed / Deferred report
   - `/autoimplement` — Auto-advance through a multi-phase implementation plan: one subagent per phase (the Claude Code Workflow tool may run the loop), `/review` + `/pitfall-verification` chained at every phase boundary, an active pre-flight chain on the plan itself before Phase 1 unless the latest plan commit matches `^(chore|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]|$)`. Stops by default on any actionable finding; severe findings always stop. Hard refusals: fewer than 2 phases, missing per-phase commit steps, dirty working tree, on `main`/`master`, plan touches migrations / secrets / credentials / `.env` / `.ssh`.
   - `/context-handoff` — Writes a human-readable handoff to `docs/superpowers/handoff.md` before `/clear` or `/compact`. Auto-resumes on next session start. Different from gstack's `/context-save` — this lives in the repo and works cross-machine.
+  - `/diagnosing-superpowers` — When a session goes wrong (repeated work, an ignored plan, a skill that didn't fire, a surprising bill), ask your agent to "figure out what went wrong with superpowers in this session." It pins down the problem with you, reads the transcripts on disk, and reports what happened with `path:line` evidence for every finding. On request it builds a scrubbed bundle or drafts a GitHub issue for your approval, with the cited evidence left intact. Works on the current session or a past one.
   - `/htmlify` — Offline HTML rendering of MD artefacts (design docs, plans, handoffs) and per-directory dashboards in the plugin's house style (`styles/companion.css`). Since 3.0.0 the fallback: previews normally go through Claude Code's Artifact tool. Bun + TypeScript with its own test suite; sanitized via DOMPurify.
   - `/pitfall-verification` — Final-check skill run after any PRD, spec, plan, or code artifact. Stage 0 resolves the target explicitly and computes the tier **floor** mechanically via `scripts/classify-change.py` — the agent may escalate above it, never below. The self-pitfall rounds infer domain-specific pitfalls from the code's own history (paths, `git log`, past `fix:` commits, existing tests). **Multi-model orchestrator:** for ship-worthy changes the Codex lens runs through gstack `/review` (which owns the Codex pass), for high-stakes changes also `/superpowers-gstack:third-lens-review`, ending in an adversarial synthesis. Trivial changes get only the self-pitfall pass.
   - `/quality-review` — Perceived-quality gate run after a PRD, spec, or implementation plan, before implementation begins. Hunts pitfalls that make a product feel cheap or broken even when it technically works (silent failures, missing loading/empty states, error recovery, state drift, animations, AI output, sudo flows). Complementary to `/pitfall-verification`: that one asks "will this work?", this one asks "will this feel good?".
@@ -102,6 +103,7 @@ This generates a CLAUDE.md with routing rules tailored to your project type, tec
 | Code complete, ready for review | `/review` |
 | Ready to ship | `/ship` |
 | Long session, save state | `/context-handoff` |
+| Something went wrong in a session | `/diagnosing-superpowers` |
 
 ## The Workflow
 
@@ -172,6 +174,10 @@ Long sessions degrade Claude's output quality — a problem known as context rot
 **Manual use:** Run `/context-handoff` anytime to save state before a `/clear`.
 
 No hooks, no orchestration overhead, no nesting. Just save and restore.
+
+## When Something Goes Wrong
+
+If a session behaves unexpectedly — repeated work, an ignored plan, a skill that didn't fire, a surprising bill — run `/diagnosing-superpowers`. It reads the transcripts on disk and reports what happened with `path:line` evidence for every finding. On request it can build a scrubbed bundle or draft a GitHub issue for your approval.
 
 ## Common Scenarios
 
@@ -261,6 +267,8 @@ Spec or plan written? (after writing-specs / writing-plans / plan-eng-review)
 Code written?  → /clear → /review
 Review feedback needs changes? → /superpowers:receiving-code-review → fix → /review
 Review passed? → /qa → /cso → /ship
+
+Something went wrong?  → /diagnosing-superpowers
 ```
 
 ### GStack Commands
@@ -290,7 +298,7 @@ Review passed? → /qa → /cso → /ship
 | `/setup-deploy` | Configure deploy platform (one-time) |
 | `/document-release` | Update docs |
 | `/retro` | Sprint retrospective; harvests shortcut-debt markers |
-| `/health` | Code quality dashboard |
+| `/health` | Code quality dashboard; scores disclose coverage (checked and unavailable categories); runs with no checks report N/A |
 | `/context-save` | Save progress, save state |
 | `/context-restore` | Resume where left off |
 | `/context-handoff` | Write handoff to repo before /clear (cross-machine, no gstack required) |
@@ -313,19 +321,20 @@ Review passed? → /qa → /cso → /ship
 
 | Command | When to Use |
 |---------|------------|
-| `/superpowers:brainstorming` | Refining technical approach |
-| `/superpowers:writing-plans` | Creating TDD task breakdown |
+| `/superpowers:brainstorming` | Refining technical approach; finds out why you want the thing before proposing features |
+| `/superpowers:writing-plans` | Creating TDD task breakdown; saved plan shown for review before anything runs |
 | `/superpowers:subagent-driven-development` | Executing with subagents + TDD |
-| `/superpowers:executing-plans` | Inline execution (small projects) |
+| `/superpowers:executing-plans` | Inline execution (small projects); runs the whole plan, then one review at the end |
 | `/superpowers:dispatching-parallel-agents` | Independent parallel tasks |
 | `/superpowers:systematic-debugging` | Finding root cause of bugs |
 | `/superpowers:using-git-worktrees` | Feature branch isolation — asks for consent before creating; detects if already in a worktree |
 | `/superpowers:finishing-a-development-branch` | Merge/PR/discard — only cleans up worktrees it created (inside `.worktrees/`) |
-| `/superpowers:test-driven-development` | Manual TDD enforcement |
+| `/superpowers:test-driven-development` | Manual TDD enforcement; runs the project's full test suite, not just the named file |
 | `/superpowers:verification-before-completion` | Verify before claiming done |
 | `/superpowers:requesting-code-review` | Dispatch review subagent (uses `general-purpose` agent with self-contained template) |
 | `/superpowers:receiving-code-review` | Handle review feedback |
 | `/superpowers:writing-skills` | Plugin/skill projects only |
+| `/diagnosing-superpowers` | When a session goes wrong — reads transcripts on disk, reports findings with path:line evidence |
 
 ### Model Routing (v0.2)
 
