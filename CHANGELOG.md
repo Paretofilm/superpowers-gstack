@@ -1,5 +1,24 @@
 # Changelog
 
+## [3.4.0] - 2026-09-30
+
+**A solo developer lands work without a pull request: worktrees by default, one command to `main`, the local checks as the gate.**
+
+### Added
+- **`/superpowers-gstack:land`** and `scripts/land-worktree.py`: local pre-merge checks, fast-forward `main`, push, and the CI run for the pushed commit. One lock per repository. Every stop has its own exit code (2–13, 64, 70) and leaves the state visible; the script never resets, never retries by itself, never passes `--yes` or `--no-hooks`, and never removes the worktree.
+- **`worktrunk.md` block** (`gstack-worktrunk-v1`): start every task in a worktree, enter it with `EnterWorktree`, no stash, land with `land`. The `Landing mode: solo|pr` line is deliberately **not** in the block: `/adapt` replaces blocks whole and would silently reset a project's `pr` choice. The project owns the line; a missing line fails closed.
+- `.config/wt.toml` for this repository: a `pre-merge` table that mirrors CI.
+
+### Changed
+- `git-hygiene` block v11 → v12 points solo projects at `land`; `gstack-git-hygiene-v11` joins the denylist.
+- **`autoimplement`** no longer refuses `main`: it creates a worktree, moves the session into it, and lands through `land` when the mode is `solo`.
+- `capture-session-tail.sh` and `session-resume.sh` resolve through `git rev-parse --git-common-dir`, so a session that ended inside a worktree is visible from the primary checkout and survives the worktree's removal. `handoff.md` is read from the primary checkout.
+- The session-start menu offers `land` instead of `/ship` in a `solo` repository, and `wt step prune` for spent working folders.
+
+### Verified
+- `wt merge` refuses a dirty `main` worktree when the same file changed (measured); a rejected push after `wt merge` leaves a diverged `main` that `git pull --ff-only` cannot fix (measured) — hence `--no-remove` and no automatic repair.
+- Two tests that already failed on this machine are real alarms, not noise: the roster lacks `diagnosing-superpowers`, and the spec-drift pin dates from gstack 1.84.1 while 1.91.2 is installed. They are excluded from the `pre-merge` hook and reviewed in Phase 9 of the plan (`/gstack-upgrade` assessment).
+
 ## [3.3.0] - 2026-09-20
 
 **The E2E executor pin routes committed suites; it never overrules the user.**
