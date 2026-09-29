@@ -21,7 +21,7 @@ agenten må huske. Enhver feil stopper med all tilstand intakt, og aldri med aut
 | Stash | Forbudt (delt mellom worktrees). Ulagret arbeid flyttes til `wip/<tema>`-branch. |
 | Squash | `wt merge --no-squash`. SHA per fase bevares så lenge `main` ikke har flyttet seg; flytter den seg, rebaseres grenen og SHA-ene omskrives (se F5). |
 | Hvor reglene bor | Egen delt blokk i `CLAUDE.md` (tilnærming A). Ingen `PreToolUse`-hook nå. |
-| Hvordan landing utføres | **Ett skript** (`scripts/land-worktree.py`), kalt av blokken og av `autoimplement`. Det er bevisst lite: lås, hent, sjekk, merge med hook, push, stopp ved enhver feil. |
+| Hvordan landing utføres | **Ett skript** (`scripts/land-worktree.py`), kalt av `land`-skillen (en delt blokk kan ikke peke på en skriptsti i pluginen; skillen finner skriptet) og av `autoimplement` via skillen. Det er bevisst lite: lås, hent, sjekk, merge med hook, push, stopp ved enhver feil. |
 | Ingen automatisk reparasjon | Skriptet kjører aldri `git reset`, og prøver aldri landing på nytt av seg selv. Feil stopper med worktree, gren og `main` urørt, og skriptet skriver kommandoene brukeren kan kjøre. |
 | `--no-hooks` | Aldri. En sperre som omgås er verre enn ingen sperre. |
 | Hvordan økten kommer inn i worktreet | `wt switch --create <gren> --no-cd --format=json`, deretter verktøyet `EnterWorktree` med `path`. Da er arbeidsmappen worktreet, og vanlige `git`-kall og `/review` virker uten `-C`. Reserve: `git -C <sti>`. Må verifiseres i planens fase 0. |
@@ -35,7 +35,7 @@ agenten må huske. Enhver feil stopper med all tilstand intakt, og aldri med aut
 
 | # | Komponent | Endring |
 |---|---|---|
-| 1 | `skills/adapt/blocks/worktrunk.md` (ny) | Regler for worktree-start, `EnterWorktree`, solo-landing via skriptet og fallback uten `wt`. Forklarer `Landing mode`-linjen (blokken inneholder den ikke selv). Ber agenten foreslå en `.config/wt.toml` med `pre-merge` hvis prosjektet mangler en (krever brukerens godkjenning). Handoff skrives til primærmappen. |
+| 1 | `skills/adapt/blocks/worktrunk.md` (ny) | Regler for worktree-start, `EnterWorktree`, solo-landing via `land`-skillen (som finner og kaller skriptet) og fallback uten `wt`. Forklarer `Landing mode`-linjen (blokken inneholder den ikke selv). Ber agenten foreslå en `.config/wt.toml` med `pre-merge` hvis prosjektet mangler en (krever brukerens godkjenning). `handoff.md` (gitignorert) skrives til primærmappen; `progress.md` er sporet og hører til grenen. |
 | 2 | `skills/adapt/blocks/git-hygiene.md` v11→v12 | Peker til worktrunk-blokken for solo-landing. Stash-forbud og `wip/`-regel urørt. |
 | 3 | `scripts/adapt-claude-md.py`, `scripts/lint-skills.py`, `scripts/sync-own-claude-md.py` | Ny `Block(...)` i `BLOCKS` med sentinel. Blokken føres også inn i `MARKER_BLOCKS` (lint E8) og i `UNIVERSAL` (repoets egen `CLAUDE.md`). Uten de to siste blir lint rød og dette repoet lærer ikke regelen. |
 | 4 | `skills/autoimplement/SKILL.md` | Check 1: er `HEAD` på `main`, opprettes worktree `autoimpl/<plan-slug>` fra `main` og økten går inn i det med `EnterWorktree`. Da virker de 15 eksisterende git-kallene uten endring. Reserve, hvis subagenter ikke arver arbeidsmappen (fase 0): Check 1 definerer én variabel `WT`, og de 15 kallene endres til `git -C "$WT"`. Er `HEAD` allerede på en feature-gren, gjelder dagens oppførsel. Sluttlanding via skriptet. |
@@ -49,8 +49,8 @@ agenten må huske. Enhver feil stopper med all tilstand intakt, og aldri med aut
 ## Solo-landing (`scripts/land-worktree.py`)
 
 Arbeidsflyt: `wt switch --create <type>/<tema> --no-cd --format=json`, `EnterWorktree` med stien,
-commit ved milepæler, `git push -u origin <gren>` som backup. Landing er ett kall:
-`python3 <plugin>/scripts/land-worktree.py --worktree <sti>`. Skriptet er uavhengig av
+commit ved milepæler, `git push -u origin <gren>` som backup. Landing er ett kall: `land`-skillen finner
+og kjører `python3 <plugin>/scripts/land-worktree.py --worktree <sti>`. Skriptet er uavhengig av
 arbeidsmappen. Rekkefølge:
 
 1. **Lås** per repo (atomisk `mkdir` i `git rev-parse --git-common-dir`, med pid og gammel-lås-sjekk), frigitt ved avslutning. To samtidige landinger serialiseres i stedet for å tråkke på hverandre (kode 12).
@@ -77,7 +77,7 @@ Ship-worthy endringer går gjennom `/review` og `pitfall-verification` **før** 
 - Check 1: er `HEAD` på `main`, opprettes worktree `autoimpl/<plan-slug>` fra `main`, og økten går inn med `EnterWorktree`. Kravet om at planen er committet gjelder da **på `main`**, ellers finnes ikke planen i worktreet. Ligger planen bare på en annen feature-gren, brukes den grenen som i dag (ingen nytt worktree).
 - Renhet vurderes i worktreet. Primærmappens skitne filer stopper ikke kjøringen. Overlapp med det landingen endrer fanges ved landing (kode 5), der tilstanden fortsatt er intakt.
 - Subagentene arver arbeidsmappen, og worktree-stien oppgis i prompten i tillegg. Uten `isolation: "worktree"`.
-- Etter siste fase og grønn sluttreview kaller den landingsskriptet hvis modusen er `solo`. Ved `pr` stopper den og nevner `/ship`. `progress.md` får SHA-ene fra `main` etter landing, siden rebase kan ha omskrevet dem.
+- Etter siste fase og grønn sluttreview kaller den `land`-skillen (som kjører landingsskriptet) hvis modusen er `solo`. Ved `pr` stopper den og nevner `/ship`. `progress.md` får SHA-ene fra `main` etter landing, siden rebase kan ha omskrevet dem.
 - Eksisterende avvisninger (migrasjoner, hemmeligheter, credentials, `.env`, `.ssh`) beholdes.
 
 ## Feilkoder
@@ -157,7 +157,7 @@ Kilde: S = egen runde, X = Codex-utfordring (GPT-6 Sol).
 - Legg `gstack-git-hygiene-v11` i `DENYLIST` i `scripts/lint-skills.py`.
 - `python3 scripts/lint-skills.py` og `python3 -m pytest -q` grønne, **også på brukerens maskin** (F1).
 - Pytest for blokkemisjonen: E8-roster (`BLOCKS`, `MARKER_BLOCKS`, `UNIVERSAL`), sentinel og v11→v12.
-- Pytest for `land-worktree.py` med kaster-repoer for hver kode 2–13: skitten `main`-worktree (samme og annen fil), primærmappen på en annen gren enn `main`, `main` uten worktree, `origin/main` foran, rød hook, manglende hook, avvist push, samtidig lås, rebase-konflikt, skittent worktree, manglende og ugyldig `Landing mode`, og ikke-fatal feil etter push (kode 0 med «gjenstår»).
+- Pytest for `land-worktree.py` med kaster-repoer for hver kode 2–13, 64 og 70: skitten `main`-worktree (samme og annen fil), primærmappen på en annen gren enn `main`, `main` uten worktree, `origin/main` foran, rød hook, manglende hook, avvist push, samtidig lås, rebase-konflikt, skittent worktree, manglende og ugyldig `Landing mode`, og ikke-fatal feil etter push (kode 0 med «gjenstår»).
 - Pytest for komponent 9: sesjonslogg skrevet fra et worktree leses fra primærmappen.
 - Fase 0 i planen: (a) `EnterWorktree` med `path` mot et `wt`-worktree, `pwd` i Bash-verktøyet og at hooken godkjenner det, (b) send en minimal subagent og bekreft at den rapporterer worktreet som arbeidsmappe. Feiler (b), settes reserven i komponent 4 inn i planen.
 - E2E-testen for `adapt` kjøres manuelt etter endringene i skript og blokker.
