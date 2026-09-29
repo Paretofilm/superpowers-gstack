@@ -1,4 +1,4 @@
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v11 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v12 -->
 
 Commit at meaningful milestones — not at every file save, not only at session end.
 
@@ -54,8 +54,10 @@ review, and rots against the default branch while everything else moves.
   review first"* (PR), *"keep it safely stored but not live"* (leave the pushed
   branch) — and recommend one based on how the repo actually works (solo repo with
   no CI review → merge; anything with review or deploys on main → PR).
-- **Landing is a skill, not a hand-rolled merge:** `/ship` (tests → review → PR) or
-  `/superpowers:finishing-a-development-branch` (merge, PR, or discard). Pick one.
+- **Landing is a skill, not a hand-rolled merge:** `/superpowers-gstack:land` (a project
+  whose `Landing mode` is `solo`: local checks → main → push, no pull request), `/ship`
+  (tests → review → PR) or `/superpowers:finishing-a-development-branch` (merge, PR, or
+  discard). Pick one.
 - **Deliberate abandonment counts as done.** Say so and delete the branch — but
   **check whether it was ever pushed first.** If its commits exist on a remote,
   deleting the local branch is tidy-up and the work stays recoverable. If it was
