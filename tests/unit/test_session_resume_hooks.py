@@ -386,3 +386,42 @@ def test_resume_no_longer_reads_typeless_legacy_handoff(repo):
         "---\nsession_end: 2026-09-01T10:00:00+02:00\n"
         "next_step: \"Read x.py:1\"\n---\n")
     assert "next step" not in run_resume(repo)
+
+
+# ------------------------------------------------- linked worktrees (3.4.0) ----
+
+@pytest.fixture
+def linked(repo, tmp_path):
+    """The repo plus a linked worktree (path with a space) that also carries docs/superpowers/."""
+    (repo / "docs" / "superpowers" / ".gitkeep").write_text("")
+    git(repo, "add", "-f", "docs/superpowers/.gitkeep")
+    git(repo, "commit", "-qm", "docs dir")
+    wt = tmp_path.parent / (tmp_path.name + ".wt dir")
+    git(repo, "worktree", "add", "-q", "-b", "feat/x", str(wt))
+    return wt
+
+
+def test_capture_from_a_linked_worktree_lands_in_the_shared_git_dir(repo, linked, tmp_path):
+    t = transcript(tmp_path, [("user", "hello"), ("assistant", "hi")])
+    run_capture(linked, payload(linked, t))
+    assert capture_file(repo).is_file(), "the primary checkout must be able to read it"
+    assert "feat/x" in capture_file(repo).read_text(), "it still describes the worktree's branch"
+
+
+def test_capture_survives_the_worktree_being_removed(repo, linked, tmp_path):
+    t = transcript(tmp_path, [("user", "hello"), ("assistant", "hi")])
+    run_capture(linked, payload(linked, t))
+    git(repo, "worktree", "remove", "--force", str(linked))
+    assert capture_file(repo).is_file()
+
+
+def test_resume_in_the_primary_shows_a_capture_written_from_a_worktree(repo, linked, tmp_path):
+    t = transcript(tmp_path, [("user", "go"), ("assistant", "next: finish the landing script")])
+    run_capture(linked, payload(linked, t))
+    assert "landing script" in run_resume(repo)
+
+
+def test_resume_in_a_worktree_reads_the_primarys_handoff(repo, linked):
+    (repo / "docs" / "superpowers" / "handoff.md").write_text(
+        '---\ntype: handoff\nnext_step: "run the phase 3 tests"\n---\nbody\n')
+    assert "run the phase 3 tests" in run_resume(linked)

@@ -28,9 +28,13 @@ def sh(*args):
     return r.stdout.strip() if r.returncode == 0 else None
 
 root = sh("git", "rev-parse", "--show-toplevel")
-gitdir = sh("git", "rev-parse", "--absolute-git-dir")
+gitdir = sh("git", "rev-parse", "--path-format=absolute", "--git-common-dir")
 if not root or not gitdir:
     raise SystemExit(0)
+
+# handoff.md is gitignored, so it lives only in the primary checkout. progress.md is
+# tracked and belongs to the branch, so it keeps being read from the worktree.
+primary = os.path.dirname(gitdir) if os.path.basename(gitdir) == ".git" else root
 
 sections = []
 
@@ -84,7 +88,7 @@ if os.path.isfile(progress):
     except Exception:
         pass
 
-handoff = os.path.join(root, "docs", "superpowers", "handoff.md")
+handoff = os.path.join(primary, "docs", "superpowers", "handoff.md")
 if os.path.isfile(handoff):
     try:
         text = open(handoff, encoding="utf-8", errors="replace").read()

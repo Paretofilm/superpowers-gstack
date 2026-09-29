@@ -8,8 +8,9 @@
 # assistant messages from the on-disk transcript, plus a git snapshot. The
 # companion SessionStart hook (session-resume.sh) surfaces it next session.
 #
-# The capture is written INSIDE the git dir (.git/gstack-last-session.md),
-# never into the working tree: transcript excerpts can contain anything, and
+# The capture is written INSIDE the SHARED git dir (<primary>/.git/gstack-last-session.md,
+# also when the session ran in a linked worktree — a worktree's own git dir is deleted
+# with it), never into the working tree: transcript excerpts can contain anything, and
 # a file that `git add -A` cannot reach cannot be committed by accident.
 #
 # Signal discipline: acts only in git repos that use the workflow (a
@@ -45,7 +46,7 @@ if not os.path.isdir(cwd):
 root = sh("git", "-C", cwd, "rev-parse", "--show-toplevel")
 if not root or not os.path.isdir(os.path.join(root, "docs", "superpowers")):
     raise SystemExit(0)
-gitdir = sh("git", "-C", cwd, "rev-parse", "--absolute-git-dir")
+gitdir = sh("git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir")
 if not gitdir:
     raise SystemExit(0)
 
