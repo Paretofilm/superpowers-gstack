@@ -1,6 +1,6 @@
 # Worktrunk-integrasjon — design
 
-**Dato:** 2026-09-29 · **Status:** revidert etter self-pitfall (runde 1) og Codex-utfordring; venter på tredje linse og brukergjennomgang · **Målversjon:** 3.4.0
+**Dato:** 2026-09-29 · **Status:** revidert etter self-pitfall, Codex-utfordring og tredje linse (GLM-5.3); venter på brukergjennomgang · **Målversjon:** 3.4.0
 **Bakgrunn:** `docs/superpowers/.handoff-last.md` (utredning av `max-sixty/worktrunk`, `wt` v0.79.0)
 
 ## Formål
@@ -25,6 +25,7 @@ agenten må huske. Enhver feil stopper med all tilstand intakt, og aldri med aut
 | Ingen automatisk reparasjon | Skriptet kjører aldri `git reset`, og prøver aldri landing på nytt av seg selv. Feil stopper med worktree, gren og `main` urørt, og skriptet skriver kommandoene brukeren kan kjøre. |
 | `--no-hooks` | Aldri. En sperre som omgås er verre enn ingen sperre. |
 | Hvordan økten kommer inn i worktreet | `wt switch --create <gren> --no-cd --format=json`, deretter verktøyet `EnterWorktree` med `path`. Da er arbeidsmappen worktreet, og vanlige `git`-kall og `/review` virker uten `-C`. Reserve: `git -C <sti>`. Må verifiseres i planens fase 0. |
+| Kilde for `Landing mode` | Én linje `Landing mode: solo` eller `Landing mode: pr` i prosjektets `CLAUDE.md`. Skriptet leser den med et strengt mønster (`^Landing mode: (solo|pr)$`). Mangler den eller har en annen verdi, **feiler skriptet lukket** (kode 2). |
 | Parallelle agenter | Utenfor omfanget. `autoimplement` kjører faser sekvensielt. |
 | `copy-ignored` | Ikke i dette repoet. Prosjekter med `node_modules` eller `.env` bruker `.worktreeinclude`. |
 | Personlig konfig og Codex-modell | Uavhengig av resten (komponent 7), valgfri, og endres bare etter at brukeren har sett diffen. Standard byttes fra GPT-6 Astra ($10/$50 per million tokens) til GPT-6 Sol ($2/$10); kvalitet er ikke målt for kodegjennomgang (F9). |
@@ -37,11 +38,12 @@ agenten må huske. Enhver feil stopper med all tilstand intakt, og aldri med aut
 | 1 | `skills/adapt/blocks/worktrunk.md` (ny) | Regler for worktree-start, `EnterWorktree`, solo-landing via skriptet og fallback uten `wt`. Linjen `Landing mode: solo`. Ber agenten foreslå en `.config/wt.toml` med `pre-merge` hvis prosjektet mangler en (krever brukerens godkjenning). Handoff skrives til primærmappen. |
 | 2 | `skills/adapt/blocks/git-hygiene.md` v11→v12 | Peker til worktrunk-blokken for solo-landing. Stash-forbud og `wip/`-regel urørt. |
 | 3 | `scripts/adapt-claude-md.py`, `scripts/lint-skills.py`, `scripts/sync-own-claude-md.py` | Ny `Block(...)` i `BLOCKS` med sentinel. Blokken føres også inn i `MARKER_BLOCKS` (lint E8) og i `UNIVERSAL` (repoets egen `CLAUDE.md`). Uten de to siste blir lint rød og dette repoet lærer ikke regelen. |
-| 4 | `skills/autoimplement/SKILL.md` | Check 1: er `HEAD` på `main`, opprettes worktree `autoimpl/<plan-slug>` fra `main` og økten går inn i det med `EnterWorktree`. Da virker de 15 eksisterende git-kallene uten endring. Er `HEAD` allerede på en feature-gren, gjelder dagens oppførsel. Sluttlanding via skriptet. |
+| 4 | `skills/autoimplement/SKILL.md` | Check 1: er `HEAD` på `main`, opprettes worktree `autoimpl/<plan-slug>` fra `main` og økten går inn i det med `EnterWorktree`. Da virker de 15 eksisterende git-kallene uten endring. Reserve, hvis subagenter ikke arver arbeidsmappen (fase 0): Check 1 definerer én variabel `WT`, og de 15 kallene endres til `git -C "$WT"`. Er `HEAD` allerede på en feature-gren, gjelder dagens oppførsel. Sluttlanding via skriptet. |
 | 5 | `scripts/check-branch-hygiene.sh` | Foreslår landingsskriptet og `wt step prune` når `wt` finnes. Tilbyr ikke `/ship` når modusen er `solo`. `WORKTREE_SCAN_MAX` beholdes på 12 (økning gir flere `git status`-kall ved hver sesjonsstart). |
 | 6 | `.config/wt.toml` (ny, dette repoet) | `pre-merge` som tabell (kommandoene kjører samtidig): `lint-skills.py`, `pytest tests/unit -q` og kontrakttestene `skills/*/tests/required-sections.test.sh`. Ingen `post-start`-hook. |
 | 7 | Personlig konfig (valgfri, etter samtykke) | `GSTACK_CODEX_MODEL=gpt-6-sol` i `~/.zshenv`, `model = "gpt-6-sol"` i `~/.codex/config.toml`, `[commit.generation]` med Claude. |
 | 8 | `scripts/land-worktree.py` (ny) | Landing i én kommando med lås, forhåndssjekker og feilkoder. Fjerner aldri worktreet selv. Testes med kaster-repoer. |
+| 9 | `scripts/capture-session-tail.sh`, `scripts/session-resume.sh` | Sesjonsloggen skrives i og leses fra **`git rev-parse --git-common-dir`** i stedet for worktreets egen git-mappe, og `handoff.md`/`progress.md` slås opp i primærmappen. Ellers ser ikke neste økt fra primærmappen en avbrutt økt fra et worktree, og loggen forsvinner når worktreet fjernes. Tester i `tests/unit/test_session_resume_hooks.py`. |
 
 ## Solo-landing (`scripts/land-worktree.py`)
 
@@ -51,16 +53,21 @@ commit ved milepæler, `git push -u origin <gren>` som backup. Landing er ett ka
 arbeidsmappen. Rekkefølge:
 
 1. **Lås** per repo (atomisk `mkdir` i `git rev-parse --git-common-dir`, med pid og gammel-lås-sjekk), frigitt ved avslutning. To samtidige landinger serialiseres i stedet for å tråkke på hverandre (kode 12).
-2. **Modus:** `Landing mode: pr` → kode 2, bruk `/ship`.
+2. **Modus:** les `Landing mode` fra prosjektets `CLAUDE.md` med det strenge mønsteret. `pr`, manglende eller ugyldig linje → kode 2 (feiler lukket), bruk `/ship`.
 3. **Sperre finnes:** prosjektet må ha minst én `pre-merge`-hook (kode 9) og den må være godkjent (kode 3). Aldri `--yes`.
 4. **`git fetch origin`** (kode 11 hvis den feiler).
-5. **Overlapp-sjekk, før noe flyttes:** skitne filer i primærmappen (`git status --porcelain`) mot filene grenen endrer **og** filene `origin/main` endrer (kode 5, filene nevnes). `wt merge` nekter uansett (verifisert), men skriptet sier det før de to minuttene med tester og før `main` flyttes.
-6. **Oppdater `main`:** `git -C <primær> merge --ff-only origin/main`. Feiler den, ligger lokal `main` foran med ikke-pushede commits (kode 4, commitene listes).
+5. **Forhåndssjekker, før noe flyttes:**
+   - **Worktreet som landes må være rent** (`git -C <sti> status --porcelain`, inkludert ikke-sporede filer). `wt merge` committer ellers uforpliktet arbeid automatisk, og et commit skal være et valg (kode 13).
+   - **Finn worktreet der `main` står** (`git worktree list --porcelain`). Primærmappen står ofte på en annen gren, så antakelsen «primær = `main`» er ikke tillatt.
+   - Er det et slikt worktree: skitne filer der mot filene grenen endrer **og** filene `origin/main` endrer (kode 5, filene nevnes). `wt merge` nekter uansett (verifisert), men skriptet sier det før de to minuttene med tester og før `main` flyttes.
+6. **Oppdater `main`:** står `main` i et worktree, `git -C <det worktreet> merge --ff-only origin/main`. Står den ikke i noe worktree, `git fetch origin main:main` (nekter alt annet enn fast-forward). Feiler det, ligger lokal `main` foran med ikke-pushede commits (kode 4, commitene listes).
 7. **Landing:** `wt -C <sti> merge --no-squash --no-remove`. Hooken kjører, grenen rebaseres, lokal `main` fast-forwardes. Rød hook gir kode 6, rebase-konflikt kode 10. Worktree og gren står.
-8. **Push:** hent på nytt. Har `origin/main` flyttet seg siden steg 4, eller avvises pushen, avslutter skriptet med kode 7. Ingenting repareres. Skriptet skriver tilstanden og kommandoene brukeren kan kjøre.
-9. **Slett fjerngrenen** (`git push origin --delete <gren>`) hvis den ble pushet.
-10. **CI:** finn kjøringen for **den pushede SHA-en** (`gh run list --commit <sha>`, vent opptil 30 sekunder på at den opprettes) og skriv `gh run watch <id> --exit-status`. Agenten kjører den i bakgrunnen. Er den rød, er neste oppgave å fikse `main`.
+8. **Push** (`git push origin main`, uavhengig av hvilket worktree som har `main`): hent på nytt. Har `origin/main` flyttet seg siden steg 4, eller avvises pushen, avslutter skriptet med kode 7. Ingenting repareres. Skriptet skriver tilstanden og kommandoene brukeren kan kjøre.
+9. **Slett fjerngrenen** (`git push origin --delete <gren>`) hvis den ble pushet. Feiler det, er landingen likevel gjennomført (se «Etter vellykket push»).
+10. **CI:** finn kjøringen for **den pushede SHA-en** (`gh run list --commit <sha>`, vent opptil 30 sekunder på at den opprettes) og skriv `gh run watch <id> --exit-status`. Skriptet venter aldri på CI. Agenten kjører kommandoen i bakgrunnen, og er kjøringen rød, er neste oppgave å fikse `main`.
 11. **Skriv hva som gjenstår lokalt:** `ExitWorktree` med `keep` hvis økten står i worktreet, deretter `wt -C <primær> remove <gren>`. Skriptet gjør ikke dette selv, fordi et worktree som fjernes under økten etterlater en ugyldig arbeidsmappe.
+
+**Etter vellykket push** er landingen gjennomført. Feil i steg 9–10 (fjerngren ikke slettet, `gh` mangler, ingen CI-kjøring funnet på 30 sekunder) er ikke-fatale: skriptet avslutter med kode 0 og en «gjenstår»-seksjon som lister dem. Rød CI er ikke en avslutningskode, siden skriptet ikke venter.
 
 Ship-worthy endringer går gjennom `/review` og `pitfall-verification` **før** skriptet kalles.
 
@@ -76,7 +83,7 @@ Ship-worthy endringer går gjennom `/review` og `pitfall-verification` **før** 
 
 | Kode | Situasjon | Tilstand som står |
 |---|---|---|
-| 2 | Modus er `pr` | Alt urørt. Bruk `/ship`. |
+| 2 | Modus er `pr`, eller linjen mangler/er ugyldig | Alt urørt. Bruk `/ship`, eller sett linjen. |
 | 3 | Hooks ikke godkjent | Alt urørt. Brukeren kjører `wt config approvals add`. |
 | 4 | Lokal `main` foran `origin/main` med ikke-pushede commits | Alt urørt. Commitene listes. |
 | 5 | Skitne filer i primærmappen overlapper | Alt urørt. Filene nevnes. Aldri stash. |
@@ -87,6 +94,7 @@ Ship-worthy endringer går gjennom `/review` og `pitfall-verification` **før** 
 | 10 | Rebase-konflikt | Rebasen står åpen i worktreet (løs den eller `git rebase --abort`). |
 | 11 | `fetch` feilet | Alt urørt. |
 | 12 | Lås holdt av en annen landing | Alt urørt. Vent eller se hvem som holder den. |
+| 13 | Worktreet som landes har ikke-committet arbeid | Alt urørt. Commit, eller flytt til `wip/<tema>`. |
 
 ## Verifisert under pitfall-review
 
@@ -101,7 +109,8 @@ Målt eller kjørt, ikke antatt:
 - **Registre:** `MARKER_BLOCKS` (`lint-skills.py:138`) og `UNIVERSAL` (`sync-own-claude-md.py:32`) finnes.
 - **Sesjonslogg:** `capture-session-tail.sh:48` og `:133` skriver i worktreets egen git-mappe, som fjernes sammen med worktreet.
 - **`.gitignore`-filer `copy-ignored` ville kopiert:** `handoff.md`, `.handoff-last.md`, `.superpowers/`, `.update-state.json`, `__pycache__`, `.pytest_cache`.
-- **Ikke kjørt:** `EnterWorktree` med `path` (kun lest i verktøybeskrivelsen), og at pluginens `PermissionRequest`-hook godkjenner det automatisk.
+- **`wt merge` committer uforpliktet arbeid** (dokumentasjonen, steg 1: «uncommitted changes are committed»), ikke avviser.
+- **Ikke kjørt:** `EnterWorktree` med `path` (kun lest i verktøybeskrivelsen), at pluginens `PermissionRequest`-hook godkjenner det automatisk, og at subagenter arver arbeidsmappen.
 
 ## Funn og håndtering
 
@@ -122,9 +131,14 @@ Kilde: S = egen runde, X = Codex-utfordring (GPT-6 Sol).
 | F11 (X) | Ingen samtidighetslås: to landinger kan overskrive hverandre. | Lås per repo (steg 1, kode 12). |
 | F12 (X) | «Samme dekning som CI» gjelder bare dette repoet; andre adapterte prosjekter har ingen hook. | Kode 9. Blokken ber agenten foreslå en `.config/wt.toml`. |
 | F13 (X) | Plan committet bare på en annen gren finnes ikke i worktreet fra `main`. | Se `autoimplement`: nytt worktree bare fra `main`, ellers dagens oppførsel. |
-| F14 (X) | Handoff ligger i worktreet og sesjonsloggen i worktreets git-mappe. Begge forsvinner når worktreet fjernes. | Regel nå: handoff skrives til primærmappen. Kodeendring utsatt, utløser: første gang en handoff går tapt (`session-resume.sh` og `capture-session-tail.sh` må da slå opp `git-common-dir`). |
+| F14 (X, skjerpet av T4) | Handoff og sesjonslogg ligger i worktreet. Avsluttes økten midt i arbeidet der, ser ikke neste økt fra primærmappen dem, og de forsvinner når worktreet fjernes. Jeg hadde utsatt dette, men utløseren inntreffer første gang du blir avbrutt. | Komponent 9: loggen og oppslaget går via `git-common-dir`, handoff i primærmappen. |
 | F15 (X) | To register manglet (`MARKER_BLOCKS`, `UNIVERSAL`). | Komponent 3. |
 | F16 (X) | Å øke `WORKTREE_SCAN_MAX` gjør sesjonsstart tregere, og menyen tilbyr fortsatt `/ship`. | Komponent 5: grensen beholdes, `/ship` skjules i modus `solo`. |
+| F18 (T1) | Steg 6 antok at primærmappen står på `main`. Står den på en annen gren, flettes `origin/main` inn i feil gren. | Steg 5–6: finn worktreet der `main` står, ellers `git fetch origin main:main`. |
+| F19 (T2) | `wt merge` committer uforpliktet arbeid automatisk. | Kode 13: worktreet må være rent før landing. |
+| F20 (T3) | At subagenter arver arbeidsmappen er uverifisert, og reserven motsa «ingen endringer». | Fase 0 tester begge. Reserven er nå en konkret variabel `WT` i komponent 4. |
+| F21 (T5) | Uklart hva som skjer etter vellykket push. | «Etter vellykket push»: ikke-fatale feil gir kode 0 med «gjenstår»-seksjon. Skriptet venter aldri på CI. |
+| F22 (T6) | `Landing mode` hadde ingen definert kilde. | Beslutningstabellen: strengt mønster i `CLAUDE.md`, feiler lukket. |
 | F17 (X) | Enklere design: `wt merge` + `git push` har færre tilstander. | Skriptet er beholdt, men strippet til lås, sjekk, merge, push, stopp. Automatisk reset og nytt forsøk er fjernet. |
 
 ## Utenfor omfanget
@@ -132,7 +146,6 @@ Kilde: S = egen runde, X = Codex-utfordring (GPT-6 Sol).
 - Parallelle agenter via `wt` i `autoimplement`.
 - `PreToolUse`-hook som håndhever `wt` (alternativ B).
 - Beskyttelse av `main` på GitHub (solo-flyten skal pushe direkte).
-- Kodeendring for handoff i worktrees (F14), til utløseren inntreffer.
 
 ## Utgivelse og testing
 
@@ -141,8 +154,9 @@ Kilde: S = egen runde, X = Codex-utfordring (GPT-6 Sol).
 - Legg `gstack-git-hygiene-v11` i `DENYLIST` i `scripts/lint-skills.py`.
 - `python3 scripts/lint-skills.py` og `python3 -m pytest -q` grønne, **også på brukerens maskin** (F1).
 - Pytest for blokkemisjonen: E8-roster (`BLOCKS`, `MARKER_BLOCKS`, `UNIVERSAL`), sentinel og v11→v12.
-- Pytest for `land-worktree.py` med kaster-repoer for hver kode 2–12: skitten primær (samme og annen fil), `origin/main` foran, rød hook, manglende hook, avvist push, samtidig lås, rebase-konflikt.
-- Fase 0 i planen: kjør `EnterWorktree` med `path` mot et `wt`-worktree og bekreft at hooken godkjenner det.
+- Pytest for `land-worktree.py` med kaster-repoer for hver kode 2–13: skitten `main`-worktree (samme og annen fil), primærmappen på en annen gren enn `main`, `main` uten worktree, `origin/main` foran, rød hook, manglende hook, avvist push, samtidig lås, rebase-konflikt, skittent worktree, manglende og ugyldig `Landing mode`, og ikke-fatal feil etter push (kode 0 med «gjenstår»).
+- Pytest for komponent 9: sesjonslogg skrevet fra et worktree leses fra primærmappen.
+- Fase 0 i planen: (a) `EnterWorktree` med `path` mot et `wt`-worktree, `pwd` i Bash-verktøyet og at hooken godkjenner det, (b) send en minimal subagent og bekreft at den rapporterer worktreet som arbeidsmappe. Feiler (b), settes reserven i komponent 4 inn i planen.
 - E2E-testen for `adapt` kjøres manuelt etter endringene i skript og blokker.
 - Manuell dry-run av `autoimplement` på en liten plan, både fra `main` og fra en feature-gren.
 - Ship-worthy og berører kontrakt ⇒ pitfall-verification med Codex-pass via `/review` og tredje linse.
