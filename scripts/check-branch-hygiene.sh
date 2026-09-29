@@ -54,6 +54,9 @@ _root=$(git rev-parse --show-toplevel 2>/dev/null || echo .)
 # Landing mode: the exact line, outside any /adapt-managed section, decides whether
 # a finished branch is offered /superpowers-gstack:land (solo) or /ship (a PR).
 # Same strict pattern as the landing script; absent or invalid behaves as before.
+# Read from the CLAUDE.md of the checkout the session started in (one menu, one mode).
+# Fail-safe on a mismatch: land-worktree.py reads the CLAUDE.md of the worktree being
+# landed and refuses with exit 2 when the line is missing there, so it never lands wrongly.
 land_mode=$(grep -m1 -E '^Landing mode: (solo|pr)$' "$_root/CLAUDE.md" 2>/dev/null | sed 's/^Landing mode: //')
 finish_via="/ship"
 [ "$land_mode" = "solo" ] && finish_via="/superpowers-gstack:land"
@@ -882,7 +885,7 @@ if [ "${merged_n:-0}" -ge 5 ] || [ "${wt_done_n:-0}" != "0" ] || [ "${wt_stale_r
   [ "${wt_done_n:-0}" != "0" ] && \
     act "tidy" "remove ${wt_done_n} spent working folder(s) — git worktree remove <path>; their branch cannot be deleted until you do"
   [ "${wt_done_n:-0}" != "0" ] && command -v wt >/dev/null 2>&1 && \
-    act "tidy" "or let worktrunk do it: wt step prune removes every working folder whose branch is already merged into ${default_ref}"
+    act "tidy" "or let worktrunk do it: wt step prune removes working folders whose branch is already merged into ${default_ref} and older than a day; wt step prune --dry-run previews it"
   [ "${wt_stale_reg:-0}" -gt 0 ] && \
     act "tidy" "run git worktree prune — until then git refuses to delete those ${wt_stale_reg} branch(es)"
   [ "${merged_n:-0}" -ge 5 ] && \

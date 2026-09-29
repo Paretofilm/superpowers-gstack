@@ -1123,3 +1123,17 @@ def test_spent_worktrees_are_offered_wt_step_prune_when_wt_exists(tmp_path, repo
     out = run_hook(repo, PATH=f"/usr/bin:/bin:{fake}")
     assert "wt step prune" in out
     assert "wt step prune" not in run_hook(repo)
+
+
+def test_mode_follows_the_checkout_the_session_started_in(tmp_path, repo):
+    """Documented choice: the hook reads CLAUDE.md of the cwd checkout, not the primary's."""
+    (repo / "CLAUDE.md").write_text("# p\n\nLanding mode: pr\n")
+    git(repo, "add", "-A"); git(repo, "commit", "-qm", "mode pr")
+    wt = add_worktree(repo, tmp_path.parent / f"{tmp_path.name} wt space", "side")
+    (wt / "CLAUDE.md").write_text("# p\n\nLanding mode: solo\n")
+    git(wt, "add", "-A"); git(wt, "commit", "-qm", "mode solo")
+    unlanded_branch(repo)
+    from_wt = run_hook(repo, cwd=wt)
+    assert "/superpowers-gstack:land" in from_wt and "/ship" not in from_wt
+    from_primary = run_hook(repo)
+    assert "/ship" in from_primary and "/superpowers-gstack:land" not in from_primary
