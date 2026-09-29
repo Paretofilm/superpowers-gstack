@@ -96,7 +96,7 @@ def test_fresh_project_gets_the_header_and_every_universal_block(tmp_path):
     assert lines[1].startswith("<!-- Sections whose heading carries a gstack-<name>-vN marker are plugin-managed")
     assert "<!--" not in lines[1][4:], "the header must not nest a comment opener"
     for name in ("git-hygiene.md", "multi-lens-review.md", "code-reuse.md",
-                 "plan-fidelity.md", "session-continuity.md", "track-routing.md"):
+                 "plan-fidelity.md", "session-continuity.md", "worktrunk.md", "track-routing.md"):
         head = block(name).split("\n", 1)[0]
         assert f"{head}<!-- emitted={emitted(name)} -->\n" in text, name
         assert block(name).split("\n", 1)[1].rstrip("\n") in text, f"{name} body not verbatim"

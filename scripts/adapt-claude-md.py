@@ -111,6 +111,8 @@ BLOCKS = (
           ("The three ways a plan goes stale", "fix the plan in the same commit")),
     Block("session-continuity.md", "gstack-session-continuity", r"Session [Cc]ontinuity",
           ("docs/superpowers/handoff.md",)),
+    Block("worktrunk.md", "gstack-worktrunk", r"Worktrees and solo landing",
+          ("EnterWorktree", "Landing mode")),
     Block("track-routing.md", "gstack-routing", r"Track-aware routing \(dual-track\)", None),
     Block("xcode-tools.md", "gstack-xcode-tools", r"Native Apple development tools",
           ("XcodeBuildMCP", "MUST be performed by the agent"), tracks=NATIVE),

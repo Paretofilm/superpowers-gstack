@@ -141,6 +141,7 @@ MARKER_BLOCKS = [
     "code-reuse.md",
     "plan-fidelity.md",
     "session-continuity.md",
+    "worktrunk.md",
     "track-routing.md",
     "xcode-tools.md",
     "companion-skills.md",

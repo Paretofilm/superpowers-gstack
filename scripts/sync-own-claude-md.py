@@ -35,6 +35,7 @@ UNIVERSAL = [
     "code-reuse.md",
     "plan-fidelity.md",
     "session-continuity.md",
+    "worktrunk.md",
 ]
 
 def emitted_heading(raw: str) -> str:
