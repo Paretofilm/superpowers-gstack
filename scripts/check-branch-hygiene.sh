@@ -51,6 +51,12 @@ current=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 # would otherwise find nothing and silently never offer the check.
 has_app=0
 _root=$(git rev-parse --show-toplevel 2>/dev/null || echo .)
+# Landing mode: the exact line, outside any /adapt-managed section, decides whether
+# a finished branch is offered /superpowers-gstack:land (solo) or /ship (a PR).
+# Same strict pattern as the landing script; absent or invalid behaves as before.
+land_mode=$(grep -m1 -E '^Landing mode: (solo|pr)$' "$_root/CLAUDE.md" 2>/dev/null | sed 's/^Landing mode: //')
+finish_via="/ship"
+[ "$land_mode" = "solo" ] && finish_via="/superpowers-gstack:land"
 for g in "$_root"/*.xcodeproj "$_root"/*.xcworkspace "$_root"/project.yml; do
   [ -e "$g" ] && { has_app=1; break; }
 done
@@ -858,12 +864,16 @@ if [ -n "$stale_names" ] || [ "$remote_n" != "0" ]; then
     where=$(printf '%s' "$wt_map" | awk -F'\t' -v b="$stale_first" '$1 == b { print $2; exit }')
   fi
   if [ -n "$where" ]; then
-    act "finish" "${target# } via /ship — run it in $(shortpath "$where"), the folder that branch is checked out in"
+    act "finish" "${target# } via ${finish_via} — run it in $(shortpath "$where"), the folder that branch is checked out in"
   else
     if [ "$stale_n" -gt 1 ]; then
-      act "finish" "the oldest one first via /ship — one branch per run; offer the next when it lands"
+      act "finish" "the oldest one first via ${finish_via} — one branch per run; offer the next when it lands"
     else
-      act "finish" "${target# } — /ship runs tests and review and opens a PR; /superpowers:finishing-a-development-branch merges or discards instead. Recommend one based on the repo"
+      if [ "$land_mode" = "solo" ]; then
+        act "finish" "${target# } via /superpowers-gstack:land — runs the project's local checks, lands it on main and pushes, no pull request"
+      else
+        act "finish" "${target# } — /ship runs tests and review and opens a PR; /superpowers:finishing-a-development-branch merges or discards instead. Recommend one based on the repo"
+      fi
     fi
   fi
 fi
@@ -871,6 +881,8 @@ if [ "${merged_n:-0}" -ge 5 ] || [ "${wt_done_n:-0}" != "0" ] || [ "${wt_stale_r
   [ "$i" -eq 0 ] && act "show" "what is left over — nothing is deleted by this"
   [ "${wt_done_n:-0}" != "0" ] && \
     act "tidy" "remove ${wt_done_n} spent working folder(s) — git worktree remove <path>; their branch cannot be deleted until you do"
+  [ "${wt_done_n:-0}" != "0" ] && command -v wt >/dev/null 2>&1 && \
+    act "tidy" "or let worktrunk do it: wt step prune removes every working folder whose branch is already merged into ${default_ref}"
   [ "${wt_stale_reg:-0}" -gt 0 ] && \
     act "tidy" "run git worktree prune — until then git refuses to delete those ${wt_stale_reg} branch(es)"
   [ "${merged_n:-0}" -ge 5 ] && \

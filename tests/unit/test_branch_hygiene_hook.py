@@ -1079,3 +1079,47 @@ def test_a_server_with_thousands_of_branches_stays_inside_the_budget(tmp_path, r
     findings = findings_of(run_hook(repo))
     assert time.monotonic() - start < SERVER_CHECK_SECS + 3
     assert "orphan" in findings and "as of the last fetch" not in findings
+
+
+# --- Landing mode: solo repos are offered /land, never /ship -----------------------------
+
+def unlanded_branch(repo):
+    """An old, unlanded feature branch: the setup that gives the 'finish' offer."""
+    git(repo, "switch", "-q", "-c", "feat/old")
+    (repo / "old.txt").write_text("o")
+    git(repo, "add", "-A")
+    old_commit(repo, "old work")
+    git(repo, "switch", "-q", "main")
+
+
+def test_solo_repo_is_offered_land_and_never_ship(repo):
+    (repo / "CLAUDE.md").write_text("# p\n\nLanding mode: solo\n")
+    git(repo, "add", "-A"); git(repo, "commit", "-qm", "mode")
+    unlanded_branch(repo)
+    out = run_hook(repo)
+    assert "/superpowers-gstack:land" in out and "/ship" not in out
+
+
+def test_repo_without_a_mode_line_keeps_the_ship_offer(repo):
+    unlanded_branch(repo)
+    out = run_hook(repo)
+    assert "/ship" in out and "/superpowers-gstack:land" not in out
+
+
+def test_an_invalid_mode_line_keeps_the_ship_offer(repo):
+    (repo / "CLAUDE.md").write_text("# p\n\nLanding mode: yolo\n")
+    git(repo, "add", "-A"); git(repo, "commit", "-qm", "mode")
+    unlanded_branch(repo)
+    out = run_hook(repo)
+    assert "/ship" in out and "/superpowers-gstack:land" not in out
+
+
+def test_spent_worktrees_are_offered_wt_step_prune_when_wt_exists(tmp_path, repo):
+    fake = tmp_path / "bin"; fake.mkdir()
+    (fake / "wt").write_text("#!/bin/sh\nexit 0\n"); (fake / "wt").chmod(0o755)
+    wt = add_worktree(repo, tmp_path.parent / f"{tmp_path.name}-spent", "spent")
+    (wt / "s.txt").write_text("s"); git(wt, "add", "-A"); old_commit(wt, "spent work")
+    git(repo, "merge", "-q", "--no-ff", "-m", "merge spent", "spent")
+    out = run_hook(repo, PATH=f"/usr/bin:/bin:{fake}")
+    assert "wt step prune" in out
+    assert "wt step prune" not in run_hook(repo)
