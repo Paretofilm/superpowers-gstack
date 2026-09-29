@@ -1700,14 +1700,14 @@ Skriv til brukeren: hva som er landet, hvilken SHA, CI-status, hvilke av de tre 
 
 ## Phase 0 results
 
-Fylles ut under Phase 0 og Phase 9. Verdiene under er **ikke kjørt ennå**.
+Fase 0 kjørt 2026-09-30. Fase 9-radene er ikke kjørt ennå.
 
 | Punkt | Resultat | Merknad |
 |---|---|---|
-| `EnterWorktree` med `path` mot `wt`-worktree (Task 0.1) | ikke kjørt | |
-| Tillatelsesspørsmål oppstod? | ikke kjørt | |
-| Subagenter arver arbeidsmappen (Task 0.2) | ikke kjørt | Ved FAIL: bruk reserven i Task 6.1 |
-| Grunnlinje før endringer (Task 0.3) | forventet `574 passed, 2 failed` | |
+| `EnterWorktree` med `path` mot `wt`-worktree (Task 0.1) | PASS | `pwd` og gren stemte uten `-C`/`cd`; `ExitWorktree keep` + `wt remove` ryddet |
+| Tillatelsesspørsmål oppstod? | Nei | Ingen spørsmål ved inn- eller utgang |
+| Subagenter arver arbeidsmappen (Task 0.2) | PASS | Subagenten rapporterte worktree-stien og grenen `scratch/enter-test`; reserven i Task 6.1 trengs ikke |
+| Grunnlinje før endringer (Task 0.3) | `574 passed, 2 failed` (144 s) | Som forventet; lint 0 feil, 1 advarsel (W3: `diagnosing-superpowers` mangler i rosteren) |
 | Personlig konfig, hvilke endringer godkjent (Task 9.1) | ikke kjørt | |
 | Vurdering etter `/gstack-upgrade` (Task 9.2) | ikke kjørt | |
 
