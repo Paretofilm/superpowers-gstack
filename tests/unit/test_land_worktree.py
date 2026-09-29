@@ -210,3 +210,136 @@ def test_landing_from_main_is_code_64(lab):
 
 def test_bad_argument_is_code_64_not_2(lab):
     assert land(lab, "--no-such-flag").returncode == 64
+
+
+# ===== landing against the real wt (skipped without worktrunk, e.g. in CI) =====
+
+needs_wt = pytest.mark.skipif(shutil.which("wt") is None,
+                              reason="wt (worktrunk) not installed — expected in CI")
+
+
+def real_land(lab, *args):
+    """Isolated HOME/XDG so approvals never touch the developer's own config."""
+    e = {"HOME": str(lab.root), "XDG_CONFIG_HOME": str(lab.root / "xdg"),
+         "PATH": os.environ["PATH"]}
+    return subprocess.run([sys.executable, str(SCRIPT), "--worktree", str(lab.wt), "--ci-wait", "0", *args],
+                          capture_output=True, text=True, env=e)
+
+
+def approve(lab):
+    e = {"HOME": str(lab.root), "XDG_CONFIG_HOME": str(lab.root / "xdg"), "PATH": os.environ["PATH"]}
+    r = subprocess.run(["wt", "-C", str(lab.wt), "config", "approvals", "add", "--yes"],
+                       capture_output=True, text=True, env=e, stdin=subprocess.DEVNULL)
+    assert r.returncode == 0, r.stderr
+
+
+def set_hook(lab, command):
+    (lab.wt / ".config" / "wt.toml").write_text(f"[pre-merge]\ncheck = '{command}'\n")
+    git(lab.wt, "commit", "-qam", "chore: hook")
+
+
+def remote_log(lab):
+    return git(lab.remote, "log", "--format=%s", "main")
+
+
+@needs_wt
+def test_lands_pushes_and_leaves_the_worktree_for_the_caller(lab):
+    git(lab.wt, "push", "-q", "-u", "origin", "feat/x")          # a pushed branch must be deleted
+    approve(lab)
+    p = real_land(lab)
+    assert p.returncode == 0, p.stderr
+    v = verdict(p)
+    assert v["landed"] is True and "feat: x" in remote_log(lab)
+    assert git(lab.primary, "rev-parse", "main") == git(lab.remote, "rev-parse", "main")
+    assert lab.wt.exists(), "the script never removes the worktree"
+    assert git(lab.remote, "branch", "--list", "feat/x") == "", "the remote branch is deleted"
+    assert any("remove feat/x" in r for r in v["remaining"])
+
+
+@needs_wt
+def test_unapproved_hooks_are_code_3_before_anything_moves(lab):
+    p = real_land(lab)                                            # no approve(lab)
+    assert p.returncode == 3, p.stderr
+    assert "feat: x" not in remote_log(lab)
+
+
+@needs_wt
+def test_red_hook_is_code_6_and_main_does_not_move(lab):
+    set_hook(lab, "false")
+    approve(lab)
+    p = real_land(lab)
+    assert p.returncode == 6, p.stderr
+    assert "feat: x" not in remote_log(lab)
+    assert git(lab.primary, "rev-parse", "main") == git(lab.remote, "rev-parse", "main")
+    assert lab.wt.exists()
+
+
+@needs_wt
+def test_rebase_conflict_is_code_10_with_the_rebase_left_open(lab):
+    commit(lab.wt, "shared.md", "feature side\n", "feat: shared")
+    commit(lab.primary, "shared.md", "main side\n", "chore: main moves the same line")
+    git(lab.primary, "push", "-q", "origin", "main")
+    approve(lab)
+    p = real_land(lab)
+    assert p.returncode == 10, p.stderr
+    assert (Path(git(lab.wt, "rev-parse", "--path-format=absolute", "--git-dir")) / "rebase-merge").exists()
+
+
+@needs_wt
+def test_origin_moving_during_the_checks_is_code_7_and_nothing_is_pushed(lab):
+    other = lab.root / "other"
+    subprocess.run(["git", "clone", "-q", str(lab.remote), str(other)], check=True)
+    for k, v in (("user.email", "t@t.t"), ("user.name", "t")):
+        git(other, "config", k, v)
+    set_hook(lab, f"cd \"{other}\" && echo x >> z.md && git add -A && git commit -qm race && git push -q origin main")
+    approve(lab)
+    p = real_land(lab)
+    assert p.returncode == 7, p.stderr
+    assert "feat: x" not in remote_log(lab) and "race" in remote_log(lab)
+    assert "feat: x" in git(lab.primary, "log", "--format=%s", "main"), "local main holds the work"
+    assert lab.wt.exists(), "worktree and branch stand as the recovery point"
+
+
+@needs_wt
+def test_repo_without_origin_lands_locally_with_a_warning(lab):
+    git(lab.primary, "remote", "remove", "origin")
+    approve(lab)
+    p = real_land(lab)
+    assert p.returncode == 0, p.stderr
+    assert "feat: x" in git(lab.primary, "log", "--format=%s", "main")
+    assert any("no origin" in w for w in verdict(p)["warnings"])
+
+
+@needs_wt
+def test_unclassified_wt_merge_failure_is_code_70_and_nothing_is_pushed(lab):
+    # A git hook that refuses the fast-forward of main: wt merge fails in a way no
+    # _classify rule names (not approvals, hook, rebase or overlap).
+    hook = lab.primary / ".git" / "hooks" / "reference-transaction"
+    hook.write_text('#!/bin/sh\n[ "$1" = prepared ] && grep -q " refs/heads/main$" && exit 1\nexit 0\n')
+    hook.chmod(0o755)
+    approve(lab)
+    p = real_land(lab)
+    assert p.returncode == 70, p.stdout + p.stderr
+    assert verdict(p)["code"] == 70
+    assert "feat: x" not in remote_log(lab)
+    assert lab.wt.exists()
+
+
+@needs_wt
+def test_non_fatal_failures_after_the_push_exit_0_and_are_listed(lab):
+    git(lab.wt, "push", "-q", "-u", "origin", "feat/x")
+    approve(lab)
+    # no gh on PATH: only wt and git (through /usr/bin) are reachable
+    bin_dir = lab.root / "nogh-bin"
+    bin_dir.mkdir()
+    (bin_dir / "wt").symlink_to(shutil.which("wt", path=os.environ["PATH"]))
+    e = {"HOME": str(lab.root), "XDG_CONFIG_HOME": str(lab.root / "xdg"), "PATH": f"{bin_dir}:/usr/bin:/bin"}
+    assert shutil.which("gh", path=e["PATH"]) is None
+    p = subprocess.run([sys.executable, str(SCRIPT), "--worktree", str(lab.wt), "--ci-wait", "0"],
+                       capture_output=True, text=True, env=e)
+    assert p.returncode == 0, p.stderr
+    assert "feat: x" in remote_log(lab), "the push happened"
+    v = verdict(p)
+    assert any("gh is not installed" in w for w in v["warnings"])
+    assert "warning: gh is not installed" in p.stdout, "the human-readable remaining/warning section lists it"
+    assert any("remove feat/x" in r for r in v["remaining"])
