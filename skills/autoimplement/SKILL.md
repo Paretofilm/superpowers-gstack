@@ -33,7 +33,7 @@ Read the resolved file in full. From this point on, "the plan" refers to this fi
 ## Startup checks (enforced by the shipped skill, not just documented)
 
 Before invoking `AskUserQuestion`, before dispatching any subagent, run these
-checks in order. Each is a hard refusal — exit with the named reason and do
+checks in order. Each refusal below is hard — exit with the named reason and do
 not proceed.
 
 ### Check 1: A clean feature branch, in a worktree of its own
@@ -51,14 +51,16 @@ Refuse if:
 **On `main` or `master`** (the normal start for a solo developer): do not refuse. Create a worktree for the run and move the session into it, so every later `git` call, every review skill and every subagent works in the right folder without change:
 
 1. The plan must be committed **on this branch**, otherwise it does not exist in the new worktree. Check `git ls-files --error-unmatch -- "$plan_path"` and `git status --porcelain -- "$plan_path"` (must be empty). If not → "the plan is not committed on '<branch>' — commit it first, or check out the branch it lives on."
-2. Create the worktree: `wt switch --create "autoimpl/<plan-slug>" --no-cd --format=json` (without worktrunk: `git worktree add "../<repo>.autoimpl-<plan-slug>" -b "autoimpl/<plan-slug>"`). The plan slug is the plan file name without date and extension.
-3. Call the `EnterWorktree` tool with `path=<the worktree path>`, then verify with `pwd && git rev-parse --abbrev-ref HEAD` that the branch is `autoimpl/<plan-slug>`.
-4. The primary checkout's own uncommitted files do **not** stop the run. If they overlap what the run changes, the landing reports it (exit code 5) while everything is still intact.
+2. The primary checkout's uncommitted files stop the run **only if they overlap the plan's files**. Intersect the paths in `git_status` with every path in the plan's `Files:` blocks. If any overlap → refuse and name the overlapping files: "uncommitted files in this checkout overlap the plan's files: <list>. Commit them or move them to their own branch, then re-invoke." Dirty files that do not overlap do not stop the run.
+3. The plan slug is the plan file name without date and extension. If the branch `autoimpl/<plan-slug>` or a worktree for it already exists (an interrupted earlier run) → refuse and name it: "autoimpl/<plan-slug> already exists (<path>). Resume by running /autoimplement from inside that worktree, or remove it with `wt remove autoimpl/<plan-slug>` after checking it has no unlanded commits." Never delete, recreate or switch into it silently, and never invent a second slug.
+4. Create the worktree from the current HEAD: `wt switch --create "autoimpl/<plan-slug>" --base=@ --no-cd --format=json` and read the worktree path from the `path` field of the JSON output (without worktrunk: `git worktree add "../<repo>.autoimpl-<plan-slug>" -b "autoimpl/<plan-slug>"`, which also starts at HEAD).
+5. Call the `EnterWorktree` tool with `path=<the worktree path>`, then verify with `pwd && git rev-parse --abbrev-ref HEAD` that the folder is the worktree and the branch is `autoimpl/<plan-slug>`. If `EnterWorktree` fails or the verification does not match → hard refusal naming the path; no phase runs.
+6. Re-run `git_status=$(git status --porcelain)` now, inside the worktree — the value captured above belongs to the primary checkout.
 
 **On any other branch:** work on it as before, in the worktree it already lives in.
 
 Then refuse if:
-- `git_status` (now evaluated inside the worktree or feature branch) is non-empty → "working tree has uncommitted changes — autoimplement requires a clean tree (so phase commits are unambiguous). Commit them here if they belong to this plan; otherwise move them onto their own branch (`git switch -c wip/<topic>`, commit, `git switch <branch>`). Then re-invoke on '<branch>'."
+- `git_status` (evaluated inside the worktree or feature branch) is non-empty → "working tree has uncommitted changes — autoimplement requires a clean tree (so phase commits are unambiguous). Commit them here if they belong to this plan; otherwise move them onto their own branch (`git switch -c wip/<topic>`, commit, `git switch <branch>`). Then re-invoke on '<branch>'."
 
 ### Check 2: Phase count is at least 2
 
@@ -401,7 +403,7 @@ Move to the next phase. **No `AskUserQuestion` between phases — that's the fri
 
 ### F. When the last phase is done
 
-If the project's `CLAUDE.md` carries the exact line `Landing mode: solo`, invoke `/superpowers-gstack:land` for the worktree; it runs the project's pre-merge checks and pushes, and stops with a named exit code if anything is wrong (see that skill for the codes). If the line is `pr` or missing, do not land: name `/ship` in the summary. Then emit a single completion summary (see § Final summary). `progress.md` gets the commit SHAs **as they are on `main` after landing**, because a rebase can rewrite the phase commits.
+If the project's `CLAUDE.md` carries the exact line `Landing mode: solo`, invoke `/superpowers-gstack:land` for the worktree; it runs the project's pre-merge checks and pushes, and stops with a named exit code if anything is wrong (see that skill for the codes). If the line is `pr` or missing, do not land: name `/ship` in the summary. Then emit a single completion summary (see § Final summary). After a non-zero landing exit, do not fix and re-land within this run: report the exit code in the summary and stop (a failing pre-merge check, exit 6, would otherwise loop). `progress.md` gets the commit SHAs **as they are on `main` after landing**, because a rebase can rewrite the phase commits.
 
 ## When STOPping
 
