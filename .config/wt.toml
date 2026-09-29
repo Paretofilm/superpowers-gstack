@@ -1,0 +1,9 @@
+# Prosjektets pre-merge-sperre. Kjøres av `wt merge` etter rebase og før main flyttes.
+# Kommandoene er de samme som .github/workflows/lint.yml, og kjører samtidig (tabell).
+# De to --deselect-testene måler oppstrøms drift (installert gstack/Superpowers mot
+# roster og pinne), ikke denne endringen. De kjøres eksplisitt i planens Phase 9.
+
+[pre-merge]
+lint = "python3 scripts/lint-skills.py"
+unit = "python3 -m pytest tests/unit -q -p no:cacheprovider --deselect tests/unit/test_lint_upstream_skills.py::test_roster_matches_installed_upstream_when_present --deselect tests/unit/test_spec_drift_upstream_alarm.py::test_pin_matches_installed_gstack_when_present"
+contract = "for t in skills/*/tests/required-sections.test.sh; do bash \"$t\" || exit 1; done"
