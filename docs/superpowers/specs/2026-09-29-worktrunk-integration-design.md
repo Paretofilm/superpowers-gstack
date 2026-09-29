@@ -25,7 +25,7 @@ agenten må huske. Enhver feil stopper med all tilstand intakt, og aldri med aut
 | Ingen automatisk reparasjon | Skriptet kjører aldri `git reset`, og prøver aldri landing på nytt av seg selv. Feil stopper med worktree, gren og `main` urørt, og skriptet skriver kommandoene brukeren kan kjøre. |
 | `--no-hooks` | Aldri. En sperre som omgås er verre enn ingen sperre. |
 | Hvordan økten kommer inn i worktreet | `wt switch --create <gren> --no-cd --format=json`, deretter verktøyet `EnterWorktree` med `path`. Da er arbeidsmappen worktreet, og vanlige `git`-kall og `/review` virker uten `-C`. Reserve: `git -C <sti>`. Må verifiseres i planens fase 0. |
-| Kilde for `Landing mode` | Én linje `Landing mode: solo` eller `Landing mode: pr` i prosjektets `CLAUDE.md`. Skriptet leser den med et strengt mønster (`^Landing mode: (solo|pr)$`). Mangler den eller har en annen verdi, **feiler skriptet lukket** (kode 2). |
+| Kilde for `Landing mode` | Én linje `Landing mode: solo` eller `Landing mode: pr` i prosjektets `CLAUDE.md`, **utenfor den utsendte blokken**: `/adapt` erstatter blokker hele ved oppgradering og ville ellers stille nullstilt et valg om `pr`. Prosjektet setter den én gang. Mangler den, spør agenten brukeren og skriver linjen under en overskrift prosjektet eier. Skriptet leser den med et strengt mønster (`^Landing mode: (solo\|pr)$`) og **feiler lukket** (kode 2) ved manglende eller ugyldig verdi. |
 | Parallelle agenter | Utenfor omfanget. `autoimplement` kjører faser sekvensielt. |
 | `copy-ignored` | Ikke i dette repoet. Prosjekter med `node_modules` eller `.env` bruker `.worktreeinclude`. |
 | Personlig konfig og Codex-modell | Uavhengig av resten (komponent 7), valgfri, og endres bare etter at brukeren har sett diffen. Standard byttes fra GPT-6 Astra ($10/$50 per million tokens) til GPT-6 Sol ($2/$10); kvalitet er ikke målt for kodegjennomgang (F9). |
@@ -35,7 +35,7 @@ agenten må huske. Enhver feil stopper med all tilstand intakt, og aldri med aut
 
 | # | Komponent | Endring |
 |---|---|---|
-| 1 | `skills/adapt/blocks/worktrunk.md` (ny) | Regler for worktree-start, `EnterWorktree`, solo-landing via skriptet og fallback uten `wt`. Linjen `Landing mode: solo`. Ber agenten foreslå en `.config/wt.toml` med `pre-merge` hvis prosjektet mangler en (krever brukerens godkjenning). Handoff skrives til primærmappen. |
+| 1 | `skills/adapt/blocks/worktrunk.md` (ny) | Regler for worktree-start, `EnterWorktree`, solo-landing via skriptet og fallback uten `wt`. Forklarer `Landing mode`-linjen (blokken inneholder den ikke selv). Ber agenten foreslå en `.config/wt.toml` med `pre-merge` hvis prosjektet mangler en (krever brukerens godkjenning). Handoff skrives til primærmappen. |
 | 2 | `skills/adapt/blocks/git-hygiene.md` v11→v12 | Peker til worktrunk-blokken for solo-landing. Stash-forbud og `wip/`-regel urørt. |
 | 3 | `scripts/adapt-claude-md.py`, `scripts/lint-skills.py`, `scripts/sync-own-claude-md.py` | Ny `Block(...)` i `BLOCKS` med sentinel. Blokken føres også inn i `MARKER_BLOCKS` (lint E8) og i `UNIVERSAL` (repoets egen `CLAUDE.md`). Uten de to siste blir lint rød og dette repoet lærer ikke regelen. |
 | 4 | `skills/autoimplement/SKILL.md` | Check 1: er `HEAD` på `main`, opprettes worktree `autoimpl/<plan-slug>` fra `main` og økten går inn i det med `EnterWorktree`. Da virker de 15 eksisterende git-kallene uten endring. Reserve, hvis subagenter ikke arver arbeidsmappen (fase 0): Check 1 definerer én variabel `WT`, og de 15 kallene endres til `git -C "$WT"`. Er `HEAD` allerede på en feature-gren, gjelder dagens oppførsel. Sluttlanding via skriptet. |
@@ -43,7 +43,8 @@ agenten må huske. Enhver feil stopper med all tilstand intakt, og aldri med aut
 | 6 | `.config/wt.toml` (ny, dette repoet) | `pre-merge` som tabell (kommandoene kjører samtidig): `lint-skills.py`, `pytest tests/unit -q` og kontrakttestene `skills/*/tests/required-sections.test.sh`. Ingen `post-start`-hook. |
 | 7 | Personlig konfig (valgfri, etter samtykke) | `GSTACK_CODEX_MODEL=gpt-6-sol` i `~/.zshenv`, `model = "gpt-6-sol"` i `~/.codex/config.toml`, `[commit.generation]` med Claude. |
 | 8 | `scripts/land-worktree.py` (ny) | Landing i én kommando med lås, forhåndssjekker og feilkoder. Fjerner aldri worktreet selv. Testes med kaster-repoer. |
-| 9 | `scripts/capture-session-tail.sh`, `scripts/session-resume.sh` | Sesjonsloggen skrives i og leses fra **`git rev-parse --git-common-dir`** i stedet for worktreets egen git-mappe, og `handoff.md`/`progress.md` slås opp i primærmappen. Ellers ser ikke neste økt fra primærmappen en avbrutt økt fra et worktree, og loggen forsvinner når worktreet fjernes. Tester i `tests/unit/test_session_resume_hooks.py`. |
+| 9 | `scripts/capture-session-tail.sh`, `scripts/session-resume.sh` | Sesjonsloggen skrives i og leses fra **`git rev-parse --git-common-dir`** i stedet for worktreets egen git-mappe, og `handoff.md` (gitignorert) slås opp i primærmappen; `progress.md` er sporet i git og leses fra worktreet. Ellers ser ikke neste økt fra primærmappen en avbrutt økt fra et worktree, og loggen forsvinner når worktreet fjernes. Tester i `tests/unit/test_session_resume_hooks.py`. |
+| 10 | `skills/land/SKILL.md` (ny) | En blokk i et annet prosjekts `CLAUDE.md` kan ikke peke på et skript i pluginen, men en skill kjenner sin egen basemappe. Skillen finner `land-worktree.py`, kaller det og oversetter feilkoder til handling. `git-hygiene`-blokken og `autoimplement` peker på skillen. |
 
 ## Solo-landing (`scripts/land-worktree.py`)
 
@@ -74,7 +75,7 @@ Ship-worthy endringer går gjennom `/review` og `pitfall-verification` **før** 
 ## `autoimplement`
 
 - Check 1: er `HEAD` på `main`, opprettes worktree `autoimpl/<plan-slug>` fra `main`, og økten går inn med `EnterWorktree`. Kravet om at planen er committet gjelder da **på `main`**, ellers finnes ikke planen i worktreet. Ligger planen bare på en annen feature-gren, brukes den grenen som i dag (ingen nytt worktree).
-- Renhet vurderes i worktreet. Primærmappens skitne filer stopper ikke kjøringen med mindre de overlapper planens filer (da nevnes de).
+- Renhet vurderes i worktreet. Primærmappens skitne filer stopper ikke kjøringen. Overlapp med det landingen endrer fanges ved landing (kode 5), der tilstanden fortsatt er intakt.
 - Subagentene arver arbeidsmappen, og worktree-stien oppgis i prompten i tillegg. Uten `isolation: "worktree"`.
 - Etter siste fase og grønn sluttreview kaller den landingsskriptet hvis modusen er `solo`. Ved `pr` stopper den og nevner `/ship`. `progress.md` får SHA-ene fra `main` etter landing, siden rebase kan ha omskrevet dem.
 - Eksisterende avvisninger (migrasjoner, hemmeligheter, credentials, `.env`, `.ssh`) beholdes.
@@ -95,6 +96,8 @@ Ship-worthy endringer går gjennom `/review` og `pitfall-verification` **før** 
 | 11 | `fetch` feilet | Alt urørt. |
 | 12 | Lås holdt av en annen landing | Alt urørt. Vent eller se hvem som holder den. |
 | 13 | Worktreet som landes har ikke-committet arbeid | Alt urørt. Commit, eller flytt til `wip/<tema>`. |
+| 64 | Ikke et feature-worktree (mangler git, står på `main`, eller ugyldige argumenter) | Alt urørt. |
+| 70 | `wt merge` feilet av en grunn skriptet ikke kjenner igjen | Skriptet skriver de siste linjene av `wt`-utskriften. Ingenting repareres. |
 
 ## Verifisert under pitfall-review
 
@@ -163,5 +166,5 @@ Kilde: S = egen runde, X = Codex-utfordring (GPT-6 Sol).
 
 ## Åpne punkter
 
-- Skal de to `_when_present`-testene gjøres maskinuavhengige, eller utelates fra hooken? Avgjøres i planen.
+- De to røde testene (`test_roster_matches_installed_upstream_when_present`, `test_pin_matches_installed_gstack_when_present`) er ekte alarmer, ikke miljøstøy: roster mangler `diagnosing-superpowers`, og spec-drift-pinnen er fra gstack 1.84.1 mens 1.91.2 er installert. De utelates fra `pre-merge`-hooken med `--deselect` (de måler oppstrøms drift, ikke denne endringen), og vurderes eksplisitt i Phase 9 etter `/gstack-upgrade`.
 - De tre uavklarte filene på `main` (`CLAUDE.md`, `AGENTS.md`, `JEV-FORSLAG.md`) må avklares av brukeren før landing, siden `CLAUDE.md` overlapper. De skal ikke inn i denne branchen.
