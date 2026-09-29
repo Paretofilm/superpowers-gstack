@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -24,6 +25,13 @@ SCRIPT = REPO / "scripts" / "land-worktree.py"
 APPROVED = "APPROVED\n↳ (none)\n\nUNAPPROVED\n↳ (none)\n"
 UNAPPROVED = "APPROVED\n↳ (none)\n\nUNAPPROVED\n❯ pre-merge check:\n  true\n"
 HOOK_TOML = '[pre-merge]\ncheck = "true"\n'
+
+
+def load_module():
+    spec = importlib.util.spec_from_file_location("land_worktree", SCRIPT)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
 
 
 def git(repo, *args, check=True):
@@ -72,7 +80,7 @@ def write_shim(root, approvals):
 
 
 def land(lab, *args, shim=APPROVED, wt=None, env=None):
-    path = "/usr/bin:/bin:/usr/local/bin"
+    path = "/usr/bin:/bin"
     if shim is not None:
         path = f"{write_shim(lab.root, shim)}:{path}"
     e = {"HOME": str(lab.root), "PATH": path}
@@ -202,6 +210,108 @@ def test_stale_lock_is_cleared_and_released(lab):
     assert not d.exists(), "the lock must be released on exit"
 
 
+# --- final-review fixes -------------------------------------------------------
+
+def test_sh_tolerates_non_utf8_output():
+    m = load_module()
+    r = m.sh("printf", "a\\377b")
+    assert r.returncode == 0 and r.stdout.startswith("a") and r.stdout.endswith("b")
+
+
+def test_unexpected_exception_prints_json_verdict_and_exits_70(monkeypatch, capsys, tmp_path):
+    m = load_module()
+
+    def boom(a):
+        raise RuntimeError("kaboom")
+    monkeypatch.setattr(m, "land", boom)
+    rc = m.main(["--worktree", str(tmp_path)])
+    cap = capsys.readouterr()
+    assert rc == 70
+    v = json.loads(cap.out.strip().splitlines()[-1])
+    assert v["landed"] is False and v["code"] == 70 and "kaboom" in v["message"]
+    assert "Traceback" in cap.err and "kaboom" in cap.err
+
+
+def test_unexpected_exception_releases_the_lock(lab, monkeypatch, capsys):
+    m = load_module()
+
+    def boom(*a, **k):
+        raise RuntimeError("inside the lock")
+    monkeypatch.setattr(m, "_land_locked", boom)
+    assert m.main(["--worktree", str(lab.wt)]) == 70
+    assert not lock_dir(lab).exists()
+
+
+def test_missing_main_branch_is_code_64_naming_the_flag(lab):
+    p = land(lab, "--main-branch", "nosuch", "--preflight-only")
+    assert p.returncode == 64, p.stderr
+    assert "--main-branch" in p.stderr
+
+
+def test_recovery_hint_names_a_runnable_command():
+    m = load_module()
+    assert m.pull_hint(Path("/tmp/my proj"), "main") == "git -C '/tmp/my proj' pull --rebase origin main"
+    without = m.pull_hint(None, "main")
+    assert "checked out" in without and "git -C" not in without
+
+
+def test_untracked_directory_overlap_is_code_5(lab):
+    (lab.wt / "newdir").mkdir()
+    commit(lab.wt, "newdir/a.py", "x\n", "feat: adds newdir/a.py")
+    (lab.primary / "newdir").mkdir()
+    (lab.primary / "newdir" / "a.py").write_text("mine\n")
+    p = land(lab, "--preflight-only")
+    assert p.returncode == 5, p.stderr
+    assert "newdir/a.py" in p.stderr
+
+
+def dead_pid():
+    dead = subprocess.Popen([sys.executable, "-c", "pass"])
+    dead.wait()
+    return dead.pid
+
+
+def test_stale_lock_rename_lost_race_is_code_12(lab, monkeypatch):
+    m = load_module()
+    d = lock_dir(lab)
+    d.mkdir()
+    (d / "pid").write_text(str(dead_pid()))
+
+    def lost(*a, **k):
+        raise FileNotFoundError("another process won the rename")
+    monkeypatch.setattr(m.os, "rename", lost)
+    with pytest.raises(m.Stop) as e:
+        with m.Lock(d.parent):
+            pass
+    assert e.value.code == 12
+
+
+def test_lock_exit_leaves_a_lock_now_owned_by_someone_else(lab):
+    m = load_module()
+    d = lock_dir(lab)
+    with m.Lock(d.parent):
+        (d / "pid").write_text(str(os.getpid() + 1))
+    assert d.exists(), "a lock whose pid file is not ours is never removed"
+    shutil.rmtree(d)
+
+
+def test_stale_lock_is_renamed_before_removal(lab, monkeypatch):
+    m = load_module()
+    d = lock_dir(lab)
+    d.mkdir()
+    (d / "pid").write_text(str(dead_pid()))
+    calls, real = [], m.os.rename
+
+    def spy(a, b):
+        calls.append((str(a), str(b)))
+        real(a, b)
+    monkeypatch.setattr(m.os, "rename", spy)
+    with m.Lock(d.parent):
+        pass
+    assert calls and calls[0][1].endswith(f".stale-{os.getpid()}")
+    assert not Path(calls[0][1]).exists()
+
+
 # --- usage --------------------------------------------------------------------
 
 def test_landing_from_main_is_code_64(lab):
@@ -295,6 +405,7 @@ def test_origin_moving_during_the_checks_is_code_7_and_nothing_is_pushed(lab):
     approve(lab)
     p = real_land(lab)
     assert p.returncode == 7, p.stderr
+    assert f"git -C '{lab.primary}' pull --rebase origin main" in p.stderr
     assert "feat: x" not in remote_log(lab) and "race" in remote_log(lab)
     assert "feat: x" in git(lab.primary, "log", "--format=%s", "main"), "local main holds the work"
     assert lab.wt.exists(), "worktree and branch stand as the recovery point"

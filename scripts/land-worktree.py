@@ -18,10 +18,12 @@ import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 import time
+import traceback
 from pathlib import Path
 
 MODE, UNAPPROVED, MAIN_AHEAD, OVERLAP, HOOK_RED, PUSH, NO_WT, NO_HOOK, REBASE, FETCH, LOCKED, DIRTY = (
@@ -39,7 +41,8 @@ class Stop(Exception):
 
 
 def sh(*args, cwd=None):
-    return subprocess.run(list(args), cwd=cwd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    return subprocess.run(list(args), cwd=cwd, capture_output=True, text=True, errors="replace",
+                          stdin=subprocess.DEVNULL)
 
 
 def git(repo, *args):
@@ -92,7 +95,7 @@ def default_branch(repo) -> str:
 
 
 def dirty_files(repo) -> set[str]:
-    parts = git(repo, "status", "--porcelain", "-z").stdout.split("\0")
+    parts = git(repo, "status", "--porcelain", "-z", "--untracked-files=all").stdout.split("\0")
     files, i = set(), 0
     while i < len(parts):
         entry = parts[i]
@@ -141,15 +144,32 @@ class Lock:
                 return self
             except FileExistsError:
                 if self._stale():
-                    shutil.rmtree(self.dir, ignore_errors=True)
+                    gone = f"{self.dir}.stale-{os.getpid()}"
+                    try:   # only one process can win this rename; the loser reports the lock as held
+                        os.rename(self.dir, gone)
+                    except OSError:
+                        break
+                    shutil.rmtree(gone, ignore_errors=True)
                     continue
                 break
         raise Stop(LOCKED, f"another landing holds {self.dir}",
                    commands=[f"cat '{self.dir}/pid'   # the process that holds it"])
 
     def __exit__(self, *exc):
-        shutil.rmtree(self.dir, ignore_errors=True)
+        try:   # never remove a lock that another process has taken over
+            mine = (self.dir / "pid").read_text().strip() == str(os.getpid())
+        except OSError:
+            mine = False
+        if mine:
+            shutil.rmtree(self.dir, ignore_errors=True)
         return False
+
+
+def pull_hint(mw, main) -> str:
+    if mw:
+        return f"git -C {shlex.quote(str(mw))} pull --rebase origin {main}"
+    return (f"{main} has no worktree: {main} must be checked out somewhere first "
+            f"(e.g. git worktree add <path> {main}), then pull --rebase origin {main} there")
 
 
 def _classify(r, wt) -> Stop:
@@ -201,6 +221,8 @@ def land(a) -> dict:
     if not common or not branch:
         raise Stop(USAGE, f"{wt} is not a git worktree")
     main = a.main_branch or default_branch(wt)
+    if git(wt, "rev-parse", "--verify", "--quiet", f"refs/heads/{main}").returncode != 0:
+        raise Stop(USAGE, f"main branch '{main}' does not exist here — pass --main-branch NAME")
     if branch in ("HEAD", main):
         raise Stop(USAGE, f"{wt} is on '{branch}', not a feature branch — land from the feature worktree")
     with Lock(Path(common)):
@@ -261,7 +283,7 @@ def _land_locked(a, wt, common, branch, main) -> dict:
     if has_origin:
         git(wt, "fetch", "origin")
         stop_cmds = [f"git -C '{wt}' log --oneline origin/{main}..{main}",
-                     f"resolve in the worktree that has {main} checked out: git pull --rebase",
+                     pull_hint(mw["path"] if mw else None, main),
                      f"git -C '{wt}' push origin {main}"]
         if out(wt, "rev-parse", f"origin/{main}") != base:
             raise Stop(PUSH, f"origin/{main} moved while the checks ran — nothing was pushed",
@@ -305,6 +327,12 @@ def main(argv=None) -> int:
             print(f"  {c}", file=sys.stderr)
         print(json.dumps({"landed": False, "code": s.code, "message": s.message}))
         return s.code
+    except Exception as e:   # noqa: BLE001 — a verdict must always be printed; the lock is already released
+        tb = traceback.format_exc()
+        print(f"STOPPED (exit {UNKNOWN}): unexpected error: {e!r}", file=sys.stderr)
+        print("\n".join(tb.strip().splitlines()[-12:]), file=sys.stderr)
+        print(json.dumps({"landed": False, "code": UNKNOWN, "message": f"unexpected error: {e!r}"}))
+        return UNKNOWN
     if v.get("landed"):
         print(f"LANDED {v['branch']} on {v['main']} ({(v['sha'] or '')[:9]})")
         for line in v["remaining"]:
