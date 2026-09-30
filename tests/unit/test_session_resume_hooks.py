@@ -425,3 +425,39 @@ def test_resume_in_a_worktree_reads_the_primarys_handoff(repo, linked):
     (repo / "docs" / "superpowers" / "handoff.md").write_text(
         '---\ntype: handoff\nnext_step: "run the phase 3 tests"\n---\nbody\n')
     assert "run the phase 3 tests" in run_resume(linked)
+
+
+def test_resume_in_a_worktree_falls_back_to_its_own_handoff(repo, linked):
+    """context-handoff writes the relative path: a handoff written inside a worktree
+    must not be invisible when the primary has none."""
+    (linked / "docs" / "superpowers" / "handoff.md").write_text(
+        '---\ntype: handoff\nnext_step: "finish phase 4 in the worktree"\n---\nbody\n')
+    assert "finish phase 4 in the worktree" in run_resume(linked)
+
+
+def test_consumed_primary_handoff_does_not_hide_the_worktrees(repo, linked):
+    (repo / "docs" / "superpowers" / "handoff.md").write_text("")     # consumed: the resting state
+    (linked / "docs" / "superpowers" / "handoff.md").write_text(
+        '---\ntype: handoff\nnext_step: "worktree step"\n---\n')
+    assert "worktree step" in run_resume(linked)
+
+
+def test_resume_prefers_the_primarys_handoff_over_the_worktrees(repo, linked):
+    (repo / "docs" / "superpowers" / "handoff.md").write_text(
+        '---\ntype: handoff\nnext_step: "primary step"\n---\n')
+    (linked / "docs" / "superpowers" / "handoff.md").write_text(
+        '---\ntype: handoff\nnext_step: "worktree step"\n---\n')
+    out = run_resume(linked)
+    assert "primary step" in out and "worktree step" not in out
+
+
+def test_capture_is_written_atomically(repo, tmp_path):
+    """A reader never sees a half-written capture: it is written to a temp file in the
+    same dir and renamed over the old one (no temp file is left behind)."""
+    script = CAPTURE.read_text()
+    assert "os.replace(" in script
+    t = transcript(tmp_path, [("user", "hello"), ("assistant", "hi")])
+    run_capture(repo, payload(repo, t))
+    gitdir = capture_file(repo).parent
+    assert capture_file(repo).is_file()
+    assert not [p for p in gitdir.iterdir() if p.name.startswith("gstack-last-session") and p.name.endswith(".tmp")]

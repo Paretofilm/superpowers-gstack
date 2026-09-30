@@ -131,7 +131,19 @@ if last_user:
 if last_assistant:
     lines += ["## Last assistant message", clip(last_assistant), ""]
 
-with open(os.path.join(gitdir, "gstack-last-session.md"), "w", encoding="utf-8") as f:
-    f.write("\n".join(lines))
+# Atomic: a temp file in the same dir, renamed over the old capture, so a session
+# starting at the same moment never reads half a file. Last writer still wins.
+import tempfile
+fd, tmp = tempfile.mkstemp(dir=gitdir, prefix="gstack-last-session.", suffix=".tmp")
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+    os.replace(tmp, os.path.join(gitdir, "gstack-last-session.md"))
+except BaseException:
+    try:
+        os.unlink(tmp)
+    except OSError:
+        pass
+    raise
 PY
 exit 0

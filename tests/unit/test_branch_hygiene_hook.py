@@ -1114,6 +1114,27 @@ def test_an_invalid_mode_line_keeps_the_ship_offer(repo):
     assert "/ship" in out and "/superpowers-gstack:land" not in out
 
 
+@pytest.mark.parametrize("text", [
+    "# p\n\nLanding mode: solo\n\nLanding mode: pr\n",       # two values: invalid, as in land-worktree.py
+    "# p\n\n```\nLanding mode: solo\n```\n",                  # only an example inside a code fence
+    "# p\n\n~~~\nLanding mode: solo\n~~~\n",
+])
+def test_conflicting_or_fenced_mode_lines_keep_the_ship_offer(repo, text):
+    (repo / "CLAUDE.md").write_text(text)
+    git(repo, "add", "-A"); git(repo, "commit", "-qm", "mode")
+    unlanded_branch(repo)
+    out = run_hook(repo)
+    assert "/ship" in out and "/superpowers-gstack:land" not in out
+
+
+def test_a_fenced_pr_example_does_not_hide_the_real_solo_line(repo):
+    (repo / "CLAUDE.md").write_text("# p\n\n```\nLanding mode: pr\n```\n\nLanding mode: solo\n")
+    git(repo, "add", "-A"); git(repo, "commit", "-qm", "mode")
+    unlanded_branch(repo)
+    out = run_hook(repo)
+    assert "/superpowers-gstack:land" in out and "/ship" not in out
+
+
 def test_spent_worktrees_are_offered_wt_step_prune_when_wt_exists(tmp_path, repo):
     fake = tmp_path / "bin"; fake.mkdir()
     (fake / "wt").write_text("#!/bin/sh\nexit 0\n"); (fake / "wt").chmod(0o755)

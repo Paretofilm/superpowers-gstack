@@ -88,8 +88,13 @@ if os.path.isfile(progress):
     except Exception:
         pass
 
-handoff = os.path.join(primary, "docs", "superpowers", "handoff.md")
-if os.path.isfile(handoff):
+# The primary's handoff wins; a worktree's own is the fallback, because
+# context-handoff writes the relative path and may have run inside the worktree.
+# "Has none" means no complete handoff: an emptied (consumed) file does not count.
+for base in dict.fromkeys((primary, root)):
+    handoff = os.path.join(base, "docs", "superpowers", "handoff.md")
+    if not os.path.isfile(handoff):
+        continue
     try:
         text = open(handoff, encoding="utf-8", errors="replace").read()
         m = re.match(r"\s*---\n(.*?)\n---", text, re.DOTALL)
@@ -101,6 +106,7 @@ if os.path.isfile(handoff):
         is_handoff = keys.get("type") == "handoff"
         if is_handoff and next_step:
             sections.append(f'  handoff.md next step:\n      "{next_step}"')
+            break
     except Exception:
         pass
 

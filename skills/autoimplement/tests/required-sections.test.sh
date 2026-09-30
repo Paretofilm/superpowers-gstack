@@ -36,6 +36,10 @@ REQUIRED=(
   "pitfall-verification"
   "## When STOPping"
   "## Final summary"
+  # 3.4.0 fix wave 2: the plan path is re-resolved inside the worktree, and a plan
+  # commit that is not on origin refuses up front (landing would stop with code 4)
+  'plan_rel='
+  'git rev-list --count "origin/$git_branch..$git_branch"'
 )
 
 failed=0

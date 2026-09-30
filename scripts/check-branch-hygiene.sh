@@ -57,7 +57,14 @@ _root=$(git rev-parse --show-toplevel 2>/dev/null || echo .)
 # Read from the CLAUDE.md of the checkout the session started in (one menu, one mode).
 # Fail-safe on a mismatch: land-worktree.py reads the CLAUDE.md of the worktree being
 # landed and refuses with exit 2 when the line is missing there, so it never lands wrongly.
-land_mode=$(grep -m1 -E '^Landing mode: (solo|pr)$' "$_root/CLAUDE.md" 2>/dev/null | sed 's/^Landing mode: //')
+# Lines inside fenced code blocks are examples, not the setting; two different values
+# are invalid (land-worktree.py refuses them with exit 2, so the menu must not offer land).
+land_mode=$(awk '
+  { sub(/\r$/, "") }
+  /^ ? ? ?(```|~~~)/ { fence = !fence; next }
+  !fence && /^Landing mode: (solo|pr)$/ { seen[substr($0, 15)] = 1 }
+  END { n = 0; for (k in seen) { n++; v = k }; if (n == 1) print v }
+' "$_root/CLAUDE.md" 2>/dev/null)
 finish_via="/ship"
 [ "$land_mode" = "solo" ] && finish_via="/superpowers-gstack:land"
 for g in "$_root"/*.xcodeproj "$_root"/*.xcworkspace "$_root"/project.yml; do
