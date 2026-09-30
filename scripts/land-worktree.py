@@ -412,24 +412,30 @@ def _land_locked(a, wt, branch, main, lock_fd) -> dict:
         if clash:
             raise Stop(OVERLAP, f"uncommitted files in {mw['path']} overlap this landing: {', '.join(clash)}",
                        state="nothing moved", commands=["commit them or move them to their own branch — never stash"])
+    ff_note = ""
     if has_origin:
-        ahead = git(wt, "log", "--oneline", f"{origin}..{heads}").stdout.strip()
+        ahead =git(wt, "log", "--oneline", f"{origin}..{heads}").stdout.strip()
         if ahead:
             raise Stop(MAIN_AHEAD, f"local {main} has commits that are not on origin (they would ride along unchecked)",
                        state=ahead)
+        main_before_ff = out(wt, "rev-parse", heads)
         r = (git(mw["path"], "-c", "merge.autostash=false", "merge", "--ff-only", "--no-autostash", origin) if mw
              else git(wt, "fetch", "origin", f"{heads}:{heads}"))
         if r.returncode:
             raise Stop(MAIN_AHEAD, f"local {main} cannot fast-forward to origin/{main}", state=r.stderr.strip())
+        if out(wt, "rev-parse", heads) != main_before_ff:
+            ff_note = (f"local {main} was fast-forwarded to origin/{main}; "
+                       "the branch and origin were not moved")
     count = out(wt, "rev-list", "--count", f"{heads}..refs/heads/{branch}")
     if count is None:
         raise Stop(UNKNOWN, f"git rev-list {main}..{branch} failed")
     if count == "0":
-        raise Stop(USAGE, f"nothing to land: '{branch}' has no commits that are not already on {main}")
+        raise Stop(USAGE, f"nothing to land: '{branch}' has no commits that are not already on {main}",
+                   state=ff_note)
     if git(wt, "merge-base", "--is-ancestor", heads, f"refs/heads/{branch}").returncode != 0:
         raise Stop(REBASE, f"rebase needed: '{branch}' does not contain the current {main} — the gate must run "
                            "on the rebased tree, so the rebase happens before the landing",
-                   state="nothing moved",
+                   state=ff_note or "nothing moved",
                    commands=[f"wt -C {w} step rebase {q(main)}",
                              f"git -C {w} rebase {q(main)}   # the same without worktrunk",
                              "then land again"])

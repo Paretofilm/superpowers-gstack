@@ -1177,3 +1177,43 @@ def test_non_fatal_failures_after_the_push_exit_0_and_are_listed(lab):
     assert any("gh is not installed" in w for w in v["warnings"])
     assert "warning: gh is not installed" in p.stdout, "the human-readable remaining/warning section lists it"
     assert any("remove feat/x" in r for r in v["remaining"])
+
+
+def _origin_moves_on(lab):
+    other = lab.root / "other"
+    subprocess.run(["git", "clone", "-q", str(lab.remote), str(other)], check=True)
+    for k, v in (("user.email", "t@t.t"), ("user.name", "t")):
+        git(other, "config", k, v)
+    commit(other, "z.md", "z\n", "chore: someone else pushed")
+    git(other, "push", "-q", "origin", "main")
+    return git(other, "rev-parse", "HEAD")
+
+
+def test_code_10_says_main_was_fast_forwarded_when_it_was(lab):
+    new_main = _origin_moves_on(lab)
+    branch_before = git(lab.wt, "rev-parse", "HEAD")
+    p = land(lab)
+    assert p.returncode == 10, p.stderr
+    assert "local main was fast-forwarded to origin/main" in p.stderr
+    assert "nothing moved" not in p.stderr
+    assert git(lab.primary, "rev-parse", "main") == new_main
+    assert git(lab.wt, "rev-parse", "HEAD") == branch_before
+
+
+def test_code_10_says_nothing_moved_when_origin_was_not_ahead(lab):
+    commit(lab.primary, "later.md", "l\n", "chore: main moves on")
+    git(lab.primary, "push", "-q", "origin", "main")
+    p = land(lab)
+    assert p.returncode == 10, p.stderr
+    assert "nothing moved" in p.stderr
+    assert "fast-forwarded" not in p.stderr
+
+
+def test_nothing_to_land_says_main_was_fast_forwarded_when_it_was(lab):
+    empty = lab.root / "my proj.empty"
+    git(lab.primary, "worktree", "add", "-q", "-b", "feat/empty", str(empty))
+    _origin_moves_on(lab)
+    p = land(lab, "--preflight-only", wt=empty)
+    # the branch is behind the new main, so 0 commits ahead -> nothing to land
+    assert p.returncode == 64, p.stderr
+    assert "local main was fast-forwarded to origin/main" in p.stderr

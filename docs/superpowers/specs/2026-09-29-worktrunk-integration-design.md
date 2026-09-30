@@ -92,11 +92,11 @@ Ship-worthy endringer går gjennom `/review` og `pitfall-verification` **før** 
 | 7 | `origin/main` har flyttet seg, eller push feilet og er ikke bekreftet | Lokal `main` har allerede fått commitene. Worktree og gren står. Skriptet skriver kommandoene, med `wt hook pre-merge` før push. |
 | 8 | `wt` mangler | Alt urørt. Fall tilbake til `git worktree add` og `/superpowers:finishing-a-development-branch`. |
 | 9 | Ingen `pre-merge`-hook som kjører en kommando i prosjektet | Alt urørt. Agenten foreslår en `.config/wt.toml`. |
-| 10 | Rebase trengs (grenen inneholder ikke `main`), eller en rebase står åpen | «Rebase trengs»: alt urørt; kjør `wt step rebase <main>` og land igjen. «Åpen»: løs den eller `git rebase --abort`. |
+| 10 | Rebase trengs (grenen inneholder ikke `main`), eller en rebase står åpen | «Rebase trengs»: alt urørt, bortsett fra at lokal `main` kan ha blitt fast-forwardet til `origin/main` først (stoppen sier det); kjør `wt step rebase <main>` og land igjen. «Åpen»: løs den eller `git rebase --abort`. |
 | 11 | `fetch` feilet | Alt urørt. |
 | 12 | Lås holdt av en annen landing | Alt urørt. Vent eller se hvem som holder den. |
 | 13 | Worktreet som landes har ikke-committet arbeid | Alt urørt. Commit, eller flytt til `wip/<tema>`. |
-| 64 | Ikke et feature-worktree (mangler git, står på `main`, ugyldige argumenter, ingenting å lande, eller ingen hovedgren: verken `origin/HEAD`, lokal `main` eller `master`) | Alt urørt. |
+| 64 | Ikke et feature-worktree (mangler git, står på `main`, ugyldige argumenter, ingenting å lande, eller ingen hovedgren: verken `origin/HEAD`, lokal `main` eller `master`) | Alt urørt (ved «ingenting å lande» kan lokal `main` ha blitt fast-forwardet til `origin/main`; stoppen sier det). |
 | 70 | `wt merge` feilet av en grunn skriptet ikke kjenner igjen; `main` er ikke nøyaktig den kontrollerte tuppen etter merge; en hook endret filer i worktreet; Python eldre enn 3.11; eller landingen ble avbrutt (Ctrl-C, SIGTERM) uten bekreftet push | Tilstanden måles: om lokal `main` flyttet seg, om en rebase står åpen, og ved avbrudd etter at `main` flyttet seg, om origin har den («ikke bekreftet pushet», med push-kommandoen som fullfører). Skriptet reparerer ingenting og prøver ikke på nytt. Avbrudd etter bekreftet push gir kode 0 (landet) med en advarsel. |
 
 ## Verifisert under pitfall-review
