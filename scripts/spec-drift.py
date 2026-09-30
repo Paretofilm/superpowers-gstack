@@ -234,13 +234,32 @@ def _blank(m: re.Match) -> str:
     return re.sub(r"[^\n]", " ", m.group())
 
 
+def _paragraph_start(masked: str, end: int) -> int:
+    """Offset of the first line of the prose paragraph that ends at `end`: walk
+    up line by line until a line that is blank IN `masked` — a real blank line,
+    or a line of some other fence, which the mask turned to spaces. So the walk
+    never enters a fence above, and a label that sits inside one is never found.
+    Each walk covers only prose between two fences: linear over the file."""
+    start = masked.rfind("\n", 0, end) + 1
+    while start > 0:
+        prev = masked.rfind("\n", 0, start - 1) + 1
+        if not masked[prev:start - 1].strip():
+            break
+        start = prev
+    return start
+
+
 def _prompt_fences(text: str, masked: str) -> list[tuple[int, int]]:
     """Body spans of every fence that is the subagent prompt: one of `_FENCE`'s
     own matches that is CLOSED, opened by four or more backticks with the info
-    string `text`, and whose nearest preceding non-blank line is `PROMPT_LABEL`
-    still standing as prose in `masked`. `masked` is the plain `_FENCE` pass over
-    `text`; a label it blanked sits inside some other fence, and that is upstream
-    quoting its prompt as an example, not the prompt."""
+    string `text`, and whose immediately preceding prose paragraph OPENS with
+    `PROMPT_LABEL` — standing as prose in `masked`. `masked` is the plain `_FENCE`
+    pass over `text`; a label it blanked sits inside some other fence, and that
+    is upstream quoting its prompt as an example, not the prompt.
+
+    The paragraph, not the nearest line: gstack ≤ 1.84 wrote the label as a
+    one-line paragraph, 1.91.9 as the first line of a four-line one — the prompt
+    fence was then masked and repin refused on anchors that were still there."""
     spans = []
     for m in _FENCE.finditer(text):
         if not (m.group("f").startswith("````") and m.group("info").strip() == "text"
@@ -249,7 +268,9 @@ def _prompt_fences(text: str, masked: str) -> list[tuple[int, int]]:
         i = m.start()
         while i > 0 and text[i - 1] in " \t\r\n":
             i -= 1
-        label = text.rfind("\n", 0, i) + 1
+        if i == 0:
+            continue
+        label = _paragraph_start(masked, i)
         if text.startswith(PROMPT_LABEL, label) and masked[label] == text[label]:
             spans.append(m.span("body"))
     return spans

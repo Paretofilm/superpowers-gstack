@@ -52,7 +52,12 @@ UPSTREAM_DEPENDENCIES = ("Showing top 50 of", "### Gate Logic", "### Plan File D
                          "Include in PR body", "Parent processing", "Validator detection",
                          # gstack >= 1.83 spells the NOT DONE count `not_done` and adds
                          # `partial`; override 6 exists to answer exactly that spelling.
-                         '"not_done":N', '"partial":N')
+                         '"not_done":N', '"partial":N',
+                         # gstack 1.91: the ordered preamble the prompt's intro answers,
+                         # the two-dot diff override 3 replaces, and the execution-only
+                         # routing override 9 exists for (there is no Step 8.1/9 here).
+                         "Complete this section in order", "git diff origin/<base>",
+                         "inspect untracked files", "execution-only", "Step 8.1/9")
 
 
 def section(start: str, end: str | None = None) -> str:
@@ -76,11 +81,13 @@ def test_skill_never_inlines_step_8():
     half — a paraphrased paste dodges the needles but not the size."""
     for needle in STEP8_ONLY:
         assert needle not in SKILL, f"{needle!r} is Step 8 text — read it from disk, do not paste it"
-    assert SKILL.count("\n") < 345, \
+    assert SKILL.count("\n") < 365, \
         ("Step 8 alone is ~190 lines; a wrapper past this has probably swallowed it. "
          "Raised 320 -> 345 in 2.52.0 for override 8, the plan-derived-path quoting "
-         "rule and the per-block variable rebinding — all guards, none of them Step 8 "
-         "text. Raise it again only for the same kind of reason, never to fit a paste.")
+         "rule and the per-block variable rebinding; 345 -> 365 in 3.4.1 for override 9 "
+         "(execution-only checks) and override 3's diff-base reason — all guards, none "
+         "of them Step 8 text. Raise it again only for the same kind of reason, never "
+         "to fit a paste.")
 
 
 def test_omission_needles_still_exist_upstream():
@@ -114,12 +121,19 @@ def test_dispatch_prompt_carries_every_override_in_order():
         "6. Your LAST line is the JSON object Step 8 specifies",
         "7. Step 8's 50-item cap does not apply",
         '8. "Validator detection": do not run it.',
+        "9. Execution-only checks: Step 8 keeps them out of the counts",
     ]
     pos = [p.index(n) for n in needles]
     assert pos == sorted(pos)
     assert "would\n   hand that branch the reviewer's shell" in p, \
         "override 8 must say WHY it differs from /ship, or a future edit will 'restore parity'"
     assert "stop where `## Step 8.1` begins" in p
+    assert "only the\naudit in item 1 applies here" in p, \
+        "Step 8's own preamble (gstack 1.91) walks on into 8.1, 8.2 and Step 9"
+    assert "not Step 8's `git diff origin/<base>`" in p and "untracked files are not inspected" in p, \
+        "a two-dot diff against an unmerged, moved base counts the base's commits as the branch's"
+    assert "do not run them" in " ".join(p.split()) and "never mark one DONE" in p, \
+        "execution-only checks have no Step 8.1/9 to go to here; running them hands over the shell"
     assert "no content search, no freshness fallback" in p
     assert "PARTIAL items count in total_items only" in p and "Add no other keys" in p, \
         "an unassigned PARTIAL folded into `done` is the one false CLEAN the verdict cannot see"

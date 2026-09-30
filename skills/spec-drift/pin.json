@@ -1,6 +1,6 @@
 {
   "source": "garrytan/gstack (MIT) \u2014 ship/sections/plan-completion.md; snapshot is for --repin's diff only, never executed",
-  "sha256": "5957e0e9c112a4c6f5f5a61c21ea58921257229d6d7243a50b0377ff4bede2c5",
-  "gstack_version": "1.84.1.0",
-  "pinned_at": "2026-09-11"
+  "sha256": "2992ed65ff8db318972d306d6043dcd451167c3cf93bbcb157a817d7c5210b95",
+  "gstack_version": "1.91.9.0",
+  "pinned_at": "2026-09-30"
 }

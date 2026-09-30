@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.4.1] - 2026-09-30
+
+**`/superpowers-gstack:spec-drift` re-pinned to gstack 1.91.9's rewritten Step 8, with the overrides re-read against it.**
+
+### Fixed
+- **`repin` refused 1.91.9 on anchors that were still there.** gstack reflowed the `**Subagent prompt:**` label into the first line of a four-line paragraph; `spec-drift.py` looked for the label only on the line right above the ````text prompt fence, so it masked the prompt as an example and reported `### Plan File Discovery` and `Validator detection` missing. The label must now open the prose paragraph that touches the fence (the walk stops at blank lines and at other fences, so a label inside an example still does not count, and a label in the middle of a paragraph no longer does). The anchor list is unchanged. Three new tests.
+
+### Changed (spec-drift overrides, against 1.91.9)
+- **Diff base (override 3):** Step 8 now says `git diff origin/<base>` plus untracked files. The wrapper keeps `git diff <BASE_REF>...HEAD`, committed work only, and says why: /ship has merged its base first; a standalone audit has not, and a two-dot diff against a base that moved on would count the base's new commits as the branch's work.
+- **New override 9, execution-only checks:** Step 8 now keeps "run X, expect Y" checks out of the counts and hands them to Step 8.1/9, which do not exist standalone. They stay out of the counts, are never run (same reason as override 8) and never marked DONE, and are listed verbatim under `Execution-only checks (not run, not counted): N` and in `summary`. The Contract says CLEAN says nothing about them.
+- The prompt's intro disarms Step 8's new "Complete this section in order" preamble (only the audit applies; no 8.1, 8.2, Prior Learnings or Step 9). Phase 2 names Step 7 as the new home of the foreground-dispatch rule, and the inline fallback now confirms the stopped subagent has stopped, as Step 8's rewritten fallback asks.
+- The last-line JSON contract (six keys, `deferred` = NOT DONE) is unchanged; override 6 still overrides Step 8's "exactly these seven fields".
+- The wrapper's line budget in `test_spec_drift_skill.py` goes 345 → 365 for override 9, and the new upstream wording the overrides key on joins `UPSTREAM_DEPENDENCIES`.
+
 ## [3.4.0] - 2026-09-30
 
 **A solo developer lands work without a pull request: worktrees by default, one command to `main`, the local checks as the gate.**

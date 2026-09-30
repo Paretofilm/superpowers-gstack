@@ -48,8 +48,9 @@ reason).
 Same human-readable report as `/ship` Step 8, and a JSON object on the last line —
 `{"total_items":N,"done":N,"changed":N,"deferred":N,"unverifiable":N,"summary":"…"}`,
 where `"deferred"` is the NOT DONE count (Step 8 itself, gstack ≥ 1.83, spells it
-`"not_done"` and adds `"partial"`; this skill keeps the keys its callers read —
-override 6 makes the subagent write them) — plus a verdict line just above the JSON. The table shows each line's prefix; the real
+`"not_done"` and adds `"partial"` — since 1.91, "exactly these seven fields"; this
+skill keeps the keys its callers read — override 6 makes the subagent write them) —
+plus a verdict line just above the JSON. The table shows each line's prefix; the real
 line continues with a breakdown:
 
 | Verdict line (prefix) | Meaning | Exit |
@@ -57,6 +58,9 @@ line continues with a breakdown:
 | `SPEC-DRIFT: CLEAN (exit 0)` | every item DONE or CHANGED | 0 |
 | `SPEC-DRIFT: DRIFT (exit 1)` | any PARTIAL, NOT DONE or UNVERIFIABLE item | 1 |
 | `SPEC-DRIFT: COULD-NOT-RUN (exit 2)` | pin mismatch, unreadable plan, empty diff, no actionable items, no JSON | 2 |
+
+A plan's execution-only checks (run X, expect Y) are listed in the report, never
+run and never counted (override 9): CLEAN says nothing about them.
 
 Every outcome — a refusal in Phase 0 or 1 included — ends the same way: the
 verdict line, then the JSON as the very last line. A refusal's JSON is
@@ -184,8 +188,8 @@ expands to nothing and re-pins the DEFAULT section instead of the named one.
    `### Plan File Discovery`, `### Gate Logic`, `<base>`, `Include in PR body`,
    `Parent processing`, `"total_items"`, `Validator detection` — the first four
    in that order; a heading inside a code fence does not count, except in the
-   one ````text fence after `**Subagent prompt:**` — that fence is the prompt
-   itself since gstack 1.83; fences nested inside it are examples, and a
+   one ````text fence whose preceding paragraph opens with `**Subagent prompt:**`
+   — that fence is the prompt itself since gstack 1.83; fences nested inside it are examples, and a
    second labelled fence is refused by count). What the script cannot
    judge is meaning: read the diff against the overrides in Phase 2 below and
    say, in one or two sentences, whether any override now contradicts what the
@@ -212,8 +216,9 @@ expands to nothing and re-pins the DEFAULT section instead of the named one.
 
 ## Phase 2 — dispatch the audit
 
-Step 8 says to run as a subagent, in the foreground, and that executing it
-inline forfeits the fresh-context isolation. That holds here. Invoke the
+Step 8 says to dispatch a foreground subagent; the rule behind it — a fresh
+context, inline work only as the fallback after a failed subagent has stopped —
+lives in /ship's Step 7 since gstack 1.91, outside this section. That holds here. Invoke the
 `Agent` tool with `subagent_type: "general-purpose"`, `run_in_background: false`,
 `description: "spec-drift audit"`, and the prompt below. If the tool rejects
 `run_in_background` as unknown, omit it and wait for the completion
@@ -232,7 +237,9 @@ You are the dispatched subagent for a standalone plan-completion audit
 
 Run override 0 first. Read this file in full, then execute ONLY its
 `## Step 8: Plan Completion Audit` section — stop where `## Step 8.1` begins;
-Step 8.1, "Prior Learnings" and Step 8.2 are not part of this run.
+Step 8.1, "Prior Learnings" and Step 8.2 are not part of this run. Its
+"Complete this section in order" list is /ship's sequencing: of it, only the
+audit in item 1 applies here — no Step 8.1, 8.2, Prior Learnings or Step 9.
 
 Overrides. Each replaces the part of Step 8 it names; everything else in Step 8
 applies verbatim — the extraction rules, the verification modes, the verdict
@@ -262,8 +269,12 @@ that one with `./`, or classify it UNVERIFIABLE.
    emit the JSON line with total_items 0 and the reason in "summary" — never
    "skip" without a JSON line.
 3. Wherever Step 8 says `<base>` or `origin/<base>`, use exactly <BASE_REF>.
-   The diff is `git diff <BASE_REF>...HEAD`; the log is
-   `git log <BASE_REF>..HEAD --oneline`.
+   The diff is `git diff <BASE_REF>...HEAD`, not Step 8's `git diff origin/<base>`,
+   and untracked files are not inspected; the log is
+   `git log <BASE_REF>..HEAD --oneline`. /ship has merged its base first, so
+   there the two-dot diff is the branch's change; here nothing was merged, and
+   against a base that moved on it would count the base's own new commits
+   (reversed) as this branch's work. Only committed work is audited.
 4. "Gate Logic": do not use AskUserQuestion and do not wait for anyone.
    Classify every item, print the Output Format block, then one line
    `Ignored under Step 8's rules: N items` (deferred, out-of-scope and
@@ -288,6 +299,12 @@ that one with `./`, or classify it UNVERIFIABLE.
    hand that branch the reviewer's shell during a run whose whole contract is
    "report only". Judge such an item by reading the file instead; if that cannot
    settle it, UNVERIFIABLE, naming the validator the user may choose to run.
+9. Execution-only checks: Step 8 keeps them out of the counts and routes them
+   to Step 8.1/9, which do not exist here. Keep them out of the counts, do not
+   run them (override 8's reason), and never mark one DONE. List each verbatim
+   (command, expected outcome, source) after the Output Format block under
+   `Execution-only checks (not run, not counted): N`, and in "summary"; the
+   caller runs them. If they are all that remains, total_items is 0.
 ```
 
 Wait for it (Step 8's own budget: about ten minutes). "Parseable" means: the
@@ -296,7 +313,7 @@ over several, or inside a ``` fence all count; collapse it to a single line
 before Phase 3. If the reply has no such object, or the subagent fails
 outright, do what Step 8 itself prescribes, once: stop the subagent's task
 first with the TaskStop tool if it was dispatched asynchronously and is still
-running (a late result must never race the fallback; a synchronous one has
+running, and confirm it stopped (a late result must never race the fallback; a synchronous one has
 already returned), then run the same Step 8 inline in your own context with
 the same overrides. If that also yields no JSON, do not guess a result —
 `SPEC-DRIFT: COULD-NOT-RUN (exit 2)` and the refusal JSON.

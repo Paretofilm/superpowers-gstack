@@ -794,6 +794,63 @@ def test_unfenced_stays_linear_on_many_unclosed_labelled_openers():
     assert len(masked) == len(text)
 
 
+# --- gstack 1.91.9: the label opens a paragraph instead of standing alone -------
+#
+# 1.91.9 reflowed the label into a four-line paragraph ("**Subagent prompt:**
+# Substitute `<base>` and supply ... / ... / The child does not inherit the
+# parent's conversation."). The prompt fence's nearest non-blank line was then
+# the paragraph's LAST line, not the label, so the fence was masked like an
+# example and repin refused with ANCHORS MISSING on text that was still there.
+
+def _label_paragraph(text: str) -> str:
+    return text.replace(
+        "**Subagent prompt:** Pass these instructions to the subagent:\n\n",
+        "**Subagent prompt:** Substitute `<base>` and supply the active plan's absolute path\n"
+        "or complete text. If none exists, say so explicitly.\n"
+        "The child does not inherit the parent's conversation.\n\n", 1)
+
+
+def test_a_label_that_opens_a_multi_line_paragraph_marks_the_prompt(rig):
+    upstream, pin_dir = rig
+    upstream.write_text(_label_paragraph(SECTION_PROMPT_FENCED))
+    p = run("repin", *common(upstream, pin_dir), expect=3)
+    assert "ANCHORS: all present" in p.stdout, p.stderr
+    masked = module().unfenced(upstream.read_text())
+    assert "### Plan File Discovery" in masked and 'PLAN=$(ls' not in masked
+
+
+def test_the_label_must_open_the_paragraph_that_touches_the_fence(rig):
+    """The paragraph is the unit, not "somewhere above": a label in an EARLIER
+    paragraph, or in the middle of the preceding one, does not make a ````text
+    fence the prompt."""
+    upstream, pin_dir = rig
+    for text in (
+        SECTION_PROMPT_FENCED.replace(
+            "**Subagent prompt:** Pass these instructions to the subagent:\n\n",
+            "**Subagent prompt:** Pass these instructions to the subagent:\n\nAn unrelated paragraph.\n\n", 1),
+        SECTION_PROMPT_FENCED.replace(
+            "**Subagent prompt:** Pass these instructions to the subagent:\n\n",
+            "Some lead-in prose.\n**Subagent prompt:** Pass these instructions:\n\n", 1),
+    ):
+        upstream.write_text(text)
+        p = run("repin", *common(upstream, pin_dir), expect=2)
+        assert "ANCHORS MISSING" in p.stderr and "### Plan File Discovery" in p.stderr
+
+
+def test_a_paragraph_walk_does_not_cross_into_a_fence_above(rig):
+    """A fence closer directly above the label paragraph (no blank line) is not
+    part of the paragraph: a label inside that fence stays an example."""
+    upstream, pin_dir = rig
+    renamed = SECTION_PROMPT_FENCED.replace(
+        "### Plan File Discovery\nline two\n", "### Plan Discovery\nline two\n")
+    text = renamed.replace(
+        "**Subagent prompt:** Pass these instructions to the subagent:\n\n",
+        "~~~md\n**Subagent prompt:** for illustration\n~~~\nplain prose line\n\n", 1)
+    upstream.write_text(text)
+    p = run("repin", *common(upstream, pin_dir), expect=2)
+    assert "ANCHORS MISSING" in p.stderr
+
+
 # --- third house (DeepSeek), 3.0.2: fence grammar edges ---------------------------
 
 def test_an_indented_fence_still_masks_a_planted_heading(rig):
