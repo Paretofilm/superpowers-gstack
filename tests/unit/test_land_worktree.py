@@ -8,12 +8,16 @@ shell string would have mangled.
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import importlib.util
+import shlex
 import shutil
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -69,20 +73,30 @@ def lab(tmp_path):
     return SimpleNamespace(root=tmp_path, remote=remote, primary=primary, wt=wt)
 
 
-def write_shim(root, approvals):
+# A fake merge that does what a successful `wt merge` does to the refs: the target
+# (the last argument) fast-forwards to the worktree's HEAD. No hooks, no rebase.
+FF_MERGE = 'for t; do :; done; git -C "$2" update-ref "refs/heads/$t" HEAD; exit 0'
+
+
+def write_shim(root, approvals, merge="exit 99", approvals_rc=0):
+    """Fake wt: answers `config approvals list`; records the argv of `merge` to
+    <bin>/merge-argv (one argument per line) and then runs the `merge` shell body."""
     d = root / "bin"
     d.mkdir(exist_ok=True)
     f = d / "wt"
     f.write_text("#!/bin/sh\nif [ \"$3\" = config ] && [ \"$4\" = approvals ]; then\n"
-                 "cat <<'EOF'\n" + approvals + "EOF\nexit 0\nfi\nexit 99\n")
+                 "cat <<'EOF'\n" + approvals + f"EOF\nexit {approvals_rc}\nfi\n"
+                 "if [ \"$3\" = merge ]; then\n"
+                 "printf '%s\\n' \"$@\" > \"$(dirname \"$0\")/merge-argv\"\n"
+                 + merge + "\nfi\nexit 99\n")
     f.chmod(0o755)
     return d
 
 
-def land(lab, *args, shim=APPROVED, wt=None, env=None):
+def land(lab, *args, shim=APPROVED, wt=None, env=None, merge="exit 99", approvals_rc=0):
     path = "/usr/bin:/bin"
     if shim is not None:
-        path = f"{write_shim(lab.root, shim)}:{path}"
+        path = f"{write_shim(lab.root, shim, merge, approvals_rc)}:{path}"
     e = {"HOME": str(lab.root), "PATH": path}
     e.update(env or {})
     return subprocess.run([sys.executable, str(SCRIPT), "--worktree", str(wt or lab.wt),
@@ -110,12 +124,71 @@ def test_mode_other_than_exact_solo_fails_closed(lab, text):
     assert verdict(p)["landed"] is False
 
 
+FENCE = "```"
+
+
+@pytest.mark.parametrize("text", [
+    f"# proj\n\n{FENCE}\nLanding mode: solo\n{FENCE}\n",                   # only an example in a fence
+    f"# proj\n\n~~~md\nLanding mode: solo\n~~~\n",                          # tilde fence
+    "# proj\n\nLanding mode: solo\n\nLanding mode: pr\n",                   # the real lines disagree
+    "# proj\n\nLanding mode: pr\n\nLanding mode: solo\n",
+])
+def test_mode_in_a_code_fence_or_conflicting_fails_closed(lab, text):
+    (lab.wt / "CLAUDE.md").write_text(text)
+    git(lab.wt, "commit", "-qam", "chore: mode")
+    assert land(lab, "--preflight-only").returncode == 2
+
+
+def test_a_fenced_pr_example_does_not_override_the_real_solo_line(lab):
+    (lab.wt / "CLAUDE.md").write_text(f"# proj\n\nExample:\n{FENCE}\nLanding mode: pr\n{FENCE}\n\nLanding mode: solo\n")
+    git(lab.wt, "commit", "-qam", "chore: mode")
+    p = land(lab, "--preflight-only")
+    assert p.returncode == 0, p.stderr
+
+
 # --- hook presence, wt presence, approvals ------------------------------------
 
 def test_no_pre_merge_hook_is_code_9(lab):
     (lab.wt / ".config" / "wt.toml").write_text('[post-start]\nx = "true"\n')
     git(lab.wt, "commit", "-qam", "chore: no gate")
     assert land(lab, "--preflight-only").returncode == 9
+
+
+@pytest.mark.parametrize("toml", [
+    "[pre-merge]\n",                                  # a table with no commands
+    "pre-merge = {}\n",                               # inline, empty
+    'pre-merge = ""\n',                               # an empty command
+    "pre-merge = []\n",                               # an empty pipeline
+    "[[pre-merge]]\n",                                # a pipeline step with no commands
+    '[aliases]\npre-merge = "true"\n',                # an alias, not a hook
+    '[pre-merge]\ncheck = "   "\n',                   # whitespace only
+    '[pre-merge\ncheck = "true"\n',                   # not TOML at all
+])
+def test_a_pre_merge_hook_that_runs_nothing_is_code_9(lab, toml):
+    (lab.wt / ".config" / "wt.toml").write_text(toml)
+    git(lab.wt, "commit", "-qam", "chore: hollow gate")
+    assert land(lab, "--preflight-only").returncode == 9
+
+
+@pytest.mark.parametrize("toml", [
+    'pre-merge = "make test"\n',
+    '[pre-merge]\ntest = "make test"\n',
+    '[[pre-merge]]\ninstall = "npm ci"\n\n[[pre-merge]]\ntest = "npm test"\n',
+])
+def test_every_real_hook_form_counts_as_a_gate(tmp_path, toml):
+    m = load_module()
+    (tmp_path / ".config").mkdir()
+    (tmp_path / ".config" / "wt.toml").write_text(toml)
+    assert m.has_pre_merge_hook(tmp_path)
+
+
+@pytest.mark.parametrize("rc,listing", [
+    (1, APPROVED),                                    # wt failed: approval state unknown
+    (0, "something wt never printed before\n"),       # unparseable
+])
+def test_approvals_that_cannot_be_read_fail_closed_as_code_3(lab, rc, listing):
+    p = land(lab, "--preflight-only", shim=listing, approvals_rc=rc)
+    assert p.returncode == 3, p.stderr
 
 
 def test_wt_missing_is_code_8(lab):
@@ -188,26 +261,59 @@ def test_repo_without_origin_passes_preflight(lab):
 
 # --- lock ---------------------------------------------------------------------
 
-def lock_dir(lab):
+def lock_file(lab):
     return Path(git(lab.wt, "rev-parse", "--path-format=absolute", "--git-common-dir")) / "gstack-land.lock"
 
 
-def test_live_lock_is_code_12_and_left_alone(lab):
-    d = lock_dir(lab)
-    d.mkdir()
-    (d / "pid").write_text(str(os.getpid()))
-    assert land(lab, "--preflight-only").returncode == 12
-    assert d.exists(), "someone else's lock is never removed"
+def lock_is_free(path) -> bool:
+    """True when nobody holds the kernel lock (we take it and give it straight back)."""
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    finally:
+        os.close(fd)   # closing the only fd drops the lock too
+    return True
 
 
-def test_stale_lock_is_cleared_and_released(lab):
-    dead = subprocess.Popen([sys.executable, "-c", "pass"])
-    dead.wait()
-    d = lock_dir(lab)
-    d.mkdir()
-    (d / "pid").write_text(str(dead.pid))
+def hold_lock(path):
+    """Another process holds the lock until it is killed."""
+    p = subprocess.Popen([sys.executable, "-c",
+                          "import fcntl,os,sys,time\n"
+                          f"fd=os.open({str(path)!r}, os.O_RDWR|os.O_CREAT, 0o644)\n"
+                          "fcntl.flock(fd, fcntl.LOCK_EX)\nprint('held', flush=True)\ntime.sleep(60)\n"],
+                         stdout=subprocess.PIPE, text=True)
+    assert p.stdout.readline().strip() == "held"
+    return p
+
+
+def test_lock_held_by_a_live_process_is_code_12_naming_the_file(lab):
+    holder = hold_lock(lock_file(lab))
+    try:
+        p = land(lab, "--preflight-only")
+        assert p.returncode == 12, p.stderr
+        assert str(lock_file(lab)) in p.stderr
+    finally:
+        holder.kill()
+        holder.wait()
+
+
+def test_lock_is_released_after_a_normal_run(lab):
     assert land(lab, "--preflight-only").returncode == 0
-    assert not d.exists(), "the lock must be released on exit"
+    assert lock_is_free(lock_file(lab))
+
+
+def test_lock_is_released_after_a_stop(lab):
+    assert land(lab, "--preflight-only", shim=UNAPPROVED).returncode == 3
+    assert lock_is_free(lock_file(lab))
+
+
+def test_lock_of_a_dead_holder_is_free_without_any_stale_detection(lab):
+    holder = hold_lock(lock_file(lab))
+    holder.kill()
+    holder.wait()
+    assert land(lab, "--preflight-only").returncode == 0
 
 
 # --- final-review fixes -------------------------------------------------------
@@ -239,7 +345,7 @@ def test_unexpected_exception_releases_the_lock(lab, monkeypatch, capsys):
         raise RuntimeError("inside the lock")
     monkeypatch.setattr(m, "_land_locked", boom)
     assert m.main(["--worktree", str(lab.wt)]) == 70
-    assert not lock_dir(lab).exists()
+    assert lock_is_free(lock_file(lab))
 
 
 def test_missing_main_branch_is_code_64_naming_the_flag(lab):
@@ -265,51 +371,287 @@ def test_untracked_directory_overlap_is_code_5(lab):
     assert "newdir/a.py" in p.stderr
 
 
-def dead_pid():
-    dead = subprocess.Popen([sys.executable, "-c", "pass"])
-    dead.wait()
-    return dead.pid
-
-
-def test_stale_lock_rename_lost_race_is_code_12(lab, monkeypatch):
+def test_second_lock_in_the_same_repo_is_code_12(lab):
     m = load_module()
-    d = lock_dir(lab)
-    d.mkdir()
-    (d / "pid").write_text(str(dead_pid()))
-
-    def lost(*a, **k):
-        raise FileNotFoundError("another process won the rename")
-    monkeypatch.setattr(m.os, "rename", lost)
-    with pytest.raises(m.Stop) as e:
-        with m.Lock(d.parent):
-            pass
+    common = lock_file(lab).parent
+    with m.Lock(common):
+        with pytest.raises(m.Stop) as e:
+            with m.Lock(common):
+                pass
     assert e.value.code == 12
+    assert lock_is_free(lock_file(lab))
 
 
-def test_lock_exit_leaves_a_lock_now_owned_by_someone_else(lab):
+SLOW_MERGE = 'echo "$$" > "$(dirname "$0")/merge-pid"; exec sleep 20'
+
+
+def start_slow_landing(lab):
+    """A landing whose (fake) wt merge sleeps; returns once the merge child is running."""
+    shim = write_shim(lab.root, APPROVED, SLOW_MERGE)
+    pidfile = shim / "merge-pid"
+    e = {"HOME": str(lab.root), "PATH": f"{shim}:/usr/bin:/bin"}
+    p = subprocess.Popen([sys.executable, str(SCRIPT), "--worktree", str(lab.wt), "--ci-wait", "0"],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=e)
+    deadline = time.time() + 20
+    while not (pidfile.exists() and pidfile.read_text().strip()):
+        assert time.time() < deadline and p.poll() is None, p.communicate()
+        time.sleep(0.05)
+    return p, int(pidfile.read_text())
+
+
+def test_orphaned_wt_merge_keeps_the_lock_when_the_script_is_killed(lab):
+    p, child = start_slow_landing(lab)
+    try:
+        p.kill()
+        p.wait()
+        assert not lock_is_free(lock_file(lab)), "the merge still runs: a second landing must not start"
+    finally:
+        os.kill(child, signal.SIGKILL)
+    deadline = time.time() + 5
+    while not lock_is_free(lock_file(lab)):
+        assert time.time() < deadline, "lock never freed after the orphan died"
+        time.sleep(0.05)
+
+
+def test_sigterm_is_a_clean_stop_with_a_verdict_and_a_free_lock(lab):
+    p, child = start_slow_landing(lab)
+    try:
+        p.send_signal(signal.SIGTERM)
+        out, err = p.communicate(timeout=15)
+    finally:
+        try:
+            os.kill(child, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    assert p.returncode == 70, err
+    v = json.loads(out.strip().splitlines()[-1])
+    assert v["landed"] is False and v["code"] == 70 and "interrupted" in v["message"]
+    assert "git status" in err
+    assert lock_is_free(lock_file(lab))
+    assert "feat: x" not in remote_log(lab)
+
+
+# --- fix wave 2: the gate, the exact tip, what is printed --------------------
+
+def merge_argv(lab):
+    return (lab.root / "bin" / "merge-argv").read_text().splitlines()
+
+
+def test_wt_merge_is_forced_to_verify_and_named_the_target(lab):
+    """A1/A3/A4: hooks forced on over any config, explicit target, never auto-commit."""
+    land(lab, "--main-branch", "main")
+    argv = merge_argv(lab)
+    assert argv[-1] == "main", "the validated main is passed as TARGET"
+    assert "--no-commit" in argv and "--no-squash" in argv and "--no-remove" in argv
+    pairs = list(zip(argv, argv[1:]))
+    assert ("--config-set", "merge.verify=true") in pairs
+    assert "--no-hooks" not in argv and "--yes" not in argv and "-y" not in argv
+
+
+def test_worktrunk_merge_env_overrides_are_scrubbed(lab):
+    shim = write_shim(lab.root, APPROVED, 'env > "$(dirname "$0")/merge-env"; exit 99')
+    e = {"HOME": str(lab.root), "PATH": f"{shim}:/usr/bin:/bin", "WORKTRUNK_MERGE__VERIFY": "false"}
+    subprocess.run([sys.executable, str(SCRIPT), "--worktree", str(lab.wt), "--ci-wait", "0"],
+                   capture_output=True, text=True, env=e)
+    env = (shim / "merge-env").read_text()
+    assert "WORKTRUNK_MERGE__VERIFY" not in env
+    # the project's hooks run under wt merge: our git transport settings stay out of them
+    assert "BatchMode" not in env
+
+
+def test_lands_with_a_fake_merge_and_pushes_the_exact_tip(lab):
+    p = land(lab, merge=FF_MERGE)
+    assert p.returncode == 0, p.stderr
+    tip = git(lab.wt, "rev-parse", "HEAD")
+    assert verdict(p)["sha"] == tip
+    assert git(lab.remote, "rev-parse", "main") == tip
+
+
+def test_main_with_an_extra_commit_after_the_merge_is_not_pushed(lab):
+    """B1: main must be exactly the tip that passed the gate."""
+    extra = ('git -C "$2" update-ref refs/heads/main '
+             '"$(git -C "$2" commit-tree -p HEAD -m extra "HEAD^{tree}")"; exit 0')
+    before = git(lab.remote, "rev-parse", "main")
+    p = land(lab, merge=extra)
+    assert p.returncode == 70, p.stderr
+    assert git(lab.remote, "rev-parse", "main") == before, "nothing was pushed"
+    assert "extra" not in remote_log(lab)
+
+
+def test_nothing_to_land_is_code_64(lab):
+    empty = lab.root / "my proj.empty"
+    git(lab.primary, "worktree", "add", "-q", "-b", "feat/empty", str(empty))
+    p = land(lab, "--preflight-only", wt=empty)
+    assert p.returncode == 64, p.stderr
+    assert "nothing to land" in p.stderr
+
+
+def test_failed_merge_reports_that_main_moved_when_it_did(lab):
+    """D3: the state after a failing wt merge is measured, not assumed."""
+    moved = 'git -C "$2" update-ref refs/heads/main HEAD; echo "boom from wt"; exit 1'
+    p = land(lab, merge=moved)
+    assert p.returncode == 70, p.stderr
+    assert "main moved" in p.stderr and "boom from wt" in p.stderr
+    assert "main was not moved" not in p.stderr
+
+
+def test_failed_merge_reports_that_main_did_not_move(lab):
+    p = land(lab, merge='echo "pre-merge command failed: check"; exit 1')
+    assert p.returncode == 6, p.stderr
+    assert "main was not moved" in p.stderr
+    assert "pre-merge command failed: check" in p.stderr, "the output tail is shown for code 6 too"
+
+
+def test_extra_commit_on_the_remote_branch_is_not_deleted(lab):
+    """B4: the remote branch is removed only when everything on it landed."""
+    git(lab.wt, "push", "-q", "-u", "origin", "feat/x")
+    other = lab.root / "other"
+    subprocess.run(["git", "clone", "-q", "-b", "feat/x", str(lab.remote), str(other)], check=True)
+    for k, v in (("user.email", "t@t.t"), ("user.name", "t")):
+        git(other, "config", k, v)
+    commit(other, "late.md", "l\n", "feat: pushed from elsewhere")
+    git(other, "push", "-q", "origin", "feat/x")
+    p = land(lab, merge=FF_MERGE)
+    assert p.returncode == 0, p.stderr
+    assert git(lab.remote, "branch", "--list", "feat/x") != "", "unlanded remote work survives"
+    v = verdict(p)
+    assert any("origin/feat/x" in w for w in v["warnings"])
+
+
+def test_fully_landed_remote_branch_is_deleted(lab):
+    git(lab.wt, "push", "-q", "-u", "origin", "feat/x")
+    p = land(lab, merge=FF_MERGE)
+    assert p.returncode == 0, p.stderr
+    assert git(lab.remote, "branch", "--list", "feat/x") == ""
+
+
+def test_remote_branch_is_matched_by_full_ref_not_by_tail(lab):
+    """`ls-remote --heads origin x` also matches refs/heads/other/x."""
+    git(lab.wt, "push", "-q", "origin", "HEAD:refs/heads/team/feat/x")
+    p = land(lab, merge=FF_MERGE)
+    assert p.returncode == 0, p.stderr
+    assert git(lab.remote, "branch", "--list", "team/feat/x") != ""
+    assert not any("feat/x" in w for w in verdict(p)["warnings"]), "no delete was even attempted"
+
+
+def test_push_error_after_the_update_landed_is_treated_as_pushed(lab, monkeypatch, capsys):
+    """B3: a non-zero push exit is re-checked against origin before it is called a failure."""
     m = load_module()
-    d = lock_dir(lab)
-    with m.Lock(d.parent):
-        (d / "pid").write_text(str(os.getpid() + 1))
-    assert d.exists(), "a lock whose pid file is not ours is never removed"
-    shutil.rmtree(d)
+    shim = write_shim(lab.root, APPROVED, FF_MERGE)
+    monkeypatch.setenv("PATH", f"{shim}:/usr/bin:/bin")
+    monkeypatch.setenv("HOME", str(lab.root))
+    real = m.git
+
+    def flaky(repo, *args):
+        r = real(repo, *args)
+        if args[:1] == ("push",) and "--delete" not in args:
+            return subprocess.CompletedProcess(r.args, 1, r.stdout, "connection reset after the update")
+        return r
+    monkeypatch.setattr(m, "git", flaky)
+    assert m.main(["--worktree", str(lab.wt), "--ci-wait", "0"]) == 0
+    assert git(lab.remote, "rev-parse", "main") == git(lab.wt, "rev-parse", "HEAD")
 
 
-def test_stale_lock_is_renamed_before_removal(lab, monkeypatch):
+def test_rejected_push_is_code_7_not_confirmed(lab):
+    hook = lab.remote / "hooks" / "pre-receive"
+    hook.write_text("#!/bin/sh\necho no >&2\nexit 1\n")
+    hook.chmod(0o755)
+    p = land(lab, merge=FF_MERGE)
+    assert p.returncode == 7, p.stderr
+    assert "not confirmed pushed" in p.stderr
+    assert "nothing was pushed" not in p.stderr
+    assert "UNCHECKED" in p.stderr and "hook pre-merge" in p.stderr
+
+
+def test_failed_git_diff_is_unknown_not_no_overlap(lab):
     m = load_module()
-    d = lock_dir(lab)
-    d.mkdir()
-    (d / "pid").write_text(str(dead_pid()))
-    calls, real = [], m.os.rename
+    with pytest.raises(m.Stop) as e:
+        m.changed(lab.wt, "refs/heads/nosuch...refs/heads/main")
+    assert e.value.code == 70
+    with pytest.raises(m.Stop):
+        m.dirty_files(lab.root / "not-a-repo")
 
-    def spy(a, b):
-        calls.append((str(a), str(b)))
-        real(a, b)
-    monkeypatch.setattr(m.os, "rename", spy)
-    with m.Lock(d.parent):
-        pass
-    assert calls and calls[0][1].endswith(f".stale-{os.getpid()}")
-    assert not Path(calls[0][1]).exists()
+
+def test_git_never_prompts_and_ssh_is_batch_mode(lab, monkeypatch):
+    m = load_module()
+    monkeypatch.delenv("GIT_SSH_COMMAND", raising=False)
+    monkeypatch.delenv("GIT_SSH", raising=False)
+    env = m.batch_env(lab.wt)
+    assert env["GIT_TERMINAL_PROMPT"] == "0" and "BatchMode=yes" in env["GIT_SSH_COMMAND"]
+    monkeypatch.setenv("GIT_SSH_COMMAND", "ssh -i mykey")
+    assert m.batch_env(lab.wt)["GIT_SSH_COMMAND"] == "ssh -i mykey", "the user's transport is kept"
+    monkeypatch.delenv("GIT_SSH_COMMAND")
+    git(lab.wt, "config", "core.sshCommand", "ssh -i other")
+    assert "GIT_SSH_COMMAND" not in m.batch_env(lab.wt), "core.sshCommand is not overridden"
+
+
+def test_primary_is_the_main_worktree_even_with_a_separate_git_dir(tmp_path):
+    m = load_module()
+    repo, gd = tmp_path / "repo", tmp_path / "store" / "gd"
+    gd.parent.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main", "--separate-git-dir", str(gd), str(repo)], check=True)
+    for k, v in (("user.email", "t@t.t"), ("user.name", "t")):
+        git(repo, "config", k, v)
+    commit(repo, "a", "a\n", "init")
+    wt = tmp_path / "wt"
+    git(repo, "worktree", "add", "-q", "-b", "feat", str(wt))
+    # git 2.54 itself names the git dir as the main worktree here; never hand that to wt
+    assert m.primary_worktree(wt) is None
+    assert m.primary_worktree(wt) != (tmp_path / "store").resolve(), "the old <common>/.. answer"
+    git(repo, "config", "core.worktree", str(repo))            # what a submodule's git dir carries
+    assert m.primary_worktree(wt) == repo.resolve()
+
+
+def test_primary_is_the_main_worktree_in_an_ordinary_repo(lab):
+    assert load_module().primary_worktree(lab.wt) == lab.primary.resolve()
+
+
+HOSTILE_BRANCH = "feat/$(touch${IFS}pwned);'q"
+
+
+def test_printed_commands_round_trip_through_a_shell(tmp_path):
+    """E1: a branch with shell metacharacters and a path with an apostrophe."""
+    root = tmp_path / "it's here"
+    root.mkdir()
+    remote, primary = root / "remote.git", root / "my proj"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(remote)], check=True)
+    subprocess.run(["git", "init", "-q", "-b", "main", str(primary)], check=True)
+    for k, v in (("user.email", "t@t.t"), ("user.name", "t")):
+        git(primary, "config", k, v)
+    (primary / ".config").mkdir()
+    (primary / ".config" / "wt.toml").write_text(HOOK_TOML)
+    (primary / "CLAUDE.md").write_text("# proj\n\nLanding mode: solo\n")
+    git(primary, "add", "-A")
+    git(primary, "commit", "-qm", "init")
+    git(primary, "remote", "add", "origin", str(remote))
+    git(primary, "push", "-q", "-u", "origin", "main")
+    wt = root / "wt's tree"
+    git(primary, "worktree", "add", "-q", "-b", HOSTILE_BRANCH, str(wt))
+    commit(wt, "f.md", "f\n", "feat: f")
+    lab = SimpleNamespace(root=root, remote=remote, primary=primary, wt=wt)
+    p = land(lab, merge=FF_MERGE)
+    assert p.returncode == 0, p.stderr
+    assert not (wt / "pwned").exists() and not Path("pwned").exists()
+    remove = next(r for r in verdict(p)["remaining"] if " remove " in r)
+    assert shlex.split(remove) == ["wt", "-C", str(primary), "remove", HOSTILE_BRANCH]
+
+    m = load_module()
+    for stop in (m._classify(subprocess.CompletedProcess([], 1, "pre-merge command failed", ""), wt, "main", False, False),
+                 m._classify(subprocess.CompletedProcess([], 1, "CONFLICT", ""), wt, "main", False, True),
+                 m._classify(subprocess.CompletedProcess([], 1, "needs approval", ""), wt, "main", False, False)):
+        for c in stop.commands:
+            argv = shlex.split(c.split("   #")[0])
+            assert str(wt) in argv, c
+    cmds = m.push_stop_commands(wt, primary, "main")
+    assert shlex.split(cmds[1].split("   #")[0])[:3] == ["git", "-C", str(primary)]
+    assert any(shlex.split(c.split("   #")[0])[:4] == ["wt", "-C", str(primary), "hook"] for c in cmds)
+    held = m.Stop  # the lock message names a quoted file
+    common = Path(git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    with m.Lock(common):
+        with pytest.raises(held) as e:
+            with m.Lock(common):
+                pass
+    assert shlex.split(e.value.commands[0].split("   #")[0])[-1] == str(common / "gstack-land.lock")
 
 
 # --- usage --------------------------------------------------------------------
@@ -385,6 +727,47 @@ def test_red_hook_is_code_6_and_main_does_not_move(lab):
 
 
 @needs_wt
+@pytest.mark.parametrize("how", ["user-config", "project-scoped-user-config", "env"])
+def test_merge_verify_false_cannot_switch_the_gate_off(lab, how):
+    """A1: worktrunk's `merge.verify = false` skips hooks without --no-hooks (measured on
+    0.79.0). The landing forces it back on, so a red hook still stops it."""
+    set_hook(lab, "false")
+    approve(lab)
+    cfg = lab.root / "xdg" / "worktrunk" / "config.toml"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    extra = {}
+    if how == "user-config":
+        cfg.write_text("[merge]\nverify = false\n")
+    elif how == "project-scoped-user-config":
+        e = {"HOME": str(lab.root), "XDG_CONFIG_HOME": str(lab.root / "xdg"), "PATH": os.environ["PATH"]}
+        show = subprocess.run(["wt", "-C", str(lab.wt), "config", "show"], capture_output=True, text=True, env=e).stdout
+        ident = next(l.split("Identifier:", 1)[1].strip() for l in show.splitlines() if "Identifier:" in l)
+        cfg.write_text(f'[projects."{ident}".merge]\nverify = false\n')
+    else:
+        extra = {"WORKTRUNK_MERGE__VERIFY": "false"}
+    e = {"HOME": str(lab.root), "XDG_CONFIG_HOME": str(lab.root / "xdg"), "PATH": os.environ["PATH"], **extra}
+    p = subprocess.run([sys.executable, str(SCRIPT), "--worktree", str(lab.wt), "--ci-wait", "0"],
+                       capture_output=True, text=True, env=e)
+    assert p.returncode == 6, p.stdout + p.stderr
+    assert "feat: x" not in remote_log(lab)
+    assert "feat: x" not in git(lab.primary, "log", "--format=%s", "main")
+
+
+@needs_wt
+def test_main_branch_other_than_wts_default_is_the_merge_target(lab):
+    """A3: --main-branch trunk lands on trunk; wt's own default (main) does not move."""
+    git(lab.primary, "branch", "trunk", "main")
+    git(lab.primary, "push", "-q", "origin", "trunk")
+    approve(lab)
+    before = git(lab.primary, "rev-parse", "main")
+    p = real_land(lab, "--main-branch", "trunk")
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "feat: x" in git(lab.remote, "log", "--format=%s", "trunk")
+    assert git(lab.primary, "rev-parse", "main") == before
+    assert "feat: x" not in remote_log(lab)
+
+
+@needs_wt
 def test_rebase_conflict_is_code_10_with_the_rebase_left_open(lab):
     commit(lab.wt, "shared.md", "feature side\n", "feat: shared")
     commit(lab.primary, "shared.md", "main side\n", "chore: main moves the same line")
@@ -406,6 +789,8 @@ def test_origin_moving_during_the_checks_is_code_7_and_nothing_is_pushed(lab):
     p = real_land(lab)
     assert p.returncode == 7, p.stderr
     assert f"git -C '{lab.primary}' pull --rebase origin main" in p.stderr
+    assert f"wt -C '{lab.primary}' hook pre-merge" in p.stderr, "B2: the gate runs on the rebased result"
+    assert "UNCHECKED" in p.stderr
     assert "feat: x" not in remote_log(lab) and "race" in remote_log(lab)
     assert "feat: x" in git(lab.primary, "log", "--format=%s", "main"), "local main holds the work"
     assert lab.wt.exists(), "worktree and branch stand as the recovery point"

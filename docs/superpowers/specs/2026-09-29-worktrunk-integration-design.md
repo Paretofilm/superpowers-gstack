@@ -53,7 +53,7 @@ commit ved milepæler, `git push -u origin <gren>` som backup. Landing er ett ka
 og kjører `python3 <plugin>/scripts/land-worktree.py --worktree <sti>`. Skriptet er uavhengig av
 arbeidsmappen. Rekkefølge:
 
-1. **Lås** per repo (atomisk `mkdir` i `git rev-parse --git-common-dir`, med pid og gammel-lås-sjekk), frigitt ved avslutning. To samtidige landinger serialiseres i stedet for å tråkke på hverandre (kode 12).
+1. **Lås** per repo (kjernelås, `flock`, på `gstack-land.lock` i `git rev-parse --git-common-dir`; kjernen slipper den når siste holder avslutter, så ingen gammel-lås-sjekk trengs; `wt merge` arver den), frigitt ved avslutning. To samtidige landinger serialiseres i stedet for å tråkke på hverandre (kode 12).
 2. **Modus:** les `Landing mode` fra prosjektets `CLAUDE.md` med det strenge mønsteret. `pr`, manglende eller ugyldig linje → kode 2 (feiler lukket), bruk `/ship`.
 3. **Sperre finnes:** prosjektet må ha minst én `pre-merge`-hook (kode 9) og den må være godkjent (kode 3). Aldri `--yes`.
 4. **`git fetch origin`** (kode 11 hvis den feiler).
@@ -62,9 +62,9 @@ arbeidsmappen. Rekkefølge:
    - **Finn worktreet der `main` står** (`git worktree list --porcelain`). Primærmappen står ofte på en annen gren, så antakelsen «primær = `main`» er ikke tillatt.
    - Er det et slikt worktree: skitne filer der mot filene grenen endrer **og** filene `origin/main` endrer (kode 5, filene nevnes). `wt merge` nekter uansett (verifisert), men skriptet sier det før de to minuttene med tester og før `main` flyttes.
 6. **Oppdater `main`:** står `main` i et worktree, `git -C <det worktreet> merge --ff-only origin/main`. Står den ikke i noe worktree, `git fetch origin main:main` (nekter alt annet enn fast-forward). Feiler det, ligger lokal `main` foran med ikke-pushede commits (kode 4, commitene listes).
-7. **Landing:** `wt -C <sti> merge --no-squash --no-remove`. Hooken kjører, grenen rebaseres, lokal `main` fast-forwardes. Rød hook gir kode 6, rebase-konflikt kode 10. Worktree og gren står.
-8. **Push** (`git push origin main`, uavhengig av hvilket worktree som har `main`): hent på nytt. Har `origin/main` flyttet seg siden steg 4, eller avvises pushen, avslutter skriptet med kode 7. Ingenting repareres. Skriptet skriver tilstanden og kommandoene brukeren kan kjøre.
-9. **Slett fjerngrenen** (`git push origin --delete <gren>`) hvis den ble pushet. Feiler det, er landingen likevel gjennomført (se «Etter vellykket push»).
+7. **Landing:** `wt -C <sti> merge --config-set merge.verify=true --config-set merge.ff=true --config-set merge.rebase=true --no-squash --no-commit --no-remove <main>`. `merge.verify = false` i brukerkonfig eller `WORKTRUNK_MERGE__VERIFY` hopper ellers over hookene uten `--no-hooks` (målt på wt 0.79.0); `--config-set` overstyrer begge. Hooken kjører, grenen rebaseres, lokal `main` fast-forwardes. Rød hook gir kode 6, rebase-konflikt kode 10. Worktree og gren står. Etterpå må lokal `main` være nøyaktig grenens tupp, ellers kode 70 uten push.
+8. **Push** (`git push origin <tupp>:refs/heads/main`, nøyaktig SHA-en som passerte sperren): hent på nytt. Har `origin/main` flyttet seg siden steg 4, avslutter skriptet med kode 7 («ingenting pushet»). Feiler pushen, hentes det på nytt: er `origin/main` tuppen, regnes den som pushet; ellers kode 7 («ikke bekreftet pushet»). Ingenting repareres. Etter `pull --rebase` er kombinasjonen ukontrollert til `wt hook pre-merge` har kjørt grønt på den.
+9. **Slett fjerngrenen** (`git push --force-with-lease=refs/heads/<gren>:<sha> origin --delete refs/heads/<gren>`) bare hvis alt på den er landet (forfar til tuppen, eller patch-likt etter rebase); ellers står den med en advarsel. Feiler det, er landingen likevel gjennomført (se «Etter vellykket push»).
 10. **CI:** finn kjøringen for **den pushede SHA-en** (`gh run list --commit <sha>`, vent opptil 30 sekunder på at den opprettes) og skriv `gh run watch <id> --exit-status`. Skriptet venter aldri på CI. Agenten kjører kommandoen i bakgrunnen, og er kjøringen rød, er neste oppgave å fikse `main`.
 11. **Skriv hva som gjenstår lokalt:** `ExitWorktree` med `keep` hvis økten står i worktreet, deretter `wt -C <primær> remove <gren>`. Skriptet gjør ikke dette selv, fordi et worktree som fjernes under økten etterlater en ugyldig arbeidsmappe.
 
@@ -84,20 +84,20 @@ Ship-worthy endringer går gjennom `/review` og `pitfall-verification` **før** 
 
 | Kode | Situasjon | Tilstand som står |
 |---|---|---|
-| 2 | Modus er `pr`, eller linjen mangler/er ugyldig | Alt urørt. Bruk `/ship`, eller sett linjen. |
-| 3 | Hooks ikke godkjent | Alt urørt. Brukeren kjører `wt config approvals add`. |
+| 2 | Modus er `pr`, eller linjen mangler/er ugyldig, står bare i en kodeblokk, eller både `solo` og `pr` finnes | Alt urørt. Bruk `/ship`, eller sett linjen. |
+| 3 | Hooks ikke godkjent, eller godkjenningsstatus kan ikke leses | Alt urørt. Brukeren ser `.config/wt.toml`-diffen og kjører `wt config approvals add`. |
 | 4 | Lokal `main` foran `origin/main` med ikke-pushede commits | Alt urørt. Commitene listes. |
 | 5 | Skitne filer i primærmappen overlapper | Alt urørt. Filene nevnes. Aldri stash. |
 | 6 | `pre-merge` rød | Worktree og gren står. Fiks og kall skriptet på nytt. |
-| 7 | `origin/main` har flyttet seg, eller push avvist | Lokal `main` har allerede fått commitene. Worktree og gren står. Skriptet skriver kommandoene. |
+| 7 | `origin/main` har flyttet seg, eller push feilet og er ikke bekreftet | Lokal `main` har allerede fått commitene. Worktree og gren står. Skriptet skriver kommandoene, med `wt hook pre-merge` før push. |
 | 8 | `wt` mangler | Alt urørt. Fall tilbake til `git worktree add` og `/superpowers:finishing-a-development-branch`. |
-| 9 | Ingen `pre-merge`-hook i prosjektet | Alt urørt. Agenten foreslår en `.config/wt.toml`. |
+| 9 | Ingen `pre-merge`-hook som kjører en kommando i prosjektet | Alt urørt. Agenten foreslår en `.config/wt.toml`. |
 | 10 | Rebase-konflikt | Rebasen står åpen i worktreet (løs den eller `git rebase --abort`). |
 | 11 | `fetch` feilet | Alt urørt. |
 | 12 | Lås holdt av en annen landing | Alt urørt. Vent eller se hvem som holder den. |
 | 13 | Worktreet som landes har ikke-committet arbeid | Alt urørt. Commit, eller flytt til `wip/<tema>`. |
-| 64 | Ikke et feature-worktree (mangler git, står på `main`, eller ugyldige argumenter) | Alt urørt. |
-| 70 | `wt merge` feilet av en grunn skriptet ikke kjenner igjen | Skriptet skriver de siste linjene av `wt`-utskriften. Ingenting repareres. |
+| 64 | Ikke et feature-worktree (mangler git, står på `main`, ugyldige argumenter, eller ingenting å lande) | Alt urørt. |
+| 70 | `wt merge` feilet av en grunn skriptet ikke kjenner igjen; `main` er ikke nøyaktig den kontrollerte tuppen etter merge; eller landingen ble avbrutt (Ctrl-C, SIGTERM) | Skriptet skriver om `main` flyttet seg, om en rebase står åpen, og de siste linjene av `wt`-utskriften. Ingenting pushes eller repareres. |
 
 ## Verifisert under pitfall-review
 

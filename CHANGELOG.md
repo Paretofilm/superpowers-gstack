@@ -14,6 +14,16 @@
 - **`autoimplement`** no longer refuses `main`: it creates a worktree, moves the session into it, and lands through `land` when the mode is `solo`.
 - `capture-session-tail.sh` and `session-resume.sh` resolve through `git rev-parse --git-common-dir`, so a session that ended inside a worktree is visible from the primary checkout and survives the worktree's removal. `handoff.md` is read from the primary checkout.
 - The session-start menu offers `land` instead of `/ship` in a `solo` repository, and `wt step prune` for spent working folders.
+- `session-resume.sh` falls back to the worktree's own `handoff.md` when the primary checkout has no complete one (`context-handoff` writes the relative path). `capture-session-tail.sh` writes the capture atomically (temp file + rename; last writer still wins).
+- `autoimplement` resolves the plan path relative to the repository before entering the worktree and re-resolves it inside, and refuses up front when the plan commit is not on origin (landing would stop with code 4).
+
+### Security (landing gate)
+- **The gate cannot be switched off by worktrunk config.** `[merge] verify = false` in the user config (also per project) or `WORKTRUNK_MERGE__VERIFY=false` made `wt merge` skip the hooks without `--no-hooks` (measured on wt 0.79.0). `land-worktree.py` now passes `--config-set merge.verify=true` (and pins `merge.ff`/`merge.rebase`), scrubs `WORKTRUNK_MERGE__*`, names `main` as the explicit merge target, and passes `--no-commit` so `wt merge` refuses a tree that became dirty after the precheck.
+- **Exactly the checked commit is pushed.** After `wt merge`, local `main` must equal the branch tip that passed the hooks (else code 70, nothing pushed); the push is `<sha>:refs/heads/main`. A failed push is re-checked against origin: "not confirmed pushed" instead of a categorical "nothing was pushed". The code-7 recovery runs `wt hook pre-merge` on the rebased result before pushing it — until then it is UNCHECKED.
+- A `pre-merge` hook counts only when it runs a command (parsed with `tomllib`: an empty table, an alias or broken TOML is code 9). An unreadable approval state is code 3. A `Landing mode` line inside a code block is ignored, and `solo` plus `pr` is code 2 (the session-start menu likewise treats two values as invalid).
+- The remote feature branch is deleted only when everything on it landed (`--force-with-lease` on the exact sha, full ref name); otherwise it stays with a warning. Nothing to land is code 64.
+- The lock is a kernel lock (`flock`) inherited by `wt merge`: no stale-lock detection, and a merge orphaned by a killed landing keeps it. SIGTERM/Ctrl-C end with a code-70 verdict and a released lock.
+- After a failed `wt merge` the state is measured (did `main` move, is a rebase open) instead of assumed; git never prompts (`GIT_TERMINAL_PROMPT=0`, ssh `BatchMode` unless the user routes ssh); every printed command is shell-quoted; `wt remove` is pointed at the main worktree, not `<git-common-dir>/..`.
 
 ### Verified
 - `wt merge` refuses a dirty `main` worktree when the same file changed (measured); a rejected push after `wt merge` leaves a diverged `main` that `git pull --ff-only` cannot fix (measured) — hence `--no-remove` and no automatic repair.
