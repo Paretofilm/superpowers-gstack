@@ -1,5 +1,18 @@
 # Superpowers + GStack Manual
 
+## superpowers-gstack: forslag til neste prosjektøkt
+
+Ved neste interaktive økt, les [JEV-FORSLAG.md](JEV-FORSLAG.md) og følg
+avklaringsregelen øverst. Ved status `ikke_presentert`: presenter pilot A og spør
+om implementering. Lagre svaret i forslaget og unngå gjentatte spørsmål. Ikke spør
+dobbelt hvis en annen instruksjonsfil allerede har utløst avklaringen.
+Forslaget er ikke godkjent implementeringsarbeid.
+
+API-tilgang: se [API-nøkkel på brukerens Mac](JEV-FORSLAG.md#api-nøkkel-på-brukerens-mac)
+for nøkkelringoppføring, trygg uthenting og verifisert tilgang.
+
+
+
 ## About
 This repo contains the combined workflow manual for using Superpowers and GStack with Claude Code.
 
