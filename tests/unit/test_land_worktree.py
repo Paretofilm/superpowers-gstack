@@ -775,9 +775,52 @@ def test_ff_of_main_never_autostashes(lab):
     git(other, "push", "-q", "origin", "main")
     (lab.primary / "shared.md").write_text("staged, unrelated\n")
     git(lab.primary, "add", "shared.md")
-    land(lab, "--preflight-only")
+    p = land(lab, "--preflight-only")
+    # main really fast-forwarded (else the test is vacuous); feat/x is then behind it: 10
+    assert p.returncode == 10, p.stderr
+    assert git(lab.primary, "rev-parse", "main") == git(other, "rev-parse", "HEAD")
     assert git(lab.primary, "stash", "list") == "", "no stash entry, ever"
     assert "shared.md" in git(lab.primary, "diff", "--cached", "--name-only"), "still staged"
+
+
+def test_unreadable_branch_after_the_merge_is_named_as_such(lab):
+    """Wave 5 minor b: no 'got a new commit (?)' when the branch simply cannot be read."""
+    gone = ('for t; do :; done; git -C "$2" update-ref "refs/heads/$t" HEAD; '
+            'git -C "$2" update-ref -d refs/heads/feat/x; exit 0')
+    p = land(lab, merge=gone)
+    assert p.returncode == 70, p.stderr
+    assert "could not read the branch after the merge" in p.stderr
+    assert "got a new commit" not in p.stderr
+    assert "feat: x" not in remote_log(lab)
+
+
+def solo_repo(root, branch):
+    """A primary on `branch` (no remote, so no origin/HEAD) and a feature worktree."""
+    primary = root / "repo"
+    subprocess.run(["git", "init", "-q", "-b", branch, str(primary)], check=True)
+    for k, v in (("user.email", "t@t.t"), ("user.name", "t")):
+        git(primary, "config", k, v)
+    (primary / ".config").mkdir()
+    (primary / ".config" / "wt.toml").write_text(HOOK_TOML)
+    (primary / "CLAUDE.md").write_text("# proj\n\nLanding mode: solo\n")
+    git(primary, "add", "-A")
+    git(primary, "commit", "-qm", "init")
+    wt = root / "repo.feat"
+    git(primary, "worktree", "add", "-q", "-b", "feat/y", str(wt))
+    commit(wt, "y.md", "y\n", "feat: y")
+    return SimpleNamespace(root=root, primary=primary, wt=wt)
+
+
+@pytest.mark.parametrize("branch,code", [("master", 0), ("main", 0), ("trunk", 64)])
+def test_default_branch_falls_back_to_main_then_master(tmp_path, branch, code):
+    """Codex P2 (wave 5): origin/HEAD → main → master → a usage error naming --main-branch."""
+    r = solo_repo(tmp_path, branch)
+    p = land(r, "--preflight-only")
+    assert p.returncode == code, p.stderr
+    if code == 0:
+        assert verdict(p)["main"] == branch
+    else:
+        assert "--main-branch" in p.stderr
 
 
 def test_interrupt_during_the_push_is_not_called_landed(lab):
@@ -1024,6 +1067,18 @@ def test_a_commit_made_on_the_branch_during_the_gate_is_never_pushed(lab):
     assert sneaked != gated
     assert sneaked[:9] in p.stderr, "the new commit is named"
     assert "sneaked-in-during-the-gate" not in remote_log(lab) and "feat: x" not in remote_log(lab)
+
+
+@needs_wt
+def test_a_hook_that_changes_a_tracked_file_is_not_pushed(lab):
+    """Codex P1 (wave 5): an auto-formatter in the gate tested a tree that differs from
+    the commit — the worktree must be clean after wt merge."""
+    set_hook(lab, "echo formatted >> shared.md")
+    approve(lab)
+    p = real_land(lab)
+    assert p.returncode == 70, p.stdout + p.stderr
+    assert "shared.md" in p.stderr and "diff" in p.stderr
+    assert "feat: x" not in remote_log(lab)
 
 
 @needs_wt

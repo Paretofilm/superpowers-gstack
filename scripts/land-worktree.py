@@ -184,9 +184,15 @@ def primary_worktree(repo) -> Path | None:
     return path
 
 
-def default_branch(repo) -> str:
+def default_branch(repo) -> str | None:
+    """origin/HEAD, else an existing local main, else master (as check-branch-hygiene.sh)."""
     ref = out(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
-    return ref.split("/", 1)[1] if ref and "/" in ref else "main"
+    if ref and "/" in ref:
+        return ref.split("/", 1)[1]
+    for name in ("main", "master"):
+        if git(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{name}").returncode == 0:
+            return name
+    return None
 
 
 def dirty_files(repo) -> set[str]:
@@ -350,6 +356,8 @@ def land(a) -> dict:
     if not common or not branch:
         raise Stop(USAGE, f"{wt} is not a git worktree")
     main = a.main_branch or default_branch(wt)
+    if not main:
+        raise Stop(USAGE, "no origin/HEAD and no local 'main' or 'master' — pass --main-branch NAME")
     if git(wt, "rev-parse", "--verify", "--quiet", f"refs/heads/{main}").returncode != 0:
         raise Stop(USAGE, f"main branch '{main}' does not exist here — pass --main-branch NAME")
     if rebase_open(wt):   # before the branch check: HEAD is detached while a rebase is open
@@ -441,13 +449,28 @@ def _land_locked(a, wt, branch, main, lock_fd) -> dict:
         raise _classify(merge, wt, main, out(wt, "rev-parse", heads) != before, rebase_open(wt))
     branch_now, now = out(wt, "rev-parse", f"refs/heads/{branch}"), out(wt, "rev-parse", heads)
     if branch_now != tip or now != tip:
-        what = (f"'{branch}' got a new commit during the gate ({(branch_now or '?')[:9]}, checked was {tip[:9]})"
+        what = ("could not read the branch after the merge" if not branch_now else
+                f"'{branch}' got a new commit during the gate ({branch_now[:9]}, checked was {tip[:9]})"
                 if branch_now != tip else f"{main} is not the checked tip {tip[:9]}")
         raise Stop(UNKNOWN, f"after wt merge, {what} — nothing was pushed",
                    state=(f"{main} was {before}, is now {now}; '{branch}' was {tip} when the gate started, is now "
                           f"{branch_now}; worktree and branch stand. Only {tip[:9]} passed the checks"),
                    commands=[f"git -C {q(str(wt))} log --oneline {q(f'{tip}..{branch}')} {q(f'{tip}..{main}')}"
                              "   # what was never checked"])
+    # A hook that edits tracked files (a formatter before the tests) checked a tree that
+    # is not the commit about to be pushed. Ignored files are build output; they don't count.
+    st = git(wt, "status", "--porcelain", "--untracked-files=all")
+    if st.returncode or st.stdout.strip():
+        w = q(str(wt))
+        raise Stop(UNKNOWN, "the pre-merge hooks changed files in the worktree — the checked tree is not the "
+                            "commit, so nothing was pushed",
+                   state=(f"files changed by the hooks:\n{st.stdout.rstrip() or st.stderr.strip()}\n"
+                          f"local {main} is now {now} (the commit without those changes) and it is not on origin, "
+                          f"so a plain re-run stops at exit 4; worktree and branch stand"),
+                   commands=[f"git -C {w} diff   # what the hooks changed",
+                             f"git -C {w} status",
+                             "decide consciously: commit the changes on the branch and land that commit, or discard "
+                             "them — and make the hook stop writing (a formatter belongs in pre-commit)"])
 
     warnings, pushed, remaining_extra = [], None, []
     if has_origin:
