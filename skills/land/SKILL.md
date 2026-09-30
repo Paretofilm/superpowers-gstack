@@ -19,14 +19,23 @@ Ship-worthy changes have already been through `/review` and `/superpowers-gstack
 
 Locate the script relative to this skill (it usually runs in the user's project, where `scripts/` does not exist):
 
+The script needs Python 3.11 or newer (`tomllib`, to read the gate). macOS's `/usr/bin/python3` is 3.9, so pick an interpreter first:
+
 ```bash
 LAND="<this skill's base directory>/../../scripts/land-worktree.py"
-python3 "$LAND" --worktree "<the feature worktree, default: the current directory>"
+PY=""
+for p in python3 python3.14 python3.13 python3.12 python3.11 /opt/homebrew/bin/python3; do
+  if command -v "$p" >/dev/null 2>&1 && "$p" -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then PY=$p; break; fi
+done
+[ -n "$PY" ] || echo "no Python 3.11+ found — tell the user; do not run the script with an older one"
+"$PY" "$LAND" --worktree "<the feature worktree, default: the current directory>"
 ```
+
+Run with an older Python anyway, the script stops with code 70 and says "Python >= 3.11 required".
 
 `--preflight-only` runs the preflight checks and updates local `main` (fast-forward from origin), then stops before the merge and push. It is not a dry run: local `main` moves. Use it when the user wants to know whether the landing would go through. The last line of stdout is a JSON verdict; stderr carries the reason and the exact commands to run.
 
-The script forces the hooks on (`--config-set merge.verify=true`), so a worktrunk config with `merge.verify = false` cannot switch the gate off, and it pushes exactly the commit that passed them (`<sha>:refs/heads/main`), never a re-read of `main`.
+The script forces the hooks on (`--config-set merge.verify=true`), and runs `wt` without any `WORKTRUNK_*` environment variable, so neither a worktrunk config with `merge.verify = false` nor `WORKTRUNK_PROJECT_CONFIG_PATH` can switch or swap the gate, and it pushes exactly the commit that passed them (`<sha>:refs/heads/main`), never a re-read of `main`.
 
 ## Exit codes
 
@@ -41,12 +50,12 @@ The script forces the hooks on (`--config-set merge.verify=true`), so a worktrun
 | 7 | `origin/main` moved during the checks, or the push failed and is not confirmed | Local `main` already holds the work and the worktree stands. "Nothing was pushed" is said only when origin moved before the push; a failed push is "not confirmed pushed". Show the user the printed commands and let them choose; do not reset. After `pull --rebase` the combined result is UNCHECKED: run the printed `wt hook pre-merge` in the worktree holding `main`, and push only when it passes. |
 | 8 | `wt` is not installed | Fall back to `git worktree` and `/superpowers:finishing-a-development-branch`. |
 | 9 | No top-level `pre-merge` hook that runs a command in `.config/wt.toml` (an empty table, an alias or unparseable TOML counts as none) | Propose one that runs the same commands as CI. The user approves it. |
-| 10 | Rebase conflict | A rebase is open in the worktree. Resolve it, or `git rebase --abort`, then land again. |
+| 10 | Rebase needed, or a rebase is open | "Rebase needed": the branch does not contain the current `main`; nothing moved. The gate must run on the rebased tree, so the script never rebases inside `wt merge` (`--no-rebase`). Run the printed `wt -C <worktree> step rebase <main>` (or `git rebase <main>`), then land again. "A rebase is open" (usually after that rebase hit a conflict): resolve it and `git rebase --continue`, or `git rebase --abort`, then land again. |
 | 11 | `git fetch` failed | Check the network and the remote, then land again. |
-| 12 | Another landing holds the lock: a kernel lock on `gstack-land.lock` in the git dir, freed when its holder exits (a `wt merge` left running by a killed landing keeps it until it ends) | Wait, or look at who holds it with the printed `lsof` command. Never delete the file to get past it. |
+| 12 | Another landing holds the lock: a kernel lock on `gstack-land.lock` in the git dir, freed only when every process holding it has exited. After a killed landing that includes the orphaned `wt merge` and every background child it started (post-merge and post-start hooks inherit the lock) | Wait, or see who holds it with the printed `lsof <lock file>`. Every PID it lists is a holder. Never delete the file to get past it. |
 | 13 | The worktree has uncommitted work | Commit it, or move it to `wip/<topic>`. |
 | 64 | Not a feature worktree, bad arguments, or nothing to land (no commits beyond `main`) | Run from the feature worktree, or pass `--worktree`. Nothing to land: say so; there is nothing to do. |
-| 70 | Unrecognised `wt merge` failure; `main` after the merge is not exactly the tip that passed the checks (nothing pushed); or the landing was interrupted (Ctrl-C, SIGTERM) | Show the user the printed state and tail: it says whether `main` moved and whether a rebase is open. Do not guess. |
+| 70 | Unrecognised `wt merge` failure; `main` after the merge is not exactly the tip that passed the checks (nothing pushed); an interpreter older than Python 3.11; or the landing was interrupted (Ctrl-C, SIGTERM) and the push is not confirmed | Show the user the printed state. After a `wt merge` failure or an interrupt, the state is measured: whether local `main` moved, whether a rebase is open and, when interrupted after `main` moved, whether origin has it ("not confirmed pushed", plus the exact `push` command that finishes the landing; a plain re-run would stop at 4). An interrupt after a confirmed push is not 70: it exits 0 as landed, with a warning. Do not guess. |
 
 ## Never
 

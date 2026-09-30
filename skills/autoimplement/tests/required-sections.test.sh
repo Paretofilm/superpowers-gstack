@@ -40,6 +40,8 @@ REQUIRED=(
   # commit that is not on origin refuses up front (landing would stop with code 4)
   'plan_rel='
   'git rev-list --count "origin/$git_branch..$git_branch"'
+  # fix wave 3: an unverifiable count refuses instead of reading as 0
+  'cannot verify that the plan commit is pushed'
 )
 
 failed=0

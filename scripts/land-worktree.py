@@ -10,9 +10,10 @@ worktree (the caller leaves it first, then runs `wt remove`). The pre-merge gate
 forced on (`--config-set merge.verify=true`), so no worktrunk config can switch it
 off, and exactly the commit that passed it is pushed.
 
-Usage: land-worktree.py [--worktree PATH] [--main-branch NAME] [--preflight-only]
-                        [--ci-wait SECONDS]
-The last stdout line is a JSON verdict.
+Usage: python3.11+ land-worktree.py [--worktree PATH] [--main-branch NAME] [--preflight-only]
+                                    [--ci-wait SECONDS]
+The last stdout line is a JSON verdict. Requires Python >= 3.11 (tomllib, to read the
+pre-merge gate); an older interpreter stops with code 70 and says so.
 """
 from __future__ import annotations
 
@@ -27,9 +28,13 @@ import signal
 import subprocess
 import sys
 import time
-import tomllib
 import traceback
 from pathlib import Path
+
+try:   # Python >= 3.11. Older (macOS /usr/bin/python3 is 3.9) gets a code-70 verdict, not a traceback
+    import tomllib
+except ModuleNotFoundError:
+    tomllib = None
 
 MODE, UNAPPROVED, MAIN_AHEAD, OVERLAP, HOOK_RED, PUSH, NO_WT, NO_HOOK, REBASE, FETCH, LOCKED, DIRTY = (
     2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
@@ -40,14 +45,17 @@ FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 
 # worktrunk's user config (`[merge] verify = false`, also per project) and the
 # WORKTRUNK_MERGE__* environment skip the hooks without --no-hooks (measured on wt
-# 0.79.0). --config-set outranks both. ff/rebase are pinned so that main ends up
-# exactly at the rebased tip the hooks checked.
+# 0.79.0). --config-set outranks both. ff is pinned so that main ends up exactly at
+# the tip the hooks checked. --no-rebase: wt 0.79.0 reads the hook config BEFORE its
+# own rebase, so a rebase inside the gated step would check one tree with another
+# tree's gate; the branch must already contain main (precheck, code 10).
 WT_MERGE = ("merge", "--config-set", "merge.verify=true", "--config-set", "merge.ff=true",
-            "--config-set", "merge.rebase=true", "--no-squash", "--no-commit", "--no-remove")
+            "--no-squash", "--no-commit", "--no-rebase", "--no-remove")
 
 q = shlex.quote
 GIT_ENV: dict | None = None   # batch_env(): git never prompts
-WT_ENV: dict | None = None    # the user's environment minus WORKTRUNK_MERGE__*
+WT_ENV: dict | None = None    # the user's environment minus every WORKTRUNK_* variable
+PROGRESS: dict = {}           # what the landing has done so far, measured again on interrupt
 
 
 class Stop(Exception):
@@ -59,7 +67,7 @@ class Stop(Exception):
 def batch_env(repo) -> dict:
     """git must fail rather than ask: no terminal prompt, ssh in BatchMode — unless the
     user routes ssh through a command of their own, which ours would take precedence over."""
-    env = scrubbed_env()
+    env = {k: v for k, v in os.environ.items() if not k.startswith("WORKTRUNK_MERGE__")}
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GCM_INTERACTIVE"] = "never"
     if not env.get("GIT_SSH_COMMAND") and not env.get("GIT_SSH"):
@@ -71,7 +79,9 @@ def batch_env(repo) -> dict:
 
 
 def scrubbed_env() -> dict:
-    return {k: v for k, v in os.environ.items() if not k.startswith("WORKTRUNK_MERGE__")}
+    """For wt: no WORKTRUNK_* at all. WORKTRUNK_PROJECT_CONFIG_PATH, for one, points wt at
+    another project config than the .config/wt.toml this script checked."""
+    return {k: v for k, v in os.environ.items() if not k.startswith("WORKTRUNK_")}
 
 
 def sh(*args, cwd=None, env=None, pass_fds=()):
@@ -316,12 +326,23 @@ def _all_landed(wt, remote_sha, tip) -> bool:
         return False
     if git(wt, "merge-base", "--is-ancestor", remote_sha, tip).returncode == 0:
         return True
+    # git cherry skips merge commits, so a merge carrying its own content would read as
+    # landed. Any merge commit not in the tip → not provably landed.
+    merges = git(wt, "rev-list", "--merges", f"{tip}..{remote_sha}")
+    if merges.returncode or merges.stdout.strip():
+        return False
     r = git(wt, "cherry", tip, remote_sha)
     return r.returncode == 0 and all(line.startswith("-") for line in r.stdout.splitlines())
 
 
 def land(a) -> dict:
     global GIT_ENV, WT_ENV
+    PROGRESS.clear()
+    if tomllib is None:
+        v = sys.version_info
+        raise Stop(UNKNOWN, f"Python >= 3.11 required to read the pre-merge gate (this is {v.major}.{v.minor})",
+                   state="nothing was checked or moved",
+                   commands=["run it with python3.11 or newer, e.g. python3.13 or /opt/homebrew/bin/python3"])
     wt = Path(a.worktree).resolve()
     GIT_ENV, WT_ENV = batch_env(wt), scrubbed_env()
     common = out(wt, "rev-parse", "--path-format=absolute", "--git-common-dir")
@@ -331,8 +352,15 @@ def land(a) -> dict:
     main = a.main_branch or default_branch(wt)
     if git(wt, "rev-parse", "--verify", "--quiet", f"refs/heads/{main}").returncode != 0:
         raise Stop(USAGE, f"main branch '{main}' does not exist here — pass --main-branch NAME")
+    if rebase_open(wt):   # before the branch check: HEAD is detached while a rebase is open
+        w = q(str(wt))
+        raise Stop(REBASE, "a rebase is open in the worktree — finish or abort it, then land again",
+                   state="nothing was moved by this landing",
+                   commands=[f"git -C {w} status",
+                             f"git -C {w} rebase --abort   # or resolve, then: git -C {w} rebase --continue"])
     if branch in ("HEAD", main):
         raise Stop(USAGE, f"{wt} is on '{branch}', not a feature branch — land from the feature worktree")
+    PROGRESS.update(wt=wt, branch=branch, main=main)
     with Lock(Path(common)) as lock:
         return _land_locked(a, wt, branch, main, lock.fd)
 
@@ -357,9 +385,11 @@ def _land_locked(a, wt, branch, main, lock_fd) -> dict:
         raise Stop(UNAPPROVED, "the project's hooks are not approved (or their approval state could not be read)",
                    commands=[f"wt -C {q(str(wt))} config approvals list",
                              f"wt -C {q(str(wt))} config approvals add"])
+    w = q(str(wt))
     primary = primary_worktree(wt)
     heads, origin = f"refs/heads/{main}", f"refs/remotes/origin/{main}"
     has_origin = out(wt, "remote", "get-url", "origin") is not None
+    PROGRESS.update(primary=primary, has_origin=has_origin)
     if has_origin and git(wt, "fetch", "origin").returncode != 0:
         raise Stop(FETCH, "git fetch origin failed")
     dirty = git(wt, "status", "--porcelain").stdout.strip()
@@ -388,16 +418,25 @@ def _land_locked(a, wt, branch, main, lock_fd) -> dict:
         raise Stop(UNKNOWN, f"git rev-list {main}..{branch} failed")
     if count == "0":
         raise Stop(USAGE, f"nothing to land: '{branch}' has no commits that are not already on {main}")
+    if git(wt, "merge-base", "--is-ancestor", heads, f"refs/heads/{branch}").returncode != 0:
+        raise Stop(REBASE, f"rebase needed: '{branch}' does not contain the current {main} — the gate must run "
+                           "on the rebased tree, so the rebase happens before the landing",
+                   state="nothing moved",
+                   commands=[f"wt -C {w} step rebase {q(main)}",
+                             f"git -C {w} rebase {q(main)}   # the same without worktrunk",
+                             "then land again"])
     base = out(wt, "rev-parse", origin) if has_origin else None
     if a.preflight_only:
         return {"landed": False, "preflight": "ok", "branch": branch, "main": main,
                 "main_worktree": str(mw["path"]) if mw else None}
 
     before = out(wt, "rev-parse", heads)
+    PROGRESS.update(before=before, base=base)
     merge = wt_cmd(wt, *WT_MERGE, main, pass_fds=(lock_fd,))
     if merge.returncode:
         raise _classify(merge, wt, main, out(wt, "rev-parse", heads) != before, rebase_open(wt))
     tip, now = out(wt, "rev-parse", f"refs/heads/{branch}"), out(wt, "rev-parse", heads)
+    PROGRESS["tip"] = tip
     if not tip or now != tip:
         raise Stop(UNKNOWN, f"after wt merge, local {main} is not exactly the tip of '{branch}' that passed the "
                             "checks — nothing was pushed",
@@ -437,17 +476,65 @@ def _land_locked(a, wt, branch, main, lock_fd) -> dict:
             warnings.append(f"origin/{branch} has commits that are not in {main} — left in place")
             remaining_extra.append(f"git -C {q(str(wt))} log --oneline {q(f'{tip}..{remote_sha}')}"
                                    f"   # what only origin/{branch} has")
+    PROGRESS["pushed"] = pushed
     watch = _ci_watch(wt, main, pushed, a.ci_wait, warnings) if pushed else None
     if not has_origin:
         warnings.append("no origin remote: landed locally, nothing was pushed")
+    return _landed(branch, main, pushed or tip, primary, warnings, remaining_extra, watch)
+
+
+def _landed(branch, main, sha, primary, warnings, remaining_extra=(), watch=None) -> dict:
     remaining = ["if this session stands inside the worktree: ExitWorktree with action keep",
                  (f"wt -C {q(str(primary))} remove {q(branch)}" if primary else
                   f"from the main checkout (git could not name it): wt remove {q(branch)}"),
                  *remaining_extra]
     if watch:
         remaining.append(f"{watch}   # run in the background; a red run means fixing {main} next")
-    return {"landed": True, "branch": branch, "main": main, "sha": pushed or tip,
+    return {"landed": True, "branch": branch, "main": main, "sha": sha,
             "watch": watch, "remaining": remaining, "warnings": warnings}
+
+
+def _after_interrupt():
+    """Measure, don't assume: where did the interrupted landing get? Returns a landed
+    verdict when the push is confirmed on origin, otherwise a Stop describing the state."""
+    p, msg = PROGRESS, "interrupted — check `git status` and rebase state in the worktree"
+    wt, main, branch = p.get("wt"), p.get("main"), p.get("branch")
+    if not wt:
+        return Stop(UNKNOWN, msg, state="interrupted before the worktree was even read: nothing moved")
+    w = q(str(wt))
+    rebase = "a rebase is open in the worktree" if rebase_open(wt) else "no rebase is open"
+    if "before" not in p:
+        return Stop(UNKNOWN, msg, state=(f"interrupted during the preflight checks: nothing was merged or pushed "
+                                         f"(local {main} may have been fast-forwarded to origin); {rebase}"),
+                    commands=[f"git -C {w} status"])
+    before, tip = p["before"], p.get("tip")
+    now = out(wt, "rev-parse", f"refs/heads/{main}")
+    if now == before:
+        return Stop(UNKNOWN, msg, state=f"{main} was not moved; nothing was pushed; {rebase}",
+                    commands=[f"git -C {w} status", "then land again"])
+    landed_sha = tip or now   # wt moves main only after the pre-merge hooks passed
+    if not p.get("has_origin"):
+        if now == landed_sha:
+            return _landed(branch, main, now, p.get("primary"),
+                           ["interrupted after the merge: landed locally (no origin remote); nothing was pushed"])
+    else:
+        git(wt, "fetch", "origin")   # best effort
+        remote = out(wt, "rev-parse", f"refs/remotes/origin/{main}")
+        if remote == landed_sha == now:
+            return _landed(branch, main, now, p.get("primary"),
+                           [f"interrupted after the push: origin/{main} is {now[:9]}, so this landed; "
+                            "the remote-branch cleanup and the CI lookup may not have run"])
+        base = p.get("base") or ""
+        return Stop(UNKNOWN, msg,
+                    state=(f"{main} moved from {before[:9]} to {now[:9]} (wt moves it only after the pre-merge "
+                           f"hooks passed), but it is not confirmed pushed: origin/{main} is "
+                           f"{(remote or 'unknown')[:9]}; {rebase}. A plain re-run stops at exit 4 "
+                           f"(local {main} ahead of origin)"),
+                    commands=[f"git -C {w} log --oneline {q(f'origin/{main}..{main}')}   # what is not on origin",
+                              f"git -C {w} push origin {now}:{q(f'refs/heads/{main}')}"
+                              f"   # finishes the landing if origin/{main} is still {base[:9]}"])
+    return Stop(UNKNOWN, msg, state=f"{main} moved from {before[:9]} to {now[:9]}; {rebase}",
+                commands=[f"git -C {w} log --oneline -3 {q(main)}"])
 
 
 def _interrupted(signum, frame):
@@ -473,14 +560,17 @@ def main(argv=None) -> int:
     ap.error = lambda msg: (print(f"land-worktree: {msg}", file=sys.stderr), sys.exit(USAGE))
     a = ap.parse_args(argv)
     previous = signal.signal(signal.SIGTERM, _interrupted)   # SIGTERM stops like Ctrl-C: verdict, lock released
+    previous_int = signal.getsignal(signal.SIGINT)
     try:
         v = land(a)
     except Stop as s:
         return _stopped(s.code, s.message, s.state, s.commands)
     except KeyboardInterrupt:
-        return _stopped(UNKNOWN, "interrupted — check `git status` and rebase state in the worktree",
-                        state="the running step was stopped; the lock is released",
-                        commands=[f"git -C {q(str(Path(a.worktree).resolve()))} status"])
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)   # one measurement, not interrupted again
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        v = _after_interrupt()
+        if isinstance(v, Stop):
+            return _stopped(v.code, v.message, v.state, v.commands)
     except Exception as e:   # noqa: BLE001 — a verdict must always be printed; the lock is already released
         tb = traceback.format_exc()
         print(f"STOPPED (exit {UNKNOWN}): unexpected error: {e!r}", file=sys.stderr)
@@ -489,6 +579,7 @@ def main(argv=None) -> int:
         return UNKNOWN
     finally:
         signal.signal(signal.SIGTERM, previous)
+        signal.signal(signal.SIGINT, previous_int)
     if v.get("landed"):
         print(f"LANDED {v['branch']} on {v['main']} ({(v['sha'] or '')[:9]})")
         for line in v["remaining"]:

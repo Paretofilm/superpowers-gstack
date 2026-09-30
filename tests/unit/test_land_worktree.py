@@ -247,7 +247,8 @@ def test_primary_on_other_branch_main_updated_without_touching_it(lab):
     git(other, "push", "-q", "origin", "main")
     before = git(lab.primary, "rev-parse", "HEAD")
     p = land(lab, "--preflight-only")
-    assert p.returncode == 0, p.stderr
+    # feat/x is now behind the updated main: the rebase precheck (fix wave 3) stops it
+    assert p.returncode == 10, p.stderr
     assert git(lab.primary, "rev-parse", "HEAD") == before, "the wrong branch must not move"
     assert git(lab.primary, "rev-parse", "main") == git(other, "rev-parse", "HEAD")
 
@@ -385,12 +386,13 @@ def test_second_lock_in_the_same_repo_is_code_12(lab):
 SLOW_MERGE = 'echo "$$" > "$(dirname "$0")/merge-pid"; exec sleep 20'
 
 
-def start_slow_landing(lab):
-    """A landing whose (fake) wt merge sleeps; returns once the merge child is running."""
-    shim = write_shim(lab.root, APPROVED, SLOW_MERGE)
-    pidfile = shim / "merge-pid"
+def start_slow_landing(lab, merge=SLOW_MERGE, pidfile=None, ci_wait="0"):
+    """A landing that blocks in a slow step; returns once that step's process has
+    written its pid to `pidfile` (default: the fake wt merge's)."""
+    shim = write_shim(lab.root, APPROVED, merge)
+    pidfile = pidfile or shim / "merge-pid"
     e = {"HOME": str(lab.root), "PATH": f"{shim}:/usr/bin:/bin"}
-    p = subprocess.Popen([sys.executable, str(SCRIPT), "--worktree", str(lab.wt), "--ci-wait", "0"],
+    p = subprocess.Popen([sys.executable, str(SCRIPT), "--worktree", str(lab.wt), "--ci-wait", ci_wait],
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=e)
     deadline = time.time() + 20
     while not (pidfile.exists() and pidfile.read_text().strip()):
@@ -429,6 +431,7 @@ def test_sigterm_is_a_clean_stop_with_a_verdict_and_a_free_lock(lab):
     assert "git status" in err
     assert lock_is_free(lock_file(lab))
     assert "feat: x" not in remote_log(lab)
+    assert "main was not moved" in err and "no rebase is open" in err, "the state is measured"
 
 
 # --- fix wave 2: the gate, the exact tip, what is printed --------------------
@@ -654,6 +657,144 @@ def test_printed_commands_round_trip_through_a_shell(tmp_path):
     assert shlex.split(e.value.commands[0].split("   #")[0])[-1] == str(common / "gstack-land.lock")
 
 
+# --- fix wave 3 ------------------------------------------------------------------
+
+def test_python_without_tomllib_stops_with_a_json_verdict(lab, monkeypatch, capsys):
+    m = load_module()
+    monkeypatch.setattr(m, "tomllib", None)
+    assert m.main(["--worktree", str(lab.wt), "--preflight-only"]) == 70
+    cap = capsys.readouterr()
+    v = json.loads(cap.out.strip().splitlines()[-1])
+    assert v["code"] == 70 and "Python >= 3.11" in v["message"]
+
+
+OLD_PY = "/usr/bin/python3"
+
+
+@pytest.mark.skipif(not Path(OLD_PY).exists() or subprocess.run(
+    [OLD_PY, "-c", "import sys; sys.exit(sys.version_info >= (3, 11))"]).returncode != 0,
+    reason="no python older than 3.11 at /usr/bin/python3")
+def test_an_old_system_python_gets_a_verdict_not_a_traceback(lab):
+    shim = write_shim(lab.root, APPROVED)
+    p = subprocess.run([OLD_PY, str(SCRIPT), "--worktree", str(lab.wt), "--preflight-only"],
+                       capture_output=True, text=True,
+                       env={"HOME": str(lab.root), "PATH": f"{shim}:/usr/bin:/bin"})
+    assert p.returncode == 70, p.stderr
+    assert "Python >= 3.11" in verdict(p)["message"]
+
+
+def kill_quietly(pid):
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
+def interrupt(p, child):
+    try:
+        p.send_signal(signal.SIGTERM)
+        out, err = p.communicate(timeout=30)
+    finally:
+        kill_quietly(child)
+    return out, err, json.loads(out.strip().splitlines()[-1])
+
+
+def test_interrupt_after_the_merge_moved_main_says_so_and_how_to_finish(lab):
+    moved = ('git -C "$2" update-ref refs/heads/main HEAD; '
+             'echo "$$" > "$(dirname "$0")/merge-pid"; exec sleep 20')
+    tip = git(lab.wt, "rev-parse", "HEAD")
+    p, child = start_slow_landing(lab, merge=moved)
+    out, err, v = interrupt(p, child)
+    assert p.returncode == 70 and v["landed"] is False, err
+    assert "main moved" in err and "not confirmed pushed" in err
+    assert git(lab.remote, "rev-parse", "main") != tip
+    assert "push origin" in err, "the way to finish is printed"
+    assert "exit 4" in err, "and that a plain re-run would stop on the unpushed main"
+
+
+def test_interrupt_during_the_push_is_not_called_landed(lab):
+    pid = lab.root / "push-pid"
+    hook = lab.remote / "hooks" / "pre-receive"
+    hook.write_text(f'#!/bin/sh\necho "$$" > "{pid}"\nexec sleep 20\n')
+    hook.chmod(0o755)
+    p, child = start_slow_landing(lab, merge=FF_MERGE, pidfile=pid)
+    out, err, v = interrupt(p, child)
+    assert p.returncode == 70 and v["landed"] is False, err
+    assert "main moved" in err and "not confirmed pushed" in err
+
+
+def test_interrupt_after_a_confirmed_push_is_a_landing_with_a_warning(lab):
+    pid = lab.root / "gh-pid"
+    (lab.root / "bin").mkdir(exist_ok=True)
+    gh = lab.root / "bin" / "gh"
+    gh.write_text(f'#!/bin/sh\necho "$$" > "{pid}"\nexec sleep 20\n')
+    gh.chmod(0o755)
+    p, child = start_slow_landing(lab, merge=FF_MERGE, pidfile=pid, ci_wait="30")
+    out, err, v = interrupt(p, child)
+    assert p.returncode == 0, err
+    assert v["landed"] is True and v["sha"] == git(lab.wt, "rev-parse", "HEAD")
+    assert any("interrupted" in w for w in v["warnings"])
+    assert git(lab.remote, "rev-parse", "main") == v["sha"]
+
+
+def test_all_worktrunk_env_is_kept_away_from_wt(lab):
+    shim = write_shim(lab.root, APPROVED, 'env > "$(dirname "$0")/merge-env"; exit 99')
+    e = {"HOME": str(lab.root), "PATH": f"{shim}:/usr/bin:/bin",
+         "WORKTRUNK_PROJECT_CONFIG_PATH": str(lab.root / "elsewhere.toml"), "WORKTRUNK_ANYTHING": "x"}
+    subprocess.run([sys.executable, str(SCRIPT), "--worktree", str(lab.wt), "--ci-wait", "0"],
+                   capture_output=True, text=True, env=e)
+    assert "WORKTRUNK_" not in (shim / "merge-env").read_text()
+
+
+def test_wt_merge_never_rebases_inside_the_gated_step(lab):
+    land(lab)
+    argv = merge_argv(lab)
+    assert "--no-rebase" in argv and "merge.rebase=true" not in argv
+
+
+def test_branch_behind_main_is_code_10_before_anything_moves(lab):
+    commit(lab.primary, "later.md", "l\n", "chore: main moves on")
+    git(lab.primary, "push", "-q", "origin", "main")
+    main_before, branch_before = git(lab.primary, "rev-parse", "main"), git(lab.wt, "rev-parse", "HEAD")
+    p = land(lab, merge=FF_MERGE)
+    assert p.returncode == 10, p.stderr
+    assert "rebase needed" in p.stderr
+    assert shlex.split(next(c for c in p.stderr.splitlines() if "step rebase" in c).strip()) == \
+        ["wt", "-C", str(lab.wt), "step", "rebase", "main"]
+    assert not (lab.root / "bin" / "merge-argv").exists(), "wt merge never ran"
+    assert git(lab.primary, "rev-parse", "main") == main_before
+    assert git(lab.wt, "rev-parse", "HEAD") == branch_before
+
+
+def test_open_rebase_in_the_worktree_is_code_10_with_the_state_visible(lab):
+    commit(lab.wt, "shared.md", "feature side\n", "feat: shared")
+    commit(lab.primary, "shared.md", "main side\n", "chore: main moves the same line")
+    git(lab.primary, "push", "-q", "origin", "main")
+    git(lab.wt, "rebase", "main", check=False)                  # conflicts: the rebase stays open
+    p = land(lab, merge=FF_MERGE)
+    assert p.returncode == 10, p.stderr
+    assert "a rebase is open" in p.stderr and "rebase --abort" in p.stderr
+
+
+def test_remote_branch_whose_extra_content_is_only_in_a_merge_commit_is_kept(lab):
+    """git cherry skips merge commits: a merge carrying a unique file must not read as landed."""
+    git(lab.wt, "push", "-q", "-u", "origin", "feat/x")
+    other = lab.root / "other"
+    subprocess.run(["git", "clone", "-q", "-b", "feat/x", str(lab.remote), str(other)], check=True)
+    for k, v in (("user.email", "t@t.t"), ("user.name", "t")):
+        git(other, "config", k, v)
+    (other / "unique.md").write_text("only here\n")
+    git(other, "add", "unique.md")
+    tree = git(other, "write-tree")
+    base = git(other, "rev-parse", "origin/main")
+    evil = git(other, "commit-tree", tree, "-p", "HEAD", "-p", base, "-m", "merge carrying unique.md")
+    git(other, "push", "-q", "origin", f"{evil}:refs/heads/feat/x")
+    p = land(lab, merge=FF_MERGE)
+    assert p.returncode == 0, p.stderr
+    assert git(lab.remote, "rev-parse", "refs/heads/feat/x") == evil, "the merge commit survives"
+    assert any("origin/feat/x" in w for w in verdict(p)["warnings"])
+
+
 # --- usage --------------------------------------------------------------------
 
 def test_landing_from_main_is_code_64(lab):
@@ -774,8 +915,67 @@ def test_rebase_conflict_is_code_10_with_the_rebase_left_open(lab):
     git(lab.primary, "push", "-q", "origin", "main")
     approve(lab)
     p = real_land(lab)
-    assert p.returncode == 10, p.stderr
+    assert p.returncode == 10 and "rebase needed" in p.stderr, p.stderr    # the precheck: nothing moved yet
+    # the printed guidance: wt step rebase — it conflicts and leaves the rebase open
+    e = {"HOME": str(lab.root), "XDG_CONFIG_HOME": str(lab.root / "xdg"), "PATH": os.environ["PATH"]}
+    r = subprocess.run(["wt", "-C", str(lab.wt), "step", "rebase", "main"], capture_output=True, text=True,
+                       env=e, stdin=subprocess.DEVNULL)
+    assert r.returncode != 0
     assert (Path(git(lab.wt, "rev-parse", "--path-format=absolute", "--git-dir")) / "rebase-merge").exists()
+    p = real_land(lab)
+    assert p.returncode == 10 and "a rebase is open" in p.stderr, p.stderr
+    assert "feat: shared" not in remote_log(lab)
+
+
+@needs_wt
+def test_branch_behind_main_lands_after_the_printed_rebase(lab):
+    """P1-b: the gate runs on the rebased tree, so the rebase happens before wt merge."""
+    commit(lab.primary, "later.md", "l\n", "chore: main moves on")
+    git(lab.primary, "push", "-q", "origin", "main")
+    approve(lab)
+    assert real_land(lab).returncode == 10
+    e = {"HOME": str(lab.root), "XDG_CONFIG_HOME": str(lab.root / "xdg"), "PATH": os.environ["PATH"]}
+    r = subprocess.run(["wt", "-C", str(lab.wt), "step", "rebase", "main"], capture_output=True, text=True,
+                       env=e, stdin=subprocess.DEVNULL)
+    assert r.returncode == 0, r.stderr
+    p = real_land(lab)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "feat: x" in remote_log(lab) and "chore: main moves on" in remote_log(lab)
+
+
+@needs_wt
+def test_worktrunk_project_config_path_cannot_swap_the_checked_gate(lab):
+    """P1-a: WORKTRUNK_PROJECT_CONFIG_PATH pointed wt at another file than the one checked."""
+    set_hook(lab, "false")
+    alt = lab.root / "alt.toml"
+    alt.write_text('[pre-merge]\ncheck = "true"\n')
+    e = {"HOME": str(lab.root), "XDG_CONFIG_HOME": str(lab.root / "xdg"), "PATH": os.environ["PATH"]}
+    for extra in ({}, {"WORKTRUNK_PROJECT_CONFIG_PATH": str(alt)}):   # approve both files' commands
+        r = subprocess.run(["wt", "-C", str(lab.wt), "config", "approvals", "add", "--yes"],
+                           capture_output=True, text=True, env={**e, **extra}, stdin=subprocess.DEVNULL)
+        assert r.returncode == 0, r.stderr
+    p = subprocess.run([sys.executable, str(SCRIPT), "--worktree", str(lab.wt), "--ci-wait", "0"],
+                       capture_output=True, text=True, env={**e, "WORKTRUNK_PROJECT_CONFIG_PATH": str(alt)})
+    assert p.returncode == 6, p.stdout + p.stderr
+    assert "feat: x" not in remote_log(lab)
+
+
+@needs_wt
+def test_interrupt_during_a_real_hook_says_main_was_not_moved(lab):
+    pid = lab.root / "hook-pid"
+    set_hook(lab, f'echo $$ > "{pid}"; exec sleep 30')
+    approve(lab)
+    e = {"HOME": str(lab.root), "XDG_CONFIG_HOME": str(lab.root / "xdg"), "PATH": os.environ["PATH"]}
+    p = subprocess.Popen([sys.executable, str(SCRIPT), "--worktree", str(lab.wt), "--ci-wait", "0"],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=e)
+    deadline = time.time() + 30
+    while not (pid.exists() and pid.read_text().strip()):
+        assert time.time() < deadline and p.poll() is None, p.communicate()
+        time.sleep(0.05)
+    out, err, v = interrupt(p, int(pid.read_text()))
+    assert p.returncode == 70 and v["landed"] is False, err
+    assert "main was not moved" in err
+    assert "feat: x" not in git(lab.primary, "log", "--format=%s", "main")
 
 
 @needs_wt
