@@ -297,10 +297,11 @@ def frontmatter(text: str) -> dict | None:
 #
 # Scoped to Superpowers on purpose. gstack ships ~50 skills on a weekly cadence;
 # a checked-in list that large would drift faster than it protects, and its bare
-# `/name` form collides with E9's own-skill matcher. Superpowers is 14 names on a
+# `/name` form collides with E9's own-skill matcher. Superpowers is 15 names on a
 # slow cadence, and the namespaced `superpowers:<name>` form is unambiguous.
 SUPERPOWERS_SKILLS = {
     "brainstorming",
+    "diagnosing-superpowers",
     "dispatching-parallel-agents",
     "executing-plans",
     "finishing-a-development-branch",
