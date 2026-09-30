@@ -221,7 +221,7 @@ def rebase_open(worktree) -> bool:
         p = out(worktree, "rev-parse", "--path-format=absolute", "--git-path", name)
         if p and Path(p).exists():
             return True
-    return git(worktree, "rev-parse", "--verify", "--quiet", "REBASE_HEAD").returncode == 0
+    return False   # a lingering REBASE_HEAD alone is no open rebase (`rebase --abort` would fail on it)
 
 
 class Lock:
@@ -409,7 +409,7 @@ def _land_locked(a, wt, branch, main, lock_fd) -> dict:
         if ahead:
             raise Stop(MAIN_AHEAD, f"local {main} has commits that are not on origin (they would ride along unchecked)",
                        state=ahead)
-        r = (git(mw["path"], "merge", "--ff-only", origin) if mw
+        r = (git(mw["path"], "-c", "merge.autostash=false", "merge", "--ff-only", "--no-autostash", origin) if mw
              else git(wt, "fetch", "origin", f"{heads}:{heads}"))
         if r.returncode:
             raise Stop(MAIN_AHEAD, f"local {main} cannot fast-forward to origin/{main}", state=r.stderr.strip())
@@ -430,18 +430,24 @@ def _land_locked(a, wt, branch, main, lock_fd) -> dict:
         return {"landed": False, "preflight": "ok", "branch": branch, "main": main,
                 "main_worktree": str(mw["path"]) if mw else None}
 
-    before = out(wt, "rev-parse", heads)
-    PROGRESS.update(before=before, base=base)
+    # The tip is captured BEFORE the gate: a commit that appears on the branch while the
+    # hooks run was never checked, and wt would fast-forward main to it.
+    before, tip = out(wt, "rev-parse", heads), out(wt, "rev-parse", f"refs/heads/{branch}")
+    if not before or not tip:
+        raise Stop(UNKNOWN, f"could not read {main} or '{branch}' before the merge")
+    PROGRESS.update(before=before, base=base, tip=tip)
     merge = wt_cmd(wt, *WT_MERGE, main, pass_fds=(lock_fd,))
     if merge.returncode:
         raise _classify(merge, wt, main, out(wt, "rev-parse", heads) != before, rebase_open(wt))
-    tip, now = out(wt, "rev-parse", f"refs/heads/{branch}"), out(wt, "rev-parse", heads)
-    PROGRESS["tip"] = tip
-    if not tip or now != tip:
-        raise Stop(UNKNOWN, f"after wt merge, local {main} is not exactly the tip of '{branch}' that passed the "
-                            "checks — nothing was pushed",
-                   state=f"{main} was {before}, is now {now}; {branch} is {tip}; worktree and branch stand",
-                   commands=[f"git -C {q(str(wt))} log --oneline {q(f'{branch}..{main}')}   # what else is on {main}"])
+    branch_now, now = out(wt, "rev-parse", f"refs/heads/{branch}"), out(wt, "rev-parse", heads)
+    if branch_now != tip or now != tip:
+        what = (f"'{branch}' got a new commit during the gate ({(branch_now or '?')[:9]}, checked was {tip[:9]})"
+                if branch_now != tip else f"{main} is not the checked tip {tip[:9]}")
+        raise Stop(UNKNOWN, f"after wt merge, {what} — nothing was pushed",
+                   state=(f"{main} was {before}, is now {now}; '{branch}' was {tip} when the gate started, is now "
+                          f"{branch_now}; worktree and branch stand. Only {tip[:9]} passed the checks"),
+                   commands=[f"git -C {q(str(wt))} log --oneline {q(f'{tip}..{branch}')} {q(f'{tip}..{main}')}"
+                             "   # what was never checked"])
 
     warnings, pushed, remaining_extra = [], None, []
     if has_origin:
@@ -507,34 +513,38 @@ def _after_interrupt():
         return Stop(UNKNOWN, msg, state=(f"interrupted during the preflight checks: nothing was merged or pushed "
                                          f"(local {main} may have been fast-forwarded to origin); {rebase}"),
                     commands=[f"git -C {w} status"])
-    before, tip = p["before"], p.get("tip")
+    before, tip = p["before"], p.get("tip")   # tip: the sha the gate checked, captured before wt merge
     now = out(wt, "rev-parse", f"refs/heads/{main}")
+    if not now:
+        return Stop(UNKNOWN, msg, state=f"could not read {main} after the interrupt; {rebase}",
+                    commands=[f"git -C {w} status", f"git -C {w} log --oneline -3 {q(main)}"])
     if now == before:
         return Stop(UNKNOWN, msg, state=f"{main} was not moved; nothing was pushed; {rebase}",
                     commands=[f"git -C {w} status", "then land again"])
-    landed_sha = tip or now   # wt moves main only after the pre-merge hooks passed
+    gated = bool(tip) and now == tip   # main is exactly what passed the gate
     if not p.get("has_origin"):
-        if now == landed_sha:
+        if gated:
             return _landed(branch, main, now, p.get("primary"),
                            ["interrupted after the merge: landed locally (no origin remote); nothing was pushed"])
-    else:
-        git(wt, "fetch", "origin")   # best effort
-        remote = out(wt, "rev-parse", f"refs/remotes/origin/{main}")
-        if remote == landed_sha == now:
-            return _landed(branch, main, now, p.get("primary"),
-                           [f"interrupted after the push: origin/{main} is {now[:9]}, so this landed; "
-                            "the remote-branch cleanup and the CI lookup may not have run"])
-        base = p.get("base") or ""
-        return Stop(UNKNOWN, msg,
-                    state=(f"{main} moved from {before[:9]} to {now[:9]} (wt moves it only after the pre-merge "
-                           f"hooks passed), but it is not confirmed pushed: origin/{main} is "
-                           f"{(remote or 'unknown')[:9]}; {rebase}. A plain re-run stops at exit 4 "
-                           f"(local {main} ahead of origin)"),
-                    commands=[f"git -C {w} log --oneline {q(f'origin/{main}..{main}')}   # what is not on origin",
-                              f"git -C {w} push origin {now}:{q(f'refs/heads/{main}')}"
-                              f"   # finishes the landing if origin/{main} is still {base[:9]}"])
-    return Stop(UNKNOWN, msg, state=f"{main} moved from {before[:9]} to {now[:9]}; {rebase}",
-                commands=[f"git -C {w} log --oneline -3 {q(main)}"])
+        return Stop(UNKNOWN, msg, state=f"{main} moved from {before[:9]} to {now[:9]}, which is not the checked "
+                                        f"tip; {rebase}", commands=[f"git -C {w} log --oneline -3 {q(main)}"])
+    git(wt, "fetch", "origin")   # best effort
+    remote = out(wt, "rev-parse", f"refs/remotes/origin/{main}")
+    if gated and remote == tip:
+        return _landed(branch, main, now, p.get("primary"),
+                       [f"interrupted after the push: origin/{main} is {now[:9]}, so this landed; "
+                        "the remote-branch cleanup and the CI lookup may not have run"])
+    base = p.get("base") or ""
+    cmds = [f"git -C {w} log --oneline {q(f'origin/{main}..{main}')}   # what is not on origin"]
+    if gated:   # only ever the sha that passed the gate
+        cmds.append(f"git -C {w} push origin {tip}:{q(f'refs/heads/{main}')}"
+                    f"   # finishes the landing if origin/{main} is still {base[:9]}")
+    return Stop(UNKNOWN, msg,
+                state=(f"{main} moved from {before[:9]} to {now[:9]}"
+                       + (" (the checked tip)" if gated else f", which is NOT the checked tip {(tip or '?')[:9]}")
+                       + f", and it is not confirmed pushed: origin/{main} is {(remote or 'unknown')[:9]}; "
+                       f"{rebase}. A plain re-run stops at exit 4 (local {main} ahead of origin)"),
+                commands=cmds)
 
 
 def _interrupted(signum, frame):
@@ -568,7 +578,11 @@ def main(argv=None) -> int:
     except KeyboardInterrupt:
         signal.signal(signal.SIGTERM, signal.SIG_IGN)   # one measurement, not interrupted again
         signal.signal(signal.SIGINT, signal.SIG_IGN)
-        v = _after_interrupt()
+        try:
+            v = _after_interrupt()
+        except Exception as e:   # noqa: BLE001 — the verdict guarantee covers the measurement too
+            v = Stop(UNKNOWN, "interrupted — and the state could not be measured; check `git status`, "
+                              "`git log` of main and the rebase state in the worktree", state=repr(e))
         if isinstance(v, Stop):
             return _stopped(v.code, v.message, v.state, v.commands)
     except Exception as e:   # noqa: BLE001 — a verdict must always be printed; the lock is already released

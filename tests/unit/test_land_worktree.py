@@ -709,7 +709,75 @@ def test_interrupt_after_the_merge_moved_main_says_so_and_how_to_finish(lab):
     assert "main moved" in err and "not confirmed pushed" in err
     assert git(lab.remote, "rev-parse", "main") != tip
     assert "push origin" in err, "the way to finish is printed"
+    assert f"push origin {tip}:" in err, "and it pushes the gated sha, nothing else"
     assert "exit 4" in err, "and that a plain re-run would stop on the unpushed main"
+
+
+def test_interrupt_with_main_not_at_the_gated_sha_prints_no_push(lab):
+    """Wave 4 minor 1: a push is offered only for the sha that passed the gate."""
+    odd = ('git -C "$2" update-ref refs/heads/main '
+           '"$(git -C "$2" commit-tree -p HEAD -m odd "HEAD^{tree}")"; '
+           'echo "$$" > "$(dirname "$0")/merge-pid"; exec sleep 20')
+    p, child = start_slow_landing(lab, merge=odd)
+    out, err, v = interrupt(p, child)
+    assert p.returncode == 70 and v["landed"] is False, err
+    assert "main moved" in err
+    assert "push origin" not in err
+
+
+def test_an_error_while_measuring_an_interrupt_still_gives_a_verdict(lab, monkeypatch, capsys):
+    """Wave 4 minor 2: the measurement itself must not escape the verdict guarantee."""
+    m = load_module()
+
+    def interrupted(a):
+        m.PROGRESS.update(wt=lab.wt, branch="feat/x", main="main", before="0" * 40)
+        raise KeyboardInterrupt
+    monkeypatch.setattr(m, "land", interrupted)
+    monkeypatch.setattr(m, "out", lambda *a, **k: None)          # every git read fails
+    assert m.main(["--worktree", str(lab.wt)]) == 70
+    v = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert v["code"] == 70 and v["landed"] is False and "interrupted" in v["message"]
+
+
+def test_an_exception_while_measuring_an_interrupt_still_gives_a_verdict(lab, monkeypatch, capsys):
+    m = load_module()
+
+    def interrupted(a):
+        m.PROGRESS.update(wt=lab.wt, branch="feat/x", main="main")
+        raise KeyboardInterrupt
+
+    def boom(*a):
+        raise RuntimeError("measurement broke")
+    monkeypatch.setattr(m, "land", interrupted)
+    monkeypatch.setattr(m, "rebase_open", boom)
+    assert m.main(["--worktree", str(lab.wt)]) == 70
+    cap = capsys.readouterr()
+    v = json.loads(cap.out.strip().splitlines()[-1])
+    assert v["code"] == 70 and "interrupted" in v["message"] and "measurement broke" in cap.err
+
+
+def test_a_leftover_rebase_head_is_not_an_open_rebase(lab):
+    """Wave 4 minor 5: only rebase-merge/rebase-apply mean a rebase is open."""
+    f = Path(git(lab.wt, "rev-parse", "--path-format=absolute", "--git-path", "REBASE_HEAD"))
+    f.write_text(git(lab.wt, "rev-parse", "HEAD") + "\n")
+    p = land(lab, "--preflight-only")
+    assert p.returncode == 0, p.stderr
+
+
+def test_ff_of_main_never_autostashes(lab):
+    """Codex P2: merge.autostash=true would stash (and unstage) the main worktree's work."""
+    git(lab.primary, "config", "merge.autostash", "true")
+    other = lab.root / "other"
+    subprocess.run(["git", "clone", "-q", str(lab.remote), str(other)], check=True)
+    for k, v in (("user.email", "t@t.t"), ("user.name", "t")):
+        git(other, "config", k, v)
+    commit(other, "z.md", "z\n", "chore: someone else pushed")
+    git(other, "push", "-q", "origin", "main")
+    (lab.primary / "shared.md").write_text("staged, unrelated\n")
+    git(lab.primary, "add", "shared.md")
+    land(lab, "--preflight-only")
+    assert git(lab.primary, "stash", "list") == "", "no stash entry, ever"
+    assert "shared.md" in git(lab.primary, "diff", "--cached", "--name-only"), "still staged"
 
 
 def test_interrupt_during_the_push_is_not_called_landed(lab):
@@ -941,6 +1009,21 @@ def test_branch_behind_main_lands_after_the_printed_rebase(lab):
     p = real_land(lab)
     assert p.returncode == 0, p.stdout + p.stderr
     assert "feat: x" in remote_log(lab) and "chore: main moves on" in remote_log(lab)
+
+
+@needs_wt
+def test_a_commit_made_on_the_branch_during_the_gate_is_never_pushed(lab):
+    """Codex P1 (wave 4): the tip is captured before wt merge; a commit that appears on
+    the branch while the hooks run was never checked."""
+    set_hook(lab, 'git commit --allow-empty -qm sneaked-in-during-the-gate')
+    approve(lab)
+    gated = git(lab.wt, "rev-parse", "HEAD")
+    p = real_land(lab)
+    assert p.returncode == 70, p.stdout + p.stderr
+    sneaked = git(lab.wt, "rev-parse", "refs/heads/feat/x")
+    assert sneaked != gated
+    assert sneaked[:9] in p.stderr, "the new commit is named"
+    assert "sneaked-in-during-the-gate" not in remote_log(lab) and "feat: x" not in remote_log(lab)
 
 
 @needs_wt

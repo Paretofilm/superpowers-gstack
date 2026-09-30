@@ -405,7 +405,7 @@ Move to the next phase. **No `AskUserQuestion` between phases — that's the fri
 
 ### F. When the last phase is done
 
-If the project's `CLAUDE.md` carries the exact line `Landing mode: solo`, invoke `/superpowers-gstack:land` for the worktree; it runs the project's pre-merge checks and pushes, and stops with a named exit code if anything is wrong (see that skill for the codes). If the line is `pr` or missing, do not land: name `/ship` in the summary. Then emit a single completion summary (see § Final summary). After a non-zero landing exit, do not fix and re-land within this run: report the exit code in the summary and stop (a failing pre-merge check, exit 6, would otherwise loop). `progress.md` gets the commit SHAs **as they are on `main` after landing**, because a rebase can rewrite the phase commits.
+If the project's `CLAUDE.md` carries the exact line `Landing mode: solo`, invoke `/superpowers-gstack:land` for the worktree; it runs the project's pre-merge checks and pushes, and stops with a named exit code if anything is wrong (see that skill for the codes). If the line is `pr` or missing, do not land: name `/ship` in the summary. Then emit a single completion summary (see § Final summary). After a non-zero landing exit, do not fix and re-land within this run: report the exit code in the summary and stop (a failing pre-merge check, exit 6, would otherwise loop). `progress.md` gets the commit SHAs **as they are on `main` after landing**. Landing itself never rewrites commits (no squash, no rebase), so these are normally the phase SHAs unchanged. They differ only when the user rebased the branch after a code-10 stop ("rebase needed"), and then the `main` SHAs are the true ones.
 
 ## When STOPping
 
