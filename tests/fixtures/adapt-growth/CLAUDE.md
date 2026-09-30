@@ -201,6 +201,30 @@ the same test process, because of an internal write-coalescing delay that
 step after every save-then-assert test, rather than trusting the save call
 itself, and it turned every one of those tests deterministic on the first try.
 
+### Swift Package resolution and the shared package cache
+
+Package resolution stalls on a clean checkout more often than it fails, which
+makes it easy to misdiagnose as a network problem. The two causes we have
+actually hit are a stale `Package.resolved` that pins a revision the upstream
+maintainer has since force-pushed away, and a corrupted entry in the shared
+package cache under `~/Library/Caches/org.swift.swiftpm`. In the first case
+the resolver reports a missing revision; in the second it hangs with no output
+at all. For the stale pin, update only the one dependency rather than
+re-resolving everything, so unrelated packages keep the versions we tested.
+For the cache, remove just the entry for the offending repository — clearing
+the whole cache forces every package on the machine to be cloned again.
+
+### Signing team drift between the app and its extensions
+
+The app, the widget extension and the share extension each carry their own
+signing settings, and Xcode's "Automatically manage signing" only changes the
+target that is currently selected. After the team was switched once, the
+extensions kept the old team and the build failed with an embedded-binary
+error that names neither target. When a build complains that an extension's
+team differs from the app's, compare `DEVELOPMENT_TEAM` across all three
+targets in the build settings before touching provisioning profiles, since
+regenerating profiles never fixes a team mismatch and only hides it for a day.
+
 ## Git hygiene & commit cadence <!-- gstack-git-hygiene-v8 --><!-- emitted=101 -->
 
 This section captures how *this* team actually works with git day to day — it grew
