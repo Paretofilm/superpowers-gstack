@@ -278,7 +278,10 @@ that one with `./`, or classify it UNVERIFIABLE.
 4. "Gate Logic": do not use AskUserQuestion and do not wait for anyone.
    Classify every item, print the Output Format block, then one line
    `Ignored under Step 8's rules: N items` (deferred, out-of-scope and
-   review-report text), and stop. The gate's decisions are made by the caller
+   review-report text), and stop. The `Ignored` count does not include
+   execution-only checks; override 9 lists those separately. "And stop" means
+   stop after printing everything above the JSON, the execution-only list included.
+   The gate's decisions are made by the caller
    from your JSON. Skip "Include in PR body" and "Parent processing".
 5. Report only. Do not commit, push, edit the plan, or edit any file.
 6. Your LAST line is the JSON object Step 8 specifies, but with exactly these

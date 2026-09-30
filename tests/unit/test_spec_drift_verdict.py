@@ -59,6 +59,14 @@ def test_mapping(line, code, label):
     assert f"SPEC-DRIFT: {label} (exit {code})" in out
 
 
+def test_zero_items_names_both_reasons_a_plan_has_nothing_to_score():
+    """Since gstack 1.91 a plan whose remaining steps are all run-and-expect
+    checks also comes back with total_items 0 (override 9) — the reason must
+    say so, not only blame a design doc."""
+    rc, out = verdict(step8(0, 0))
+    assert rc == 2 and "a design doc" in out and "run-and-expect checks" in out
+
+
 def test_partial_is_reported_in_the_breakdown():
     rc, out = verdict(step8(5, 2, changed=1, deferred=1))
     assert rc == 1 and "partial=1" in out and "not_done=1" in out

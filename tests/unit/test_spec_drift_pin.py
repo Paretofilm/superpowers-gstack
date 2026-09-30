@@ -837,6 +837,18 @@ def test_the_label_must_open_the_paragraph_that_touches_the_fence(rig):
         assert "ANCHORS MISSING" in p.stderr and "### Plan File Discovery" in p.stderr
 
 
+def test_a_heading_between_label_and_fence_ends_the_labelled_paragraph(rig):
+    """In Markdown a heading starts a new block: a label followed by a `### X`
+    line (no blank line) and then the ````text fence does not label the fence."""
+    upstream, pin_dir = rig
+    upstream.write_text(SECTION_PROMPT_FENCED.replace(
+        "**Subagent prompt:** Pass these instructions to the subagent:\n\n",
+        "**Subagent prompt:** Pass these instructions to the subagent:\n### X\n\n", 1))
+    p = run("repin", *common(upstream, pin_dir), expect=2)
+    assert "ANCHORS MISSING" in p.stderr and "### Plan File Discovery" in p.stderr
+    assert module().prompt_fence_count(upstream.read_text()) == 0
+
+
 def test_a_paragraph_walk_does_not_cross_into_a_fence_above(rig):
     """A fence closer directly above the label paragraph (no blank line) is not
     part of the paragraph: a label inside that fence stays an example."""

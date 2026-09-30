@@ -128,6 +128,11 @@ _FENCE = re.compile(r"^ {0,3}(?P<f>(?P<c>[`~])(?P=c){2,})(?P<info>[^\n]*)\n(?P<b
 # bash blocks) stay masked. An UNCLOSED prompt fence is not transparent, and two
 # labelled fences make neither transparent: the anchors go missing — fail-closed.
 PROMPT_LABEL = "**Subagent prompt:**"
+# The label rule is a TRUST decision made on upstream's layout, not a structural
+# proof: it says which fence the wrapper chooses to read as the prompt. What makes
+# that choice safe is the whole-file sha256 pin and the human reading the repin
+# diff — this rule only has to fail closed when the layout stops looking familiar.
+_ATX_HEADING = re.compile(r" {0,3}#{1,6}(?:[ \t]|\r?$)", re.M)
 
 EXIT_OK, EXIT_DRIFT, EXIT_CANNOT, EXIT_CONFIRM = 0, 1, 2, 3
 COUNT_KEYS = ("total_items", "done", "changed", "deferred", "unverifiable")
@@ -239,9 +244,11 @@ def _paragraph_start(masked: str, end: int) -> int:
     up line by line until a line that is blank IN `masked` — a real blank line,
     or a line of some other fence, which the mask turned to spaces. So the walk
     never enters a fence above, and a label that sits inside one is never found.
-    Each walk covers only prose between two fences: linear over the file."""
+    Each walk covers only prose between two fences: linear over the file. An ATX
+    heading also ends the walk — in Markdown it starts a block of its own, so a
+    label above it does not belong to the paragraph that touches the fence."""
     start = masked.rfind("\n", 0, end) + 1
-    while start > 0:
+    while start > 0 and not _ATX_HEADING.match(masked, start):
         prev = masked.rfind("\n", 0, start - 1) + 1
         if not masked[prev:start - 1].strip():
             break
@@ -725,8 +732,10 @@ def cmd_verdict(a) -> int:
     total, done, changed, deferred, unver = (counts[k] for k in COUNT_KEYS)
     if total <= 0:
         return _verdict("COULD-NOT-RUN", EXIT_CANNOT,
-                        "plan has no actionable checklist items (a design doc? verdict "
-                        "scores checklist items only; prose claims are out of its scope)")
+                        "plan has no actionable checklist items (a design doc, or a plan "
+                        "whose remaining steps are all run-and-expect checks that standalone "
+                        "mode lists but never runs? verdict scores checklist items only; "
+                        "prose claims are out of its scope)")
     if min(done, changed, deferred, unver) < 0:
         # A negative count can make done + changed == total look CLEAN.
         return _verdict("COULD-NOT-RUN", EXIT_CANNOT, "negative count in the JSON")
