@@ -180,6 +180,8 @@ def test_denylist_catches_a_hardcoded_simulator_model():
     ("## Multi-lens review <!-- gstack-multi-lens-review-v6 -->", True, "v6 multi-lens"),
     ("## Session Continuity <!-- gstack-session-continuity-v3 -->", True, "v3 session-continuity"),
     ("## Code reuse <!-- gstack-code-reuse-v2 -->", True, "v2 code-reuse"),
+    ("## Code reuse <!-- gstack-code-reuse-v3 -->", True,
+     "v3 is stale since 3.5.0 — it did not scope a dispatched subagent's test runs"),
     ("## Track routing <!-- gstack-routing-v2 -->", True, "v2 routing"),
     ("## Companion skills <!-- gstack-companion-skills-v2 -->", True, "v2 companion-skills"),
     ("## Git hygiene <!-- gstack-git-hygiene-v9 -->", True, "v9 git-hygiene"),
@@ -199,7 +201,7 @@ def test_denylist_catches_a_hardcoded_simulator_model():
     # what a 3.x generator actually writes must stay clean
     ("## Multi-lens review <!-- gstack-multi-lens-review-v7 -->", False, "current multi-lens"),
     ("## Session Continuity <!-- gstack-session-continuity-v4 -->", False, "current session-continuity"),
-    ("## Code reuse <!-- gstack-code-reuse-v3 -->", False, "current code-reuse"),
+    ("## Code reuse <!-- gstack-code-reuse-v4 -->", False, "current code-reuse"),
     ("## Track routing <!-- gstack-routing-v3 -->", False, "current routing"),
     ("## Companion skills <!-- gstack-companion-skills-v3 -->", False, "current companion-skills"),
     ("## Git hygiene <!-- gstack-git-hygiene-v11 --><!-- emitted=101 -->", True,

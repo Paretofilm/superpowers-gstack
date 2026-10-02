@@ -84,7 +84,7 @@ DENYLIST = [
     (re.compile(r"--role\s+sensitive|--sensitive\b"), "third-lens --sensitive flag was removed in 2.18.0"),
     (re.compile(r"gstack-multi-lens-review-v[0-6]\b"), "stale multi-lens marker (current: v7+, 3.0.0)"),
     (re.compile(r"gstack-session-continuity-v[1-3]\b"), "stale session-continuity marker (current: v4+, 3.0.0)"),
-    (re.compile(r"gstack-code-reuse-v[12]\b"), "stale code-reuse marker (current: v3+, 3.0.0)"),
+    (re.compile(r"gstack-code-reuse-v[123]\b"), "stale code-reuse marker (current: v4+, 3.5.0 — v3 let a dispatched subagent run the whole suite or an end-to-end rig per task)"),
     (re.compile(r"gstack-autonomy-v\d"), "the autonomy block was retired in 3.0.0 — the Claude Code harness carries the same instruction; /adapt removes the old section"),
     (re.compile(r"gstack-plan-fidelity-v[12]\b"), "stale plan-fidelity marker (current: v3+, 2.52.0)"),
     (re.compile(r"repin\s+--yes\s+--sha\b|--yes\s+--sha\b"),

@@ -1,4 +1,4 @@
-## Code reuse discipline (before writing) <!-- gstack-code-reuse-v3 -->
+## Code reuse discipline (before writing) <!-- gstack-code-reuse-v4 -->
 
 Before introducing a new reusable concept — a component, helper, model, type-alias, view-modifier, extension, hook, utility — search the codebase for an existing implementation first. This catches context-bounded duplication: a subagent writing a new `EntityCard` when one exists one directory over. It is NOT a DRY-purity rule — three similar lines are fine and premature abstraction is a real cost; the rule fires only when introducing something that could plausibly already exist.
 
@@ -27,6 +27,8 @@ Include in the dispatch prompt:
 > Before introducing new reusable concepts (components, helpers, models, extensions), search the codebase via Grep/Glob for existing implementations. If you find one, **use it or extend it** and continue with your delegated task — report what you reused. If not, scaffold new and report what you searched for. Escalate to the orchestrator ONLY if the reuse decision is genuinely ambiguous (extending would change semantics for existing callers).
 
 The subagent must NOT stop with a recommendation after finding existing code — it completes its delegated task using the found implementation.
+
+Also tell it to run only the tests that cover what it changed (the affected target or a `--filter`), never the whole suite or an end-to-end rig per task; the full suite runs once at the phase boundary and once before landing.
 
 ### Guardrails
 
