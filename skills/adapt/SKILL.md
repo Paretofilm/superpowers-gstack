@@ -86,8 +86,10 @@ concisely, what matters for the transition.
 ### Step 3: Evaluate skills and model routing
 
 Read `roster.md` (sibling of this file) and pick, for this project, the relevant
-Superpowers skills and the relevant GStack skills per phase. Read `model-routing.md`
-(sibling) for the per-skill base tiers, and infer the project's **domain sensitivity**:
+Superpowers skills and the relevant GStack skills per phase. Leave out rows marked
+`User-started only`: they stay the user's to invoke and stay out of the routing draft.
+Read `model-routing.md` (sibling) for the per-skill base tiers, and infer the
+project's **domain sensitivity**:
 
 - real-time audio / DSP / signal processing, or any lock-free concurrency → **very high**
   (a plain SwiftUI CRUD app with none of these is **medium**)
@@ -159,8 +161,8 @@ then the base tiers for the selected skills and the inferred sensitivity, and as
    - [selected skills]
 
    ### Routing Logic
-   [project-specific decision tree, e.g. New feature idea → /office-hours;
-   Ready to build → /superpowers:brainstorming; Bug during coding →
+   [project-specific decision tree, e.g. Ready to build →
+   /superpowers:brainstorming; Bug during coding →
    /superpowers:systematic-debugging; Bug found in QA → /investigate; Code complete →
    /review [→ /qa <url>]; Security-sensitive → /cso before /review; Ready to ship →
    /ship; Trivial change → just do it]
@@ -264,7 +266,7 @@ you find and re-verify.
 > **Next steps:**
 > - Working on a new feature? → `/superpowers:brainstorming`
 > - Have code ready for review? → `/review`
-> - Starting fresh? → `/office-hours`
+> - Want a product-framing session first? → type `/office-hours` yourself; it is never routed automatically
 >
 > **Tip:** Run `/superpowers-gstack:adapt` again after major project changes (new deploy target, added test framework) and after every plugin upgrade — the session-start hook nudges when the CLAUDE.md version marker lags.
 

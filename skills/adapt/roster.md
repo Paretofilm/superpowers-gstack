@@ -2,7 +2,9 @@
 
 Read by `/superpowers-gstack:adapt` Step 3. One table set, used for every project;
 the weekly update workflow edits this file when upstream adds, removes or renames
-a skill. Rows are `| skill | consider relevant when... |`.
+a skill. Rows are `| skill | consider relevant when... |`. A row that starts
+`User-started only` is the user's to invoke: never put it in a project's default routing
+unless the user asks for it.
 
 **Superpowers skills:**
 
@@ -26,15 +28,13 @@ a skill. Rows are `| skill | consider relevant when... |`.
 
 | Skill | Consider relevant when... |
 |---|---|
-| `/office-hours` | New product ideas, features with unclear scope |
+| `/office-hours` | User-started only — a product-framing session the user begins by typing it (new product ideas, unclear scope); never default routing. `/superpowers-gstack:office-hours-track-aware` still intercepts it |
 | `/plan-ceo-review` | Projects with strategic decisions or significant scope |
-| `/plan-eng-review` | Projects needing architecture decisions |
-| `/plan-design-review` | Projects with UI/UX components |
 | `/design-consultation` | New projects defining a design system from scratch (creates DESIGN.md in open format compatible with impeccable and Google Stitch) |
 | `/design-shotgun` | When you want multiple design variants to compare before committing |
 | `/plan-devex-review` | Projects with developer-facing surfaces (APIs, CLIs, SDKs, libraries) |
 | `/plan-tune` | Tune plan-skill question preferences (one-time, per-project) |
-| `/autoplan` | When all three plan reviews are relevant — chains them automatically |
+| `/autoplan` | User-started only — chains the CEO, eng and design plan reviews in one pass |
 
 **GStack skills — Phase 3 (Review & QA):**
 
@@ -88,7 +88,7 @@ a skill. Rows are `| skill | consider relevant when... |`.
 | `/benchmark-models` | Projects comparing AI model performance |
 | `/codex` | Projects needing second opinions or adversarial code review; defaults to GPT-6 Astra (override with `GSTACK_CODEX_MODEL`) |
 | `/superpowers-gstack:autoimplement` | Multi-phase plans — one subagent per phase, `/review` + `/pitfall-verification` chained at every phase boundary (`/review` owns the Codex pass; pitfall adds domain inference and the third lens per tier). Active pre-flight reviews the plan body before Phase 1 unless the latest plan commit matches `^(chore\|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]\|$)`. Refuses on <2 phases, missing per-phase commit steps, dirty tree, main/master branch, or plans touching migrations/secrets/credentials/.env/.ssh. |
-| `/superpowers-gstack:office-hours-track-aware` | All new-project brainstorming — wraps `/office-hours` with track inference (web vs native), inline platform question, design-doc relocation, and an Artifact preview before the approval gate. **Intercepts `/office-hours`** — see routing-intercept rules below. |
+| `/superpowers-gstack:office-hours-track-aware` | Whenever the user starts a product-framing session — wraps `/office-hours` with track inference (web vs native), inline platform question, design-doc relocation, and an Artifact preview before the approval gate. **Intercepts `/office-hours`** — see routing-intercept rules below. |
 | `/superpowers-gstack:swiftui-design-consultation` | Native SwiftUI projects — produces DESIGN.md + Swift Package starter; equivalent to /design-consultation for web. Inlines the platform question (iOS/macOS/both) on first run if `.gstack/track` is missing. |
 | `/superpowers-gstack:apple-native-review` | iOS / iPadOS / macOS apps — pre-implementation HIG-citation-grounded review; platform from `.gstack/track` or the artifact; every finding cites a HIG page fetched this run (apple-docs MCP for API reference). Run on PRDs/specs/plans before implementation. |
 | `/superpowers-gstack:quality-review` | After any PRD/spec/plan, before implementation — hunts perceived-quality pitfalls (silent failures, loading/empty states, error recovery, state drift). Complementary to pitfall-verification ("will it work?" vs "will it feel good?"). |

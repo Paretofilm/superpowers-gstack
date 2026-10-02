@@ -242,3 +242,34 @@ def test_every_block_file_ends_with_a_newline():
     be one line short of its own length forever."""
     for f in sorted(BLOCKS.glob("*.md")):
         assert f.read_bytes().endswith(b"\n"), f.name
+
+
+# --- 3.5.0 lite profile: the roster no longer routes to interactive planning ---------
+
+ROSTER = (REPO / "skills" / "adapt" / "roster.md").read_text()
+
+
+def _row(skill):
+    rows = [ln for ln in ROSTER.splitlines() if ln.startswith(f"| `{skill}` |")]
+    assert len(rows) <= 1, f"{skill} has {len(rows)} roster rows"
+    return rows[0] if rows else None
+
+
+def test_roster_has_no_default_row_for_the_interactive_plan_reviews():
+    """Measured over 17 days: /plan-eng-review and /plan-design-review never paid for
+    their questions, yet /adapt routed every project to them. They stay installable
+    gstack skills; they just do not get a roster row (and so no default routing)."""
+    assert _row("/plan-eng-review") is None
+    assert _row("/plan-design-review") is None
+
+
+def test_office_hours_is_user_started_only_and_its_intercept_survives():
+    """The row says the user starts it; the wrapper skill and the intercept block stay,
+    because a user who types /office-hours must still get the track-aware flow."""
+    assert _row("/office-hours").startswith("| `/office-hours` | User-started only")
+    assert _row("/autoplan").startswith("| `/autoplan` | User-started only")
+    assert "User-started only" in ADAPT_SKILL, "adapt must tell the model to skip those rows"
+    assert (REPO / "skills" / "office-hours-track-aware" / "SKILL.md").is_file()
+    intercept = (BLOCKS / "track-routing.md").read_text()
+    assert "### When user invokes /office-hours (no namespace)" in intercept
+    assert "office-hours-track-aware" in intercept
