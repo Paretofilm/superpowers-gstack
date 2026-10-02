@@ -300,7 +300,9 @@ adds no question of its own when the project has already decided how it lands.
    `land` does: the exact line `Landing mode: solo` or `Landing mode: pr` in the
    `CLAUDE.md` at the root of this worktree (`git rev-parse --show-toplevel`), a real line
    outside fenced code blocks. Compare it with the same line on the default branch
-   (`git show "$DEFAULT_REF":CLAUDE.md`, the ref from Phase 1).
+   (`git show "$DEFAULT_REF":CLAUDE.md`, the ref from Phase 1). When `CLAUDE.md` is a
+   symlink, that prints only the link's target path: read the target the same way
+   (`git show "$DEFAULT_REF":AGENTS.md` for a link to `AGENTS.md`), as `land` does.
    - **The branch changes the landing mode** (the two differ) → land nothing
      automatically: a branch must not set the policy it is landed under. Ask once with
      `AskUserQuestion` which mode holds, naming both values, and end your message at it.

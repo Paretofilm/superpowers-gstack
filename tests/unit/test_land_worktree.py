@@ -769,6 +769,33 @@ def test_rejected_push_is_code_7_not_confirmed(lab):
     assert "UNCHECKED" in p.stderr and "hook pre-merge" in p.stderr
 
 
+def test_code_7_recovery_rechecks_claude_md_before_the_manual_push(lab):
+    """3.5.1 (Codex): the recovery is pull --rebase, gate, push — by hand, so check_policy
+    never runs on it. If origin switched to `pr` while the checks ran, the printed diff of
+    CLAUDE.md between the checked tip and the rebased main is not empty, and comes before the push."""
+    m = load_module()
+    tip = git(lab.wt, "rev-parse", "HEAD")
+    cmds = m.push_stop_commands(lab.wt, lab.primary, "main", tip)
+    check = next(c for c in cmds if "CLAUDE.md" in c)
+    assert cmds.index(check) < next(i for i, c in enumerate(cmds) if " push origin " in c)
+    argv = shlex.split(check.split("   #")[0])
+    assert argv == ["git", "-C", str(lab.primary), "diff", tip, "main", "--", "CLAUDE.md"]
+    # the scenario it guards: origin moved to pr during the gate; the recovery rebases onto it
+    git(lab.primary, "update-ref", "refs/heads/main", tip)                 # local main = the checked tip
+    other = lab.root / "other"
+    subprocess.run(["git", "clone", "-q", str(lab.remote), str(other)], check=True)
+    for k, v in (("user.email", "t@t.t"), ("user.name", "t")):
+        git(other, "config", k, v)
+    commit(other, "CLAUDE.md", PR, "chore: the project moves to pull requests")
+    git(other, "push", "-q", "origin", "main")
+    git(lab.primary, "reset", "-q", "--hard", "main")
+    git(lab.primary, "pull", "-q", "--rebase", "origin", "main")
+    r = subprocess.run(argv, capture_output=True, text=True)
+    assert "+Landing mode: pr" in r.stdout, "not empty: the user sees the new mode before any push"
+    no_mw = " ".join(m.push_stop_commands(lab.wt, None, "main", tip))
+    assert f"git diff {tip} main -- CLAUDE.md" in no_mw
+
+
 def test_failed_git_diff_is_unknown_not_no_overlap(lab):
     m = load_module()
     with pytest.raises(m.Stop) as e:

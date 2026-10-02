@@ -347,17 +347,24 @@ def pull_hint(mw, main) -> str:
             f"(e.g. git worktree add <path> {q(main)}), then pull --rebase origin {q(main)} there")
 
 
-def push_stop_commands(wt, mw, main) -> list[str]:
+def push_stop_commands(wt, mw, main, tip=None) -> list[str]:
     """Recovery for code 7. After pull --rebase the combination is new and UNCHECKED:
-    the gate runs on it before anything is pushed."""
+    the gate runs on it before anything is pushed, and origin may have changed the
+    landing mode meanwhile, so CLAUDE.md must still read as the checked tip did."""
     cmds = [f"git -C {q(str(wt))} log --oneline {q(f'origin/{main}..{main}')}   # your commits, not on origin",
             pull_hint(mw, main)]
+    policy = (f"git -C {q(str(mw or wt))} diff {q(tip)} {q(main)} -- CLAUDE.md   # REQUIRED: empty, else origin "
+              "changed CLAUDE.md while the checks ran (perhaps the landing mode): push nothing, show the user"
+              if tip else None)
     if mw:
         cmds += [f"wt -C {q(str(mw))} hook pre-merge   # REQUIRED: the rebased result is UNCHECKED until this passes",
+                 *([policy] if policy else []),
                  f"git -C {q(str(mw))} push origin {q(main)}   # only after the gate passed"]
     else:
         cmds += [f"then, in that checkout: wt hook pre-merge (the rebased result is UNCHECKED until it passes), "
-                 f"and only then: git push origin {q(main)}"]
+                 + (f"check that `git diff {tip} {main} -- CLAUDE.md` is empty (else push nothing and show the "
+                    "user: origin changed CLAUDE.md, perhaps the landing mode), " if tip else "")
+                 + f"and only then: git push origin {q(main)}"]
     return cmds
 
 
@@ -569,7 +576,7 @@ def _land_locked(a, wt, branch, main, lock_fd) -> dict:
     warnings, pushed, remaining_extra = [], None, []
     if has_origin:
         git(wt, "fetch", "origin")
-        stop_cmds = push_stop_commands(wt, mw["path"] if mw else None, main)
+        stop_cmds = push_stop_commands(wt, mw["path"] if mw else None, main, tip)
         if out(wt, "rev-parse", origin) != base:
             raise Stop(PUSH, f"origin/{main} moved while the checks ran — nothing was pushed",
                        state=(f"local {main} already contains your commits; worktree and branch stand. "
