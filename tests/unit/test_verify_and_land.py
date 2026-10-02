@@ -138,8 +138,34 @@ def test_phase6_yes_names_the_landing_it_triggers():
     t = SKILL.read_text()
     gate = " ".join(t[t.index("## Phase 6"):t.index("### Phase 6b")].split())
     assert "lands without asking again" in gate
-    assert "VERIFIED_HEAD=$(git rev-parse HEAD)" in gate
+    assert "recorded in Phase 4" in gate, "the yes is about the built commit, not HEAD at question time"
     assert re.search(r"`solo` —[^;]*?/superpowers-gstack:land", gate)
     assert re.search(r"`pr` —[^;]*?/ship", gate)
     assert "no valid line" in gate
     assert "a yes lands nothing" in gate and "detached HEAD" in gate
+
+
+def test_verified_head_is_recorded_before_the_build_and_the_dev_server():
+    """Third-lens finding: HEAD read at question time would cover a commit made after
+    the build. Record it before building (Phase 4) and before starting a dev server (6b)."""
+    t = SKILL.read_text()
+    p4 = t[t.index("## Phase 4"):t.index("## Phase 5")]
+    assert p4.index("VERIFIED_HEAD=$(git rev-parse HEAD)") < p4.index("xcodebuild")
+    p6b = t[t.index("### Phase 6b"):t.index("## Phase 7")]
+    assert p6b.index("VERIFIED_HEAD=$(git rev-parse HEAD)") < p6b.index("dev script")
+
+
+def test_a_failed_push_lands_nothing():
+    """Codex review: with automatic landing, a failed backup push must stop Phase 7
+    before land runs; the Phase 6 option promised push first."""
+    p7 = " ".join(_phase7().split())
+    assert "If the push fails, land nothing" in p7
+    assert p7.index("If the push fails, land nothing") < p7.index("Then land it by the project's landing mode")
+
+
+def test_phase6_yes_says_when_the_branch_is_unreviewed():
+    """Codex review: land assumes /review has run. A yes that lands unreviewed code
+    must say so, so the one human review is an informed one."""
+    t = SKILL.read_text()
+    gate = " ".join(t[t.index("## Phase 6"):t.index("### Phase 6b")].split())
+    assert "a yes lands code no review has seen" in gate

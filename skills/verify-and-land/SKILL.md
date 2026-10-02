@@ -147,6 +147,9 @@ no other copy exists, say nothing; do not narrate an ambiguity that is absent.
 
 ## Phase 4 — build the branch that is checked out
 
+Record the commit you are about to build: `VERIFIED_HEAD=$(git rev-parse HEAD)`. Phase 5
+names it as the commit on screen, and a yes in Phase 6 is about this commit only.
+
 ```bash
 xcodebuild "${XC[@]}" -scheme "$SCHEME" -configuration Debug -destination "$DEST" build
 ```
@@ -239,11 +242,15 @@ The user is the instrument; a person looking is the entire point. Ask with
 - **Yes, it works** — asked per observable change when there are several; only when
   all of them hold → Phase 7. Phase 7 then lands without asking again, so settle now
   what a yes does, and say it in this option:
-  - Record `VERIFIED_HEAD=$(git rev-parse HEAD)`: the commit the user is looking at.
+  - Name `VERIFIED_HEAD`, recorded in Phase 4 before the build: the commit the user is
+    looking at. Do not re-read `HEAD` here; a commit made since the build is not on screen.
   - Read the landing mode (the rule in Phase 7, step 2) and name what follows: `solo` —
     push, then land on the default branch through `/superpowers-gstack:land`; `pr` —
     push, then open a pull request through `/ship`; no valid line — push, then `land`
-    asks once how this project lands.
+    asks once how this project lands. With no remote configured, say that nothing is
+    pushed and the landing stays on this machine. If `/review` has not run on this
+    branch in this session, say that a yes lands code no review has seen (`land`
+    assumes one has).
   - When Phase 0 skipped or blocked Phase 7 (the default branch, a detached HEAD, or
     uncommitted changes the user declined to commit), say instead that a yes lands
     nothing.
@@ -256,7 +263,8 @@ describe them as though they had happened.
 
 ### Phase 6b — the web track, briefly
 
-Start the project's dev script **and keep its PID**. A ready port does not prove the
+Record `VERIFIED_HEAD=$(git rev-parse HEAD)` first, as Phase 4 does. Then start the
+project's dev script **and keep its PID**. A ready port does not prove the
 server is yours: an older one from another branch or worktree may already own it, in
 which case the new process exits and the readiness probe succeeds against stale code
 — the same bug as the stale bundle, wearing a different hat. Check that the process
@@ -273,7 +281,9 @@ adds no question of its own when the project has already decided how it lands.
 0. **Check that the yes still applies.** A yes covers the build the user saw and the
    landing they were told about, nothing else. If `git rev-parse HEAD` is no longer
    `VERIFIED_HEAD`, or the landing mode now reads differently from what the Phase 6
-   option said, land nothing: say what changed and go back to Phase 4.
+   option said, land nothing and say what changed. A new commit means a new build: go
+   back to Phase 4. A changed mode only invalidates the announcement: go back to Phase 6
+   and ask again with the mode as it now reads.
 1. **Push first**, so the verified work exists in more than one place whatever is
    decided next. Pass the branch as a quoted argument — refs may legally contain
    `$( )`, `;` and `&`:
@@ -283,7 +293,9 @@ adds no question of its own when the project has already decided how it lands.
      && git push \
      || git push -u origin -- "$branch"
    ```
-   With no remote configured, say plainly that the work is still only on this machine.
+   If the push fails, land nothing: report the error and stop, so landing never runs
+   without the backup the Phase 6 option promised. With no remote configured there is
+   nothing to push: say plainly that the work stays on this machine, then go on.
 2. **Then land it by the project's landing mode.** Read the `Landing mode:` line the way
    `land` does: the exact line `Landing mode: solo` or `Landing mode: pr` in the
    `CLAUDE.md` at the root of this worktree (`git rev-parse --show-toplevel`), a real line
@@ -294,10 +306,13 @@ adds no question of its own when the project has already decided how it lands.
      `AskUserQuestion` which mode holds, naming both values, and end your message at it.
    - **`solo`** → invoke `/superpowers-gstack:land` for this worktree, from its root, with
      no further question.
-   - **`pr`** → invoke `/ship` inside this worktree, with no further question.
+   - **`pr`** → invoke `/ship` inside this worktree, with no further question from this
+     skill. `/ship` may ask its own questions about the pull request; those are not a
+     second ask of the landing.
    - **No valid line** (missing, only inside a code block, or both values) → invoke
      `/superpowers-gstack:land` anyway. Its exit-2 row owns this question: it asks the
-     user once (solo or pull request?) and records the answer. Do not ask it here as well.
+     user once (solo or pull request? or, with both values, which one holds) and records
+     the answer. Do not ask it here as well.
 
    When `land` stops with an exit code, follow `land`'s own exit-code table: it is the
    authority on the next step, including its exit-8 fallback when `wt` is not installed.
