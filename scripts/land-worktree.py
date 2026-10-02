@@ -351,24 +351,29 @@ def pull_hint(mw, main) -> str:
             f"(e.g. git worktree add <path> {q(main)}), then pull --rebase origin {q(main)} there")
 
 
-def push_stop_commands(wt, mw, main, tip=None) -> list[str]:
+def push_stop_commands(wt, mw, main, base=None) -> list[str]:
     """Recovery for code 7. After pull --rebase the combination is new and UNCHECKED:
-    the gate runs on it before anything is pushed, and origin may have changed the
-    landing mode meanwhile, so CLAUDE.md must still read as the checked tip did."""
+    the gate runs on it before anything is pushed. The push is by hand, so the landing-mode
+    check never sees it: origin must still contain the base the checks started from (no
+    rollback) and must not have changed CLAUDE.md since (perhaps the landing mode)."""
     cmds = [f"git -C {q(str(wt))} log --oneline {q(f'origin/{main}..{main}')}   # your commits, not on origin",
             pull_hint(mw, main)]
-    files = " ".join(map(q, policy_files(wt, tip, f"refs/remotes/origin/{main}"))) if tip else ""
-    policy = (f"git -C {q(str(mw or wt))} diff {q(tip)} {q(main)} -- {files}   # REQUIRED: empty, else origin "
-              "changed CLAUDE.md while the checks ran (perhaps the landing mode): push nothing, show the user"
-              if tip else None)
+    ref = f"origin/{main}"
+    files = " ".join(map(q, policy_files(wt, base, f"refs/remotes/{ref}"))) if base else ""
+    checks = ([f"git -C {q(str(mw or wt))} merge-base --is-ancestor {q(base)} {q(ref)}   # REQUIRED: exit 0, "
+               f"else {ref} was rolled back while the checks ran: push nothing, show the user",
+               f"git -C {q(str(mw or wt))} diff {q(base)} {q(ref)} -- {files}   # REQUIRED: empty, else origin "
+               "changed CLAUDE.md while the checks ran (perhaps the landing mode): push nothing, show the user"]
+              if base else [])
     if mw:
         cmds += [f"wt -C {q(str(mw))} hook pre-merge   # REQUIRED: the rebased result is UNCHECKED until this passes",
-                 *([policy] if policy else []),
-                 f"git -C {q(str(mw))} push origin {q(main)}   # only after the gate passed"]
+                 *checks,
+                 f"git -C {q(str(mw))} push origin {q(main)}   # only after the gate passed and the checks held"]
     else:
         cmds += [f"then, in that checkout: wt hook pre-merge (the rebased result is UNCHECKED until it passes), "
-                 + (f"check that `git diff {tip} {main} -- {files}` is empty (else push nothing and show the "
-                    "user: origin changed CLAUDE.md, perhaps the landing mode), " if tip else "")
+                 + (f"check that `git merge-base --is-ancestor {base} {ref}` exits 0 and `git diff {base} {ref} "
+                    f"-- {files}` is empty (else push nothing and show the user: origin was rolled back or changed "
+                    "CLAUDE.md, perhaps the landing mode), " if base else "")
                  + f"and only then: git push origin {q(main)}"]
     return cmds
 
@@ -585,7 +590,7 @@ def _land_locked(a, wt, branch, main, lock_fd) -> dict:
     warnings, pushed, remaining_extra = [], None, []
     if has_origin:
         git(wt, "fetch", "origin")
-        stop_cmds = push_stop_commands(wt, mw["path"] if mw else None, main, tip)
+        stop_cmds = push_stop_commands(wt, mw["path"] if mw else None, main, base)
         if out(wt, "rev-parse", origin) != base:
             raise Stop(PUSH, f"origin/{main} moved while the checks ran — nothing was pushed",
                        state=(f"local {main} already contains your commits; worktree and branch stand. "
@@ -679,8 +684,9 @@ def _after_interrupt():
     base = p.get("base") or ""
     cmds = [f"git -C {w} log --oneline {q(f'origin/{main}..{main}')}   # what is not on origin"]
     if gated:   # only ever the sha that passed the gate
-        cmds.append(f"git -C {w} push origin {tip}:{q(f'refs/heads/{main}')}"
-                    f"   # finishes the landing if origin/{main} is still {base[:9]}")
+        lease = f" --force-with-lease={q(f'refs/heads/{main}:{base}')}" if base else ""
+        cmds.append(f"git -C {w} push origin {tip}:{q(f'refs/heads/{main}')}{lease}"
+                    f"   # finishes the landing only while origin/{main} is still {base[:9]} (the lease refuses otherwise)")
     return Stop(UNKNOWN, msg,
                 state=(f"{main} moved from {before[:9]} to {now[:9]}"
                        + (" (the checked tip)" if gated else f", which is NOT the checked tip {(tip or '?')[:9]}")

@@ -812,31 +812,40 @@ def test_a_rollback_of_origin_main_after_the_last_fetch_is_never_pushed_over(lab
     assert git(lab.remote, "rev-parse", "main") == rolled_back, "the rollback stands"
 
 
-def test_code_7_recovery_rechecks_claude_md_before_the_manual_push(lab):
-    """3.5.1 (Codex): the recovery is pull --rebase, gate, push — by hand, so check_policy
-    never runs on it. If origin switched to `pr` while the checks ran, the printed diff of
-    CLAUDE.md between the checked tip and the rebased main is not empty, and comes before the push."""
+def test_code_7_recovery_rechecks_origin_before_the_manual_push(lab):
+    """3.5.1 (Codex, two rounds): the recovery is pull --rebase, gate, push — by hand, so
+    check_policy never runs on it. Two printed checks come before the push: origin/main
+    still contains the base the checks started from (no rollback), and origin did not change
+    CLAUDE.md since (perhaps the landing mode). Both are run here against the cases they guard."""
     m = load_module()
-    tip = git(lab.wt, "rev-parse", "HEAD")
-    cmds = m.push_stop_commands(lab.wt, lab.primary, "main", tip)
-    check = next(c for c in cmds if "CLAUDE.md" in c)
-    assert cmds.index(check) < next(i for i, c in enumerate(cmds) if " push origin " in c)
-    argv = shlex.split(check.split("   #")[0])
-    assert argv == ["git", "-C", str(lab.primary), "diff", tip, "main", "--", "CLAUDE.md"]
-    # the scenario it guards: origin moved to pr during the gate; the recovery rebases onto it
-    git(lab.primary, "update-ref", "refs/heads/main", tip)                 # local main = the checked tip
+    base = git(lab.remote, "rev-parse", "main")
+    cmds = m.push_stop_commands(lab.wt, lab.primary, "main", base)
+    push = next(i for i, c in enumerate(cmds) if " push origin " in c)
+    ancestor = next(c for c in cmds if "merge-base --is-ancestor" in c)
+    diff = next(c for c in cmds if " diff " in c)
+    assert cmds.index(ancestor) < push and cmds.index(diff) < push
+    ancestor_argv, diff_argv = (shlex.split(c.split("   #")[0]) for c in (ancestor, diff))
+    assert ancestor_argv == ["git", "-C", str(lab.primary), "merge-base", "--is-ancestor", base, "origin/main"]
+    assert diff_argv == ["git", "-C", str(lab.primary), "diff", base, "origin/main", "--", "CLAUDE.md"]
+    # origin moves to pr while the checks run; the recovery pulls it in
     other = lab.root / "other"
     subprocess.run(["git", "clone", "-q", str(lab.remote), str(other)], check=True)
     for k, v in (("user.email", "t@t.t"), ("user.name", "t")):
         git(other, "config", k, v)
     commit(other, "CLAUDE.md", PR, "chore: the project moves to pull requests")
     git(other, "push", "-q", "origin", "main")
-    git(lab.primary, "reset", "-q", "--hard", "main")
     git(lab.primary, "pull", "-q", "--rebase", "origin", "main")
-    r = subprocess.run(argv, capture_output=True, text=True)
+    assert subprocess.run(ancestor_argv).returncode == 0, "no rollback here"
+    r = subprocess.run(diff_argv, capture_output=True, text=True)
     assert "+Landing mode: pr" in r.stdout, "not empty: the user sees the new mode before any push"
-    no_mw = " ".join(m.push_stop_commands(lab.wt, None, "main", tip))
-    assert f"git diff {tip} main -- CLAUDE.md" in no_mw
+    # a base that origin/main no longer contains (what a rollback leaves): the check fails
+    git(other, "push", "-q", "--force", "origin", "HEAD~1:refs/heads/main")
+    git(lab.primary, "fetch", "-q", "origin")
+    cmds = m.push_stop_commands(lab.wt, lab.primary, "main", git(other, "rev-parse", "HEAD"))
+    ancestor_argv = shlex.split(next(c for c in cmds if "merge-base --is-ancestor" in c).split("   #")[0])
+    assert subprocess.run(ancestor_argv).returncode != 0, "origin/main does not contain the base: rolled back"
+    no_mw = " ".join(m.push_stop_commands(lab.wt, None, "main", base))
+    assert f"git merge-base --is-ancestor {base} origin/main" in no_mw and f"git diff {base} origin/main" in no_mw
 
 
 def test_failed_git_diff_is_unknown_not_no_overlap(lab):
@@ -984,6 +993,10 @@ def test_interrupt_after_the_merge_moved_main_says_so_and_how_to_finish(lab):
     assert "push origin" in err, "the way to finish is printed"
     assert f"push origin {tip}:" in err, "and it pushes the gated sha, nothing else"
     assert "exit 4" in err, "and that a plain re-run would stop on the unpushed main"
+    # 3.5.1 (Codex round 2): "if origin/main is still <base>" is enforced, not only said
+    base = git(lab.remote, "rev-parse", "main")
+    finish = next(c for c in err.splitlines() if f"push origin {tip}:" in c).split("   #")[0]
+    assert f"--force-with-lease=refs/heads/main:{base}" in shlex.split(finish)
 
 
 def test_interrupt_with_main_not_at_the_gated_sha_prints_no_push(lab):
