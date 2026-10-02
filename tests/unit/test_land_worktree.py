@@ -301,6 +301,27 @@ def test_a_symlinked_claude_md_is_read_through_the_link_on_main_too(lab):
     assert p.returncode == 14
     diff = next(c for c in p.stderr.splitlines() if " diff " in c)
     assert "AGENTS.md" in diff, "the printed diff shows the file that actually changed"
+    # the exit-7 recovery check reads through the link the same way (countersynthesis pass)
+    recovery = load_module().push_stop_commands(lab.wt, lab.primary, "main", git(lab.wt, "rev-parse", "HEAD"))
+    assert any("CLAUDE.md" in c and "AGENTS.md" in c for c in recovery)
+
+
+def test_a_claude_md_linked_out_of_the_repository_fails_closed_and_says_why(lab):
+    """Third lens (DeepSeek): the disk read follows any link, the committed read only
+    links inside the repository. A policy git cannot read on main never counts as main's
+    (fail closed), and the stop names the cause instead of a puzzling 'no line'."""
+    outside = lab.root / "shared-claude.md"
+    outside.write_text(SOLO)
+    (lab.primary / "CLAUDE.md").unlink()
+    (lab.primary / "CLAUDE.md").symlink_to(outside)
+    git(lab.primary, "add", "-A")
+    git(lab.primary, "commit", "-qm", "chore: CLAUDE.md lives outside the repo")
+    git(lab.primary, "push", "-q", "origin", "main")
+    git(lab.wt, "rebase", "-q", "main")
+    p = land(lab, merge=FF_MERGE)
+    assert p.returncode == 14, p.stdout + p.stderr
+    assert "link out of the repository" in p.stderr and "only a committed line counts" in p.stderr
+    assert not (lab.root / "bin" / "merge-argv").exists(), "wt merge never ran"
 
 
 def test_code_14_prints_a_diff_that_survives_a_shell_with_a_hostile_branch_name(lab):
@@ -767,6 +788,28 @@ def test_rejected_push_is_code_7_not_confirmed(lab):
     assert "not confirmed pushed" in p.stderr
     assert "nothing was pushed" not in p.stderr
     assert "UNCHECKED" in p.stderr and "hook pre-merge" in p.stderr
+
+
+def test_a_rollback_of_origin_main_after_the_last_fetch_is_never_pushed_over(lab, monkeypatch):
+    """3.5.1 (Codex + countersynthesis): origin/main is rolled back to an ancestor of the
+    checked tip between the post-gate fetch and the push. A plain push fast-forwards over
+    the rollback; the compare-and-swap push refuses it, and nothing lands."""
+    commit(lab.primary, "second.md", "2\n", "chore: second")
+    git(lab.primary, "push", "-q", "origin", "main")
+    git(lab.wt, "rebase", "-q", "main")
+    rolled_back = git(lab.remote, "rev-parse", "main~1")
+    m = load_module()
+    monkeypatch.setenv("PATH", f"{write_shim(lab.root, APPROVED, FF_MERGE)}:/usr/bin:/bin")
+    monkeypatch.setenv("HOME", str(lab.root))
+    real = m.git
+
+    def racing(repo, *args):
+        if args[:1] == ("push",) and "--delete" not in args:      # the push of main, nothing else
+            subprocess.run(["git", "-C", str(lab.remote), "update-ref", "refs/heads/main", rolled_back], check=True)
+        return real(repo, *args)
+    monkeypatch.setattr(m, "git", racing)
+    assert m.main(["--worktree", str(lab.wt), "--ci-wait", "0"]) == 7
+    assert git(lab.remote, "rev-parse", "main") == rolled_back, "the rollback stands"
 
 
 def test_code_7_recovery_rechecks_claude_md_before_the_manual_push(lab):

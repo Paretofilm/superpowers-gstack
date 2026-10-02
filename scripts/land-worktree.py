@@ -143,6 +143,12 @@ def claude_md_at(repo, rev, path="CLAUDE.md"):
     return None
 
 
+def policy_files(repo, *revs) -> list[str]:
+    """CLAUDE.md plus the file a symlinked CLAUDE.md resolves to at each rev: a diff of
+    CLAUDE.md alone shows nothing when the change is in the link's target."""
+    return ["CLAUDE.md", *sorted({f[0] for f in (claude_md_at(repo, r) for r in revs) if f and f[0] != "CLAUDE.md"})]
+
+
 def describe(mode) -> str:
     return {None: "no Landing mode line", "conflict": "both 'solo' and 'pr'"}.get(mode, f"'{mode}'")
 
@@ -161,9 +167,7 @@ def check_policy(wt, main, branch, main_rev, branch_mode, state):
                                f"({said})", state=state,
                        commands=[f"wt -C {w} step rebase {q(main)}",
                                  f"git -C {w} rebase {q(main)}   # the same without worktrunk", "then land again"])
-        # a symlinked CLAUDE.md changes in its target: name that file in the diff too
-        files = ["CLAUDE.md", *sorted({f[0] for f in (claude_md_at(wt, main_rev), claude_md_at(wt, f"refs/heads/{branch}"))
-                                       if f and f[0] != "CLAUDE.md"})]
+        files = policy_files(wt, main_rev, f"refs/heads/{branch}")
         raise Stop(POLICY, f"'{branch}' changes the landing mode: {said} — a branch never sets the policy "
                            "it is landed under", state=state,
                    commands=[f"git -C {w} diff {q(f'{main}...{branch}')} -- {' '.join(map(q, files))}"
@@ -353,7 +357,8 @@ def push_stop_commands(wt, mw, main, tip=None) -> list[str]:
     landing mode meanwhile, so CLAUDE.md must still read as the checked tip did."""
     cmds = [f"git -C {q(str(wt))} log --oneline {q(f'origin/{main}..{main}')}   # your commits, not on origin",
             pull_hint(mw, main)]
-    policy = (f"git -C {q(str(mw or wt))} diff {q(tip)} {q(main)} -- CLAUDE.md   # REQUIRED: empty, else origin "
+    files = " ".join(map(q, policy_files(wt, tip, f"refs/remotes/origin/{main}"))) if tip else ""
+    policy = (f"git -C {q(str(mw or wt))} diff {q(tip)} {q(main)} -- {files}   # REQUIRED: empty, else origin "
               "changed CLAUDE.md while the checks ran (perhaps the landing mode): push nothing, show the user"
               if tip else None)
     if mw:
@@ -362,7 +367,7 @@ def push_stop_commands(wt, mw, main, tip=None) -> list[str]:
                  f"git -C {q(str(mw))} push origin {q(main)}   # only after the gate passed"]
     else:
         cmds += [f"then, in that checkout: wt hook pre-merge (the rebased result is UNCHECKED until it passes), "
-                 + (f"check that `git diff {tip} {main} -- CLAUDE.md` is empty (else push nothing and show the "
+                 + (f"check that `git diff {tip} {main} -- {files}` is empty (else push nothing and show the "
                     "user: origin changed CLAUDE.md, perhaps the landing mode), " if tip else "")
                  + f"and only then: git push origin {q(main)}"]
     return cmds
@@ -470,7 +475,11 @@ def _land_locked(a, wt, branch, main, lock_fd) -> dict:
     heads = f"refs/heads/{main}"
     # Before anything moves: the line on disk here against local main. Checked again
     # below against the exact main and tip the merge uses (main may fast-forward first).
-    check_policy(wt, main, branch, heads, landing_mode(wt), state="nothing moved")
+    disk, committed = landing_mode(wt), mode_at(wt, f"refs/heads/{branch}")
+    unread = ("" if disk == committed else
+              f"; the CLAUDE.md on disk says {describe(disk)}, the committed one {describe(committed)} "
+              "(uncommitted, ignored, or a link out of the repository): only a committed line counts")
+    check_policy(wt, main, branch, heads, disk, state="nothing moved" + unread)
     if not has_pre_merge_hook(wt):
         raise Stop(NO_HOOK, "no top-level pre-merge hook that runs a command in .config/wt.toml "
                             "— nothing would gate this landing",
@@ -583,7 +592,16 @@ def _land_locked(a, wt, branch, main, lock_fd) -> dict:
                               "After pull --rebase the combined result is UNCHECKED until the pre-merge gate "
                               "passes on it"),
                        commands=stop_cmds)
-        r = git(wt, "push", "origin", f"{tip}:{heads}")
+        if not base or git(wt, "merge-base", "--is-ancestor", base, tip).returncode:
+            raise Stop(UNKNOWN, f"the checked tip {tip[:9]} does not contain origin/{main} as checked "
+                                f"({(base or '?')[:9]}) — nothing was pushed",
+                       state=f"local {main} already contains your commits; worktree and branch stand",
+                       commands=stop_cmds)
+        # Compare-and-swap: the push lands only while origin/main is still exactly the base the
+        # gate and the landing-mode check saw. A move after the fetch above (even to an ancestor
+        # of the tip, which a plain push would fast-forward over) or a push URL that is another
+        # server is refused. base is an ancestor of tip, so this is never a rewrite.
+        r = git(wt, "push", f"--force-with-lease={heads}:{base}", "origin", f"{tip}:{heads}")
         if r.returncode:
             git(wt, "fetch", "origin")
             if out(wt, "rev-parse", origin) != tip:
