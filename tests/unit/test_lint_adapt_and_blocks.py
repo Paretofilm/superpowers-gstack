@@ -275,3 +275,12 @@ def test_office_hours_is_user_started_only_and_its_intercept_survives():
     intercept = (BLOCKS / "track-routing.md").read_text()
     assert "### When user invokes /office-hours (no namespace)" in intercept
     assert "office-hours-track-aware" in intercept
+
+
+def test_the_remaining_plan_reviews_are_user_started_only():
+    """3.5.0: the commit that stopped routing to interactive planning skills left two of
+    them as default rows; all plan reviews the roster still lists are user-started."""
+    for skill in ("/plan-ceo-review", "/plan-devex-review"):
+        row = _row(skill)
+        assert row is not None, f"{skill} row disappeared"
+        assert row.startswith(f"| `{skill}` | User-started only"), row

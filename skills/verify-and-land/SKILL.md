@@ -237,7 +237,13 @@ The user is the instrument; a person looking is the entire point. Ask with
 `AskUserQuestion`, naming the behaviour from Phase 1:
 
 - **Yes, it works** — asked per observable change when there are several; only when
-  all of them hold → Phase 7.
+  all of them hold → Phase 7. Phase 7 then acts without asking again, so read the
+  `Landing mode:` line now (the rule in Phase 7, step 2) and say in this option what a
+  yes does next: `solo` — push, then land on the default branch through
+  `/superpowers-gstack:land`; `pr` — push, then open a pull request through `/ship`;
+  no line — push, then one question about how to land. When Phase 0 skipped Phase 7
+  (the default branch) or blocked it (uncommitted changes declined), say instead that a
+  yes lands nothing.
 - **No, it still behaves the old way** → stay on the branch, land nothing. Say what
   you would check next and offer `/investigate`.
 - **Something else broke** → same: land nothing, investigate.

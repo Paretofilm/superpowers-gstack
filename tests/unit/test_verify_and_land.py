@@ -108,3 +108,15 @@ def test_landing_guidance_requires_seeing_it_run_first():
     t = HYGIENE.read_text()
     assert "verify-and-land" in t
     assert "Tests answer" in t, "must distinguish tests from watching it run"
+
+
+def test_phase6_yes_names_the_landing_it_triggers():
+    """3.5.0: Phase 7 acts on the yes without asking again (push + land, or push + PR),
+    so the yes must be an informed one: the option says what it will do, per mode."""
+    t = SKILL.read_text()
+    gate = " ".join(t[t.index("## Phase 6"):t.index("### Phase 6b")].split())
+    assert "acts without asking again" in gate
+    assert "`solo`" in gate and "/superpowers-gstack:land" in gate
+    assert "`pr`" in gate and "/ship" in gate
+    assert "no line" in gate
+    assert "a yes lands nothing" in gate, "default branch / declined commit: no landing to promise"
