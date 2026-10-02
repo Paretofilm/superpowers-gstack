@@ -41,13 +41,58 @@ def test_skill_launches_by_path_and_proves_it_rather_than_assuming():
     assert "quit" in t.lower(), "must quit the running instance first"
 
 
-def test_skill_pushes_before_offering_the_landing():
-    """Pushing is backup, landing is completion. Offering a merge before the work
-    exists anywhere else inverts the safety order that git-hygiene establishes."""
+def test_skill_pushes_before_landing():
+    """Pushing is backup, landing is completion. Landing before the work exists
+    anywhere else inverts the safety order that git-hygiene establishes. (3.5.0: the
+    second step is no longer an offer in a solo or pr project, so the anchor is the
+    new heading; the ordering invariant is unchanged.)"""
     t = SKILL.read_text()
     push = t.index("Push first")
-    offer = t.index("Then offer the landing")
-    assert push < offer
+    land = t.index("Then land it by the project's landing mode")
+    assert push < land
+
+
+def _phase7():
+    t = SKILL.read_text()
+    return t[t.index("## Phase 7"):t.index("## What this skill is not")]
+
+
+def test_phase7_lands_by_the_projects_landing_mode_without_a_second_question():
+    """3.5.0: the yes in Phase 6 is the one human review. A solo project lands through
+    /land and a pr project through /ship, each directly. The old menu cost a second
+    question for a decision the project had already made."""
+    p7 = _phase7()
+    assert re.search(r"`solo`.*?/superpowers-gstack:land", p7, re.S)
+    assert re.search(r"`pr`.*?/ship", p7, re.S)
+    assert "Landing mode: solo" in p7 and "Landing mode: pr" in p7
+    assert "outside fenced code blocks" in " ".join(p7.split()), \
+        "same line-reading rule as autoimplement Step F"
+
+
+def test_phase7_never_hands_over_to_the_finishing_branch_menu():
+    """That skill shows its own menu, so a handover is the double menu this change
+    removes. It may only appear as a prohibition."""
+    p7 = _phase7()
+    assert "Merge into the default branch" not in p7
+    assert re.search(r"Never hand over to `/superpowers:finishing-a-development-branch`", p7)
+    assert p7.count("/superpowers:finishing-a-development-branch") == 1
+
+
+def test_phase7_asks_exactly_one_question_and_only_when_the_line_is_missing():
+    p7 = _phase7()
+    assert p7.count("AskUserQuestion") == 1
+    missing = p7[p7.index("The line is missing"):]
+    assert "AskUserQuestion" in missing
+    assert "Open a pull request" in missing and "keep the branch" in missing
+    assert "Landing mode: solo" in missing, "must say how to make this automatic next time"
+
+
+def test_phase6_gate_still_asks_the_user_to_look():
+    """The human gate is the point of the skill; Phase 7 changes must not touch it."""
+    t = SKILL.read_text()
+    gate = t[t.index("## Phase 6"):t.index("## Phase 7")]
+    assert "AskUserQuestion" in gate
+    assert "Yes, it works" in gate
 
 
 def test_skill_does_not_land_when_the_user_says_it_is_still_broken():

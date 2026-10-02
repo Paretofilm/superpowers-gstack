@@ -2,7 +2,7 @@
 name: verify-and-land
 description: |
   Build the checked-out branch, launch that exact app, let the user confirm the
-  fix is really there, then push and offer merge or PR.
+  fix is really there, then push and land it by the project's landing mode.
 ---
 
 # Verify, then land
@@ -17,8 +17,9 @@ products were registered besides.
 
 So this skill never asks the user to open the app. It **builds the branch they are
 standing on, launches that exact bundle, proves on screen which one is running**, and
-only then asks whether the fix is there. A yes leads into landing; a no keeps the
-branch open and says what to look at next.
+only then asks whether the fix is there. A yes lands the branch the way the project
+has decided to land (Phase 7), without a second question; a no keeps the branch open
+and says what to look at next.
 
 Invoke with: `/superpowers-gstack:verify-and-land`
 
@@ -257,7 +258,8 @@ serves the working tree, so no stale-bundle ambiguity exists.
 ## Phase 7 — land it
 
 Landing has two halves and they are not the same: **pushing is backup, landing is
-completion.** Do both, in that order.
+completion.** Do both, in that order. The yes in Phase 6 is the one human review; Phase 7
+asks nothing more when the project has already decided how it lands.
 
 1. **Push first**, so the verified work exists in more than one place whatever is
    decided next. Pass the branch as a quoted argument — refs may legally contain
@@ -269,23 +271,39 @@ completion.** Do both, in that order.
      || git push -u origin -- "$branch"
    ```
    With no remote configured, say plainly that the work is still only on this machine.
-2. **Then offer the landing** with `AskUserQuestion` — and carry out the pick yourself
-   rather than printing commands:
-   - **Merge into the default branch** — `/superpowers:finishing-a-development-branch`
-   - **Open a pull request** — `/ship`, which runs tests and review on the way
-   - **Not yet, keep the branch** — fine; say it is pushed and still open, so the
-     next session's report is accurate.
+2. **Then land it by the project's landing mode.** Read the `Landing mode:` line the way
+   `/superpowers-gstack:autoimplement` Step F does: the exact line `Landing mode: solo` or
+   `Landing mode: pr` in the `CLAUDE.md` of this worktree, a real line outside fenced code
+   blocks (the land script ignores fenced examples).
+   - **`solo`** → invoke `/superpowers-gstack:land` for this worktree now, with no
+     further question. If it stops, it names an exit code: report the code and the
+     reason, and stop — no retry loop, no merge by hand.
+   - **`pr`** → invoke `/ship` now, inside this worktree, with no further question.
+   - **The line is missing** (`land` stops with exit 2 without it, and on a line that
+     appears with both values, so it cannot be called here) → ask ONE question with
+     `AskUserQuestion`, and end your message at it:
+     - **Open a pull request** — `/ship`, which runs tests and review on the way
+     - **Not yet, keep the branch** — fine; say it is pushed and still open, so the
+       next session's report is accurate.
+
+     Add one sentence: a line `Landing mode: solo` in the project's `CLAUDE.md` makes
+     this skill land automatically next time. Do not write that line yourself — it is
+     the project's policy, not a side effect of a verification.
+
+Never hand over to `/superpowers:finishing-a-development-branch` from here: it shows a
+menu of its own, so the user would be asked twice about the same landing.
 
 **If the branch is checked out in a worktree**, `/ship` must run *inside that folder*:
 a branch cannot be checked out twice, and `git checkout` fails outright elsewhere
-(`git worktree list` gives the path). A merge is different — `git merge` always merges
+(`git worktree list` gives the path). `/superpowers-gstack:land` also runs from the
+feature worktree. A merge is different — `git merge` always merges
 *into the current branch*, so it has to run where the **default** branch is checked
 out; run from the feature branch it merges the wrong direction. The landing skills
 handle that switch; do not hand-roll it.
 
 After a merge, the worktree that produced the work has done its job: offer to remove
-it (`git worktree remove <path>`), then delete the branch. In that order — git refuses
-the branch while the folder stands.
+it (`git worktree remove <path>`; `land` prints the commands in its `remaining` field),
+then delete the branch. In that order — git refuses the branch while the folder stands.
 
 ## What this skill is not
 
