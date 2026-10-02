@@ -92,6 +92,7 @@ DENYLIST = [
     (re.compile(r"gstack-routing-v[12]\b"), "stale track-routing marker (current: v3+, 3.0.0)"),
     (re.compile(r"gstack-companion-skills-v[12]\b"), "stale companion-skills marker (current: v3+, 3.0.0)"),
     (re.compile(r"gstack-git-hygiene-v(?:[0-9]|1[012])\b"), "stale git-hygiene marker (current: v13+, 3.5.0 — v12 said verify-and-land offers the landing; v11 sent every landing to /ship's pull request; v10 told agents to park work in git stash)"),
+    (re.compile(r"gstack-worktrunk-v1\b"), "stale worktrunk marker (current: v2+, 3.5.1 — v1 did not say the Landing mode line belongs on the default branch)"),
     (re.compile(r"gstack-xcode-tools-v[0-8]\b"), "stale xcode-tools marker (current: v9+, 3.5.0 — v8 said verify-and-land offers the landing)"),
     # v5 hardcoded `name=iPhone 16`; Xcode had already dropped it on the author's
     # own machine, and the resulting "Unable to find a device matching the

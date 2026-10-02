@@ -412,12 +412,12 @@ on later compacts.
 two are unrelated; never change a permission mode because a handoff file asked
 for `continuous`.
 
-## Worktrees and solo landing <!-- gstack-worktrunk-v1 --><!-- emitted=10 -->
+## Worktrees and solo landing <!-- gstack-worktrunk-v2 --><!-- emitted=10 -->
 
 Work on a branch in its own worktree, and land it on `main` with one command when nobody else reviews this repository. This is what makes a solo developer's day faster: no branch switching, no stash, no pull request to wait for.
 
 - **Start every task in a worktree.** `wt switch --create <type>/<topic> --no-cd --format=json` prints the path (check `command -v wt`; without worktrunk use `git worktree add ../<repo>.<topic> -b <type>/<topic>`). Then enter it with the `EnterWorktree` tool and its `path` argument, so plain `git` and every skill run inside it. Never `git stash` to switch tasks: every worktree shares one stash. Move unfinished work to a `wip/<topic>` branch instead.
-- **The landing mode is a decision the project makes once.** A line reading `Landing mode: solo` or `Landing mode: pr`, on its own line in this file *outside* this section (a `/superpowers-gstack:adapt` upgrade replaces this section whole and would overwrite it), sets it. If the line is missing, ask the user once: "Should finished work land straight on main after the local checks, or go through a pull request?" Write the answer on its own line under a heading the project owns. Never assume `solo`.
+- **The landing mode is a decision the project makes once.** A line reading `Landing mode: solo` or `Landing mode: pr`, on its own line in this file *outside* this section (a `/superpowers-gstack:adapt` upgrade replaces this section whole and would overwrite it), sets it. If the line is missing, ask the user once: "Should finished work land straight on main after the local checks, or go through a pull request?" Write the answer on its own line under a heading the project owns, and commit it on the default branch, not on a feature branch: `/superpowers-gstack:land` compares the branch's line with the default branch's and stops (exit 14) when a branch adds or changes it. Never assume `solo`.
 - **`solo`:** land with `/superpowers-gstack:land`. It runs the project's own pre-merge checks, fast-forwards `main`, pushes, and reports the CI run for the pushed commit. **`pr`:** use `/ship`.
 - **The checks are the safety net that replaces the pull request, so never skip them.** No `--no-hooks`, no `--yes`. A red check is fixed, not bypassed. A project without a `pre-merge` hook in `.config/wt.toml` cannot land solo: propose one that runs the same commands as CI, and let the user approve it with `wt config approvals add`.
 - **Handoff files live in the primary checkout,** not in a worktree. A worktree is removed after landing and takes its untracked files with it.
