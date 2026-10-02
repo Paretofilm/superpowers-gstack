@@ -57,34 +57,55 @@ def _phase7():
     return t[t.index("## Phase 7"):t.index("## What this skill is not")]
 
 
+def _mode_bullet(p7, label):
+    m = re.search(rf"^\s*- \*\*`{label}`\*\* →(.*?)(?=^\s*- \*\*|\Z)", p7, re.S | re.M)
+    assert m, f"no {label} bullet in Phase 7"
+    return m.group(1)
+
+
 def test_phase7_lands_by_the_projects_landing_mode_without_a_second_question():
     """3.5.0: the yes in Phase 6 is the one human review. A solo project lands through
-    /land and a pr project through /ship, each directly. The old menu cost a second
-    question for a decision the project had already made."""
+    /land and a pr project through /ship, each directly. Each mode bullet must invoke its
+    own landing skill and not the other one (a swap would land a pr project on main)."""
     p7 = _phase7()
-    assert re.search(r"`solo`.*?/superpowers-gstack:land", p7, re.S)
-    assert re.search(r"`pr`.*?/ship", p7, re.S)
+    solo, pr = _mode_bullet(p7, "solo"), _mode_bullet(p7, "pr")
+    assert "/superpowers-gstack:land" in solo and "/ship" not in solo
+    assert "/ship" in pr and "/superpowers-gstack:land" not in pr
     assert "Landing mode: solo" in p7 and "Landing mode: pr" in p7
-    assert "outside fenced code blocks" in " ".join(p7.split()), \
-        "same line-reading rule as autoimplement Step F"
+    assert "outside fenced code blocks" in " ".join(p7.split()), "same line-reading rule as land"
 
 
-def test_phase7_never_hands_over_to_the_finishing_branch_menu():
-    """That skill shows its own menu, so a handover is the double menu this change
-    removes. It may only appear as a prohibition."""
-    p7 = _phase7()
+def test_phase7_follows_lands_exit_codes_and_offers_no_menu_of_its_own():
+    """The old Phase 7 handed over to finishing-a-development-branch, which shows its own
+    menu (two menus for one landing). land's exit-code table is the authority now; the
+    finishing skill is reachable only through land's exit-8 row."""
+    p7 = " ".join(_phase7().split())
     assert "Merge into the default branch" not in p7
-    assert re.search(r"Never hand over to `/superpowers:finishing-a-development-branch`", p7)
+    assert "follow `land`'s own exit-code table" in p7
     assert p7.count("/superpowers:finishing-a-development-branch") == 1
+    assert "never offer `/superpowers:finishing-a-development-branch` from this skill except through that row" in p7
 
 
-def test_phase7_asks_exactly_one_question_and_only_when_the_line_is_missing():
+def test_phase7_asks_only_when_the_branch_changes_the_landing_mode():
+    """A missing line is land's question (its exit-2 row asks once and records the answer),
+    so Phase 7 does not ask it too. The one question left is a branch that changes the
+    policy it would be landed under."""
     p7 = _phase7()
     assert p7.count("AskUserQuestion") == 1
-    missing = p7[p7.index("The line is missing"):]
-    assert "AskUserQuestion" in missing
-    assert "Open a pull request" in missing and "keep the branch" in missing
-    assert "Landing mode: solo" in missing, "must say how to make this automatic next time"
+    changes = p7[p7.index("The branch changes the landing mode"):p7.index("**`solo`**")]
+    assert "AskUserQuestion" in changes
+    assert 'git show "$DEFAULT_REF":CLAUDE.md' in p7
+    novalid = " ".join(p7[p7.index("**No valid line**"):].split())
+    assert "/superpowers-gstack:land" in novalid and "Do not ask it here as well" in novalid
+
+
+def test_phase7_rechecks_the_verified_commit_before_pushing():
+    """The yes covers the build the user saw. A commit made while they looked must not
+    be pushed and landed on the strength of that yes."""
+    p7 = _phase7()
+    push = p7.index("**Push first**")
+    assert "VERIFIED_HEAD" in p7[:push]
+    assert "land nothing" in p7[:push]
 
 
 def test_phase6_gate_still_asks_the_user_to_look():
@@ -112,11 +133,13 @@ def test_landing_guidance_requires_seeing_it_run_first():
 
 def test_phase6_yes_names_the_landing_it_triggers():
     """3.5.0: Phase 7 acts on the yes without asking again (push + land, or push + PR),
-    so the yes must be an informed one: the option says what it will do, per mode."""
+    so the yes must be an informed one: the option pairs each mode with its landing, and
+    records the commit the yes is about."""
     t = SKILL.read_text()
     gate = " ".join(t[t.index("## Phase 6"):t.index("### Phase 6b")].split())
-    assert "acts without asking again" in gate
-    assert "`solo`" in gate and "/superpowers-gstack:land" in gate
-    assert "`pr`" in gate and "/ship" in gate
-    assert "no line" in gate
-    assert "a yes lands nothing" in gate, "default branch / declined commit: no landing to promise"
+    assert "lands without asking again" in gate
+    assert "VERIFIED_HEAD=$(git rev-parse HEAD)" in gate
+    assert re.search(r"`solo` —[^;]*?/superpowers-gstack:land", gate)
+    assert re.search(r"`pr` —[^;]*?/ship", gate)
+    assert "no valid line" in gate
+    assert "a yes lands nothing" in gate and "detached HEAD" in gate

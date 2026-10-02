@@ -18,8 +18,8 @@ products were registered besides.
 So this skill never asks the user to open the app. It **builds the branch they are
 standing on, launches that exact bundle, proves on screen which one is running**, and
 only then asks whether the fix is there. A yes lands the branch the way the project
-has decided to land (Phase 7), without a second question; a no keeps the branch open
-and says what to look at next.
+has decided to land (Phase 7), without a second question unless the branch itself
+changes how the project lands; a no keeps the branch open and says what to look at next.
 
 Invoke with: `/superpowers-gstack:verify-and-land`
 
@@ -237,13 +237,16 @@ The user is the instrument; a person looking is the entire point. Ask with
 `AskUserQuestion`, naming the behaviour from Phase 1:
 
 - **Yes, it works** — asked per observable change when there are several; only when
-  all of them hold → Phase 7. Phase 7 then acts without asking again, so read the
-  `Landing mode:` line now (the rule in Phase 7, step 2) and say in this option what a
-  yes does next: `solo` — push, then land on the default branch through
-  `/superpowers-gstack:land`; `pr` — push, then open a pull request through `/ship`;
-  no line — push, then one question about how to land. When Phase 0 skipped Phase 7
-  (the default branch) or blocked it (uncommitted changes declined), say instead that a
-  yes lands nothing.
+  all of them hold → Phase 7. Phase 7 then lands without asking again, so settle now
+  what a yes does, and say it in this option:
+  - Record `VERIFIED_HEAD=$(git rev-parse HEAD)`: the commit the user is looking at.
+  - Read the landing mode (the rule in Phase 7, step 2) and name what follows: `solo` —
+    push, then land on the default branch through `/superpowers-gstack:land`; `pr` —
+    push, then open a pull request through `/ship`; no valid line — push, then `land`
+    asks once how this project lands.
+  - When Phase 0 skipped or blocked Phase 7 (the default branch, a detached HEAD, or
+    uncommitted changes the user declined to commit), say instead that a yes lands
+    nothing.
 - **No, it still behaves the old way** → stay on the branch, land nothing. Say what
   you would check next and offer `/investigate`.
 - **Something else broke** → same: land nothing, investigate.
@@ -265,8 +268,12 @@ serves the working tree, so no stale-bundle ambiguity exists.
 
 Landing has two halves and they are not the same: **pushing is backup, landing is
 completion.** Do both, in that order. The yes in Phase 6 is the one human review; Phase 7
-asks nothing more when the project has already decided how it lands.
+adds no question of its own when the project has already decided how it lands.
 
+0. **Check that the yes still applies.** A yes covers the build the user saw and the
+   landing they were told about, nothing else. If `git rev-parse HEAD` is no longer
+   `VERIFIED_HEAD`, or the landing mode now reads differently from what the Phase 6
+   option said, land nothing: say what changed and go back to Phase 4.
 1. **Push first**, so the verified work exists in more than one place whatever is
    decided next. Pass the branch as a quoted argument — refs may legally contain
    `$( )`, `;` and `&`:
@@ -278,38 +285,32 @@ asks nothing more when the project has already decided how it lands.
    ```
    With no remote configured, say plainly that the work is still only on this machine.
 2. **Then land it by the project's landing mode.** Read the `Landing mode:` line the way
-   `/superpowers-gstack:autoimplement` Step F does: the exact line `Landing mode: solo` or
-   `Landing mode: pr` in the `CLAUDE.md` of this worktree, a real line outside fenced code
-   blocks (the land script ignores fenced examples).
-   - **`solo`** → invoke `/superpowers-gstack:land` for this worktree now, with no
-     further question. If it stops, it names an exit code: report the code and the
-     reason, and stop — no retry loop, no merge by hand.
-   - **`pr`** → invoke `/ship` now, inside this worktree, with no further question.
-   - **The line is missing** (`land` stops with exit 2 without it, and on a line that
-     appears with both values, so it cannot be called here) → ask ONE question with
-     `AskUserQuestion`, and end your message at it:
-     - **Open a pull request** — `/ship`, which runs tests and review on the way
-     - **Not yet, keep the branch** — fine; say it is pushed and still open, so the
-       next session's report is accurate.
+   `land` does: the exact line `Landing mode: solo` or `Landing mode: pr` in the
+   `CLAUDE.md` at the root of this worktree (`git rev-parse --show-toplevel`), a real line
+   outside fenced code blocks. Compare it with the same line on the default branch
+   (`git show "$DEFAULT_REF":CLAUDE.md`, the ref from Phase 1).
+   - **The branch changes the landing mode** (the two differ) → land nothing
+     automatically: a branch must not set the policy it is landed under. Ask once with
+     `AskUserQuestion` which mode holds, naming both values, and end your message at it.
+   - **`solo`** → invoke `/superpowers-gstack:land` for this worktree, from its root, with
+     no further question.
+   - **`pr`** → invoke `/ship` inside this worktree, with no further question.
+   - **No valid line** (missing, only inside a code block, or both values) → invoke
+     `/superpowers-gstack:land` anyway. Its exit-2 row owns this question: it asks the
+     user once (solo or pull request?) and records the answer. Do not ask it here as well.
 
-     Add one sentence: a line `Landing mode: solo` in the project's `CLAUDE.md` makes
-     this skill land automatically next time. Do not write that line yourself — it is
-     the project's policy, not a side effect of a verification.
+   When `land` stops with an exit code, follow `land`'s own exit-code table: it is the
+   authority on the next step, including its exit-8 fallback when `wt` is not installed.
+   Add no menu of your own on top of it, and never offer
+   `/superpowers:finishing-a-development-branch` from this skill except through that row.
 
-Never hand over to `/superpowers:finishing-a-development-branch` from here: it shows a
-menu of its own, so the user would be asked twice about the same landing.
+**If the branch is checked out in a worktree**, run `/ship` and `/superpowers-gstack:land`
+from that worktree's root: a branch cannot be checked out twice, and `git checkout` fails
+outright elsewhere (`git worktree list` gives the path). The landing skills move the
+default branch themselves; do not hand-roll a merge.
 
-**If the branch is checked out in a worktree**, `/ship` must run *inside that folder*:
-a branch cannot be checked out twice, and `git checkout` fails outright elsewhere
-(`git worktree list` gives the path). `/superpowers-gstack:land` also runs from the
-feature worktree. A merge is different — `git merge` always merges
-*into the current branch*, so it has to run where the **default** branch is checked
-out; run from the feature branch it merges the wrong direction. The landing skills
-handle that switch; do not hand-roll it.
-
-After a merge, the worktree that produced the work has done its job: offer to remove
-it (`git worktree remove <path>`; `land` prints the commands in its `remaining` field),
-then delete the branch. In that order — git refuses the branch while the folder stands.
+After `land` exits 0, follow its `remaining` field: it prints the cleanup commands in the
+order git needs them (the worktree first, then the branch).
 
 ## What this skill is not
 
