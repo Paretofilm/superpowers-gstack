@@ -29,10 +29,10 @@ unless the user asks for it.
 | Skill | Consider relevant when... |
 |---|---|
 | `/office-hours` | User-started only — a product-framing session the user begins by typing it (new product ideas, unclear scope); never default routing. `/superpowers-gstack:office-hours-track-aware` still intercepts it |
-| `/plan-ceo-review` | Projects with strategic decisions or significant scope |
+| `/plan-ceo-review` | User-started only — a strategy and scope review the user asks for; never default routing |
 | `/design-consultation` | New projects defining a design system from scratch (creates DESIGN.md in open format compatible with impeccable and Google Stitch) |
 | `/design-shotgun` | When you want multiple design variants to compare before committing |
-| `/plan-devex-review` | Projects with developer-facing surfaces (APIs, CLIs, SDKs, libraries) |
+| `/plan-devex-review` | User-started only — a review of developer-facing surfaces (APIs, CLIs, SDKs, libraries) the user asks for; never default routing |
 | `/plan-tune` | Tune plan-skill question preferences (one-time, per-project) |
 | `/autoplan` | User-started only — chains the CEO, eng and design plan reviews in one pass |
 

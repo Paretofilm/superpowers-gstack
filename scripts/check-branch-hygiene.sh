@@ -839,7 +839,7 @@ if [ -n "$bk" ]; then
   [ -n "$uncovered" ] && printf '             (not covered: %s)\n' "$uncovered"
 fi
 [ "$has_app" = "1" ] && [ "${unlanded_here:-0}" -gt 0 ] && \
-  act "check it" "build $(shq "$current") and open the app, so you can see the ${unlanded_here} commit(s) actually work — /superpowers-gstack:verify-and-land, which then offers the landing"
+  act "check it" "build $(shq "$current") and open the app, so you can see the ${unlanded_here} commit(s) actually work — /superpowers-gstack:verify-and-land, which then lands it by the project's landing mode"
 [ "${dirty_n:-0}" != "0" ] && act "show" "what those ${dirty_n} file(s) actually change, before deciding"
 [ "${other_wt_n:-0}" != "0" ] && act "look at" "$(shortpath "$wt_first") — a second working folder (git worktree list), ${wt_first_n} loose file(s)"
 [ "$stash_oldest" -ge "$IDLE_DAYS" ] && act "look at" "the ${stash_n} parked change set(s) — git stash list, then git stash show -p"
