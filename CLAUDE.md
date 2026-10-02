@@ -111,7 +111,7 @@ tool as your FIRST action. Do NOT answer directly, do NOT use other tools first.
 The skill has specialized workflows that produce better results than ad-hoc answers.
 
 Key routing rules:
-- Product ideas, "is this worth building", brainstorming → invoke /superpowers-gstack:office-hours-track-aware (wraps /office-hours with track inference, writes `.gstack/track`, relocates the design doc into `docs/`, publishes it as an Artifact page before the Approve / Revise / Restart gate)
+- The user types /office-hours (product ideas, "is this worth building") → invoke /superpowers-gstack:office-hours-track-aware (wraps /office-hours with track inference, writes `.gstack/track`, relocates the design doc into `docs/`, publishes it as an Artifact page before the Approve / Revise / Restart gate)
 - Bugs, errors, "why is this broken", 500 errors → invoke investigate
 - Ship, deploy, push, create PR → invoke ship
 - QA, test the site, find bugs → invoke qa
@@ -131,7 +131,6 @@ Key routing rules:
 - E2E test a Swift app, "test the app", "trykk gjennom flyten", "e2e", press buttons and verify result → invoke /superpowers-gstack:e2e-route. Pure dispatcher: reads platform (scheme/SUPPORTED_PLATFORMS/.gstack/track) × intent (asks once if ambiguous; multiplatform → asks iOS/macOS/both) × the `.gstack/e2e-executor` pin (`host`|`vm`, absence = host; it reads the pin, never writes it) and routes to /superpowers-gstack:e2e-scaffold, MCP-live simulator automation (XcodeBuildMCP / ios-simulator), or visual-regression review (/ios-design-review for iOS, /design-review for macOS). Names the executor + next action, then hands off.
 - Scaffold committed XCUITest for a SwiftUI app (iOS or macOS) → invoke /superpowers-gstack:e2e-scaffold (manual only — modifies project files; one procedure with a per-platform table; writes the project's `run-uitests.sh` under its scripts directory from the skill's `templates/run-uitests.sh`, which honours the `.gstack/e2e-executor` pin). Normally reached via /e2e-route.
 - Visual audit, design polish → invoke design-review
-- Architecture review → invoke plan-eng-review
 - End of day, switch project, save progress → invoke context-save
 - Resume previous session, restore state → invoke context-restore
 - Context long, before /clear, before /compact → invoke context-handoff
@@ -163,7 +162,7 @@ This repository has one maintainer and no review. Finished work lands on `main` 
      Regenerate with `python3 scripts/sync-own-claude-md.py`; lint rule E11
      fails if stale. -->
 
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v12 --><!-- emitted=103 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v13 --><!-- emitted=104 -->
 
 Commit at meaningful milestones — not at every file save, not only at session end.
 
@@ -208,12 +207,13 @@ review, and rots against the default branch while everything else moves.
 - **A fix nobody has watched run is not verified.** Tests answer *did I break
   something else*; they cannot answer *is the thing I fixed actually fixed*. When the
   project has a runnable app, build the branch and launch **that build** before
-  landing — `/superpowers-gstack:verify-and-land` does exactly that and then offers
-  the landing. On macOS this matters more than it sounds: opening the app by name
+  landing — `/superpowers-gstack:verify-and-land` does exactly that and then lands
+  it by the project's `Landing mode:` line (`land` asks once when the line is missing). On macOS this matters more than it sounds: opening the app by name
   starts the copy in `/Applications`, which is the last release, not this branch. "I
   checked and it is still broken" is very often a stale bundle rather than a failed
   fix, and the fix gets rewritten for no reason.
-- **Offer landing choices in the user's language, with one recommendation.**
+- **When the landing is not settled, offer the choice in the user's language, with one
+  recommendation.** When the project's `Landing mode:` line settles it, land without asking.
   "Merge", "PR" and "default branch" are git policy, not choices a non-git user can
   weigh. Phrase the outcomes: *"make this the live version"* (merge), *"send it for
   review first"* (PR), *"keep it safely stored but not live"* (leave the pushed
@@ -324,7 +324,7 @@ Include in the dispatch prompt:
 
 The subagent must NOT stop with a recommendation after finding existing code — it completes its delegated task using the found implementation.
 
-Also tell it to run only the tests that cover what it changed (the affected target or a `--filter`), never the whole suite or an end-to-end rig per task; the full suite runs once at the phase boundary and once before landing.
+Also tell it to run only the tests that cover what it changed (the affected target or a `--filter`), never the whole suite or an end-to-end rig per task. Run the full suite yourself, once at the phase boundary and once before landing.
 
 ### Guardrails
 
@@ -333,7 +333,7 @@ Also tell it to run only the tests that cover what it changed (the affected targ
 - ❌ Do NOT ask "should we be DRY about this?" — the default is yes-but-pragmatist; just scan
 - A user override ("skip the reuse-check", "just write it") is informed — honor it without re-litigating
 
-`/plan-eng-review` covers reuse at architecture time and `/review` catches violations post-implementation; this rule fills the implementation-time gap between them. Defer to plan-eng-review's findings for high-level architecture decisions.
+`/review` catches violations after implementation; this rule covers implementation time. If the user ran `/plan-eng-review`, defer to its architecture decisions.
 
 ## Keep the plan true to the code <!-- gstack-plan-fidelity-v3 --><!-- emitted=27 -->
 

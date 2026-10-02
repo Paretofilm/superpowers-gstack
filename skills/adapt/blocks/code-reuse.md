@@ -28,7 +28,7 @@ Include in the dispatch prompt:
 
 The subagent must NOT stop with a recommendation after finding existing code — it completes its delegated task using the found implementation.
 
-Also tell it to run only the tests that cover what it changed (the affected target or a `--filter`), never the whole suite or an end-to-end rig per task; the full suite runs once at the phase boundary and once before landing.
+Also tell it to run only the tests that cover what it changed (the affected target or a `--filter`), never the whole suite or an end-to-end rig per task. Run the full suite yourself, once at the phase boundary and once before landing.
 
 ### Guardrails
 
@@ -37,4 +37,4 @@ Also tell it to run only the tests that cover what it changed (the affected targ
 - ❌ Do NOT ask "should we be DRY about this?" — the default is yes-but-pragmatist; just scan
 - A user override ("skip the reuse-check", "just write it") is informed — honor it without re-litigating
 
-`/plan-eng-review` covers reuse at architecture time and `/review` catches violations post-implementation; this rule fills the implementation-time gap between them. Defer to plan-eng-review's findings for high-level architecture decisions.
+`/review` catches violations after implementation; this rule covers implementation time. If the user ran `/plan-eng-review`, defer to its architecture decisions.

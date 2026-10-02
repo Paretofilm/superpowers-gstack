@@ -106,6 +106,8 @@ This generates a CLAUDE.md with routing rules tailored to your project type, tec
 
 ## The Workflow
 
+Phase 1 is optional and user-started: since 3.5.0 `/adapt` no longer routes to `/office-hours`, the `/plan-*-review` skills or `/autoplan` on its own. Type them when a decision deserves the extra questions.
+
 ```
 ┌─────────────────────────────────────────────────┐
 │  PHASE 1: DISCOVERY & PLANNING (GStack)         │

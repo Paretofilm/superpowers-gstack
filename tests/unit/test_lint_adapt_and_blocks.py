@@ -206,9 +206,13 @@ def test_denylist_catches_a_hardcoded_simulator_model():
     ("## Companion skills <!-- gstack-companion-skills-v3 -->", False, "current companion-skills"),
     ("## Git hygiene <!-- gstack-git-hygiene-v11 --><!-- emitted=101 -->", True,
      "v11 is stale since 3.4.0 — it sent every landing to /ship's pull request"),
-    ("## Git hygiene <!-- gstack-git-hygiene-v12 --><!-- emitted=103 -->", False,
-     "v12 must not be caught by the v11 alternation — the \\b is load-bearing"),
-    ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v8 -->", False,
+    ("## Git hygiene <!-- gstack-git-hygiene-v12 --><!-- emitted=103 -->", True,
+     "v12 is stale since 3.5.0 — it said verify-and-land offers the landing"),
+    ("## Git hygiene <!-- gstack-git-hygiene-v13 --><!-- emitted=104 -->", False,
+     "v13 must not be caught by the v12 alternation — the \\b is load-bearing"),
+    ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v8 -->", True,
+     "v8 is stale since 3.5.0 — it said verify-and-land offers the landing"),
+    ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v9 -->", False,
      "current xcode-tools, carries the user-override paragraph"),
     ("mode: continuous", False, "the only handoff mode still read"),
     ("run gstack `/review` before landing", False, "the 3.0.0 wording for the Codex pass"),
@@ -270,6 +274,8 @@ def test_office_hours_is_user_started_only_and_its_intercept_survives():
     because a user who types /office-hours must still get the track-aware flow."""
     assert _row("/office-hours").startswith("| `/office-hours` | User-started only")
     assert _row("/autoplan").startswith("| `/autoplan` | User-started only")
+    assert _row("/superpowers-gstack:office-hours-track-aware").startswith(
+        "| `/superpowers-gstack:office-hours-track-aware` | User-started only")
     assert "User-started only" in ADAPT_SKILL, "adapt must tell the model to skip those rows"
     assert (REPO / "skills" / "office-hours-track-aware" / "SKILL.md").is_file()
     intercept = (BLOCKS / "track-routing.md").read_text()
@@ -284,3 +290,19 @@ def test_the_remaining_plan_reviews_are_user_started_only():
         row = _row(skill)
         assert row is not None, f"{skill} row disappeared"
         assert row.startswith(f"| `{skill}` | User-started only"), row
+
+
+def test_this_repos_own_routing_matches_the_lite_roster():
+    """3.5.0: the roster stops routing to the interactive planning skills; this repo's
+    own CLAUDE.md routing must not keep doing it."""
+    claude = (REPO / "CLAUDE.md").read_text()
+    start = claude.index("## Skill routing")
+    routing = claude[start:claude.index("\n## ", start + 1)]
+    assert "invoke plan-eng-review" not in routing
+    assert "brainstorming → invoke /superpowers-gstack:office-hours-track-aware" not in routing
+
+
+def test_emitted_blocks_no_longer_say_verify_and_land_offers_the_landing():
+    for name in ("git-hygiene.md", "xcode-tools.md"):
+        text = " ".join((BLOCKS / name).read_text().split())
+        assert "then offers the landing" not in text, name

@@ -1,4 +1,4 @@
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v12 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v13 -->
 
 Commit at meaningful milestones — not at every file save, not only at session end.
 
@@ -43,12 +43,13 @@ review, and rots against the default branch while everything else moves.
 - **A fix nobody has watched run is not verified.** Tests answer *did I break
   something else*; they cannot answer *is the thing I fixed actually fixed*. When the
   project has a runnable app, build the branch and launch **that build** before
-  landing — `/superpowers-gstack:verify-and-land` does exactly that and then offers
-  the landing. On macOS this matters more than it sounds: opening the app by name
+  landing — `/superpowers-gstack:verify-and-land` does exactly that and then lands
+  it by the project's `Landing mode:` line (`land` asks once when the line is missing). On macOS this matters more than it sounds: opening the app by name
   starts the copy in `/Applications`, which is the last release, not this branch. "I
   checked and it is still broken" is very often a stale bundle rather than a failed
   fix, and the fix gets rewritten for no reason.
-- **Offer landing choices in the user's language, with one recommendation.**
+- **When the landing is not settled, offer the choice in the user's language, with one
+  recommendation.** When the project's `Landing mode:` line settles it, land without asking.
   "Merge", "PR" and "default branch" are git policy, not choices a non-git user can
   weigh. Phrase the outcomes: *"make this the live version"* (merge), *"send it for
   review first"* (PR), *"keep it safely stored but not live"* (leave the pushed

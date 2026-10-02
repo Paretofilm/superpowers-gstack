@@ -1,4 +1,4 @@
-## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v8 -->
+## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v9 -->
 
 Xcode-related operations MUST be performed by the agent — NEVER delegated to the user; the user should never need to open Xcode to verify your work. Prefer MCP tools, falling back to CLI otherwise. Check MCP availability via `ToolSearch` first (deferred tools load on demand); drop to CLI only if the search returns nothing.
 
@@ -45,8 +45,8 @@ not inspection**:
 4. Confirm with `ps -o comm=` that the running executable is inside that directory.
 5. Say which branch and commit is on screen before asking whether the fix is there.
 
-`/superpowers-gstack:verify-and-land` performs exactly this sequence and then offers
-the landing; reach for it rather than re-deriving the steps.
+`/superpowers-gstack:verify-and-land` performs exactly this sequence and then lands it
+by the project's `Landing mode:` line; reach for it rather than re-deriving the steps.
 
 ### E2E executor — where committed UI tests run
 
