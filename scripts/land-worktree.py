@@ -8,7 +8,9 @@ state the spec's exit-code table names. The script never runs `git reset`, never
 retries by itself, never passes --yes or --no-hooks to wt, and never removes the
 worktree (the caller leaves it first, then runs `wt remove`). The pre-merge gate is
 forced on (`--config-set merge.verify=true`), so no worktrunk config can switch it
-off, and exactly the commit that passed it is pushed.
+off, and exactly the commit that passed it is pushed. The `Landing mode:` line must
+read the same on the branch and on main (code 14 otherwise): a branch never sets the
+policy it is landed under.
 
 Usage: python3.11+ land-worktree.py [--worktree PATH] [--main-branch NAME] [--preflight-only]
                                     [--ci-wait SECONDS]
@@ -21,6 +23,7 @@ import argparse
 import fcntl
 import json
 import os
+import posixpath
 import re
 import shlex
 import shutil
@@ -36,8 +39,8 @@ try:   # Python >= 3.11. Older (macOS /usr/bin/python3 is 3.9) gets a code-70 ve
 except ModuleNotFoundError:
     tomllib = None
 
-MODE, UNAPPROVED, MAIN_AHEAD, OVERLAP, HOOK_RED, PUSH, NO_WT, NO_HOOK, REBASE, FETCH, LOCKED, DIRTY = (
-    2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
+MODE, UNAPPROVED, MAIN_AHEAD, OVERLAP, HOOK_RED, PUSH, NO_WT, NO_HOOK, REBASE, FETCH, LOCKED, DIRTY, POLICY = (
+    2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
 USAGE, UNKNOWN = 64, 70
 
 MODE_LINE = re.compile(r"Landing mode: (solo|pr)")
@@ -103,12 +106,86 @@ def out(repo, *args):
 
 
 def landing_mode(worktree: Path):
-    """The exact line, outside fenced code blocks. Two different values → 'conflict'."""
+    """The line in the CLAUDE.md on disk at the worktree's top level."""
     f = worktree / "CLAUDE.md"
     if not f.is_file():
         return None
+    return parse_mode(f.read_text(encoding="utf-8", errors="replace"))
+
+
+def mode_at(repo, rev):
+    """The line in CLAUDE.md as committed at `rev` (None: no line, or no readable file)."""
+    found = claude_md_at(repo, rev)
+    return parse_mode(found[1]) if found else None
+
+
+def claude_md_at(repo, rev, path="CLAUDE.md"):
+    """(path, text) of CLAUDE.md as committed at `rev`. A symlink is followed the way the
+    file on disk would be (CLAUDE.md -> AGENTS.md), but only inside the repository: a link
+    out of it, a missing file or an unreadable object is None."""
+    for _ in range(8):
+        r = git(repo, "ls-tree", "-z", "--full-tree", rev, "--", path)
+        entry = r.stdout.split("\0")[0] if r.returncode == 0 else ""
+        if "\t" not in entry or entry.split("\t", 1)[1] != path:
+            return None
+        mode, kind, obj = entry.split("\t", 1)[0].split()
+        if kind != "blob":
+            return None
+        blob = git(repo, "cat-file", "blob", obj)
+        if blob.returncode:
+            return None
+        if mode != "120000":
+            return path, blob.stdout
+        target = posixpath.normpath(posixpath.join(posixpath.dirname(path), blob.stdout))
+        if target.startswith(("/", "../")) or target in ("..", "."):
+            return None
+        path = target
+    return None
+
+
+def describe(mode) -> str:
+    return {None: "no Landing mode line", "conflict": "both 'solo' and 'pr'"}.get(mode, f"'{mode}'")
+
+
+def check_policy(wt, main, branch, main_rev, branch_mode, state):
+    """Land only under the line main already has. A branch that differs from main stops:
+    14 when the branch changed the line, 10 when main changed it after the branch forked
+    (the rebase brings main's line). Equal but not exactly 'solo' stops at 2."""
+    main_mode = mode_at(wt, main_rev)
+    w = q(str(wt))
+    if branch_mode != main_mode:
+        said = f"{main} says {describe(main_mode)}, the branch says {describe(branch_mode)}"
+        fork = out(wt, "merge-base", main_rev, f"refs/heads/{branch}")
+        if fork and mode_at(wt, fork) == branch_mode:
+            raise Stop(REBASE, f"rebase needed: the landing mode on {main} changed after '{branch}' forked "
+                               f"({said})", state=state,
+                       commands=[f"wt -C {w} step rebase {q(main)}",
+                                 f"git -C {w} rebase {q(main)}   # the same without worktrunk", "then land again"])
+        # a symlinked CLAUDE.md changes in its target: name that file in the diff too
+        files = ["CLAUDE.md", *sorted({f[0] for f in (claude_md_at(wt, main_rev), claude_md_at(wt, f"refs/heads/{branch}"))
+                                       if f and f[0] != "CLAUDE.md"})]
+        raise Stop(POLICY, f"'{branch}' changes the landing mode: {said} — a branch never sets the policy "
+                           "it is landed under", state=state,
+                   commands=[f"git -C {w} diff {q(f'{main}...{branch}')} -- {' '.join(map(q, files))}"
+                             "   # show the user this change",
+                             f"keep it: it reaches {main} on its own first, never through land; "
+                             f"undo it: restore {main}'s line on the branch, commit, land again"])
+    if branch_mode != "solo":
+        raise Stop(MODE, ("CLAUDE.md has both 'Landing mode: solo' and 'Landing mode: pr' outside code blocks "
+                          "(fails closed)" if branch_mode == "conflict" else
+                          f"Landing mode is '{branch_mode}', not 'solo'" if branch_mode else
+                          "CLAUDE.md has no exact 'Landing mode: solo' or 'Landing mode: pr' line outside code "
+                          "blocks (fails closed)"),
+                   state=state,
+                   commands=["mode 'pr': use /ship",
+                             f"no line: ask the user once, then commit the answer on {main} itself, not on the "
+                             "branch (a line the branch adds stops at 14); rebase the branch and land again"])
+
+
+def parse_mode(text: str):
+    """The exact line, outside fenced code blocks. Two different values → 'conflict'."""
     found, fence = set(), None
-    for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line in text.splitlines():
         m = FENCE.match(line)
         if m:
             mark = m.group(1)
@@ -185,13 +262,17 @@ def primary_worktree(repo) -> Path | None:
 
 
 def default_branch(repo) -> str | None:
-    """origin/HEAD, else an existing local main, else master (as check-branch-hygiene.sh)."""
+    """origin/HEAD, else origin/main, origin/master, local main, local master: the order of
+    verify-and-land's DEFAULT_REF, so both name the same branch. (Local first picked a
+    local master beside origin/main and landed on the wrong branch; now the missing local
+    main is a code-64 stop.)"""
     ref = out(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
     if ref and "/" in ref:
         return ref.split("/", 1)[1]
-    for name in ("main", "master"):
-        if git(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{name}").returncode == 0:
-            return name
+    for prefix in ("refs/remotes/origin", "refs/heads"):
+        for name in ("main", "master"):
+            if git(repo, "show-ref", "--verify", "--quiet", f"{prefix}/{name}").returncode == 0:
+                return name
     return None
 
 
@@ -351,15 +432,20 @@ def land(a) -> dict:
                    commands=["run it with python3.11 or newer, e.g. python3.13 or /opt/homebrew/bin/python3"])
     wt = Path(a.worktree).resolve()
     GIT_ENV, WT_ENV = batch_env(wt), scrubbed_env()
+    top = out(wt, "rev-parse", "--show-toplevel")
     common = out(wt, "rev-parse", "--path-format=absolute", "--git-common-dir")
     branch = out(wt, "rev-parse", "--abbrev-ref", "HEAD")
-    if not common or not branch:
+    if not top or not common or not branch:
         raise Stop(USAGE, f"{wt} is not a git worktree")
+    wt = Path(top)   # called from a subdirectory: CLAUDE.md and .config/wt.toml live at the top, as wt reads them
     main = a.main_branch or default_branch(wt)
     if not main:
-        raise Stop(USAGE, "no origin/HEAD and no local 'main' or 'master' — pass --main-branch NAME")
+        raise Stop(USAGE, "no origin/HEAD, no origin/main or origin/master and no local 'main' or 'master' "
+                          "— pass --main-branch NAME")
     if git(wt, "rev-parse", "--verify", "--quiet", f"refs/heads/{main}").returncode != 0:
-        raise Stop(USAGE, f"main branch '{main}' does not exist here — pass --main-branch NAME")
+        hint = ([f"git -C {q(str(wt))} branch --track {q(main)} {q(f'origin/{main}')}   # creates it from origin"]
+                if out(wt, "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{main}") else [])
+        raise Stop(USAGE, f"main branch '{main}' does not exist here — pass --main-branch NAME", commands=hint)
     if rebase_open(wt):   # before the branch check: HEAD is detached while a rebase is open
         w = q(str(wt))
         raise Stop(REBASE, "a rebase is open in the worktree — finish or abort it, then land again",
@@ -374,28 +460,26 @@ def land(a) -> dict:
 
 
 def _land_locked(a, wt, branch, main, lock_fd) -> dict:
-    mode = landing_mode(wt)
-    if mode != "solo":
-        raise Stop(MODE, ("CLAUDE.md has both 'Landing mode: solo' and 'Landing mode: pr' outside code blocks "
-                          "(fails closed)" if mode == "conflict" else
-                          f"Landing mode is '{mode}', not 'solo'" if mode else
-                          "CLAUDE.md has no exact 'Landing mode: solo' or 'Landing mode: pr' line outside code "
-                          "blocks (fails closed)"),
-                   commands=["mode 'pr': use /ship", "no line: ask the user once, then write it under a heading the project owns"])
+    heads = f"refs/heads/{main}"
+    # Before anything moves: the line on disk here against local main. Checked again
+    # below against the exact main and tip the merge uses (main may fast-forward first).
+    check_policy(wt, main, branch, heads, landing_mode(wt), state="nothing moved")
     if not has_pre_merge_hook(wt):
         raise Stop(NO_HOOK, "no top-level pre-merge hook that runs a command in .config/wt.toml "
                             "— nothing would gate this landing",
                    commands=["propose a .config/wt.toml whose [pre-merge] runs the same commands as CI; the user approves it"])
     if not shutil.which("wt"):
-        raise Stop(NO_WT, "wt (worktrunk) is not installed",
-                   commands=["fall back to: git worktree add, then /superpowers:finishing-a-development-branch"])
+        raise Stop(NO_WT, "wt (worktrunk) is not installed — it runs the pre-merge gate, so nothing lands without it",
+                   state="nothing moved",
+                   commands=["brew install worktrunk   # or: cargo install worktrunk — the user installs it",
+                             "then land again (the project's hooks may still need approving: exit 3 says how)"])
     if unapproved(wt):
         raise Stop(UNAPPROVED, "the project's hooks are not approved (or their approval state could not be read)",
                    commands=[f"wt -C {q(str(wt))} config approvals list",
                              f"wt -C {q(str(wt))} config approvals add"])
     w = q(str(wt))
     primary = primary_worktree(wt)
-    heads, origin = f"refs/heads/{main}", f"refs/remotes/origin/{main}"
+    origin = f"refs/remotes/origin/{main}"
     has_origin = out(wt, "remote", "get-url", "origin") is not None
     PROGRESS.update(primary=primary, has_origin=has_origin)
     if has_origin and git(wt, "fetch", "origin").returncode != 0:
@@ -440,15 +524,19 @@ def _land_locked(a, wt, branch, main, lock_fd) -> dict:
                              f"git -C {w} rebase {q(main)}   # the same without worktrunk",
                              "then land again"])
     base = out(wt, "rev-parse", origin) if has_origin else None
-    if a.preflight_only:
-        return {"landed": False, "preflight": "ok", "branch": branch, "main": main,
-                "main_worktree": str(mw["path"]) if mw else None}
-
     # The tip is captured BEFORE the gate: a commit that appears on the branch while the
     # hooks run was never checked, and wt would fast-forward main to it.
     before, tip = out(wt, "rev-parse", heads), out(wt, "rev-parse", f"refs/heads/{branch}")
     if not before or not tip:
         raise Stop(UNKNOWN, f"could not read {main} or '{branch}' before the merge")
+    # The landing mode again, on exactly the main and the tip the merge will use: local
+    # main may have been fast-forwarded to an origin/main whose line the first check never saw.
+    check_policy(wt, main, branch, before, mode_at(wt, tip),
+                 state=(ff_note or "nothing moved") + "; nothing was merged or pushed")
+    if a.preflight_only:
+        return {"landed": False, "preflight": "ok", "branch": branch, "main": main,
+                "main_worktree": str(mw["path"]) if mw else None}
+
     PROGRESS.update(before=before, base=base, tip=tip)
     merge = wt_cmd(wt, *WT_MERGE, main, pass_fds=(lock_fd,))
     if merge.returncode:

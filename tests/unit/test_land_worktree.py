@@ -109,6 +109,34 @@ def verdict(p):
 
 # --- mode: fails closed -------------------------------------------------------
 
+def project_mode(lab, text):
+    """The whole project says `text` (None: no CLAUDE.md at all): committed on main,
+    pushed, and the branch rebased onto it, so main and branch agree."""
+    if text is None:
+        git(lab.primary, "rm", "-q", "CLAUDE.md")
+    else:
+        (lab.primary / "CLAUDE.md").write_text(text)
+        git(lab.primary, "add", "CLAUDE.md")
+    git(lab.primary, "commit", "-qm", "chore: mode on main")
+    git(lab.primary, "push", "-q", "origin", "main")
+    git(lab.wt, "rebase", "-q", "main")
+
+
+def set_mode(lab, text, scope):
+    """`project`: main and branch say it alike. `branch`: only the branch says it (main
+    keeps the fixture's `Landing mode: solo`)."""
+    if scope == "project":
+        project_mode(lab, text)
+    else:
+        (lab.wt / "CLAUDE.md").write_text(text)
+        git(lab.wt, "commit", "-qam", "chore: mode")
+
+
+# 3.5.1: what the project says (main and branch alike) is read as before → 2. The same
+# text on the branch alone, against main's solo, is the branch changing the mode → 14.
+SCOPES = [pytest.param("project", 2, id="project"), pytest.param("branch", 14, id="branch-only")]
+
+
 @pytest.mark.parametrize("text", [
     "# proj\n",                                        # no line at all
     "# proj\n\nLanding mode: pr\n",                    # explicit pr
@@ -116,11 +144,11 @@ def verdict(p):
     "# proj\n\nSet Landing mode: solo in prose.\n",    # inside a sentence
     "# proj\n\nLanding mode: SOLO\n",                  # wrong case
 ])
-def test_mode_other_than_exact_solo_fails_closed(lab, text):
-    (lab.wt / "CLAUDE.md").write_text(text)
-    git(lab.wt, "commit", "-qam", "chore: mode")
+@pytest.mark.parametrize("scope,code", SCOPES)
+def test_mode_other_than_exact_solo_fails_closed(lab, text, scope, code):
+    set_mode(lab, text, scope)
     p = land(lab, "--preflight-only")
-    assert p.returncode == 2, p.stderr
+    assert p.returncode == code, p.stderr
     assert verdict(p)["landed"] is False
 
 
@@ -133,10 +161,10 @@ FENCE = "```"
     "# proj\n\nLanding mode: solo\n\nLanding mode: pr\n",                   # the real lines disagree
     "# proj\n\nLanding mode: pr\n\nLanding mode: solo\n",
 ])
-def test_mode_in_a_code_fence_or_conflicting_fails_closed(lab, text):
-    (lab.wt / "CLAUDE.md").write_text(text)
-    git(lab.wt, "commit", "-qam", "chore: mode")
-    assert land(lab, "--preflight-only").returncode == 2
+@pytest.mark.parametrize("scope,code", SCOPES)
+def test_mode_in_a_code_fence_or_conflicting_fails_closed(lab, text, scope, code):
+    set_mode(lab, text, scope)
+    assert land(lab, "--preflight-only").returncode == code
 
 
 def test_a_fenced_pr_example_does_not_override_the_real_solo_line(lab):
@@ -144,6 +172,172 @@ def test_a_fenced_pr_example_does_not_override_the_real_solo_line(lab):
     git(lab.wt, "commit", "-qam", "chore: mode")
     p = land(lab, "--preflight-only")
     assert p.returncode == 0, p.stderr
+
+
+# --- 3.5.1: a branch never sets the policy it is landed under -------------------
+# Codex adversarial review 2026-10-02: the mode was read only from the worktree being
+# landed, so a branch that switched `pr` to `solo` (or added `solo`) landed on main
+# with no pull request. The line is now compared with main's own.
+
+SOLO, PR, NO_LINE = "# proj\n\nLanding mode: solo\n", "# proj\n\nLanding mode: pr\n", "# proj\n"
+
+
+def nothing_moved(lab, main_before, remote_before):
+    assert not (lab.root / "bin" / "merge-argv").exists(), "wt merge never ran"
+    assert git(lab.primary, "rev-parse", "main") == main_before, "local main did not move"
+    assert git(lab.remote, "rev-parse", "main") == remote_before, "nothing was pushed"
+
+
+@pytest.mark.parametrize("on_main,on_branch", [
+    pytest.param(PR, SOLO, id="pr-to-solo"),
+    pytest.param(NO_LINE, SOLO, id="adds-solo"),
+    pytest.param(None, SOLO, id="adds-claude-md-with-solo"),
+    pytest.param(SOLO, PR, id="solo-to-pr"),
+    pytest.param(SOLO, NO_LINE, id="drops-the-line"),
+    pytest.param(SOLO, f"# proj\n\n{FENCE}\nLanding mode: solo\n{FENCE}\n", id="fences-the-line"),
+    pytest.param(PR, "# proj\n\nLanding mode: pr\n\nLanding mode: solo\n", id="adds-a-second-value"),
+])
+def test_a_branch_that_introduces_or_changes_the_landing_mode_is_code_14(lab, on_main, on_branch):
+    if on_main != SOLO:
+        project_mode(lab, on_main)
+    (lab.wt / "CLAUDE.md").write_text(on_branch)
+    git(lab.wt, "add", "CLAUDE.md")
+    git(lab.wt, "commit", "-qm", "chore: the branch sets its own landing mode")
+    main_before, remote_before = git(lab.primary, "rev-parse", "main"), git(lab.remote, "rev-parse", "main")
+    p = land(lab, merge=FF_MERGE)                  # a real landing attempt, not a preflight
+    assert p.returncode == 14, p.stdout + p.stderr
+    v = verdict(p)
+    assert v["landed"] is False and v["code"] == 14
+    assert "main says" in p.stderr and "the branch says" in p.stderr, "both values are named"
+    assert "diff" in p.stderr and "CLAUDE.md" in p.stderr, "the change is printed for the user"
+    nothing_moved(lab, main_before, remote_before)
+
+
+def test_a_branch_that_edits_claude_md_but_keeps_the_mode_lands_as_before(lab):
+    (lab.wt / "CLAUDE.md").write_text(f"# proj\n\nNotes.\n\n{FENCE}\nLanding mode: pr\n{FENCE}\n\nLanding mode: solo\n")
+    git(lab.wt, "commit", "-qam", "docs: notes, same mode")
+    p = land(lab, merge=FF_MERGE)
+    assert p.returncode == 0, p.stderr
+    assert git(lab.remote, "rev-parse", "main") == git(lab.wt, "rev-parse", "HEAD")
+
+
+def test_main_changing_the_mode_after_the_branch_forked_is_a_rebase_not_14(lab):
+    """The branch did not touch the line; main did, later. That is 'rebase needed' (after
+    the rebase the branch carries main's line), not a branch setting its own policy."""
+    (lab.primary / "CLAUDE.md").write_text(PR)
+    git(lab.primary, "commit", "-qam", "chore: the project moves to pull requests")
+    git(lab.primary, "push", "-q", "origin", "main")
+    main_before, remote_before = git(lab.primary, "rev-parse", "main"), git(lab.remote, "rev-parse", "main")
+    p = land(lab, merge=FF_MERGE)
+    assert p.returncode == 10, p.stderr
+    assert "rebase needed" in p.stderr and "landing mode" in p.stderr
+    nothing_moved(lab, main_before, remote_before)
+
+
+def test_a_stale_local_main_cannot_hide_a_mode_change_on_origin(lab):
+    """origin/main moved to `pr`; local main still says `solo`. A branch that contains
+    origin/main and switches back to `solo` looks unchanged next to the stale local main.
+    The landing compares again with the main it would land on (after the fast-forward)."""
+    other = lab.root / "other"
+    subprocess.run(["git", "clone", "-q", str(lab.remote), str(other)], check=True)
+    for k, v in (("user.email", "t@t.t"), ("user.name", "t")):
+        git(other, "config", k, v)
+    commit(other, "CLAUDE.md", PR, "chore: the project moves to pull requests")
+    git(other, "push", "-q", "origin", "main")
+    git(lab.wt, "fetch", "-q", "origin")
+    git(lab.wt, "rebase", "-q", "origin/main")
+    commit(lab.wt, "CLAUDE.md", SOLO, "chore: and back to solo, on the branch")
+    remote_before = git(lab.remote, "rev-parse", "main")
+    p = land(lab, merge=FF_MERGE)
+    assert p.returncode == 14, p.stdout + p.stderr
+    assert "local main was fast-forwarded to origin/main" in p.stderr, "the one move is named"
+    assert not (lab.root / "bin" / "merge-argv").exists(), "wt merge never ran"
+    assert git(lab.remote, "rev-parse", "main") == remote_before, "nothing was pushed"
+
+
+@pytest.mark.parametrize("sub_claude_md,project,code", [
+    pytest.param("# pkg\n\nLanding mode: pr\n", SOLO, 0, id="sub-says-pr-root-solo"),
+    pytest.param(None, SOLO, 0, id="no-claude-md-in-sub"),
+    pytest.param("# pkg\n\nLanding mode: solo\n", PR, 2, id="sub-says-solo-root-pr"),
+])
+def test_a_call_from_a_subdirectory_reads_the_worktree_root(lab, sub_claude_md, project, code):
+    if project != SOLO:
+        project_mode(lab, project)
+    sub = lab.wt / "pkg"
+    sub.mkdir()
+    (sub / ("CLAUDE.md" if sub_claude_md else "keep.md")).write_text(sub_claude_md or "x\n")
+    git(lab.wt, "add", "-A")
+    git(lab.wt, "commit", "-qm", "feat: a package with its own notes")
+    p = land(lab, "--preflight-only", wt=sub)
+    assert p.returncode == code, p.stdout + p.stderr
+
+
+def test_a_subdirectorys_own_gate_file_is_not_the_projects_gate(lab):
+    """wt merge reads .config/wt.toml at the worktree root; the check must read the same file."""
+    (lab.wt / ".config" / "wt.toml").write_text('[post-start]\nx = "true"\n')   # root: no gate
+    sub = lab.wt / "pkg"
+    (sub / ".config").mkdir(parents=True)
+    (sub / ".config" / "wt.toml").write_text(HOOK_TOML)
+    (sub / "CLAUDE.md").write_text(SOLO)
+    git(lab.wt, "add", "-A")
+    git(lab.wt, "commit", "-qam", "chore: gate only in a subdirectory")
+    assert land(lab, "--preflight-only", wt=sub).returncode == 9
+
+
+def test_a_symlinked_claude_md_is_read_through_the_link_on_main_too(lab):
+    """CLAUDE.md -> AGENTS.md is common. The worktree's file is read through the link, so
+    main's committed copy must be too, or every such project would stop at 14."""
+    (lab.primary / "AGENTS.md").write_text(SOLO)
+    (lab.primary / "CLAUDE.md").unlink()
+    (lab.primary / "CLAUDE.md").symlink_to("AGENTS.md")
+    git(lab.primary, "add", "-A")
+    git(lab.primary, "commit", "-qm", "chore: CLAUDE.md is a link")
+    git(lab.primary, "push", "-q", "origin", "main")
+    git(lab.wt, "rebase", "-q", "main")
+    p = land(lab, "--preflight-only")
+    assert p.returncode == 0, p.stderr
+    commit(lab.wt, "AGENTS.md", PR, "chore: the branch rewrites the link's target")
+    p = land(lab, "--preflight-only")
+    assert p.returncode == 14
+    diff = next(c for c in p.stderr.splitlines() if " diff " in c)
+    assert "AGENTS.md" in diff, "the printed diff shows the file that actually changed"
+
+
+def test_code_14_prints_a_diff_that_survives_a_shell_with_a_hostile_branch_name(lab):
+    hostile = lab.root / "hostile wt"
+    git(lab.primary, "worktree", "add", "-q", "-b", "feat/$(touch${IFS}pwned);'q", str(hostile))
+    commit(hostile, "CLAUDE.md", PR, "chore: the branch switches to pr")
+    p = land(lab, "--preflight-only", wt=hostile)
+    assert p.returncode == 14, p.stderr
+    cmd = next(c for c in p.stderr.splitlines() if " diff " in c).split("   #")[0].strip()
+    r = subprocess.run(["sh", "-c", cmd], capture_output=True, text=True, cwd=lab.root)
+    assert r.returncode == 0, r.stderr
+    assert "+Landing mode: pr" in r.stdout and "-Landing mode: solo" in r.stdout
+    assert not (lab.root / "pwned").exists() and not (hostile / "pwned").exists()
+
+
+def test_mode_at_reads_a_commit_and_never_follows_a_link_out_of_the_repository(tmp_path):
+    m = load_module()
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    for k, v in (("user.email", "t@t.t"), ("user.name", "t")):
+        git(repo, "config", k, v)
+    (tmp_path / "outside.md").write_text(SOLO)
+    (repo / "docs").mkdir()
+    (repo / "docs" / "agents.md").write_text(SOLO)
+    (repo / "CLAUDE.md").symlink_to("docs/agents.md")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "in-repo link")
+    assert m.mode_at(repo, "HEAD") == "solo"
+    for target in ("../outside.md", str(tmp_path / "outside.md")):
+        (repo / "CLAUDE.md").unlink()
+        (repo / "CLAUDE.md").symlink_to(target)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-qm", f"link to {target}")
+        assert m.mode_at(repo, "HEAD") is None, target
+    git(repo, "rm", "-q", "CLAUDE.md")
+    git(repo, "commit", "-qm", "no CLAUDE.md")
+    assert m.mode_at(repo, "HEAD") is None
 
 
 # --- hook presence, wt presence, approvals ------------------------------------
@@ -193,6 +387,15 @@ def test_approvals_that_cannot_be_read_fail_closed_as_code_3(lab, rc, listing):
 
 def test_wt_missing_is_code_8(lab):
     assert land(lab, "--preflight-only", shim=None).returncode == 8
+
+
+def test_wt_missing_says_how_to_install_it_and_offers_no_merge_without_the_gate(lab):
+    """3.5.1 (Codex review): the old fallback, git worktree + finishing-a-development-branch,
+    merges without the project's approved pre-merge checks. Without wt there is no landing."""
+    p = land(lab, "--preflight-only", shim=None)
+    assert p.returncode == 8
+    assert "brew install worktrunk" in p.stderr
+    assert "finishing-a-development-branch" not in p.stderr and "fall back" not in p.stderr.lower()
 
 
 def test_unapproved_hooks_is_code_3_and_names_the_command(lab):
@@ -821,6 +1024,70 @@ def test_default_branch_falls_back_to_main_then_master(tmp_path, branch, code):
         assert verdict(p)["main"] == branch
     else:
         assert "--main-branch" in p.stderr
+
+
+@pytest.mark.parametrize("remote_branches", [
+    pytest.param(("main",), id="origin-main-only"),
+    pytest.param(("main", "master"), id="origin-main-and-a-stale-master"),
+])
+def test_default_branch_agrees_with_verify_and_land_when_origin_head_is_missing(tmp_path, remote_branches):
+    """3.5.1: with no origin/HEAD (a repo only ever pushed, never fetched), verify-and-land's
+    DEFAULT_REF tries origin/main first. land tried local main, then local master — so with
+    origin/main and only a local master it picked master, and with a stale origin/master
+    beside origin/main it landed and pushed there. Now both name main; master is no target."""
+    r = solo_repo(tmp_path, "master")
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(remote)], check=True)
+    git(r.primary, "remote", "add", "origin", str(remote))
+    for name in remote_branches:
+        git(r.primary, "push", "-q", "origin", f"master:{name}")
+    assert git(r.primary, "symbolic-ref", "-q", "refs/remotes/origin/HEAD", check=False) == ""
+    before = {n: git(remote, "rev-parse", n) for n in remote_branches}
+    p = land(r, merge=FF_MERGE)
+    assert p.returncode == 64, p.stdout + p.stderr
+    assert "'main' does not exist here" in p.stderr and "--main-branch" in p.stderr
+    assert {n: git(remote, "rev-parse", n) for n in remote_branches} == before, "nothing was pushed"
+
+
+# --- the skill's exit-code table matches the script ---------------------------
+
+LAND_SKILL = REPO / "skills" / "land" / "SKILL.md"
+
+
+def exit_rows() -> dict[int, str]:
+    rows = {}
+    for line in LAND_SKILL.read_text().splitlines():
+        if line.startswith("| ") and line.split("|")[1].strip().isdigit():
+            rows[int(line.split("|")[1])] = " ".join(line.split())
+    return rows
+
+
+def test_exit_codes_are_distinct_and_each_has_a_row_in_the_skill():
+    m = load_module()
+    codes = [m.MODE, m.UNAPPROVED, m.MAIN_AHEAD, m.OVERLAP, m.HOOK_RED, m.PUSH, m.NO_WT, m.NO_HOOK,
+             m.REBASE, m.FETCH, m.LOCKED, m.DIRTY, m.POLICY, m.USAGE, m.UNKNOWN]
+    assert len(set(codes)) == len(codes), "two stops share a code"
+    assert not {0, 1} & set(codes), "0 is landed; 1 is what an uncaught Python error exits with"
+    assert set(exit_rows()) == {0, *codes}
+
+
+def test_skill_exit_14_shows_the_change_and_leaves_the_choice_to_the_user():
+    row = exit_rows()[14]
+    assert "git diff" in row and "CLAUDE.md" in row
+    assert "never through `land`" in row, "the policy change reaches main on its own"
+    assert "/ship" in row, "a project whose main says pr takes the change through a pull request"
+    assert "restore" in row, "or the branch is put right"
+
+
+def test_skill_exit_8_stops_for_the_install_and_merges_nothing_without_the_gate():
+    row = exit_rows()[8]
+    assert "brew install worktrunk" in row
+    assert "Fall back" not in row and "without the gate" in row.replace("pre-merge ", "")
+
+
+def test_skill_exit_2_records_a_missing_line_on_main_not_on_the_branch():
+    row = exit_rows()[2]
+    assert "on `main`" in row and "not on the branch" in row, "a line the branch adds stops at 14"
 
 
 def test_interrupt_during_the_push_is_not_called_landed(lab):

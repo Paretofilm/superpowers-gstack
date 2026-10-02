@@ -77,13 +77,15 @@ def test_phase7_lands_by_the_projects_landing_mode_without_a_second_question():
 
 def test_phase7_follows_lands_exit_codes_and_offers_no_menu_of_its_own():
     """The old Phase 7 handed over to finishing-a-development-branch, which shows its own
-    menu (two menus for one landing). land's exit-code table is the authority now; the
-    finishing skill is reachable only through land's exit-8 row."""
+    menu (two menus for one landing). land's exit-code table is the authority now. 3.5.1:
+    land's exit 8 no longer falls back to the finishing skill either (it merges without
+    the project's pre-merge gate), so Phase 7 never offers it at all."""
     p7 = " ".join(_phase7().split())
     assert "Merge into the default branch" not in p7
     assert "follow `land`'s own exit-code table" in p7
     assert p7.count("/superpowers:finishing-a-development-branch") == 1
-    assert "never offer `/superpowers:finishing-a-development-branch` from this skill except through that row" in p7
+    assert "never offer `/superpowers:finishing-a-development-branch` from this skill:" in p7
+    assert "except through that row" not in p7 and "exit-8 fallback" not in p7
 
 
 def test_phase7_asks_only_when_the_branch_changes_the_landing_mode():
@@ -97,6 +99,8 @@ def test_phase7_asks_only_when_the_branch_changes_the_landing_mode():
     assert 'git show "$DEFAULT_REF":CLAUDE.md' in p7
     novalid = " ".join(p7[p7.index("**No valid line**"):].split())
     assert "/superpowers-gstack:land" in novalid and "Do not ask it here as well" in novalid
+    # 3.5.1: the answer is acted on the way land's own stop for this case says
+    assert "exit-14 row" in " ".join(changes.split())
 
 
 def test_phase7_rechecks_the_verified_commit_before_pushing():

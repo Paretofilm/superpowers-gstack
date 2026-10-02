@@ -304,6 +304,8 @@ adds no question of its own when the project has already decided how it lands.
    - **The branch changes the landing mode** (the two differ) → land nothing
      automatically: a branch must not set the policy it is landed under. Ask once with
      `AskUserQuestion` which mode holds, naming both values, and end your message at it.
+     Act on the answer as `land`'s exit-14 row says: it is the same stop, made by `land`
+     itself when it is invoked on such a branch.
    - **`solo`** → invoke `/superpowers-gstack:land` for this worktree, from its root, with
      no further question.
    - **`pr`** → invoke `/ship` inside this worktree, with no further question from this
@@ -315,9 +317,10 @@ adds no question of its own when the project has already decided how it lands.
      the answer. Do not ask it here as well.
 
    When `land` stops with an exit code, follow `land`'s own exit-code table: it is the
-   authority on the next step, including its exit-8 fallback when `wt` is not installed.
-   Add no menu of your own on top of it, and never offer
-   `/superpowers:finishing-a-development-branch` from this skill except through that row.
+   authority on the next step. Add no menu of your own on top of it, and never offer
+   `/superpowers:finishing-a-development-branch` from this skill: it merges without the
+   project's pre-merge gate, which is why `land` stops at exit 8 when `wt` is not
+   installed instead of falling back to it.
 
 **If the branch is checked out in a worktree**, run `/ship` and `/superpowers-gstack:land`
 from that worktree's root: a branch cannot be checked out twice, and `git checkout` fails
