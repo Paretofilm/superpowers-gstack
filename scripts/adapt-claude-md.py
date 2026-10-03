@@ -354,8 +354,9 @@ def context_skill(project: Path, explicit: str | None) -> tuple[str, bool]:
 def render_context_skill(name: str, project_display: str) -> str:
     if not CONTEXT_TEMPLATE.is_file():
         raise Refusal(f"UNREADABLE: {CONTEXT_TEMPLATE} is missing — run `/plugin update superpowers-gstack`")
-    return CONTEXT_TEMPLATE.read_text(encoding="utf-8").replace(
-        "{{CONTEXT_SKILL}}", name).replace("{{PROJECT}}", project_display)
+    values = {"CONTEXT_SKILL": name, "PROJECT": project_display}
+    return re.sub(r"\{\{(CONTEXT_SKILL|PROJECT)\}\}", lambda m: values[m.group(1)],
+                  CONTEXT_TEMPLATE.read_text(encoding="utf-8"))
 
 
 # --- the report -------------------------------------------------------------------
@@ -1075,6 +1076,8 @@ def parse_sets(items: list[str]) -> dict[str, str]:
                           f"and a line break in it could forge a heading or a marker")
         if "{{" in v:
             raise Refusal(f"BLOCKED — --set {k} carries a `{{{{` placeholder; a value must be resolved, not another token")
+        if k == "CONTEXT_SKILL":
+            raise Refusal("BLOCKED — CONTEXT_SKILL is resolved by the script; do not pass --set CONTEXT_SKILL")
         sets[k] = v
     if "DOMAIN_SENSITIVITY" in sets and sets["DOMAIN_SENSITIVITY"] not in SENSITIVITIES:
         raise Refusal(f"BLOCKED — DOMAIN_SENSITIVITY must be one of {', '.join(SENSITIVITIES)}")
@@ -1155,8 +1158,11 @@ def main(argv=None) -> int:
             ctx.sets["CONTEXT_SKILL"] = ctx_skill
             skill_file = project / ".claude" / "skills" / ctx_skill / "SKILL.md"
             if not ctx_skill_exists:
-                if skill_file.parent.exists() and not skill_file.parent.is_dir():
-                    raise Refusal(f"BLOCKED — {skill_file.parent} is a file; the context skill needs that directory")
+                for anc in skill_file.parents:
+                    if anc == project:
+                        break
+                    if anc.exists() and not anc.is_dir():
+                        raise Refusal(f"BLOCKED — {anc} is a file; the context skill needs that directory")
                 content = render_context_skill(ctx_skill, ctx.project)   # a missing template refuses here
         new_text, report = merge(text, ctx)
         report.notes = pre_notes.notes + report.notes

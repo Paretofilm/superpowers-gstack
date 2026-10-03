@@ -1057,3 +1057,33 @@ def test_slug():
     assert m.slug("Resolve-ai-worker") == "resolve-ai-worker"
     assert m.slug("  My  App!! ") == "my-app"
     assert m.slug("???") == "project"
+
+
+# --- fix round 1: refusals before the first write, single-pass rendering ---------------
+
+def test_a_file_where_the_context_skill_needs_a_directory_refuses_before_writing(tmp_path):
+    for blocker in (".claude", ".claude/skills"):
+        proj = project(tmp_path / blocker.replace("/", "_"), workflow="vibe")
+        before = (proj / "CLAUDE.md").read_text() if (proj / "CLAUDE.md").exists() else None
+        target = proj / blocker
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("not a directory")
+        p = run(proj, *WEB_SETS, expect=2)
+        assert "BLOCKED" in p.stderr and "is a file" in p.stderr
+        after = (proj / "CLAUDE.md").read_text() if (proj / "CLAUDE.md").exists() else None
+        assert after == before
+
+
+def test_set_context_skill_is_refused(tmp_path):
+    for wf in (None, "vibe"):
+        proj = project(tmp_path / str(wf), workflow=wf) if wf else project(tmp_path / "classic")
+        p = run(proj, *WEB_SETS, "--set", "CONTEXT_SKILL=x", expect=2)
+        assert "CONTEXT_SKILL is resolved by the script" in p.stderr
+
+
+def test_a_project_name_with_a_token_does_not_leak_one_into_the_skill(tmp_path):
+    proj = project(tmp_path, workflow="vibe")
+    run(proj, *WEB_SETS, "--project-name", "A {{CONTEXT_SKILL}} {{PROJECT}} B")
+    text = context_file(proj, "a-context-skill-project-b-context").read_text()
+    assert "# A {{CONTEXT_SKILL}} {{PROJECT}} B — project knowledge" in text
+    assert "name: a-context-skill-project-b-context" in text
