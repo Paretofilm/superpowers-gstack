@@ -307,3 +307,82 @@ def test_int_rejects_nan_infinity_negatives_and_booleans(tmp_path):
         out = cli(tmp_path, command)
         assert not re.search(r"\b(nan|inf|infinity)\b", out, re.I)
         assert not any(tok.startswith("-") and tok[1:2].isdigit() for tok in out.split())
+
+
+# ---- fix round 1 ----
+def test_digest_survives_non_string_question_fields(tmp_path):
+    d = tmp_path / "-Users-ann-Developer-q"
+    write(d / "s.jsonl", [
+        human("2026-10-01T10:00:00Z", "go"),
+        assistant("2026-10-01T10:00:02Z", "a", [{"type": "tool_use", "id": "q", "name": "AskUserQuestion",
+                                                 "input": {"questions": [{"question": ["x"], "header": "h"},
+                                                                         {"question": {"k": 1}, "header": ["h"]},
+                                                                         {"question": "Fine?", "header": "ok"}]}}]),
+        {"type": "user", "timestamp": "2026-10-01T10:00:03Z",
+         "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "q", "content": 'x "Fine?"="Yes"'}]}},
+    ])
+    out = cli(tmp_path, "digest", "--session", str(d / "s.jsonl"))
+    assert "Fine?" in out and "Yes" in out
+
+
+def _sub_file(root: Path, first_user: str) -> None:
+    write(root / "-Users-ann-Developer-sub" / "s1" / "subagents" / "agent-a.jsonl", [
+        {"type": "user", "timestamp": "2026-10-01T10:00:00Z", "message": {"role": "user", "content": first_user}},
+        assistant("2026-10-01T10:00:01Z", "a", [{"type": "tool_use", "id": "b1", "name": "Bash", "input": {"command": "swift test"}}]),
+        {"type": "user", "timestamp": "2026-10-01T10:00:11Z",
+         "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "b1", "content": "ok"}]}},
+    ])
+
+
+def test_triggers_tells_an_instructed_command_from_the_subagents_own_initiative(tmp_path):
+    _sub_file(tmp_path / "a", "Implement phase 1 and run swift test")
+    _sub_file(tmp_path / "b", "Implement phase 1")
+    _sub_file(tmp_path / "c", "Kjør enhetstest etter endringen")
+    assert "| instructed in the brief | 1 |" in cli(tmp_path / "a", "triggers")
+    assert "| the subagent's own initiative | 1 |" in cli(tmp_path / "b", "triggers")
+    assert "| instructed in the brief | 1 |" in cli(tmp_path / "c", "triggers")
+
+
+def test_skills_survives_an_absurd_history_timestamp_and_notes_a_narrowed_scope(tmp_path, monkeypatch):
+    from workflow_metrics import skills
+    root = fixture_more(tmp_path / "root")
+    hist = tmp_path / "history.jsonl"
+    hist.write_text(json.dumps({"display": "/unused-skill now", "timestamp": 1e300}) + "\n"
+                    + json.dumps({"display": "/unused-skill", "timestamp": 1e18}) + "\n")
+    monkeypatch.setattr(skills, "HISTORY", str(hist))
+    monkeypatch.setattr(lib, "DEFAULT_ROOT", str(root))
+    full = skills.report(lib.Scope(root=str(root)))
+    assert "Traceback" not in full and "Note: history counts are all-time" not in full
+    narrowed = skills.report(lib.Scope(root=str(root), project="demo"))
+    assert "Note: history counts are all-time and global; transcript counts are scoped." in narrowed
+
+
+def test_mcp_ignores_empty_server_segments_and_maps_odd_names(tmp_path):
+    root = tmp_path / "root"
+    write(root / "-Users-ann-Developer-m" / "s.jsonl", [
+        human("2026-10-01T10:00:00Z", "go"),
+        assistant("2026-10-01T10:00:02Z", "a", [{"type": "tool_use", "id": "1", "name": "mcp__", "input": {}},
+                                                {"type": "tool_use", "id": "2", "name": "mcp____x", "input": {}},
+                                                {"type": "tool_use", "id": "3", "name": "mcp__my_server__t", "input": {}}]),
+    ])
+    cj = tmp_path / "c.json"
+    cj.write_text(json.dumps({"mcpServers": {"my.server": {}}}))
+    out = cli(root, "mcp", "--claude-json", str(cj))
+    assert "| my.server | 1 | m (1) |" in out
+    assert "|  |" not in out
+    nocj = cli(root, "mcp", "--claude-json", str(tmp_path / "none.json"))
+    assert "|  |" not in nocj
+
+
+@pytest.mark.parametrize("top", ["0", "-2"])
+def test_digest_top_must_be_at_least_one(tmp_path, top):
+    p = subprocess.run([sys.executable, str(CLI), "digest", "--root", str(fixture(tmp_path)), "--top", top],
+                       capture_output=True, text=True)
+    assert p.returncode == 2 and "USAGE ERROR: --top must be at least 1" in p.stderr
+
+
+def test_digest_counts_replies_once_per_message_id(tmp_path):
+    root = fixture(tmp_path)
+    out = cli(root, "digest", "--session", str(root / "-Users-ann-Developer-demo" / "s1.jsonl"))
+    assert "2 model replies" in out   # m1 appears twice, m2 once
+    assert "| demo | 2 |" in cli(root, "digest", "--top", "1")

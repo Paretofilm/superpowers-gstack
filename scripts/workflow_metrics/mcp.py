@@ -46,7 +46,7 @@ def report(scope: lib.Scope, claude_json: str = "~/.claude.json") -> str:
                 n = str(b.get("name", ""))
                 if b.get("type") == "tool_use" and n.startswith("mcp__"):
                     parts = n.split("__")
-                    if len(parts) > 1:
+                    if len(parts) > 1 and parts[1]:
                         used[label][parts[1]] += 1
     if not files:
         return EMPTY

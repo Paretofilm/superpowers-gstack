@@ -56,6 +56,9 @@ def main(argv=None) -> int:
             if not a.session and a.top is None:
                 print("USAGE ERROR: digest needs --session <file.jsonl> or --top N", file=sys.stderr)
                 return 2
+            if a.top is not None and a.top < 1:
+                print("USAGE ERROR: --top must be at least 1", file=sys.stderr)
+                return 2
             text = digest.report(scope, a.session, a.top)
         else:
             text = COMMANDS[a.command](scope)

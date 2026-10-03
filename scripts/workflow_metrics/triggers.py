@@ -26,7 +26,7 @@ def mentions(prompt, k):
     if k == "xcodebuild":
         return bool(re.search(r"xcodebuild|build-for-testing|UITest|XCUITest|xcresult", prompt, re.I))
     if k.startswith("swift"):
-        return bool(re.search(r"swift (test|build)|unit test", prompt, re.I))
+        return bool(re.search(r"swift (test|build)|enhetstest|unit test", prompt, re.I))
     return bool(re.search(r"vm-e2e|vm-run|e2e|guest", prompt, re.I))
 
 

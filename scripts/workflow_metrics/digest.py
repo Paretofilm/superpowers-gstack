@@ -112,8 +112,9 @@ def digest(scope: lib.Scope, path: str) -> str:
                     for q in (qs if isinstance(qs, list) else []):
                         if not isinstance(q, dict):
                             continue
-                        a = ans.get(q.get("question", "")) or (list(ans.values())[0] if len(ans) == 1 else "?")
-                        cur["asks"].append(f"[{clip(q.get('header', ''), 40)}] {clip(q.get('question', ''), 160)} → {clip(a, 80)}")
+                        qtext = lib.key(q.get("question")) or ""
+                        a = ans.get(qtext) or (list(ans.values())[0] if len(ans) == 1 else "?")
+                        cur["asks"].append(f"[{clip(lib.key(q.get('header')) or '', 40)}] {clip(qtext, 160)} → {clip(a, 80)}")
                 if rid in pend_bash:
                     cmd, ts0 = pend_bash.pop(rid)
                     if t - ts0 > 120:

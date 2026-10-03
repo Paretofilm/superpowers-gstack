@@ -70,6 +70,13 @@ def _history():
     return hist, first
 
 
+def _date(t, divisor) -> str:
+    try:
+        return datetime.datetime.fromtimestamp(t / divisor).strftime("%Y-%m-%d") if t else "–"
+    except (OverflowError, OSError, ValueError):
+        return "–"
+
+
 def report(scope: lib.Scope) -> str:
     tool_uses = collections.Counter()
     typed = collections.Counter()
@@ -106,6 +113,8 @@ def report(scope: lib.Scope) -> str:
         out.append(f"Skills in the context: **{len(items)}**. The descriptions alone are about **{sum(r[2] for r in rows) // 4:,} tokens** on every turn.\n")
     src = "Skill-tool calls and typed /commands in the transcripts in scope"
     out.append(src + (", and /commands in ~/.claude/history.jsonl.\n" if use_history else " (history.jsonl is read only for the default transcript root).\n"))
+    if use_history and (scope.project or scope.since is not None or scope.until is not None):
+        out.append("Note: history counts are all-time and global; transcript counts are scoped.\n")
     if items:
         zero = [r for r in rows if r[3] + r[4] + r[5] == 0]
         out.append(f"**Never used: {len(zero)} of {len(rows)}** (≈ {sum(r[2] for r in zero) // 4:,} tokens of descriptions).\n")
@@ -118,12 +127,12 @@ def report(scope: lib.Scope) -> str:
         for g, rs in sorted(by.items(), key=lambda x: -len(x[1])):
             out.append(f"\n### {g}\n\n| Skill | Skill tool | typed (session) | typed (history) | last (transcript) |\n|---|---:|---:|---:|---|")
             for r in sorted(rs, key=lambda r: -(r[3] + r[4] + r[5])):
-                ld = datetime.datetime.fromtimestamp(r[6]).strftime("%Y-%m-%d") if r[6] else "–"
+                ld = _date(r[6], 1)
                 out.append(f"| {'**' + r[1] + '**' if r[3] + r[4] + r[5] == 0 else r[1]} | {r[3]} | {r[4]} | {r[5]} | {ld} |")
     extra = [(s, tool_uses[s] + typed[s]) for s in set(tool_uses) | set(typed) if s not in items]
     if extra:
         out.append("\n### Used, but not in the listing (removed, renamed, or from another session type)\n")
         out.append(", ".join(f"`{s}` ({n})" for s, n in sorted(extra, key=lambda x: (-x[1], x[0]))[:25]))
-    if first_hist:
-        out.append(f"\n\nhistory.jsonl starts {datetime.datetime.fromtimestamp(first_hist / 1000):%Y-%m-%d}.")
+    if first_hist and _date(first_hist, 1000) != "–":
+        out.append(f"\n\nhistory.jsonl starts {_date(first_hist, 1000)}.")
     return "\n".join(out) + "\n"
