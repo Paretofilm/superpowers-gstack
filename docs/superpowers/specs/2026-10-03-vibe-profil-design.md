@@ -1,6 +1,6 @@
 # Vibe-profilen — design (3.6.0, med trinn 2 i 3.7.0)
 
-Dato: 2026-10-03 · Status: godkjent for trinnvis implementering (brukerens valg «Trinnvis») · Eier: pluginens eier
+Dato: 2026-10-03 · Status: godkjent for trinnvis implementering (brukerens valg «Trinnvis») · Eier: Kjetil
 
 ## 1. Bakgrunn
 
@@ -18,8 +18,8 @@ pluginens tekst (ca. 2 % av gjenbrukt kontekst), men atferden rundt den:
 - **Grønne tester er ikke nok.** I et videoprosjekt passerte alle sjekker mens resultatet var feil; i en
   ekstern Karpathy-løkke passerte alle sjekker mens featuren ikke var koblet til appen.
 
-Arbeidsflyten som svar på dette ble skrevet som en prosjektlokal «vibe-kontrakt» (v1 testes i et privat SwiftUI-prosjekt,
-v2 er en videreutviklet utgave i et privat analysearkiv). Den hjelper bare det ene prosjektet. Denne
+Arbeidsflyten som svar på dette ble skrevet som en prosjektlokal «vibe-kontrakt» (v1 testes i live-swiftui,
+v2 i `skills-optimalisering/docs/vibe-kontrakt-v2.md`). Den hjelper bare det ene prosjektet. Denne
 specen gjør den gjenbrukbar gjennom pluginen.
 
 ## 2. Mål og ikke-mål
@@ -34,7 +34,7 @@ specen gjør den gjenbrukbar gjennom pluginen.
 
 **Mål (3.7.0, trinn 2)**
 6. En generisk Karpathy-løkke (`/superpowers-gstack:karpathy-loop`) for oppgaver med en tallfestet poengsum,
-   generalisert fra den første ekte instansen (fargekorrigering i et privat videograderingsprosjekt).
+   generalisert fra den første ekte instansen (fargekorrigering i Resolve-ai-worker).
 
 **Ikke-mål**
 - Endre standard for andre brukere. Uten valgt profil er alt som i 3.5.1 (`classic`).
@@ -51,7 +51,7 @@ specen gjør den gjenbrukbar gjennom pluginen.
    målingsverktøyet.
 4. `lock-acceptance-tests.py lock` committer testene, skriver `deny`-regler og en kvittering; `verify` gir exit 0
    bare når testfilene er identiske med den låste committen (også ikke-committede endringer teller).
-5. Med `vibe` oppretter `/adapt` `.claude/skills/<prosjekt>-context/SKILL.md` fra mal hvis den mangler, og
+5. Med `vibe` oppretter `/adapt` `.claude/skills/<prosjekt>-kontekst/SKILL.md` fra mal hvis den mangler, og
    skriver aldri over en eksisterende.
 6. `workflow-metrics` gir samme tall som analyseskriptene fra 2026-10-02 på samme data (dedup på `message.id`).
 7. Release gate: versjon 3.6.0, CHANGELOG, README, ruting i CLAUDE.md, lint grønn.
@@ -88,9 +88,8 @@ Kort (mål: under 30 linjer), engelsk som de andre blokkene, og bare regler, ikk
 
 Prosedyren for én feature (detaljene som ikke trenger å ligge i CLAUDE.md):
 0. Les prosjektets kontekst-skill (4.5) og koden; klassifiser omfang.
-1. Intake: alle spørsmål i én `AskUserQuestion`-runde (høyst åtte; anbefalt først og merket),
-   alltid fasit/akseptkriterier (5–10) og utenfor omfang. Skillen går ikke selv inn i plan-modus (å forlate den
-   spør brukeren én gang til); intaket er skrivebeskyttet for kode.
+1. Intake i plan-modus: alle spørsmål i én `AskUserQuestion`-runde (høyst åtte; anbefalt først og merket),
+   alltid fasit/akseptkriterier (5–10) og utenfor omfang.
 2. `docs/superpowers/vibe/<dato>-<feature>/SPEC.md` (mål, ikke-mål, akseptkriterier) og `PLAN.md` (små
    oppgaver med én test og én «ferdig når»-linje; ingen kode).
 3. Akseptansetester fra kriteriene; én melding med testoversikt og en ferdig `/goal`-linje
@@ -102,23 +101,19 @@ Prosedyren for én feature (detaljene som ikke trenger å ligge i CLAUDE.md):
    la dem følge de nye reglene. `STATUS.md` per fase, én linje per runde i `ROUNDS.md`.
 5. Tester under arbeid: bare berørte (`--filter`); hel suite ved fasegrensen og før landing.
 6. Én reviewlinse til slutt via `/superpowers-gstack:pitfall-verification` (tier beregnes som før).
-7. Lærdom før landing: feil som gikk igjen i to faser eller mer blir høyst tre arbeidsregler i
-   kontekst-skillens «Slik jobber vi»-seksjon (ikke i CLAUDE.md), og endringen committes på feature-grenen;
-   lærdom skrevet etter landing når aldri hovedgrenen.
-8. `lock-acceptance-tests.py verify --feature <feature>` må gi exit 0 før landing. Låsen forsvarer mot feil og
-   snarveier, ikke mot bevisst omskriving av historikk.
-9. Landing etter `Landing mode` (`/superpowers-gstack:land` eller `/ship`); ett spørsmål om push hvis det
-   kreves av prosjektet. Låsen blir stående som oppføring.
-10. Sluttrapport: bygget, hvordan verifisere, Rulings, utsatte funn.
+7. `lock-acceptance-tests.py verify` må gi exit 0 før landing.
+8. Landing etter `Landing mode` (`/superpowers-gstack:land` eller `/ship`); ett spørsmål om push hvis det
+   kreves av prosjektet.
+9. Sluttrapport: bygget, hvordan verifisere, Rulings, utsatte funn. Lærdom: feil som gikk igjen i to faser
+   eller mer blir høyst tre arbeidsregler i kontekst-skillens «Slik jobber vi»-seksjon, ikke i CLAUDE.md.
 
 ### 4.4 `scripts/lock-acceptance-tests.py`
 
 - `lock --path <glob> [--path ...]`: krever at stiene finnes og er rene; committer dem
   (`test(acceptance): lock <feature>`); legger `deny`-regler `Edit(<glob>)` og `Write(<glob>)` i prosjektets
   `.claude/settings.json` (opprettes om den mangler; eksisterende innhold bevares; ugyldig JSON gir refusal);
-  skriver kvitteringen `.gstack/acceptance-lock.json`; committer settings og kvittering i en egen commit rett
-  etter (kvitteringen inneholder SHA-en til test-committen); kvitteringen holder én lås per feature
-  (`{"locks": [...]}`).
+  skriver kvitteringen `.gstack/acceptance-lock.json` (`commit`, `paths`, `locked_at`); committer settings og
+  kvittering i samme commit.
 - `verify`: exit 0 når `git diff --name-only <commit> -- <paths>` er tom (arbeidstre inkludert); ellers exit 1
   med de endrede filene. Exit 2 uten kvittering.
 - `unlock`: fjerner bare reglene skriptet selv la til; skal bare kjøres på brukerens uttrykkelige ønske.
@@ -128,11 +123,10 @@ Prosedyren for én feature (detaljene som ikke trenger å ligge i CLAUDE.md):
 
 - Mal `skills/adapt/templates/project-context.md` med seksjonene: hva produktet er, arkitektur, domenesannheter,
   fallgruver, funn med henvisninger, kjøring og testing, «Slik jobber vi», «Slik holdes skillen oppdatert».
-- Med `vibe`: `/adapt` oppretter `.claude/skills/<prosjekt>-context/SKILL.md` hvis den mangler (navnet fra
-  `--project-name`), med en `description` under 40 ord, og vibe-blokken peker til den gjennom `{{CONTEXT_SKILL}}` (skriptet skriver aldri i umarkerte seksjoner).
-  Standardnavn `<prosjekt>-context`; en eksisterende `*-context` eller `*-kontekst` brukes. Eksisterende skill
-  røres aldri.
-- Første ekte instans: en kontekst-skill i et privat videograderingsprosjekt (laget 2026-10-03 på
+- Med `vibe`: `/adapt` oppretter `.claude/skills/<prosjekt>-kontekst/SKILL.md` hvis den mangler (navnet fra
+  `--project-name`), med en `description` under 40 ord, og skriver én pekerlinje i prosjektets egen
+  (umarkerte) seksjon. Eksisterende skill røres aldri.
+- Første ekte instans: `Resolve-ai-worker/.claude/skills/resolve-ai-worker-kontekst/` (laget 2026-10-03 på
   egen gren); malen kalibreres mot den.
 
 ### 4.6 `workflow-metrics`
@@ -161,7 +155,7 @@ runde; holdt-av testsett; budsjett og stoppkriterier. Egen spec når instansen h
 
 | Risiko | Avbøtning |
 |---|---|
-| Arbeidsflyten er ikke målt ennå | Tilvalg; `workflow-metrics` måler før/etter; v1 måles i et privat SwiftUI-prosjekt |
+| Arbeidsflyten er ikke målt ennå | Tilvalg; `workflow-metrics` måler før/etter; v1 måles i live-swiftui |
 | Overstyringen av HARD-GATE slår ikke gjennom | Målbart med `asks`; blokken navngir portene eksplisitt |
 | Agenten svekker en låst test via Bash | `verify` før landing er porten, ikke `deny`-regelen |
 | `/goal` kan bare startes av brukeren | Ferdig linje ved kontrollpunktet; uten `/goal` fortsetter flyten med subagenter |
