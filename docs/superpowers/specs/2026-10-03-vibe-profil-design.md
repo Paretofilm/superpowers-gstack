@@ -1,6 +1,6 @@
 # Vibe-profilen — design (3.6.0, med trinn 2 i 3.7.0)
 
-Dato: 2026-10-03 · Status: godkjent for trinnvis implementering (brukerens valg «Trinnvis») · Eier: Kjetil
+Dato: 2026-10-03 · Status: godkjent for trinnvis implementering (brukerens valg «Trinnvis») · Eier: pluginens eier
 
 ## 1. Bakgrunn
 
@@ -18,8 +18,8 @@ pluginens tekst (ca. 2 % av gjenbrukt kontekst), men atferden rundt den:
 - **Grønne tester er ikke nok.** I et videoprosjekt passerte alle sjekker mens resultatet var feil; i en
   ekstern Karpathy-løkke passerte alle sjekker mens featuren ikke var koblet til appen.
 
-Arbeidsflyten som svar på dette ble skrevet som en prosjektlokal «vibe-kontrakt» (v1 testes i live-swiftui,
-v2 i `skills-optimalisering/docs/vibe-kontrakt-v2.md`). Den hjelper bare det ene prosjektet. Denne
+Arbeidsflyten som svar på dette ble skrevet som en prosjektlokal «vibe-kontrakt» (v1 testes i et privat SwiftUI-prosjekt,
+v2 er en videreutviklet utgave i et privat analysearkiv). Den hjelper bare det ene prosjektet. Denne
 specen gjør den gjenbrukbar gjennom pluginen.
 
 ## 2. Mål og ikke-mål
@@ -34,7 +34,7 @@ specen gjør den gjenbrukbar gjennom pluginen.
 
 **Mål (3.7.0, trinn 2)**
 6. En generisk Karpathy-løkke (`/superpowers-gstack:karpathy-loop`) for oppgaver med en tallfestet poengsum,
-   generalisert fra den første ekte instansen (fargekorrigering i Resolve-ai-worker).
+   generalisert fra den første ekte instansen (fargekorrigering i et privat videograderingsprosjekt).
 
 **Ikke-mål**
 - Endre standard for andre brukere. Uten valgt profil er alt som i 3.5.1 (`classic`).
@@ -125,11 +125,11 @@ Prosedyren for én feature (detaljene som ikke trenger å ligge i CLAUDE.md):
 
 - Mal `skills/adapt/templates/project-context.md` med seksjonene: hva produktet er, arkitektur, domenesannheter,
   fallgruver, funn med henvisninger, kjøring og testing, «Slik jobber vi», «Slik holdes skillen oppdatert».
-- Med `vibe`: `/adapt` oppretter `.claude/skills/<prosjekt>-kontekst/SKILL.md` hvis den mangler (navnet fra
+- Med `vibe`: `/adapt` oppretter `.claude/skills/<prosjekt>-context/SKILL.md` hvis den mangler (navnet fra
   `--project-name`), med en `description` under 40 ord, og vibe-blokken peker til den gjennom `{{CONTEXT_SKILL}}` (skriptet skriver aldri i umarkerte seksjoner).
   Standardnavn `<prosjekt>-context`; en eksisterende `*-context` eller `*-kontekst` brukes. Eksisterende skill
   røres aldri.
-- Første ekte instans: `Resolve-ai-worker/.claude/skills/resolve-ai-worker-kontekst/` (laget 2026-10-03 på
+- Første ekte instans: en kontekst-skill i et privat videograderingsprosjekt (laget 2026-10-03 på
   egen gren); malen kalibreres mot den.
 
 ### 4.6 `workflow-metrics`
@@ -158,7 +158,7 @@ runde; holdt-av testsett; budsjett og stoppkriterier. Egen spec når instansen h
 
 | Risiko | Avbøtning |
 |---|---|
-| Arbeidsflyten er ikke målt ennå | Tilvalg; `workflow-metrics` måler før/etter; v1 måles i live-swiftui |
+| Arbeidsflyten er ikke målt ennå | Tilvalg; `workflow-metrics` måler før/etter; v1 måles i et privat SwiftUI-prosjekt |
 | Overstyringen av HARD-GATE slår ikke gjennom | Målbart med `asks`; blokken navngir portene eksplisitt |
 | Agenten svekker en låst test via Bash | `verify` før landing er porten, ikke `deny`-regelen |
 | `/goal` kan bare startes av brukeren | Ferdig linje ved kontrollpunktet; uten `/goal` fortsetter flyten med subagenter |

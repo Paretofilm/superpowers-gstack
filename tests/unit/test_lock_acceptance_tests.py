@@ -70,7 +70,9 @@ def test_lock_commits_the_tests_then_the_rules_and_the_receipt(tmp_path):
     lk = receipt(r)["locks"][0]
     assert lk["commit"] == test_commit
     assert lk["files"] == ["Tests/Acceptance/test_a.py", "Tests/Acceptance/test_b.py"]
-    assert settings(r)["permissions"]["deny"] == ["Edit(/Tests/Acceptance/**)", "Write(/Tests/Acceptance/**)"]
+    assert settings(r)["permissions"]["deny"] == [
+        "Edit(/Tests/Acceptance/**)", "Write(/Tests/Acceptance/**)",
+        "Edit(/.gstack/acceptance-lock.json)", "Write(/.gstack/acceptance-lock.json)"]
     assert git(r, "status", "--porcelain") == ""
 
 
@@ -166,7 +168,7 @@ def test_unlock_removes_only_its_own_rules(tmp_path):
     run(r, "unlock", "--feature", "radid")
     assert settings(r)["permissions"]["deny"] == ["Read(/.env)"]
     assert receipt(r)["locks"] == []
-    assert git(r, "log", "--format=%s", "-1").strip() == "chore(acceptance): unlock radid tests (user request)"
+    assert git(r, "log", "--format=%s", "-1").strip() == "chore(acceptance): unlock radid tests"
 
 
 def test_two_locks_sharing_a_glob_keep_the_rule_until_both_are_unlocked(tmp_path):
@@ -240,3 +242,55 @@ def test_non_ascii_names_are_unquoted_and_stdout_is_pure(tmp_path):
     p = run(r, "verify", expect=1)
     assert p.stdout.splitlines() == ["CHANGED radid Tests/Acceptance/test_ø.py"]
     assert "Restore it" in p.stderr
+
+
+def test_a_hand_edited_receipt_fails_verify_and_a_clean_one_passes(tmp_path):
+    r = repo(tmp_path)
+    lock(r)
+    run(r, "verify")                                           # clean receipt: ok
+    rc = r / ".gstack" / "acceptance-lock.json"
+    data = json.loads(rc.read_text())
+    data["locks"][0]["files"] = []                             # the cheat: forget the files
+    rc.write_text(json.dumps(data, indent=2) + "\n")
+    p = run(r, "verify", expect=1)                             # unstaged
+    assert "CHANGED receipt .gstack/acceptance-lock.json" in p.stdout.splitlines()
+    git(r, "add", "-f", str(rc))
+    run(r, "verify", expect=1)                                 # staged
+    git(r, "commit", "-q", "-m", "tamper")
+    run(r, "verify")                                           # committed edits are the user's history
+
+
+def test_an_uncommitted_receipt_fails_verify(tmp_path):
+    r = repo(tmp_path)
+    lock(r)
+    git(r, "reset", "-q", "--hard", "HEAD~1")                  # receipt gone from HEAD...
+    (r / ".gstack").mkdir(exist_ok=True)
+    (r / ".gstack" / "acceptance-lock.json").write_text(
+        json.dumps({"locks": [{"feature": "radid", "commit": "HEAD", "files": []}]}))
+    p = run(r, "verify", expect=1)
+    assert "CHANGED receipt" in p.stdout
+
+
+def test_the_receipt_rules_are_kept_while_another_lock_remains(tmp_path):
+    r = repo(tmp_path)
+    lock(r, "one")
+    (r / "Tests" / "Acceptance" / "test_c.py").write_text("def test_c():\n    pass\n")
+    lock(r, "two")
+    run(r, "unlock", "--feature", "one")
+    deny = settings(r)["permissions"]["deny"]
+    assert "Edit(/.gstack/acceptance-lock.json)" in deny and "Write(/.gstack/acceptance-lock.json)" in deny
+    run(r, "unlock", "--feature", "two")
+    assert "permissions" not in settings(r)
+
+
+def test_a_failing_second_commit_names_the_recovery(tmp_path):
+    r = repo(tmp_path)
+    hook = r / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\ngit diff --cached --name-only | grep -q acceptance-lock && "
+                    "{ echo 'hook says no' >&2; exit 1; }\nexit 0\n")
+    hook.chmod(0o755)
+    p = lock_expect(r, 2)
+    test_commit = git(r, "rev-parse", "--short=12", "HEAD").strip()
+    assert "BLOCKED — the test commit " + test_commit in p.stderr
+    assert "hook says no" in p.stderr
+    assert "git add -f" in p.stderr and "git reset --soft HEAD~1" in p.stderr

@@ -21,6 +21,7 @@ then run each measurement twice with the same `--project`:
 ```bash
 python3 "$WM" asks   --project <dir substring> --until <change>
 python3 "$WM" asks   --project <dir substring> --since <change>
+python3 "$WM" tokens --project <dir substring> --until <change>
 python3 "$WM" tokens --project <dir substring> --since <change>
 ```
 

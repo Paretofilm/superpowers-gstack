@@ -87,8 +87,9 @@ per round to `ROUNDS.md`: what was tried, which tests still failed. Never ask "w
 next" between phases.
 
 **Stop only for:** irreversible or destructive actions, security-sensitive actions,
-side effects outside the worktree, a push to a remote, money, a licence, or a real
-blocker. Decide everything else and log it in STATUS.md as
+side effects outside the worktree, a force-push or a push to the default branch outside
+the `Landing mode:` line, money, a licence, or a real blocker. Pushing the feature branch
+for backup is pre-approved. Decide everything else and log it in STATUS.md as
 `Ruling: <choice> — <why> — <cost if wrong>`.
 
 ## Step 5: Tests while working
@@ -106,17 +107,19 @@ not re-review minor ones. No plan reviews, no `/autoplan`.
 ## Step 7: The lock must hold
 
 ```bash
-python3 "$LOCK" verify
+python3 "$LOCK" verify --feature <feature>
 ```
 
-Exit 0 is required before landing. Exit 1 names each changed file: restore it from the
-lock commit, or stop and tell the user which test is wrong.
+Exit 0 is required before landing. Exit 1 names each changed file (and the receipt
+`.gstack/acceptance-lock.json` if it was edited): restore it from the lock commit, or
+stop and tell the user which test is wrong.
 
 ## Step 8: Land
 
 Land by the project's `Landing mode:` line — `solo` → `/superpowers-gstack:land`,
 `pr` → `/ship` — with no options menu. Ask once about the push only when the project
-requires it.
+requires it. The lock stays after landing as the record: the landed tests remain
+protected, and only the user unlocks them.
 
 ## Step 9: Final report and lessons
 

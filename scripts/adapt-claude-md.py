@@ -409,6 +409,12 @@ def _resolve(text: str, ctx: Context) -> str:
     return PLACEHOLDER_RE.sub(lambda m: ctx.sets.get(m.group(1), m.group()), text)
 
 
+def _fill(text: str, ctx: Context) -> str:
+    """Placeholders filled in, without recording them as needed this run (used for
+    sections that are compared against, never emitted)."""
+    return PLACEHOLDER_RE.sub(lambda m: ctx.sets.get(m.group(1), m.group()), text)
+
+
 def _emitted_block(raw: str, ctx: Context, level: int) -> list[str]:
     """The block as a generator writes it: provenance beside the marker (never
     inside it), demoted when the root it replaces is H3, placeholders resolved."""
@@ -633,7 +639,8 @@ def apply_block(lines: list[str], blk: Block, ctx: Context, report: Report) -> l
             return _append(lines, _emitted_block(raw, ctx, 2))
         return lines
     if not in_profile:
-        return _remove_out_of_profile(lines, found, bt, ctx, report)
+        # the section on disk has the placeholders filled in; compare against that form
+        return _remove_out_of_profile(lines, found, BlockText(_fill(raw, ctx)), ctx, report)
     start, level, raw_head, version = found
     if not on_track:
         report.notes.append(f"`{heading_text(raw_head)}` is a native-track section and this run's "
@@ -951,7 +958,10 @@ def render(report: Report, ctx: Context, dry_run: bool) -> str:
     elif dry_run:
         out.append("**Snapshot:** none written (dry run).")
     else:
-        out.append("**Snapshot:** none — " + (report.notes[0] if report.notes else "the file was not rewritten"))
+        # the workflow note is informational on every classic run; it must not stand in for
+        # the reason the file was not rewritten (3.5.1 behaviour)
+        reasons = [n for n in report.notes if n != NO_WORKFLOW_NOTE]
+        out.append("**Snapshot:** none — " + (reasons[0] if reasons else "the file was not rewritten"))
     for n in report.notes:
         out.append(f"Note: {n}")
     out.append("")
@@ -1028,6 +1038,10 @@ def read_executor(project: Path) -> str | None:
     return value
 
 
+NO_WORKFLOW_NOTE = ("no .gstack/workflow file — classic profile "
+                    "(write `vibe` there to opt in to the vibe contract)")
+
+
 def read_workflow(project: Path, report: Report | None = None) -> str:
     """The project's workflow profile. Exactly `vibe` or `classic`; the file's newline
     is the only thing stripped, so `vibe ` is refused, never repaired. No file is
@@ -1035,8 +1049,7 @@ def read_workflow(project: Path, report: Report | None = None) -> str:
     f = project / ".gstack" / "workflow"
     if not f.is_file():
         if report is not None:
-            report.notes.append("no .gstack/workflow file — classic profile "
-                                "(write `vibe` there to opt in to the vibe contract)")
+            report.notes.append(NO_WORKFLOW_NOTE)
         return "classic"
     value = f.read_text().removesuffix("\n")
     if value not in PROFILES:
@@ -1153,9 +1166,11 @@ def main(argv=None) -> int:
                       project=a.project_name or project_name(text or "", project),
                       profile=profile)
         ctx_skill, content, skill_file = None, None, None
+        # the name is needed under every profile: a vibe block removed under classic is
+        # compared in its filled-in form
+        ctx_skill, ctx_skill_exists = context_skill(project, a.project_name)
+        ctx.sets["CONTEXT_SKILL"] = ctx_skill
         if profile == "vibe":
-            ctx_skill, ctx_skill_exists = context_skill(project, a.project_name)
-            ctx.sets["CONTEXT_SKILL"] = ctx_skill
             skill_file = project / ".claude" / "skills" / ctx_skill / "SKILL.md"
             if not ctx_skill_exists:
                 for anc in skill_file.parents:

@@ -142,7 +142,32 @@ then the base tiers for the selected skills and the inferred sensitivity, and as
    in that file — run them, do not guess). Each becomes a `--set TOKEN=value`. The script
    refuses with `UNRESOLVED PLACEHOLDER` and writes nothing if one is missing; that is
    the guard, not an inconvenience.
-4. **Skill routing draft** — only when CLAUDE.md has no `## Skill routing` heading.
+4. **Workflow profile.** Ask it before the routing draft (item 5), which follows the answer. If `.gstack/workflow` exists the script reads and validates it; do not re-ask. If it does not exist, ask **once** with `AskUserQuestion`:
+
+   > How should this project work?
+   >
+   > - **Vibe** (recommended) — one intake round, then the feature is finished autonomously and you review it once. Your one checkpoint on the way is the acceptance tests, which are then locked. Adds the `Vibe contract` section and a project context skill.
+   > - **Classic** — the skills' own approval gates (design, plan, execution method, landing menu), as before.
+
+   Write the pin and keep it committable:
+
+   ```bash
+   mkdir -p .gstack && printf '%s\n' "$PROFILE" > .gstack/workflow   # vibe or classic
+   if git check-ignore -q .gstack/workflow 2>/dev/null; then
+     grep -q '^!\.gstack/workflow$' .gitignore 2>/dev/null \
+       || echo '!.gstack/workflow' >> .gitignore
+     git add .gitignore && git add -f .gstack/workflow
+   else
+     git add .gstack/workflow
+   fi
+   ```
+
+   A run with nobody to answer writes no `.gstack/workflow`: the script then uses
+   classic and says so in its notes. With `vibe` the script also creates
+   `.claude/skills/<project>-context/SKILL.md` from a template when no `*-context` or
+   `*-kontekst` skill exists, and never overwrites one.
+
+5. **Skill routing draft** — only when CLAUDE.md has no `## Skill routing` heading.
    Write it to `.gstack/adapt-routing.md` from this template, tight (row descriptions
    ≤ 15 words, decision-tree lines ≤ 10 words, no rationale prose), only the skills
    confirmed in Step 3, sections that do not apply omitted:
@@ -162,7 +187,8 @@ then the base tiers for the selected skills and the inferred sensitivity, and as
 
    ### Routing Logic
    [project-specific decision tree, e.g. Ready to build →
-   /superpowers:brainstorming; Bug during coding →
+   `/superpowers-gstack:vibe` with the vibe profile, `/superpowers:brainstorming` with
+   classic; Bug during coding →
    /superpowers:systematic-debugging; Bug found in QA → /investigate; Code complete →
    /review [→ /qa <url>]; Security-sensitive → /cso before /review; Ready to ship →
    /ship; Trivial change → just do it]
@@ -187,31 +213,6 @@ then the base tiers for the selected skills and the inferred sensitivity, and as
    skills that no longer exist, the script renames `macos-/ios-native-review` →
    `apple-native-review` and `macos-/ios-e2e-scaffold` → `e2e-scaffold`, and
    drops `ios-visual-explore` rows itself.
-
-5. **Workflow profile.** If `.gstack/workflow` exists the script reads and validates it; do not re-ask. If it does not exist, ask **once** with `AskUserQuestion`:
-
-   > How should this project work?
-   >
-   > - **Vibe** (recommended) — one intake round, then the feature is finished autonomously and you review it once. Your one checkpoint on the way is the acceptance tests, which are then locked. Adds the `Vibe contract` section and a project context skill.
-   > - **Classic** — the skills' own approval gates (design, plan, execution method, landing menu), as before.
-
-   Write the pin and keep it committable:
-
-   ```bash
-   mkdir -p .gstack && printf '%s\n' "$PROFILE" > .gstack/workflow   # vibe or classic
-   if git check-ignore -q .gstack/workflow 2>/dev/null; then
-     grep -q '^!\.gstack/workflow$' .gitignore 2>/dev/null \
-       || echo '!.gstack/workflow' >> .gitignore
-     git add .gitignore && git add -f .gstack/workflow
-   else
-     git add .gstack/workflow
-   fi
-   ```
-
-   A run with nobody to answer writes no `.gstack/workflow`: the script then uses
-   classic and says so in its notes. With `vibe` the script also creates
-   `.claude/skills/<project>-context/SKILL.md` from a template when no `*-context` or
-   `*-kontekst` skill exists, and never overwrites one.
 
 ### Step 5: Dry run, then ask
 
@@ -271,7 +272,9 @@ report.
 rest of your message is in the user's language; tooling greps them. The Removed block
 lists every removed line the new block does not carry; it is over-inclusive by design
 (a reworded plugin sentence can land there), so read it as candidates for a glance,
-not as a verdict. The Snapshot line names the restore command; repeat it.
+not as a verdict. The Snapshot line names the restore command; repeat it. When the report
+says the script created `.claude/skills/<name>/SKILL.md`, run `git add` on that file (like the
+pin), so a worktree cleanup does not lose it.
 
 Whenever a marker-managed section was replaced, add:
 
@@ -292,7 +295,7 @@ you find and re-verify.
 
 > **Next steps:**
 > - Vibe profile? → `/superpowers-gstack:vibe <what to build>` — and fill in the context skill as you learn the project
-> - Working on a new feature? → `/superpowers:brainstorming`
+> - Working on a new feature? → `/superpowers-gstack:vibe` (vibe profile) or `/superpowers:brainstorming` (classic)
 > - Have code ready for review? → `/review`
 > - Want a product-framing session first? → type `/office-hours` yourself; it is never routed automatically
 >

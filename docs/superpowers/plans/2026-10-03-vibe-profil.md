@@ -29,7 +29,7 @@
 1. **Kvitteringen committes i en egen commit.** Specen sier at tester, settings og kvittering committes «i samme commit», men kvitteringen skal inneholde SHA-en til committen som låste testene, og en commit kan ikke inneholde sin egen SHA. Testene committes først (`test(acceptance): lock <feature>`), settings og kvittering rett etter (`chore(acceptance): deny edits to <feature> tests`).
 2. **Kvitteringen holder en liste med låser** (`{"locks": [...]}`), én per feature, slik at en ny feature kan låse sine tester uten å oppheve de gamle.
 3. **Pekeren til kontekst-skillen står i vibe-blokken, ikke i prosjektets egen seksjon.** Skriptet har siden 3.1.0 aldri skrevet i umarkerte seksjoner; det er garantien som gjør `/adapt` trygg. Blokken får plassholderen `{{CONTEXT_SKILL}}`, som skriptet selv fyller ut.
-4. **Standardnavnet er `<prosjekt>-context`.** En eksisterende `.claude/skills/*-context` eller `*-kontekst` brukes alltid (Resolve-ai-worker har `resolve-ai-worker-kontekst`). Prosjektnavnet er `--project-name` eller mappenavnet til hoved-checkouten, så en worktree ikke gir et annet navn.
+4. **Standardnavnet er `<prosjekt>-context`.** En eksisterende `.claude/skills/*-context` eller `*-kontekst` brukes alltid (et eksisterende prosjekt kan ha f.eks. `<prosjekt>-kontekst`). Prosjektnavnet er `--project-name` eller mappenavnet til hoved-checkouten, så en worktree ikke gir et annet navn.
 5. **Skillen går ikke selv inn i plan-modus.** Å forlate plan-modus spør brukeren én gang til, og det ville gi to kontrollpunkter. Intaket (steg 0–2) er skrivebeskyttet for kode uansett modus.
 
 ## Review Focus
@@ -65,7 +65,7 @@
 | `tests/unit/test_vibe_skill.py` | Skillkontrakten for `vibe` og `/adapt` steg 4 | 3, 6 |
 | `tests/unit/test_workflow_metrics.py` | Måleverktøyet | 7, 8, 9 |
 
-Alle kommandoer kjøres fra worktree-roten `/Users/kjetilge/Developer/superpowers-gstack-vibe`.
+Alle kommandoer kjøres fra worktree-roten `<repo>`.
 
 ---
 
@@ -1209,7 +1209,7 @@ def test_a_worktree_names_the_context_skill_after_the_main_checkout(tmp_path):
 
 def test_slug():
     m = module()
-    assert m.slug("Resolve-ai-worker") == "resolve-ai-worker"
+    assert m.slug("Video-Grading-Worker") == "video-grading-worker"
     assert m.slug("  My  App!! ") == "my-app"
     assert m.slug("???") == "project"
 ```
@@ -1490,7 +1490,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Produces: `lib.Scope(root: str, project: str | None, since: float | None, until: float | None)`; `lib.sessions(scope, include_sub=True)` → `(label, dirname, path, is_sub)`; `lib.events`, `lib.ts`, `lib.msg_id`, `lib.api_calls`, `lib.blocks`, `lib.text_of`, `lib.is_human`, `lib.project_label(dirname) -> str`, `lib.parse_date(s) -> float`; hver målemodul har `report(scope: lib.Scope) -> str` (Markdown). CLI: `workflow-metrics.py <command> [--root] [--project] [--since] [--until] [--out]`, exit 0 / 2.
-- Kilde: `~/Developer/skills-optimalisering/analysis/{lib,tokens,asks,overhead}.py` (2026-10-02). Logikken flyttes uendret; endringene er listet under, og utskriften er på engelsk.
+- Kilde: brukerens egne analyseskript (`{lib,tokens,asks,overhead}.py`, 2026-10-02). Logikken flyttes uendret; endringene er listet under, og utskriften er på engelsk.
 
 - [ ] **Step 1: Skriv de feilende testene**
 
@@ -1577,8 +1577,8 @@ def test_api_calls_are_one_per_message_id_and_broken_lines_are_skipped(tmp_path)
 
 
 def test_project_label_strips_the_home_prefix_and_worktree_suffix():
-    assert lib.project_label("-Users-ann-Developer-live-swiftui") == "live-swiftui"
-    assert lib.project_label("-Users-ann-Developer-live-swiftui--claude-worktrees-radid") == "live-swiftui"
+    assert lib.project_label("-Users-ann-Developer-swiftui-app") == "swiftui-app"
+    assert lib.project_label("-Users-ann-Developer-swiftui-app--claude-worktrees-radid") == "swiftui-app"
 
 
 def test_tokens_counts_model_calls_not_events(tmp_path):
@@ -1670,7 +1670,7 @@ def parse_date(s: str) -> float:
 
 
 def project_label(dirname: str) -> str:
-    """`-Users-ann-Developer-live-swiftui--claude-worktrees-x` -> `live-swiftui`."""
+    """`-Users-ann-Developer-swiftui-app--claude-worktrees-x` -> `swiftui-app`."""
     s = WORKTREE_SUFFIX.sub("", dirname)
     s = re.sub(r"^-Users-[^-]+-", "", s)
     s = re.sub(r"^(Developer|Projects|projects|src|code|repos)-", "", s)
@@ -1934,7 +1934,7 @@ Expected: FAIL — `invalid choice: 'skills'`.
 
 - [ ] **Step 3: Flytt de fire analysene**
 
-Fra `~/Developer/skills-optimalisering/analysis/{skills,triggers,mcp_per_project,digest}.py`, med samme endringer som i oppgave 7 (`lib.sessions(scope)`, `label` i stedet for app, engelsk, `return` i stedet for `write_out`), og i tillegg:
+Fra brukerens analyseskript `{skills,triggers,mcp_per_project,digest}.py`, med samme endringer som i oppgave 7 (`lib.sessions(scope)`, `label` i stedet for app, engelsk, `return` i stedet for `write_out`), og i tillegg:
 
 - **skills.py:** `listing()` leser `skill_listing` fra den nyeste hovedsesjonen i scope, ikke fra en fast prosjektmappe:
   ```python
@@ -2095,10 +2095,10 @@ sessions on either side is an anecdote; say so.
 Kjør begge mot arkivkopien (samme data):
 
 ```bash
-python3 scripts/workflow-metrics.py tokens --root ~/Developer/skills-optimalisering/archive/projects-2026-10-02 | grep '^Total'
-python3 scripts/workflow-metrics.py asks --root ~/Developer/skills-optimalisering/archive/projects-2026-10-02 | grep '^\*\*Total\|^Total'
-python3 ~/Developer/skills-optimalisering/analysis/tokens.py | grep '^Totalt'
-python3 ~/Developer/skills-optimalisering/analysis/asks.py | grep 'Totalt'
+python3 scripts/workflow-metrics.py tokens --root <archive> | grep '^Total'
+python3 scripts/workflow-metrics.py asks --root <archive> | grep '^\*\*Total\|^Total'
+python3 <analysis>/tokens.py | grep '^Totalt'
+python3 <analysis>/asks.py | grep 'Totalt'
 ```
 
 Expected: samme antall modellkall, output, cache_read og cache_creation (tokens), og samme antall spørsmål, andel anbefalt og antall brukermeldinger (asks). Analyseskriptene skriver om rapportene sine i `analysis/out/` med de samme tallene; det er ufarlig. Avviker et tall: finn årsaken før du går videre, og skriv den i commit-meldingen.

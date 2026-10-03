@@ -982,6 +982,17 @@ def test_the_vibe_contract_names_the_gates_it_overrides_and_stays_short():
         assert gate in b, gate
 
 
+def test_the_vibe_contract_routes_new_features_to_vibe_and_states_the_push_rule():
+    b = " ".join(block("vibe-contract.md").split())
+    assert "A new feature starts with `/superpowers-gstack:vibe`" in b
+    assert "not `superpowers:brainstorming` → `writing-plans`" in b
+    for review in ("pitfall-verification", "quality-review", "apple-native-review"):
+        assert review in b, review
+    assert "Pushing the feature branch for backup is pre-approved" in b
+    assert "a force-push or a push to the default branch outside the `Landing mode:` line" in b
+    assert "emitted=" not in b
+
+
 # --- 3.6.0: the project's context skill ---------------------------------------------
 
 def context_file(proj: Path, name: str) -> Path:
@@ -1054,7 +1065,7 @@ def test_a_worktree_names_the_context_skill_after_the_main_checkout(tmp_path):
 
 def test_slug():
     m = module()
-    assert m.slug("Resolve-ai-worker") == "resolve-ai-worker"
+    assert m.slug("Video-Grading-Worker") == "video-grading-worker"
     assert m.slug("  My  App!! ") == "my-app"
     assert m.slug("???") == "project"
 
@@ -1087,3 +1098,31 @@ def test_a_project_name_with_a_token_does_not_leak_one_into_the_skill(tmp_path):
     text = context_file(proj, "a-context-skill-project-b-context").read_text()
     assert "# A {{CONTEXT_SKILL}} {{PROJECT}} B — project knowledge" in text
     assert "name: a-context-skill-project-b-context" in text
+
+
+# --- final-review fixes: report parity with 3.5.1, removal compared in filled-in form ----
+
+IOS_SETS = [*WEB_SETS, "--set", "IOS_SIMULATOR=iPhone 17", "--set", "DEVELOPMENT_TEAM=ABCDE12345"]
+
+
+def test_the_no_workflow_note_does_not_become_the_snapshot_reason(tmp_path):
+    proj = project(tmp_path, track="ios")
+    run(proj, *IOS_SETS)
+    p = run(proj, *IOS_SETS)                                   # nothing to do: classic, no pin
+    snap = next(l for l in p.stdout.splitlines() if l.startswith("**Snapshot:**"))
+    assert snap == "**Snapshot:** none — the file was not rewritten"
+    assert "Note: no .gstack/workflow file" in p.stdout, "the note stays visible"
+    fresh = project(tmp_path / "fresh", track="ios")
+    p = run(fresh, "--dry-run", *IOS_SETS)
+    assert "Note: no .gstack/workflow file" in p.stdout
+
+
+def test_a_removed_vibe_contract_is_not_listed_as_project_authored_text(tmp_path):
+    proj = project(tmp_path, workflow="vibe")
+    run(proj, *WEB_SETS)
+    (proj / ".gstack" / "workflow").write_text("classic\n")
+    p = run(proj, *WEB_SETS)
+    assert "gstack-vibe" not in (proj / "CLAUDE.md").read_text()
+    assert "Nothing project-authored was removed." in p.stdout, p.stdout
+    assert "Removed (not plugin prose): " not in p.stdout
+    assert any("removed (workflow is classic" in c for c in last_json(p)["changes"])

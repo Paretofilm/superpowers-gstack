@@ -81,8 +81,8 @@ def test_api_calls_are_one_per_message_id_and_broken_lines_are_skipped(tmp_path)
 
 
 def test_project_label_strips_the_home_prefix_and_worktree_suffix():
-    assert lib.project_label("-Users-ann-Developer-live-swiftui") == "live-swiftui"
-    assert lib.project_label("-Users-ann-Developer-live-swiftui--claude-worktrees-radid") == "live-swiftui"
+    assert lib.project_label("-Users-ann-Developer-swiftui-app") == "swiftui-app"
+    assert lib.project_label("-Users-ann-Developer-swiftui-app--claude-worktrees-radid") == "swiftui-app"
 
 
 def test_tokens_counts_model_calls_not_events(tmp_path):
@@ -409,3 +409,9 @@ def test_the_skill_names_the_cli_and_the_cleanup_period():
     s = (REPO / "skills" / "workflow-metrics" / "SKILL.md").read_text()
     assert "$SKILL_DIR/../../scripts/workflow-metrics.py" in s
     assert "cleanupPeriodDays" in s and "--since" in s and "--until" in s
+
+
+def test_the_skill_recipe_measures_both_sides_of_the_change_for_tokens():
+    s = (REPO / "skills" / "workflow-metrics" / "SKILL.md").read_text()
+    assert 'tokens --project <dir substring> --until <change>' in s
+    assert 'tokens --project <dir substring> --since <change>' in s

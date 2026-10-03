@@ -29,7 +29,12 @@ def test_the_one_checkpoint_carries_a_goal_line_and_locks_the_tests():
     assert "/goal All tasks in PLAN.md are done" in VIBE
     assert "scripts/lock-acceptance-tests.py" in VIBE
     assert '"$LOCK" lock --feature' in VIBE
-    assert '"$LOCK" verify' in VIBE
+    assert '"$LOCK" verify --feature <feature>' in VIBE
+
+
+def test_locks_stay_after_landing_as_the_record():
+    assert "The lock stays after landing as the record" in VIBE
+    assert "only the user unlocks" in VIBE
 
 
 def test_the_two_fixed_rules_for_every_phase():
@@ -39,8 +44,9 @@ def test_the_two_fixed_rules_for_every_phase():
 
 def test_the_stop_list_and_the_ruling_format():
     for item in ("irreversible or destructive", "security-sensitive", "outside the worktree",
-                 "push to a remote", "money", "licence", "real blocker"):
+                 "force-push or a push to the default branch outside the `Landing mode:` line", "money", "licence", "real blocker"):
         assert item in VIBE, item
+    assert "Pushing the feature branch for backup is pre-approved" in VIBE
     assert "Ruling: <choice> — <why> — <cost if wrong>" in VIBE
 
 
@@ -81,3 +87,12 @@ def test_adapt_lists_contradictions_with_the_vibe_contract():
 
 def test_adapt_points_a_vibe_project_at_the_vibe_skill():
     assert "/superpowers-gstack:vibe" in ADAPT
+
+
+def test_adapt_asks_the_profile_before_the_routing_draft():
+    assert ADAPT.index("**Workflow profile.**") < ADAPT.index("**Skill routing draft**")
+    assert "`/superpowers-gstack:vibe` with the vibe profile, `/superpowers:brainstorming` with classic" in ADAPT
+
+
+def test_adapt_stages_the_created_context_skill():
+    assert "run `git add` on that file" in ADAPT

@@ -35,7 +35,7 @@ def parse_date(s: str) -> float:
 
 
 def project_label(dirname: str) -> str:
-    """`-Users-ann-Developer-live-swiftui--claude-worktrees-x` -> `live-swiftui`."""
+    """`-Users-ann-Developer-swiftui-app--claude-worktrees-x` -> `swiftui-app`."""
     s = WORKTREE_SUFFIX.sub("", dirname)
     s = re.sub(r"^-Users-[^-]+-", "", s)
     s = re.sub(r"^(Developer|Projects|projects|src|code|repos)-", "", s)

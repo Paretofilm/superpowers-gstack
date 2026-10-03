@@ -4,14 +4,17 @@
 /superpowers-gstack:vibe shows the user the acceptance tests once; after their ok the
 tests are the contract for the rest of the feature.
 
-  lock    commits the test files (`test(acceptance): lock <feature>`), then adds
-          `Edit(/<glob>)` and `Write(/<glob>)` deny rules to the project's
-          .claude/settings.json, records the lock in .gstack/acceptance-lock.json and
-          commits both (`chore(acceptance): deny edits to <feature> tests`). Two
-          commits because the receipt names the first one's SHA.
+  lock    commits the test files (`test(acceptance): lock <feature>`) — whatever the
+          matched files currently contain; they need not be clean — then adds
+          `Edit(/<glob>)` and `Write(/<glob>)` deny rules (for the receipt too) to the
+          project's .claude/settings.json, records the lock in
+          .gstack/acceptance-lock.json and commits both
+          (`chore(acceptance): deny edits to <feature> tests`). Two commits because the
+          receipt names the first one's SHA.
   verify  exit 0 when every locked path is identical to its lock commit, working tree
-          and index included; exit 1 lists `CHANGED <feature> <file>`; exit 2 when
-          there is no receipt or no such feature.
+          and index included, and the receipt itself is identical to HEAD; exit 1 lists
+          `CHANGED <feature> <file>` and `CHANGED receipt .gstack/acceptance-lock.json`;
+          exit 2 when there is no receipt or no such feature.
   unlock  removes one feature's lock and only the deny rules no other lock still
           needs. Run it only when the user asks.
 
@@ -44,7 +47,9 @@ class Refusal(Exception):
 def git(top: Path, *args: str) -> str:
     p = subprocess.run(["git", *args], cwd=top, capture_output=True, text=True)
     if p.returncode != 0:
-        raise Refusal(f"BLOCKED — `git {' '.join(args)}` failed: {p.stderr.strip()}")
+        exc = Refusal(f"BLOCKED — `git {' '.join(args)}` failed: {p.stderr.strip()}")
+        exc.detail = (p.stderr.strip() or p.stdout.strip())
+        raise exc
     return p.stdout
 
 
@@ -117,7 +122,8 @@ def expand(top: Path, globs: list[str]) -> list[str]:
 
 
 def rules_for(globs: list[str]) -> list[str]:
-    return [f"{tool}(/{g})" for g in globs for tool in ("Edit", "Write")]
+    # the receipt is protected like the tests: verify trusts it, so an edit tool must not touch it
+    return [f"{tool}(/{g})" for g in [*globs, RECEIPT.as_posix()] for tool in ("Edit", "Write")]
 
 
 def deny_list(settings: dict) -> list:
@@ -151,9 +157,23 @@ def cmd_lock(top: Path, feature: str, globs: list[str]) -> int:
                              "locked_at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
     write_json(top / SETTINGS, settings)
     write_json(top / RECEIPT, receipt)
-    commit_meta(top, f"chore(acceptance): deny edits to {feature} tests")
+    try:
+        commit_meta(top, f"chore(acceptance): deny edits to {feature} tests")
+    except Refusal as exc:
+        raise Refusal(f"BLOCKED — the test commit {commit[:12]} was made but committing the deny rules and "
+                      f"receipt failed ({getattr(exc, 'detail', str(exc))}); fix the cause and commit "
+                      f"{SETTINGS} and {RECEIPT} by hand (git add -f), or `git reset --soft HEAD~1` to "
+                      f"undo the test commit")
     print(f"locked {feature}: {len(files)} file(s) at {commit[:12]}; deny rules: {', '.join(rules)}")
     return 0
+
+
+def receipt_differs(top: Path) -> bool:
+    """True when the receipt is modified (staged or not) or not yet committed at all."""
+    if subprocess.run(["git", "cat-file", "-e", f"HEAD:{RECEIPT.as_posix()}"], cwd=top,
+                      capture_output=True).returncode != 0:
+        return True
+    return bool(git(top, "diff", "--name-only", "HEAD", "--", f":(literal){RECEIPT.as_posix()}").strip())
 
 
 def cmd_verify(top: Path, feature: str | None) -> int:
@@ -171,9 +191,11 @@ def cmd_verify(top: Path, feature: str | None) -> int:
             continue
         out = git(top, "diff", "-z", "--name-only", lk["commit"], "--", *[f":(literal){f}" for f in lk["files"]])
         changed += [f"CHANGED {lk['feature']} {f}" for f in out.split("\0") if f]
+    if receipt_differs(top):
+        changed.append(f"CHANGED receipt {RECEIPT.as_posix()}")
     if changed:
         print("\n".join(changed))
-        print("A locked acceptance test differs from what the user approved. Restore it "
+        print("A locked acceptance test (or the receipt) differs from what the user approved. Restore it "
               "(`git checkout <commit> -- <file>`), or stop and tell the user which test is wrong and why.",
               file=sys.stderr)
         return 1
@@ -202,7 +224,7 @@ def cmd_unlock(top: Path, feature: str) -> int:
     receipt["locks"] = others
     write_json(top / SETTINGS, settings)
     write_json(top / RECEIPT, receipt)
-    commit_meta(top, f"chore(acceptance): unlock {feature} tests (user request)")
+    commit_meta(top, f"chore(acceptance): unlock {feature} tests")
     print(f"unlocked {feature}")
     return 0
 
