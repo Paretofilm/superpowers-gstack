@@ -386,3 +386,20 @@ def test_digest_counts_replies_once_per_message_id(tmp_path):
     out = cli(root, "digest", "--session", str(root / "-Users-ann-Developer-demo" / "s1.jsonl"))
     assert "2 model replies" in out   # m1 appears twice, m2 once
     assert "| demo | 2 |" in cli(root, "digest", "--top", "1")
+
+
+# ---- fix round 2 ----
+def _vm_sub_file(root: Path, first_user: str) -> None:
+    write(root / "-Users-ann-Developer-vmsub" / "s1" / "subagents" / "agent-a.jsonl", [
+        {"type": "user", "timestamp": "2026-10-01T10:00:00Z", "message": {"role": "user", "content": first_user}},
+        assistant("2026-10-01T10:00:01Z", "a", [{"type": "tool_use", "id": "b1", "name": "Bash", "input": {"command": "vm-run -- ls"}}]),
+        {"type": "user", "timestamp": "2026-10-01T10:00:11Z",
+         "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "b1", "content": "ok"}]}},
+    ])
+
+
+def test_triggers_recognises_a_norwegian_gjest_brief_for_vm_commands(tmp_path):
+    _vm_sub_file(tmp_path / "a", "Implementer fasen og kjør i gjest")
+    _vm_sub_file(tmp_path / "b", "Implementer fasen")
+    assert "| instructed in the brief | 1 |" in cli(tmp_path / "a", "triggers")
+    assert "| the subagent's own initiative | 1 |" in cli(tmp_path / "b", "triggers")
