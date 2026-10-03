@@ -106,6 +106,7 @@ def test_fresh_project_gets_the_header_and_every_universal_block(tmp_path):
         assert block(name).split("\n", 1)[1].rstrip("\n") in text, f"{name} body not verbatim"
     assert "gstack-xcode-tools" not in text and "gstack-companion-skills" not in text, \
         "native-only blocks must not reach a web project"
+    assert "gstack-vibe" not in text, "the vibe contract is opt-in"
     assert "## Model Routing" in text and "domain sensitivity: low" in text
     assert "{{" not in text
     assert NOTHING in p.stdout and REMOVED in p.stdout
@@ -910,3 +911,72 @@ def test_an_invalid_workflow_pin_is_blocked_and_nothing_written(tmp_path, value)
     assert "BLOCKED — invalid .gstack/workflow" in p.stderr
     assert (proj / "CLAUDE.md").read_text() == "# P\n\nkeep me\n"
     assert not (proj / ".gstack" / "CLAUDE.md.pre-adapt").exists()
+
+
+# --- 3.6.0: the vibe contract block -------------------------------------------------
+
+def vibe_heading_line(text: str) -> str:
+    return next(l for l in text.splitlines() if "gstack-vibe-v" in l)
+
+
+def test_a_vibe_project_gets_the_vibe_contract_and_a_classic_one_does_not(tmp_path):
+    vibe = project(tmp_path / "v", workflow="vibe")
+    run(vibe, *WEB_SETS)
+    text = (vibe / "CLAUDE.md").read_text()
+    head = block("vibe-contract.md").split("\n", 1)[0]
+    assert f"{head}<!-- emitted={emitted('vibe-contract.md')} -->\n" in text
+    classic = project(tmp_path / "c")
+    run(classic, *WEB_SETS)
+    assert "gstack-vibe" not in (classic / "CLAUDE.md").read_text()
+
+
+def test_a_vibe_run_twice_changes_nothing(tmp_path):
+    proj = project(tmp_path, workflow="vibe")
+    run(proj, *WEB_SETS)
+    once = (proj / "CLAUDE.md").read_bytes()
+    p = run(proj, *WEB_SETS)
+    assert (proj / "CLAUDE.md").read_bytes() == once
+    assert last_json(p)["changes"] == [], p.stdout
+
+
+def test_switching_to_classic_removes_the_vibe_contract_and_reports_it(tmp_path):
+    proj = project(tmp_path, claude_md="# P\n\n## P — notes\n\nkeep me\n", workflow="vibe")
+    run(proj, *WEB_SETS)
+    (proj / ".gstack" / "workflow").write_text("classic\n")
+    p = run(proj, *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert "gstack-vibe" not in text and "keep me" in text
+    assert any("removed (workflow is classic" in c for c in last_json(p)["changes"]), p.stdout
+    assert "\n\n\n" not in text
+    once = (proj / "CLAUDE.md").read_bytes()
+    p2 = run(proj, *WEB_SETS)
+    assert (proj / "CLAUDE.md").read_bytes() == once and last_json(p2)["changes"] == []
+
+
+def test_a_grown_vibe_contract_is_kept_under_classic_and_the_report_says_why(tmp_path):
+    proj = project(tmp_path, workflow="vibe")
+    run(proj, *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    head = vibe_heading_line(text)
+    own = "\n".join(f"- project rule {i}: keep branch {i} green before landing" for i in range(30))
+    grown = text.replace(head, head + "\n" + own, 1)
+    (proj / "CLAUDE.md").write_text(grown)
+    (proj / ".gstack" / "workflow").write_text("classic\n")
+    p = run(proj, *WEB_SETS)
+    assert (proj / "CLAUDE.md").read_text() == grown
+    assert "has grown past its block" in p.stdout
+
+
+def test_an_unmarked_vibe_contract_heading_is_the_projects_own_under_classic(tmp_path):
+    own = "# P\n\n## Vibe contract notes\n\nour own words\n"
+    proj = project(tmp_path, claude_md=own)
+    run(proj, *WEB_SETS)
+    assert "## Vibe contract notes\n\nour own words" in (proj / "CLAUDE.md").read_text()
+
+
+def test_the_vibe_contract_names_the_gates_it_overrides_and_stays_short():
+    b = block("vibe-contract.md")
+    assert b.count("\n") < 30
+    for gate in ("superpowers:brainstorming", "superpowers:writing-plans",
+                 "superpowers:finishing-a-development-branch", "/superpowers-gstack:vibe"):
+        assert gate in b, gate

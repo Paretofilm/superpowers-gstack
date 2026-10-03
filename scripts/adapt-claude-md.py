@@ -100,6 +100,7 @@ class Block:
     sentinels: tuple[str, ...] | None   # None: a heading only this plugin writes — always attributed
     case3: str = "replace"              # "preserve": never replace a markerless copy, insert nothing
     tracks: frozenset | None = None     # None: every track
+    profiles: frozenset | None = None   # None: every workflow profile
 
 
 BLOCKS = (
@@ -119,6 +120,8 @@ BLOCKS = (
           ("XcodeBuildMCP", "MUST be performed by the agent"), tracks=NATIVE),
     Block("companion-skills.md", "gstack-companion-skills", r"Companion skills",
           ("swiftui-expert-skill", "discovery — not routing"), tracks=NATIVE),
+    Block("vibe-contract.md", "gstack-vibe", r"Vibe contract",
+          ("Standing approvals after intake", "/superpowers-gstack:vibe"), profiles=frozenset({"vibe"})),
 )
 MODEL_ROUTING_FILE = "model-routing-section.md"
 # A Model Routing section is the plugin's when its body carries the emitted block's
@@ -543,6 +546,36 @@ def _placeholder_refresh(sec: list[str], raw: str, ctx: Context, level: int):
     return new, replaced
 
 
+def _remove_out_of_profile(lines: list[str], found, bt: BlockText, ctx: Context, report: Report) -> list[str]:
+    """A profile block in a project whose workflow no longer wants it. The emitted
+    section is plugin prose and goes, the way the retired autonomy block went; a
+    section without a marker is the project's own and stays; one that has grown
+    stays too, with a note — the user's lines in it are never removed."""
+    start, level, raw_head, version = found
+    head_name = heading_text(raw_head)
+    if version is None:
+        report.preserved.append(f"{head_name}: no marker — the project's own section; kept although the "
+                                f"workflow is {ctx.profile}")
+        return lines
+    end = section_end(lines, start, level)
+    g = growth(lines, start, end, bt)
+    if g["triggers"]:
+        report.notes.append(f"`{head_name}` belongs to another workflow profile and this project's is "
+                            f"{ctx.profile}, but it has grown past its block ({g['lines']} lines against "
+                            f"{g['block_lines']}); not removed — move your own lines into an unmarked "
+                            f"section, then re-run")
+        return lines
+    report.changes.append(f"{head_name}: removed (workflow is {ctx.profile}; the snapshot has it)")
+    if g["at_risk"]:
+        report.removed.append({"section": head_name, "lines": g["at_risk"],
+                               "where": f"removed with the section — the workflow is {ctx.profile}; "
+                                        f"the snapshot has every line"})
+    lines = _splice(lines, start, end, [])
+    while len(lines) > start > 0 and not lines[start].strip() and not lines[start - 1].strip():
+        del lines[start]
+    return lines
+
+
 def apply_block(lines: list[str], blk: Block, ctx: Context, report: Report) -> list[str]:
     raw = ctx.blocks[blk.file]
     marker, cur_version, _ = _block_meta(raw)
@@ -553,14 +586,18 @@ def apply_block(lines: list[str], blk: Block, ctx: Context, report: Report) -> l
     for m_, n_ in _DUPES:
         report.notes.append(f"more than one section carries `{m_}` ({n_} found); only the first is managed — "
                             f"delete the copy you did not write, the snapshot has both")
-    wanted = blk.tracks is None or ctx.track in blk.tracks
+    on_track = blk.tracks is None or ctx.track in blk.tracks
+    in_profile = blk.profiles is None or ctx.profile in blk.profiles
+    wanted = on_track and in_profile
     if found is None:
         if wanted:
             report.changes.append(f"{name}: added ({marker}-v{cur_version})")
             return _append(lines, _emitted_block(raw, ctx, 2))
         return lines
+    if not in_profile:
+        return _remove_out_of_profile(lines, found, bt, ctx, report)
     start, level, raw_head, version = found
-    if not wanted:
+    if not on_track:
         report.notes.append(f"`{heading_text(raw_head)}` is a native-track section and this run's "
                             f"track is {ctx.track} — not on this track, so it is upgraded as usual but never removed; "
                             f"delete it yourself if the project stopped being native")

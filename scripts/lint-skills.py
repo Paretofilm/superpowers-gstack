@@ -146,6 +146,7 @@ MARKER_BLOCKS = [
     "track-routing.md",
     "xcode-tools.md",
     "companion-skills.md",
+    "vibe-contract.md",
 ]
 PLAIN_BLOCKS = ["model-routing-section.md", "PLACEHOLDERS.md"]
 
