@@ -403,3 +403,9 @@ def test_triggers_recognises_a_norwegian_gjest_brief_for_vm_commands(tmp_path):
     _vm_sub_file(tmp_path / "b", "Implementer fasen")
     assert "| instructed in the brief | 1 |" in cli(tmp_path / "a", "triggers")
     assert "| the subagent's own initiative | 1 |" in cli(tmp_path / "b", "triggers")
+
+
+def test_the_skill_names_the_cli_and_the_cleanup_period():
+    s = (REPO / "skills" / "workflow-metrics" / "SKILL.md").read_text()
+    assert "$SKILL_DIR/../../scripts/workflow-metrics.py" in s
+    assert "cleanupPeriodDays" in s and "--since" in s and "--until" in s
