@@ -55,7 +55,8 @@ def module():
     return m
 
 
-def project(tmp_path, claude_md: str | None = None, track: str | None = None) -> Path:
+def project(tmp_path, claude_md: str | None = None, track: str | None = None,
+            workflow: str | None = None) -> Path:
     p = tmp_path / "proj"
     p.mkdir(parents=True)
     subprocess.run(["git", "init", "-q"], cwd=p, check=True)
@@ -64,6 +65,9 @@ def project(tmp_path, claude_md: str | None = None, track: str | None = None) ->
     if track:
         (p / ".gstack").mkdir(exist_ok=True)
         (p / ".gstack" / "track").write_text(track + "\n")
+    if workflow:
+        (p / ".gstack").mkdir(exist_ok=True)
+        (p / ".gstack" / "workflow").write_text(workflow + "\n")
     return p
 
 
@@ -879,3 +883,30 @@ def test_notes_name_a_missing_track_a_track_mismatch_and_a_duplicate_marker(tmp_
     (proj / "CLAUDE.md").write_text(dup)
     p = run(proj, *WEB_SETS)
     assert "more than one" in p.stdout and "Git hygiene" in p.stdout
+
+
+# --- 3.6.0: the workflow profile pin ------------------------------------------------
+
+def test_no_workflow_pin_means_classic_and_the_report_says_so(tmp_path):
+    proj = project(tmp_path)
+    p = run(proj, *WEB_SETS)
+    assert "workflow classic)" in p.stdout.splitlines()[0]
+    assert "no .gstack/workflow file" in p.stdout
+
+
+def test_a_vibe_pin_is_read(tmp_path):
+    proj = project(tmp_path, workflow="vibe")
+    p = run(proj, *WEB_SETS)
+    assert "workflow vibe)" in p.stdout.splitlines()[0]
+    assert "no .gstack/workflow file" not in p.stdout
+
+
+@pytest.mark.parametrize("value", ["vibe ", "Vibe", "lite", ""])
+def test_an_invalid_workflow_pin_is_blocked_and_nothing_written(tmp_path, value):
+    proj = project(tmp_path, claude_md="# P\n\nkeep me\n")
+    (proj / ".gstack").mkdir()
+    (proj / ".gstack" / "workflow").write_text(value + "\n")
+    p = run(proj, *WEB_SETS, expect=2)
+    assert "BLOCKED — invalid .gstack/workflow" in p.stderr
+    assert (proj / "CLAUDE.md").read_text() == "# P\n\nkeep me\n"
+    assert not (proj / ".gstack" / "CLAUDE.md.pre-adapt").exists()

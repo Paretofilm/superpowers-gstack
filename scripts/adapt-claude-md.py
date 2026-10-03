@@ -71,6 +71,7 @@ NATIVE = frozenset({"ios", "macos", "both"})
 TRACKS = NATIVE | {"web"}
 SENSITIVITIES = ("very high", "high", "medium", "low")
 EXECUTORS = ("host", "vm")
+PROFILES = ("vibe", "classic")
 NO_TEAM_TEXT = "<none — no paid developer account was found; stable signing requires a Team ID>"
 
 RATIO = 1.5          # section more than 1.5x the block's line count
@@ -352,6 +353,7 @@ class Context:
     routing: str | None
     model_routing: bool
     project: str
+    profile: str = "classic"
     needed: set[str] = field(default_factory=set)   # placeholders in blocks emitted this run
 
 
@@ -837,7 +839,8 @@ def merge(text: str | None, ctx: Context) -> tuple[str, Report]:
 # --- report rendering -----------------------------------------------------------------
 
 def render(report: Report, ctx: Context, dry_run: bool) -> str:
-    out = [f"ADAPT REPORT — {'dry run' if dry_run else 'applied'} (superpowers-gstack {ctx.version}, track {ctx.track})", ""]
+    out = [f"ADAPT REPORT — {'dry run' if dry_run else 'applied'} (superpowers-gstack {ctx.version}, "
+           f"track {ctx.track}, workflow {ctx.profile})", ""]
     out += ["**Changes made:**"] + [f"- {c}" for c in report.changes] + (["- none"] if not report.changes else []) + [""]
     out += ["**Preserved:**"] + [f"- {p}" for p in report.preserved]
     for u in report.unattributed:
@@ -950,6 +953,22 @@ def read_executor(project: Path) -> str | None:
     return value
 
 
+def read_workflow(project: Path, report: Report | None = None) -> str:
+    """The project's workflow profile. Exactly `vibe` or `classic`; the file's newline
+    is the only thing stripped, so `vibe ` is refused, never repaired. No file is
+    classic: the profile is opt-in, and a run with nobody to ask never opts in."""
+    f = project / ".gstack" / "workflow"
+    if not f.is_file():
+        if report is not None:
+            report.notes.append("no .gstack/workflow file — classic profile "
+                                "(write `vibe` there to opt in to the vibe contract)")
+        return "classic"
+    value = f.read_text().removesuffix("\n")
+    if value not in PROFILES:
+        raise Refusal(f"BLOCKED — invalid .gstack/workflow {value!r}: must be exactly vibe or classic")
+    return value
+
+
 def load_blocks(blocks_dir: Path) -> dict[str, str]:
     blocks = {}
     for blk in BLOCKS:
@@ -1018,6 +1037,7 @@ def main(argv=None) -> int:
         sets = parse_sets(a.set)
         pre_notes = Report()
         track = read_track(project, a.track, pre_notes)
+        profile = read_workflow(project, pre_notes)
         if track in NATIVE:
             # the pin is authoritative; --set may only agree with it or stand in for it
             pin = read_executor(project)
@@ -1053,7 +1073,8 @@ def main(argv=None) -> int:
                     raise Refusal(f"BLOCKED — --mkdirs needs {d}/ to be a directory, but a file is in the way")
         ctx = Context(blocks=blocks, version=version, track=track, sets=sets, rescue=set(a.rescue),
                       routing=routing, model_routing=not a.no_model_routing,
-                      project=a.project_name or project_name(text or "", project))
+                      project=a.project_name or project_name(text or "", project),
+                      profile=profile)
         new_text, report = merge(text, ctx)
         report.notes = pre_notes.notes + report.notes
         unresolved = sorted(t for t in ctx.needed if t not in sets)
