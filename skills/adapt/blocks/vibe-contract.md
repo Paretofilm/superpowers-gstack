@@ -20,7 +20,9 @@ any tool; if a test is wrong, stop and say which and why. The lock's `verify` mu
 before landing.
 
 **Context.** Keep the main thread under about 150k tokens: one fresh subagent per phase,
-`STATUS.md` updated at every phase boundary.
+`STATUS.md` updated at every phase boundary. Project knowledge lives in the skill
+`{{CONTEXT_SKILL}}` (`.claude/skills/{{CONTEXT_SKILL}}/SKILL.md`), not in this file: load it
+before planning; working rules go in its "How we work" section.
 
 **Review once, at the end.** The multi-lens chain runs once per feature, after the last
 phase, at its computed tier — not at every phase boundary. Fix critical and important

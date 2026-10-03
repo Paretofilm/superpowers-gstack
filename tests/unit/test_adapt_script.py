@@ -980,3 +980,80 @@ def test_the_vibe_contract_names_the_gates_it_overrides_and_stays_short():
     for gate in ("superpowers:brainstorming", "superpowers:writing-plans",
                  "superpowers:finishing-a-development-branch", "/superpowers-gstack:vibe"):
         assert gate in b, gate
+
+
+# --- 3.6.0: the project's context skill ---------------------------------------------
+
+def context_file(proj: Path, name: str) -> Path:
+    return proj / ".claude" / "skills" / name / "SKILL.md"
+
+
+def test_a_vibe_project_gets_a_context_skill_from_the_template(tmp_path):
+    proj = project(tmp_path, workflow="vibe")
+    p = run(proj, *WEB_SETS)
+    f = context_file(proj, "proj-context")
+    text = f.read_text()
+    assert re.search(r"^name: proj-context$", text, re.M)
+    desc = re.search(r"^description: (.+)$", text, re.M).group(1)
+    assert len(desc.split()) < 40
+    assert "{{" not in text and "## How we work" in text
+    assert "proj-context" in (proj / "CLAUDE.md").read_text(), "the vibe block points to it"
+    assert any("created .claude/skills/proj-context/SKILL.md" in c for c in last_json(p)["changes"])
+
+
+def test_an_existing_context_skill_is_reused_and_never_overwritten(tmp_path):
+    proj = project(tmp_path, workflow="vibe")
+    f = context_file(proj, "proj-kontekst")
+    f.parent.mkdir(parents=True)
+    f.write_text("---\nname: proj-kontekst\ndescription: ours\n---\n\nmine\n")
+    run(proj, *WEB_SETS)
+    assert f.read_text() == "---\nname: proj-kontekst\ndescription: ours\n---\n\nmine\n"
+    assert not context_file(proj, "proj-context").exists()
+    assert "`proj-kontekst`" in (proj / "CLAUDE.md").read_text()
+
+
+def test_a_classic_project_gets_no_context_skill(tmp_path):
+    proj = project(tmp_path)
+    run(proj, *WEB_SETS)
+    assert not (proj / ".claude").exists()
+
+
+def test_dry_run_only_says_it_would_create_the_context_skill(tmp_path):
+    proj = project(tmp_path, workflow="vibe")
+    p = run(proj, "--dry-run", *WEB_SETS)
+    assert not (proj / ".claude").exists()
+    assert "would create .claude/skills/proj-context/SKILL.md" in p.stdout
+
+
+def test_a_second_vibe_run_creates_nothing(tmp_path):
+    proj = project(tmp_path, workflow="vibe")
+    run(proj, *WEB_SETS)
+    p = run(proj, *WEB_SETS)
+    assert last_json(p)["changes"] == []
+
+
+def test_the_project_name_flag_names_the_context_skill(tmp_path):
+    proj = project(tmp_path, workflow="vibe")
+    run(proj, *WEB_SETS, "--project-name", "My App")
+    assert context_file(proj, "my-app-context").is_file()
+
+
+def test_a_worktree_names_the_context_skill_after_the_main_checkout(tmp_path):
+    main = tmp_path / "myapp"
+    main.mkdir()
+    for args in (["init", "-q", "-b", "main"], ["config", "user.email", "t@e.com"], ["config", "user.name", "T"],
+                 ["config", "commit.gpgsign", "false"], ["commit", "-q", "--allow-empty", "-m", "init"],
+                 ["worktree", "add", "-q", str(tmp_path / "wt-feature"), "-b", "feature"]):
+        subprocess.run(["git", *args], cwd=main, check=True)
+    wt = tmp_path / "wt-feature"
+    (wt / ".gstack").mkdir()
+    (wt / ".gstack" / "workflow").write_text("vibe\n")
+    run(wt, *WEB_SETS)
+    assert context_file(wt, "myapp-context").is_file()
+
+
+def test_slug():
+    m = module()
+    assert m.slug("Resolve-ai-worker") == "resolve-ai-worker"
+    assert m.slug("  My  App!! ") == "my-app"
+    assert m.slug("???") == "project"

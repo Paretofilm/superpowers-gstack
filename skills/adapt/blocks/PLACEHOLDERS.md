@@ -102,3 +102,11 @@ is the pin's only writer. The script reads the pin itself (this rule, in code) s
 `--set E2E_EXECUTOR=` is only needed to override it. `e2e-route` and the
 scaffold runner are readers. iOS-only and web projects get no file and no question —
 the axis is macOS-only until someone asks for parallel iOS E2E.
+
+## `{{CONTEXT_SKILL}}` (vibe-contract.md — vibe profile only)
+
+The name of the project's context skill. The one token the script resolves itself —
+never pass it with `--set`: an existing `.claude/skills/*-context` or `*-kontekst`
+skill, else `<--project-name or the main checkout's directory name, lower-case,
+non-alphanumerics as hyphens>-context`, which the script then creates from
+`skills/adapt/templates/project-context.md` (never over an existing file).

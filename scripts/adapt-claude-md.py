@@ -49,6 +49,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 DEFAULT_BLOCKS = REPO / "skills" / "adapt" / "blocks"
+CONTEXT_TEMPLATE = REPO / "skills" / "adapt" / "templates" / "project-context.md"
+CONTEXT_SKILL_RE = re.compile(r"-(context|kontekst)$")
 PLUGIN_JSON = REPO / ".claude-plugin" / "plugin.json"
 
 REMOVED_LABEL = "**Removed (not plugin prose):**"
@@ -319,6 +321,41 @@ def project_name(text: str, project_dir: Path) -> str:
         if m:
             return heading_text(line)
     return project_dir.name
+
+
+def slug(name: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return s or "project"
+
+
+def main_checkout_name(project: Path) -> str:
+    """The main checkout's directory name, so a worktree (`wt-feature`) names the
+    context skill after the project, not after the branch."""
+    p = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                       cwd=project, capture_output=True, text=True)
+    common = Path(p.stdout.strip()) if p.returncode == 0 and p.stdout.strip() else None
+    if common is not None and common.name == ".git":
+        return common.parent.name
+    return project.name
+
+
+def context_skill(project: Path, explicit: str | None) -> tuple[str, bool]:
+    """(name, exists). An existing `.claude/skills/*-context` or `*-kontekst` skill
+    always wins: the project may have written one before it chose this profile."""
+    d = project / ".claude" / "skills"
+    if d.is_dir():
+        found = sorted(x.name for x in d.iterdir()
+                       if CONTEXT_SKILL_RE.search(x.name) and (x / "SKILL.md").is_file())
+        if found:
+            return found[0], True
+    return slug(explicit or main_checkout_name(project)) + "-context", False
+
+
+def render_context_skill(name: str, project_display: str) -> str:
+    if not CONTEXT_TEMPLATE.is_file():
+        raise Refusal(f"UNREADABLE: {CONTEXT_TEMPLATE} is missing — run `/plugin update superpowers-gstack`")
+    return CONTEXT_TEMPLATE.read_text(encoding="utf-8").replace(
+        "{{CONTEXT_SKILL}}", name).replace("{{PROJECT}}", project_display)
 
 
 # --- the report -------------------------------------------------------------------
@@ -1112,6 +1149,15 @@ def main(argv=None) -> int:
                       routing=routing, model_routing=not a.no_model_routing,
                       project=a.project_name or project_name(text or "", project),
                       profile=profile)
+        ctx_skill, content, skill_file = None, None, None
+        if profile == "vibe":
+            ctx_skill, ctx_skill_exists = context_skill(project, a.project_name)
+            ctx.sets["CONTEXT_SKILL"] = ctx_skill
+            skill_file = project / ".claude" / "skills" / ctx_skill / "SKILL.md"
+            if not ctx_skill_exists:
+                if skill_file.parent.exists() and not skill_file.parent.is_dir():
+                    raise Refusal(f"BLOCKED — {skill_file.parent} is a file; the context skill needs that directory")
+                content = render_context_skill(ctx_skill, ctx.project)   # a missing template refuses here
         new_text, report = merge(text, ctx)
         report.notes = pre_notes.notes + report.notes
         unresolved = sorted(t for t in ctx.needed if t not in sets)
@@ -1124,6 +1170,9 @@ def main(argv=None) -> int:
         changed = text is None or new_text != text
         if not changed:
             report.changes = []   # every step was a no-op; the file is not rewritten
+        if content is not None:
+            if a.dry_run:
+                report.changes.append(f"would create .claude/skills/{ctx_skill}/SKILL.md from the project-context template")
         if not a.dry_run:
             if changed and claude.is_file() and claude.read_bytes() != original:
                 raise Refusal("BLOCKED — CLAUDE.md changed on disk while this run was computing; nothing was written. Re-run")
@@ -1131,6 +1180,11 @@ def main(argv=None) -> int:
                 snapshot(project, original, report)
             if changed:
                 _atomic_write(claude, new_text.replace("\n", newline).encode("utf-8"))
+            if content is not None:
+                skill_file.parent.mkdir(parents=True, exist_ok=True)
+                skill_file.write_text(content, encoding="utf-8")
+                report.changes.append(f"created .claude/skills/{ctx_skill}/SKILL.md from the project-context "
+                                      f"template — fill it in as the project is learned")
             if a.mkdirs:
                 made = []
                 for d in ("specs", "plans"):
