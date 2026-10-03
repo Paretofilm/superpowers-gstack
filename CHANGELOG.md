@@ -1,5 +1,23 @@
 # Changelog
 
+## [3.6.0] - 2026-10-03
+
+**The vibe profile: a project can choose, once, to be built with one intake round, locked acceptance tests as the only checkpoint and one review at the end.** Opt-in per project with `.gstack/workflow`; without it everything is as in 3.5.1.
+
+### Added
+- **Workflow profile pin `.gstack/workflow`** (`vibe` | `classic`). `/adapt` asks once and commits it, like `.gstack/e2e-executor`; no file is classic, and a run with nobody to ask never opts in. An invalid value is `BLOCKED — invalid .gstack/workflow`.
+- **`gstack-vibe-v1` block** (`skills/adapt/blocks/vibe-contract.md`, 29 lines), emitted only for `vibe`: standing approvals after intake that override the brainstorming HARD-GATE, the execution-method choice and the finishing menu; the stop list; the acceptance tests as the one checkpoint; context under about 150k with a fresh subagent per phase; the multi-lens chain once per feature. Switching to `classic` removes the emitted block (a grown one stays, with a note). `Block` gained a `profiles` filter beside `tracks`.
+- **`/superpowers-gstack:vibe`** — one feature from intake to landing: one `AskUserQuestion` round (the skill does not enter plan mode itself), `SPEC.md`/`PLAN.md` under `docs/superpowers/vibe/`, acceptance tests shown once with a `/goal` line, then locked; `STATUS.md`/`ROUNDS.md`; one review; landing by `Landing mode:`; lessons into the context skill.
+- **`scripts/lock-acceptance-tests.py`** — `lock` commits the tests, then commits `Edit(/<glob>)`/`Write(/<glob>)` deny rules in the project's `.claude/settings.json` and a receipt in `.gstack/acceptance-lock.json` (one lock per feature) in a second commit. `verify` (exit 0/1/2) is the real gate, since a deny rule does not stop Bash: it diffs the files each lock recorded (files added later under the glob are out of scope; dotfiles included), prints only `CHANGED <feature> <file>` lines on stdout, and a malformed receipt is exit 2. `unlock` removes only the rules no other lock needs, handing a shared rule to the lock that still needs it.
+- **Project context skill.** With `vibe`, `/adapt` creates `.claude/skills/<project>-context/SKILL.md` from `skills/adapt/templates/project-context.md` unless a `*-context` or `*-kontekst` skill exists, rendering the template in one pass; the vibe block names it through `{{CONTEXT_SKILL}}`, which the script resolves itself (`--set CONTEXT_SKILL` is refused, and a file in the way of the skill's directory refuses before any write).
+- **`/superpowers-gstack:workflow-metrics`** and `scripts/workflow-metrics.py` (`asks`, `tokens`, `overhead`, `triggers`, `skills`, `mcp`, `digest`; `--project`, `--since`, `--until`): before/after measurement from transcripts, one count per model call (`message.id`). Malformed events are skipped, unreadable input is exit 2, `mcp` reads only server names, and the date filter uses each file's own first timestamp. On the same data it reproduces the 2026-10-02 analysis (36,570 model calls, 244 questions, 89% with the recommended answer).
+
+### Tests
+- `test_adapt_script.py`: the pin (missing, vibe, invalid values), the block emitted / not emitted / removed / kept when grown / idempotent and its gates and length, the context skill (created, reused and never overwritten, none for classic, dry run, worktree naming, `--project-name`, a file in the way, `--set CONTEXT_SKILL` refused, no token leak).
+- `test_lock_acceptance_tests.py`: lock, verify (untouched, changed, deleted, no receipt, from a subdirectory), existing and invalid settings, bad globs, a feature locked twice, unrelated staged work, unlock with own and shared rules, malformed receipts, overlapping locks, dotfiles, non-ASCII names with pure stdout.
+- `test_vibe_skill.py`: the skill's contract (one round, one checkpoint, stop list, one review, landing, lessons, no plan mode) and `/adapt`'s profile handling.
+- `test_workflow_metrics.py`: one call per `message.id` with a truncated line, project and date filters, asks, overhead, odd events and unreadable input, `--out`, skills, triggers, mcp, digest, `--top`.
+
 ## [3.5.1] - 2026-10-02
 
 **`/superpowers-gstack:land` no longer lets a branch choose the policy it is landed under, never merges without the pre-merge gate, and pushes `main` only as a compare-and-swap.** The first two were found by a Codex adversarial review of 3.5.0; the push and recovery fixes by the multi-lens review of this release (Codex, DeepSeek, Codex countersynthesis).
