@@ -113,3 +113,9 @@ def test_the_overview_lists_the_exact_files_and_the_lock_sha_is_reported():
 
 def test_the_threat_model_is_stated():
     assert "mistakes and shortcuts, not against deliberate history rewriting" in VIBE
+
+
+def test_verify_is_described_as_a_gate_not_proof_with_its_limits():
+    assert "`verify` is a gate, not proof" in VIBE
+    assert "conftest.py" in VIBE and "pytest configuration" in VIBE
+    assert "After a rebase it warns" in VIBE

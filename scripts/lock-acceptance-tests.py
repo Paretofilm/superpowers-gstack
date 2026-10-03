@@ -19,17 +19,20 @@ tests are the contract for the rest of the feature.
           needs. Run it only when the user asks.
 
 Threat model. The lock defends against an agent that makes mistakes or takes shortcuts
-(edits a test to turn it green, forgets a file, adds a conftest that skips the tests, edits
-the receipt, re-points it at a newer commit). It does NOT defend against one that
-deliberately rewrites history, fakes a commit subject, or edits `.git` directly. verify
-detects the cheap, plausible tampering:
-  - a locked file differs from its lock commit (working tree, index, HEAD), or carries an
-    assume-unchanged / skip-worktree flag;
-  - the receipt differs from HEAD, or a commit that touched it since the lock was not made
-    by this script (subject not `chore(acceptance): ` / `test(acceptance): ` — a faked
-    subject passes), or the lock commit is no longer an ancestor of HEAD;
-  - a new file appears under a locked glob that no lock lists (files git ignores, `__pycache__`
-    and `.DS_Store` are exempt).
+(edits a test to turn it green, forgets a file, adds a conftest next to the tests, edits the
+receipt, re-points it at a newer commit). It is a gate for mistakes, not proof. verify checks:
+  - every locked file against its lock commit in the working tree, the index and HEAD, and
+    that none carries an assume-unchanged / skip-worktree flag (the receipt included);
+  - receipt integrity: its bytes equal HEAD's, and every commit that touched it since the lock
+    has a script subject (`chore(acceptance): ` / `test(acceptance): `);
+  - new files under a locked path that no lock lists (only `__pycache__` directories, `*.pyc`
+    and `.DS_Store` are exempt; git-ignored files are not).
+Limits, plainly: a `conftest.py`, pytest configuration (`addopts`, plugins) or other code
+outside the locked paths can change what the tests do; a faked or amended commit subject on
+the receipt (`git commit --amend` of the script's own commit) passes; a history rewrite
+passes — after a rebase or squash the lock commit may no longer be in the branch's history,
+and verify then only warns (the files are still compared with the lock commit) so the user
+can re-lock; `.git` edited directly defeats everything.
 `lock` commits whatever the matched files currently contain (it does not require them clean)
 and refuses a symlink: lock the real file. The user approves an overview, not the bytes, so
 the overview must list the exact files and the lock commit SHA is reported afterwards.
@@ -223,11 +226,15 @@ def cmd_lock(top: Path, feature: str, globs: list[str]) -> int:
 
 
 def receipt_differs(top: Path) -> bool:
-    """True when the receipt is modified (staged or not) or not yet committed at all."""
-    if subprocess.run(["git", "cat-file", "-e", f"HEAD:{RECEIPT.as_posix()}"], cwd=top,
-                      capture_output=True).returncode != 0:
+    """True when the receipt's bytes on disk are not HEAD's (or either is missing). Compared
+    byte for byte, so an assume-unchanged/skip-worktree flag cannot hide an edit."""
+    p = subprocess.run(["git", "show", f"HEAD:{RECEIPT.as_posix()}"], cwd=top, capture_output=True)
+    if p.returncode != 0:
         return True
-    return bool(git(top, "diff", "--name-only", "HEAD", "--", f":(literal){RECEIPT.as_posix()}").strip())
+    try:
+        return (top / RECEIPT).read_bytes() != p.stdout
+    except OSError:
+        return True
 
 
 def matched_files(top: Path, globs: list[str]) -> set[str]:
@@ -239,19 +246,11 @@ def matched_files(top: Path, globs: list[str]) -> set[str]:
             continue
         for p in glob.glob(g, root_dir=str(top), recursive=True, include_hidden=True):
             pp = Path(p)
-            if ".git" in pp.parts or "__pycache__" in pp.parts or pp.name in EXEMPT_NEW:
+            if ".git" in pp.parts or "__pycache__" in pp.parts or pp.name in EXEMPT_NEW or pp.suffix == ".pyc":
                 continue
             if (top / p).is_file() or (top / p).is_symlink():
                 out.add(pp.as_posix())
     return out
-
-
-def git_ignored(top: Path, files: list[str]) -> set[str]:
-    if not files:
-        return set()
-    p = subprocess.run(["git", "check-ignore", "-z", "--stdin"], cwd=top, input="\0".join(files) + "\0",
-                       capture_output=True, text=True)
-    return {f for f in p.stdout.split("\0") if f}
 
 
 def foreign_receipt_commits(top: Path, commit: str) -> list[tuple[str, str]]:
@@ -265,6 +264,24 @@ def foreign_receipt_commits(top: Path, commit: str) -> list[tuple[str, str]]:
     return bad
 
 
+ADVICE = {
+    "file": "A locked acceptance test differs from what the user approved. Restore it "
+            "(`git checkout <lock commit> -- <file>`), or stop and tell the user which test is wrong and why.",
+    "receipt": "The receipt was changed other than by this script: restore the receipt as the script wrote it "
+               "(`git show <script commit>:.gstack/acceptance-lock.json`), or ask the user to unlock and "
+               "re-lock; if this came from merging two features' locks, re-lock.",
+    "new": "A new file sits under a locked path: remove the file, or ask the user to unlock and re-lock "
+           "to include it.",
+    "flag": "A locked file carries an assume-unchanged/skip-worktree flag: run "
+            "`git update-index --no-assume-unchanged --no-skip-worktree <file>`.",
+}
+
+
+def flagged_paths(top: Path, lit: list[str]) -> list[str]:
+    out = git(top, "ls-files", "-v", "-z", "--", *lit)
+    return [e[2:] for e in out.split("\0") if e and (e[0].islower() or e[0] == "S")]
+
+
 def cmd_verify(top: Path, feature: str | None) -> int:
     receipt = read_receipt(top, None)
     if receipt is None:
@@ -276,41 +293,48 @@ def cmd_verify(top: Path, feature: str | None) -> int:
         return 2
     for lk in locks:
         require_commit(top, lk)
-    changed: list[str] = []
+    changed: list[tuple[str, str]] = []      # (advice class, line)
+    warnings: list[str] = []
     for lk in locks:
         commit = lk["commit"]
         files = lk.get("files") or []
         if files:
             lit = [f":(literal){f}" for f in files]
-            out = git(top, "diff", "-z", "--name-only", "--end-of-options", commit, "--", *lit)
-            changed += [f"CHANGED {lk['feature']} {f}" for f in out.split("\0") if f]
-            flagged = git(top, "ls-files", "-v", "-z", "--", *lit)
-            for ent in flagged.split("\0"):
-                if ent and (ent[0].islower() or ent[0] == "S"):
-                    changed.append(f"CHANGED {lk['feature']} {ent[2:]} (assume-unchanged/skip-worktree flag)")
+            diffs = (("diff", "-z", "--name-only", "--end-of-options", commit, "--", *lit),           # working tree
+                     ("diff", "--cached", "-z", "--name-only", "--end-of-options", commit, "--", *lit),  # index
+                     ("diff", "-z", "--name-only", "--end-of-options", commit, "HEAD", "--", *lit))      # HEAD
+            names = {f for args in diffs for f in git(top, *args).split("\0") if f}
+            changed += [("file", f"CHANGED {lk['feature']} {f}") for f in sorted(names)]
+            changed += [("flag", f"CHANGED {lk['feature']} {f} (assume-unchanged/skip-worktree flag)")
+                        for f in flagged_paths(top, lit)]
         if subprocess.run(["git", "merge-base", "--is-ancestor", "--end-of-options", commit, "HEAD"],
                           cwd=top, capture_output=True).returncode != 0:
-            changed.append(f"CHANGED {lk['feature']} lock commit {commit[:12]} is not an ancestor of HEAD")
+            warnings.append(f"warning: lock commit {commit[:12]} for {lk['feature']} is not in this branch's "
+                            f"history (rebased or squashed); locked files still match it — ask the user to "
+                            f"re-lock to refresh the receipt")
     if receipt_differs(top):
-        changed.append(f"CHANGED receipt {RECEIPT.as_posix()}")
+        changed.append(("receipt", f"CHANGED receipt {RECEIPT.as_posix()}"))
+    changed += [("flag", f"CHANGED receipt {f} (assume-unchanged/skip-worktree flag)")
+                for f in flagged_paths(top, [f":(literal){RECEIPT.as_posix()}"])]
     seen: set[str] = set()
     for lk in locks:
         for sha, subject in foreign_receipt_commits(top, lk["commit"]):
             if sha not in seen:
                 seen.add(sha)
-                changed.append(f"CHANGED receipt {RECEIPT.as_posix()} (changed by commit {sha[:12]} "
-                               f"\"{subject}\", not by this script)")
+                changed.append(("receipt", f"CHANGED receipt {RECEIPT.as_posix()} (changed by commit {sha[:12]} "
+                                           f"\"{subject}\", not by this script)"))
     known = {f for lk in receipt.get("locks", []) for f in lk.get("files", [])}
     for lk in locks:
         new = matched_files(top, lk.get("paths", [])) - known
-        new -= git_ignored(top, sorted(new))
-        changed += [f"CHANGED {lk['feature']} {f} (new file under a locked path)" for f in sorted(new)]
+        changed += [("new", f"CHANGED {lk['feature']} {f} (new file under a locked path)") for f in sorted(new)]
     if changed:
-        print("\n".join(dict.fromkeys(changed)))
-        print("A locked acceptance test (or the receipt) differs from what the user approved. Restore it "
-              "(`git checkout <commit> -- <file>`), or stop and tell the user which test is wrong and why.",
-              file=sys.stderr)
+        lines = list(dict.fromkeys(line for _, line in changed))
+        print("\n".join(lines))
+        for cls in dict.fromkeys(c for c, _ in changed):
+            print(ADVICE[cls], file=sys.stderr)
         return 1
+    for w in warnings:
+        print(w, file=sys.stderr)
     print(f"acceptance tests unchanged: {', '.join(lk['feature'] for lk in locks) or 'no locks'}")
     return 0
 

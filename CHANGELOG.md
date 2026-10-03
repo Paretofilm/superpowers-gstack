@@ -21,6 +21,7 @@
 - `workflow-metrics` counts the final `output_tokens` per message (the largest over its events); an earlier analysis counted the first event, about half.
 - The context skill's `description` is written as a quoted YAML scalar, so a project title such as `Acme: Billing #2` stays valid.
 - The vibe skill writes and commits its lessons before verifying and landing (they used to be written after landing and never reached the default branch); the overview lists the exact files and the lock SHA is reported.
+- `verify` now compares locked files with the lock commit in the working tree, the index and HEAD, detects a receipt hidden by assume-unchanged (byte comparison with HEAD), no longer exempts git-ignored new files, gives each failure its own advice, and survives an ordinary rebase: a lock commit that left the branch's history is a warning, not a failure, while the files still match.
 
 ### Tests
 - `test_adapt_script.py`: the pin (missing, vibe, invalid values), the block emitted / not emitted / removed / kept when grown / idempotent and its gates and length, the context skill (created, reused and never overwritten, none for classic, dry run, worktree naming, `--project-name`, a file in the way, `--set CONTEXT_SKILL` refused, no token leak).

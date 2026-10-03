@@ -123,8 +123,13 @@ python3 "$LOCK" verify --feature <feature>
 Exit 0 is required before landing. Exit 1 names each changed file (the receipt
 `.gstack/acceptance-lock.json`, a new file under a locked path and a hidden
 assume-unchanged flag included): restore it from the lock commit, or stop and tell the
-user which test is wrong. The lock defends against mistakes and shortcuts, not against
-deliberate history rewriting.
+user which test is wrong. The lock defends against mistakes and shortcuts, not against deliberate history
+rewriting; `verify` is a gate, not proof. It compares the locked files with the lock
+commit in the working tree, the index and HEAD, and checks the receipt and new files
+under the locked paths. It cannot see a `conftest.py` or pytest configuration outside
+those paths that changes what the tests do, a faked or amended commit subject on the
+receipt, or a rewritten history. After a rebase it warns that the lock commit left the
+branch's history: tell the user, who can re-lock.
 
 ## Step 9: Land
 

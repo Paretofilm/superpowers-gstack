@@ -420,3 +420,99 @@ def test_an_assume_unchanged_flag_on_a_locked_file_fails_verify(tmp_path):
     git(r, "update-index", "--no-assume-unchanged", "Tests/Acceptance/test_a.py")
     git(r, "update-index", "--skip-worktree", "Tests/Acceptance/test_a.py")
     run(r, "verify", expect=1)
+
+
+# --- final review wave 3 ------------------------------------------------------------
+
+def rebased_feature(tmp_path, weaken: bool = False):
+    r = repo(tmp_path)
+    git(r, "checkout", "-q", "-b", "feat")
+    lock(r)
+    lock_commit = receipt(r)["locks"][0]["commit"]
+    git(r, "checkout", "-q", "main")
+    (r / "other.txt").write_text("main moved\n")
+    git(r, "add", "other.txt")
+    git(r, "commit", "-q", "-m", "main moves")
+    git(r, "checkout", "-q", "feat")
+    git(r, "rebase", "-q", "main")
+    assert subprocess.run(["git", "merge-base", "--is-ancestor", lock_commit, "HEAD"], cwd=r).returncode != 0
+    if weaken:
+        (r / "Tests" / "Acceptance" / "test_a.py").write_text("def test_a():\n    pass\n")
+        git(r, "commit", "-q", "-am", "weaken")
+    return r, lock_commit
+
+
+def test_verify_survives_a_rebase_with_a_warning(tmp_path):
+    r, lock_commit = rebased_feature(tmp_path)
+    p = run(r, "verify")
+    assert f"warning: lock commit {lock_commit[:12]} for radid is not in this branch's history" in p.stderr
+    assert "ask the user to re-lock" in p.stderr
+
+
+def test_verify_after_a_rebase_still_catches_a_weakened_test(tmp_path):
+    r, _ = rebased_feature(tmp_path, weaken=True)
+    p = run(r, "verify", expect=1)
+    assert "CHANGED radid Tests/Acceptance/test_a.py" in p.stdout
+    assert "git checkout <lock commit> -- <file>" in p.stderr
+
+
+def test_each_failure_class_has_its_own_advice(tmp_path):
+    r = repo(tmp_path)
+    lock(r)
+    f = r / "Tests" / "Acceptance" / "test_a.py"
+    (r / "Tests" / "Acceptance" / "conftest.py").write_text("x = 1\n")
+    git(r, "update-index", "--assume-unchanged", "Tests/Acceptance/test_a.py")
+    tamper_receipt(r, lambda lk: lk.update(locked_at="x"))
+    p = run(r, "verify", expect=1)
+    assert "restore the receipt as the script wrote it" in p.stderr
+    assert "remove the file, or ask the user to unlock and re-lock" in p.stderr
+    assert "git update-index --no-assume-unchanged --no-skip-worktree" in p.stderr
+    f.write_text("changed\n")
+    git(r, "update-index", "--no-assume-unchanged", "Tests/Acceptance/test_a.py")
+    assert "Restore it" in run(r, "verify", expect=1).stderr
+
+
+def test_a_receipt_hidden_by_assume_unchanged_is_still_detected(tmp_path):
+    r = repo(tmp_path)
+    lock(r)
+    git(r, "update-index", "--assume-unchanged", ".gstack/acceptance-lock.json")
+    tamper_receipt(r, lambda lk: lk.update(files=[], paths=[]))
+    (r / "Tests" / "Acceptance" / "test_a.py").write_text("def test_a():\n    pass\n")
+    p = run(r, "verify", expect=1)
+    assert "CHANGED receipt .gstack/acceptance-lock.json" in p.stdout
+
+
+def test_a_staged_modification_is_caught_after_the_working_copy_is_restored(tmp_path):
+    r = repo(tmp_path)
+    lock(r)
+    f = r / "Tests" / "Acceptance" / "test_a.py"
+    original = f.read_text()
+    f.write_text("def test_a():\n    pass\n")
+    git(r, "add", str(f))
+    f.write_text(original)
+    p = run(r, "verify", expect=1)
+    assert "CHANGED radid Tests/Acceptance/test_a.py" in p.stdout
+
+
+def test_a_committed_modification_is_caught_after_the_working_copy_is_restored(tmp_path):
+    r = repo(tmp_path)
+    lock(r)
+    f = r / "Tests" / "Acceptance" / "test_a.py"
+    original = f.read_text()
+    f.write_text("def test_a():\n    pass\n")
+    git(r, "commit", "-q", "-am", "weaken")
+    f.write_text(original)
+    p = run(r, "verify", expect=1)
+    assert "CHANGED radid Tests/Acceptance/test_a.py" in p.stdout
+
+
+def test_an_ignored_new_file_is_flagged_but_pycache_is_not(tmp_path):
+    r = repo(tmp_path)
+    lock(r)
+    (r / ".git" / "info" / "exclude").write_text("conftest.py\n")
+    (r / "Tests" / "Acceptance" / "conftest.py").write_text("collect_ignore_glob = ['*']\n")
+    (r / "Tests" / "Acceptance" / "__pycache__").mkdir()
+    (r / "Tests" / "Acceptance" / "__pycache__" / "x.pyc").write_text("x")
+    (r / "Tests" / "Acceptance" / "stray.pyc").write_text("x")
+    p = run(r, "verify", expect=1)
+    assert p.stdout.splitlines() == ["CHANGED radid Tests/Acceptance/conftest.py (new file under a locked path)"]
