@@ -1,6 +1,6 @@
 ---
 name: {{CONTEXT_SKILL}}
-description: Project knowledge for {{PROJECT}} — architecture, domain truths, pitfalls, findings, how to run and test, and the working rules. Load before planning or changing {{PROJECT}}.
+description: {{DESCRIPTION}}
 ---
 
 # {{PROJECT}} — project knowledge

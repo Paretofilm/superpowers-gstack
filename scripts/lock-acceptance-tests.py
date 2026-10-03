@@ -18,9 +18,24 @@ tests are the contract for the rest of the feature.
   unlock  removes one feature's lock and only the deny rules no other lock still
           needs. Run it only when the user asks.
 
+Threat model. The lock defends against an agent that makes mistakes or takes shortcuts
+(edits a test to turn it green, forgets a file, adds a conftest that skips the tests, edits
+the receipt, re-points it at a newer commit). It does NOT defend against one that
+deliberately rewrites history, fakes a commit subject, or edits `.git` directly. verify
+detects the cheap, plausible tampering:
+  - a locked file differs from its lock commit (working tree, index, HEAD), or carries an
+    assume-unchanged / skip-worktree flag;
+  - the receipt differs from HEAD, or a commit that touched it since the lock was not made
+    by this script (subject not `chore(acceptance): ` / `test(acceptance): ` — a faked
+    subject passes), or the lock commit is no longer an ancestor of HEAD;
+  - a new file appears under a locked glob that no lock lists (files git ignores, `__pycache__`
+    and `.DS_Store` are exempt).
+`lock` commits whatever the matched files currently contain (it does not require them clean)
+and refuses a symlink: lock the real file. The user approves an overview, not the bytes, so
+the overview must list the exact files and the lock commit SHA is reported afterwards.
+
 A deny rule stops the Edit and Write tools, not `sed` through Bash. `verify` is the
-gate; the rules make the honest path the easy one. verify ignores untracked files and
-cannot see `assume-unchanged`/`skip-worktree` flags: it is a gate for the honest path.
+gate; the rules make the honest path the easy one.
 
 Exit 0 ok, 1 changed (verify), 2 refused — the reason is on stderr. Never a traceback.
 """
@@ -38,6 +53,9 @@ from pathlib import Path
 RECEIPT = Path(".gstack") / "acceptance-lock.json"
 SETTINGS = Path(".claude") / "settings.json"
 FEATURE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+COMMIT_RE = re.compile(r"^[0-9a-f]{40}([0-9a-f]{24})?$")
+OWN_SUBJECTS = ("chore(acceptance): ", "test(acceptance): ")
+EXEMPT_NEW = (".DS_Store",)
 
 
 class Refusal(Exception):
@@ -58,6 +76,17 @@ def toplevel(project: Path) -> Path:
     if p.returncode != 0:
         raise Refusal(f"BLOCKED — {project} is not inside a git repository")
     return Path(p.stdout.strip())
+
+
+def require_commit(top: Path, lk: dict) -> str:
+    c = lk["commit"]
+    p = subprocess.run(["git", "rev-parse", "--verify", "--quiet", "--end-of-options", f"{c}^{{commit}}"],
+                       cwd=top, capture_output=True, text=True)
+    if p.returncode != 0:
+        raise Refusal(f"BLOCKED — lock commit {c[:12]} for {lk['feature']} is not in this repository "
+                      f"(squash-merged or rewritten?); the lock cannot be verified — ask the user whether "
+                      f"to unlock/re-lock")
+    return c
 
 
 def read_json(path: Path, default):
@@ -86,6 +115,8 @@ def read_receipt(top: Path, default):
                 bad = f"lock #{i} is not an object"
             elif not all(isinstance(lk.get(k), str) for k in ("feature", "commit")):
                 bad = f"lock #{i} lacks a string `feature`/`commit`"
+            elif not COMMIT_RE.match(lk["commit"]):
+                bad = f"lock #{i} has a `commit` that is not a full commit hash"
             elif not all(isinstance(lk.get(k, []), list) and all(isinstance(x, str) for x in lk.get(k, []))
                          for k in ("paths", "files", "rules", "added")):
                 bad = f"lock #{i} has a `paths`/`files`/`rules`/`added` that is not a list of strings"
@@ -117,6 +148,9 @@ def expand(top: Path, globs: list[str]) -> list[str]:
                 if (top / p).is_file() and ".git" not in Path(p).parts]
         if not hits:
             raise Refusal(f"BLOCKED — --path {g!r} matches no file; write the acceptance tests first")
+        for h in hits:
+            if (top / h).is_symlink():
+                raise Refusal(f"BLOCKED — {h.as_posix()} is a symlink; lock the real file")
         files |= {p.as_posix() for p in hits}
     return sorted(files)
 
@@ -133,9 +167,29 @@ def deny_list(settings: dict) -> list:
     return perms["deny"]
 
 
+def settings_state(top: Path) -> str:
+    """`tracked`, `local-only` (git-ignored and untracked: it may hold secrets, so it is never
+    force-added) or `plain` (untracked, not ignored)."""
+    if subprocess.run(["git", "ls-files", "--error-unmatch", "--", str(SETTINGS)], cwd=top,
+                      capture_output=True).returncode == 0:
+        return "tracked"
+    if subprocess.run(["git", "check-ignore", "-q", "--", str(SETTINGS)], cwd=top,
+                      capture_output=True).returncode == 0:
+        return "local-only"
+    return "plain"
+
+
 def commit_meta(top: Path, message: str) -> None:
-    git(top, "add", "-f", "--", str(SETTINGS), str(RECEIPT))
-    git(top, "commit", "-q", "-m", message, "--", str(SETTINGS), str(RECEIPT))
+    git(top, "add", "-f", "--", str(RECEIPT))          # the receipt is the one file forced past .gitignore
+    paths = [str(RECEIPT)]
+    state = settings_state(top)
+    if state == "local-only":
+        print(f"note: {SETTINGS} is git-ignored, so the deny rules are local only and not committed")
+    else:
+        # `add -u` for a tracked file: plain `add` refuses a tracked path under an ignored directory
+        git(top, "add", *(["-u"] if state == "tracked" else []), "--", str(SETTINGS))
+        paths.append(str(SETTINGS))
+    git(top, "commit", "-q", "-m", message, "--", *paths)
 
 
 def cmd_lock(top: Path, feature: str, globs: list[str]) -> int:
@@ -176,6 +230,41 @@ def receipt_differs(top: Path) -> bool:
     return bool(git(top, "diff", "--name-only", "HEAD", "--", f":(literal){RECEIPT.as_posix()}").strip())
 
 
+def matched_files(top: Path, globs: list[str]) -> set[str]:
+    """Files a recorded glob matches now, symlinks included. A recorded glob that is absolute
+    or climbs out is ignored (the script never wrote one)."""
+    out: set[str] = set()
+    for g in globs:
+        if g.startswith("/") or ".." in Path(g).parts:
+            continue
+        for p in glob.glob(g, root_dir=str(top), recursive=True, include_hidden=True):
+            pp = Path(p)
+            if ".git" in pp.parts or "__pycache__" in pp.parts or pp.name in EXEMPT_NEW:
+                continue
+            if (top / p).is_file() or (top / p).is_symlink():
+                out.add(pp.as_posix())
+    return out
+
+
+def git_ignored(top: Path, files: list[str]) -> set[str]:
+    if not files:
+        return set()
+    p = subprocess.run(["git", "check-ignore", "-z", "--stdin"], cwd=top, input="\0".join(files) + "\0",
+                       capture_output=True, text=True)
+    return {f for f in p.stdout.split("\0") if f}
+
+
+def foreign_receipt_commits(top: Path, commit: str) -> list[tuple[str, str]]:
+    out = git(top, "log", "--format=%H%x09%s", "--end-of-options", f"{commit}..HEAD", "--",
+              f":(literal){RECEIPT.as_posix()}")
+    bad = []
+    for line in out.splitlines():
+        sha, _, subject = line.partition("\t")
+        if not subject.startswith(OWN_SUBJECTS):
+            bad.append((sha, subject))
+    return bad
+
+
 def cmd_verify(top: Path, feature: str | None) -> int:
     receipt = read_receipt(top, None)
     if receipt is None:
@@ -185,16 +274,39 @@ def cmd_verify(top: Path, feature: str | None) -> int:
     if feature is not None and not locks:
         print(f"no acceptance lock named {feature!r}", file=sys.stderr)
         return 2
-    changed = []
     for lk in locks:
-        if not lk.get("files"):
-            continue
-        out = git(top, "diff", "-z", "--name-only", lk["commit"], "--", *[f":(literal){f}" for f in lk["files"]])
-        changed += [f"CHANGED {lk['feature']} {f}" for f in out.split("\0") if f]
+        require_commit(top, lk)
+    changed: list[str] = []
+    for lk in locks:
+        commit = lk["commit"]
+        files = lk.get("files") or []
+        if files:
+            lit = [f":(literal){f}" for f in files]
+            out = git(top, "diff", "-z", "--name-only", "--end-of-options", commit, "--", *lit)
+            changed += [f"CHANGED {lk['feature']} {f}" for f in out.split("\0") if f]
+            flagged = git(top, "ls-files", "-v", "-z", "--", *lit)
+            for ent in flagged.split("\0"):
+                if ent and (ent[0].islower() or ent[0] == "S"):
+                    changed.append(f"CHANGED {lk['feature']} {ent[2:]} (assume-unchanged/skip-worktree flag)")
+        if subprocess.run(["git", "merge-base", "--is-ancestor", "--end-of-options", commit, "HEAD"],
+                          cwd=top, capture_output=True).returncode != 0:
+            changed.append(f"CHANGED {lk['feature']} lock commit {commit[:12]} is not an ancestor of HEAD")
     if receipt_differs(top):
         changed.append(f"CHANGED receipt {RECEIPT.as_posix()}")
+    seen: set[str] = set()
+    for lk in locks:
+        for sha, subject in foreign_receipt_commits(top, lk["commit"]):
+            if sha not in seen:
+                seen.add(sha)
+                changed.append(f"CHANGED receipt {RECEIPT.as_posix()} (changed by commit {sha[:12]} "
+                               f"\"{subject}\", not by this script)")
+    known = {f for lk in receipt.get("locks", []) for f in lk.get("files", [])}
+    for lk in locks:
+        new = matched_files(top, lk.get("paths", [])) - known
+        new -= git_ignored(top, sorted(new))
+        changed += [f"CHANGED {lk['feature']} {f} (new file under a locked path)" for f in sorted(new)]
     if changed:
-        print("\n".join(changed))
+        print("\n".join(dict.fromkeys(changed)))
         print("A locked acceptance test (or the receipt) differs from what the user approved. Restore it "
               "(`git checkout <commit> -- <file>`), or stop and tell the user which test is wrong and why.",
               file=sys.stderr)

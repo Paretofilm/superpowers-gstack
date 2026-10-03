@@ -1126,3 +1126,15 @@ def test_a_removed_vibe_contract_is_not_listed_as_project_authored_text(tmp_path
     assert "Nothing project-authored was removed." in p.stdout, p.stdout
     assert "Removed (not plugin prose): " not in p.stdout
     assert any("removed (workflow is classic" in c for c in last_json(p)["changes"])
+
+
+def test_a_project_title_with_yaml_punctuation_gives_a_valid_description(tmp_path):
+    proj = project(tmp_path, workflow="vibe")
+    run(proj, *WEB_SETS, "--project-name", "Acme: Billing #2")
+    text = context_file(proj, "acme-billing-2-context").read_text()
+    line = next(l for l in text.splitlines() if l.startswith("description:"))
+    assert line.startswith('description: "')
+    value = json.loads(line[len("description: "):])
+    assert value == ("Project knowledge for Acme: Billing #2 — architecture, domain truths, pitfalls, findings, "
+                     "how to run and test, and the working rules. Load before planning or changing Acme: Billing #2.")
+    assert len(value.split()) < 40 and "{{" not in text

@@ -102,11 +102,14 @@ Prosedyren for én feature (detaljene som ikke trenger å ligge i CLAUDE.md):
    la dem følge de nye reglene. `STATUS.md` per fase, én linje per runde i `ROUNDS.md`.
 5. Tester under arbeid: bare berørte (`--filter`); hel suite ved fasegrensen og før landing.
 6. Én reviewlinse til slutt via `/superpowers-gstack:pitfall-verification` (tier beregnes som før).
-7. `lock-acceptance-tests.py verify` må gi exit 0 før landing.
-8. Landing etter `Landing mode` (`/superpowers-gstack:land` eller `/ship`); ett spørsmål om push hvis det
-   kreves av prosjektet.
-9. Sluttrapport: bygget, hvordan verifisere, Rulings, utsatte funn. Lærdom: feil som gikk igjen i to faser
-   eller mer blir høyst tre arbeidsregler i kontekst-skillens «Slik jobber vi»-seksjon, ikke i CLAUDE.md.
+7. Lærdom før landing: feil som gikk igjen i to faser eller mer blir høyst tre arbeidsregler i
+   kontekst-skillens «Slik jobber vi»-seksjon (ikke i CLAUDE.md), og endringen committes på feature-grenen;
+   lærdom skrevet etter landing når aldri hovedgrenen.
+8. `lock-acceptance-tests.py verify --feature <feature>` må gi exit 0 før landing. Låsen forsvarer mot feil og
+   snarveier, ikke mot bevisst omskriving av historikk.
+9. Landing etter `Landing mode` (`/superpowers-gstack:land` eller `/ship`); ett spørsmål om push hvis det
+   kreves av prosjektet. Låsen blir stående som oppføring.
+10. Sluttrapport: bygget, hvordan verifisere, Rulings, utsatte funn.
 
 ### 4.4 `scripts/lock-acceptance-tests.py`
 

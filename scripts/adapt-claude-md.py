@@ -354,8 +354,13 @@ def context_skill(project: Path, explicit: str | None) -> tuple[str, bool]:
 def render_context_skill(name: str, project_display: str) -> str:
     if not CONTEXT_TEMPLATE.is_file():
         raise Refusal(f"UNREADABLE: {CONTEXT_TEMPLATE} is missing — run `/plugin update superpowers-gstack`")
-    values = {"CONTEXT_SKILL": name, "PROJECT": project_display}
-    return re.sub(r"\{\{(CONTEXT_SKILL|PROJECT)\}\}", lambda m: values[m.group(1)],
+    # the description is frontmatter: a project title with `:` or `#` must not break the YAML,
+    # so it is written as a double-quoted scalar
+    sentence = (f"Project knowledge for {project_display} — architecture, domain truths, pitfalls, findings, "
+                f"how to run and test, and the working rules. Load before planning or changing {project_display}.")
+    values = {"CONTEXT_SKILL": name, "PROJECT": project_display,
+              "DESCRIPTION": json.dumps(sentence, ensure_ascii=False)}
+    return re.sub(r"\{\{(CONTEXT_SKILL|PROJECT|DESCRIPTION)\}\}", lambda m: values[m.group(1)],
                   CONTEXT_TEMPLATE.read_text(encoding="utf-8"))
 
 

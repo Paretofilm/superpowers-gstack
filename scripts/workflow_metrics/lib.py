@@ -107,18 +107,28 @@ def msg_id(o):
 
 
 def api_calls(path):
-    """(event, usage, total context) for the first event of each message.id: one per model call."""
-    seen = set()
+    """(event, usage, total context) for each message.id, in order of first appearance: one
+    per model call. The event and the input/cache fields are the first event's; the output
+    count is the largest over all events of the id, because early events carry a partial
+    `output_tokens` and the last one the final count."""
+    calls = []          # [event, usage] in order of first appearance
+    index = {}          # message.id -> position in calls
     for o in events(path):
         if o.get("type") != "assistant":
             continue
-        i = msg_id(o)
-        if i is not None:
-            if i in seen:
-                continue
-            seen.add(i)
         u = message(o).get("usage")
         u = u if isinstance(u, dict) else {}
+        i = msg_id(o)
+        if i is not None and i in index:
+            call = calls[index[i]]
+            out = _int(u.get("output_tokens"))
+            if out > _int(call[1].get("output_tokens")):
+                call[1] = {**call[1], "output_tokens": out}
+            continue
+        if i is not None:
+            index[i] = len(calls)
+        calls.append([o, u])
+    for o, u in calls:
         C = _int(u.get("input_tokens")) + _int(u.get("cache_read_input_tokens")) + _int(u.get("cache_creation_input_tokens"))
         yield o, u, C
 

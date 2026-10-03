@@ -257,16 +257,18 @@ def test_a_hand_edited_receipt_fails_verify_and_a_clean_one_passes(tmp_path):
     git(r, "add", "-f", str(rc))
     run(r, "verify", expect=1)                                 # staged
     git(r, "commit", "-q", "-m", "tamper")
-    run(r, "verify")                                           # committed edits are the user's history
+    p = run(r, "verify", expect=1)                             # committed by hand: not this script's subject
+    assert 'not by this script' in p.stdout and '"tamper"' in p.stdout
 
 
 def test_an_uncommitted_receipt_fails_verify(tmp_path):
     r = repo(tmp_path)
     lock(r)
     git(r, "reset", "-q", "--hard", "HEAD~1")                  # receipt gone from HEAD...
+    head = git(r, "rev-parse", "HEAD").strip()
     (r / ".gstack").mkdir(exist_ok=True)
     (r / ".gstack" / "acceptance-lock.json").write_text(
-        json.dumps({"locks": [{"feature": "radid", "commit": "HEAD", "files": []}]}))
+        json.dumps({"locks": [{"feature": "radid", "commit": head, "files": []}]}))
     p = run(r, "verify", expect=1)
     assert "CHANGED receipt" in p.stdout
 
@@ -294,3 +296,127 @@ def test_a_failing_second_commit_names_the_recovery(tmp_path):
     assert "BLOCKED — the test commit " + test_commit in p.stderr
     assert "hook says no" in p.stderr
     assert "git add -f" in p.stderr and "git reset --soft HEAD~1" in p.stderr
+
+
+# --- final review wave 2: hardening ------------------------------------------------
+
+def tamper_receipt(r: Path, mutate) -> None:
+    rc = r / ".gstack" / "acceptance-lock.json"
+    data = json.loads(rc.read_text())
+    mutate(data["locks"][0])
+    rc.write_text(json.dumps(data, indent=2) + "\n")
+
+
+def test_an_option_shaped_commit_is_refused_and_writes_nothing(tmp_path):
+    r = repo(tmp_path)
+    lock(r)
+    out = tmp_path / "x"
+    tamper_receipt(r, lambda lk: lk.update(commit=f"--output={out}"))
+    p = run(r, "verify", expect=2)
+    assert "malformed" in p.stderr and not out.exists()
+
+
+def test_a_non_hex_commit_is_refused(tmp_path):
+    r = repo(tmp_path)
+    lock(r)
+    tamper_receipt(r, lambda lk: lk.update(commit="main"))
+    p = run(r, "verify", expect=2)
+    assert "malformed" in p.stderr
+
+
+def test_an_unknown_commit_has_its_own_message(tmp_path):
+    r = repo(tmp_path)
+    lock(r)
+    tamper_receipt(r, lambda lk: lk.update(commit="b" * 40))
+    p = run(r, "verify", expect=2)
+    assert f"lock commit {'b' * 12} for radid is not in this repository (squash-merged or rewritten?)" in p.stderr
+    assert "ask the user whether to unlock/re-lock" in p.stderr
+
+
+def test_repointing_the_receipt_at_head_after_editing_a_test_fails_verify(tmp_path):
+    r = repo(tmp_path)
+    lock(r)
+    (r / "Tests" / "Acceptance" / "test_a.py").write_text("def test_a():\n    pass\n")
+    git(r, "commit", "-q", "-am", "weaken")
+    head = git(r, "rev-parse", "HEAD").strip()
+    tamper_receipt(r, lambda lk: lk.update(commit=head))
+    git(r, "commit", "-q", "-am", "chore(acceptance): not really")   # a faked subject passes this check...
+    git(r, "commit", "-q", "--amend", "-m", "re-point")                # ...but an honest-looking hand commit does not
+    p = run(r, "verify", expect=1)
+    assert "not by this script" in p.stdout
+
+
+def test_lock_unlock_lock_again_verifies(tmp_path):
+    r = repo(tmp_path)
+    lock(r)
+    run(r, "unlock", "--feature", "radid")
+    lock(r)
+    run(r, "verify")
+
+
+def test_a_new_file_under_a_locked_glob_fails_verify(tmp_path):
+    r = repo(tmp_path)
+    lock(r)
+    (r / "Tests" / "Acceptance" / "conftest.py").write_text("collect_ignore_glob = ['*']\n")
+    p = run(r, "verify", expect=1)
+    assert "CHANGED radid Tests/Acceptance/conftest.py (new file under a locked path)" in p.stdout
+
+
+def test_overlapping_locks_and_files_outside_every_glob_are_fine(tmp_path):
+    r = repo(tmp_path)
+    lock(r, "one")
+    (r / "Tests" / "Acceptance" / "test_c.py").write_text("def test_c():\n    pass\n")
+    lock(r, "two")
+    (r / "src.py").write_text("x = 1\n")
+    (r / "Tests" / "Acceptance" / "__pycache__").mkdir()
+    (r / "Tests" / "Acceptance" / "__pycache__" / "a.pyc").write_text("x")
+    run(r, "verify")
+
+
+def test_a_symlinked_test_is_refused(tmp_path):
+    r = repo(tmp_path)
+    (r / "real.py").write_text("def test_r():\n    pass\n")
+    (r / "Tests" / "Acceptance" / "test_link.py").symlink_to(r / "real.py")
+    p = run(r, "lock", "--feature", "radid", "--path", "Tests/Acceptance/**", expect=2)
+    assert "is a symlink; lock the real file" in p.stderr
+
+
+def test_an_ignored_untracked_settings_file_is_not_committed(tmp_path):
+    r = repo(tmp_path)
+    (r / ".gitignore").write_text(".claude/\n")
+    git(r, "add", ".gitignore")
+    git(r, "commit", "-q", "-m", "ignore")
+    p = lock(r)
+    assert ".claude/settings.json is git-ignored, so the deny rules are local only and not committed" in p.stdout
+    assert "Edit(/Tests/Acceptance/**)" in settings(r)["permissions"]["deny"]      # on disk
+    assert git(r, "ls-files", ".claude/settings.json").strip() == ""
+    assert git(r, "ls-files", ".gstack/acceptance-lock.json").strip() != ""        # the receipt is forced in
+    run(r, "verify")
+
+
+def test_a_tracked_or_unignored_settings_file_is_added_without_force(tmp_path):
+    r = repo(tmp_path)
+    p = lock(r)
+    assert "git-ignored" not in p.stdout
+    assert git(r, "ls-files", ".claude/settings.json").strip() != ""
+    (tmp_path / "t").mkdir()
+    r2 = repo(tmp_path / "t")
+    (r2 / ".claude").mkdir()
+    (r2 / ".claude" / "settings.json").write_text("{}\n")
+    (r2 / ".gitignore").write_text(".claude/\n")
+    git(r2, "add", "-f", ".claude/settings.json", ".gitignore")
+    git(r2, "commit", "-q", "-m", "tracked")
+    p = lock(r2)
+    assert "git-ignored" not in p.stdout
+    assert "Edit(/Tests/Acceptance/**)" in git(r2, "show", "HEAD:.claude/settings.json")
+
+
+def test_an_assume_unchanged_flag_on_a_locked_file_fails_verify(tmp_path):
+    r = repo(tmp_path)
+    lock(r)
+    git(r, "update-index", "--assume-unchanged", "Tests/Acceptance/test_a.py")
+    p = run(r, "verify", expect=1)
+    assert "CHANGED radid Tests/Acceptance/test_a.py (assume-unchanged/skip-worktree flag)" in p.stdout
+    git(r, "update-index", "--no-assume-unchanged", "Tests/Acceptance/test_a.py")
+    git(r, "update-index", "--skip-worktree", "Tests/Acceptance/test_a.py")
+    run(r, "verify", expect=1)

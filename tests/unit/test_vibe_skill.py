@@ -96,3 +96,20 @@ def test_adapt_asks_the_profile_before_the_routing_draft():
 
 def test_adapt_stages_the_created_context_skill():
     assert "run `git add` on that file" in ADAPT
+
+
+def test_lessons_come_before_verify_and_landing_and_are_committed():
+    steps = [m.group(0) for m in re.finditer(r"^## Step \d+: .+$", RAW, re.M)]
+    idx = {k: next(i for i, s in enumerate(steps) if k in s) for k in ("Lessons", "lock must hold", "Land", "Final report")}
+    assert idx["Lessons"] < idx["lock must hold"] < idx["Land"] < idx["Final report"]
+    assert "lessons written after landing never reach the default branch" in VIBE
+    assert "Commit the change now, on the feature branch" in VIBE
+
+
+def test_the_overview_lists_the_exact_files_and_the_lock_sha_is_reported():
+    assert "lists the exact files" in VIBE and "`lock` commits what is on disk" in VIBE
+    assert "Send the lock commit SHA" in VIBE
+
+
+def test_the_threat_model_is_stated():
+    assert "mistakes and shortcuts, not against deliberate history rewriting" in VIBE

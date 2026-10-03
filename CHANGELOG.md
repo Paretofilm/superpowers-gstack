@@ -17,6 +17,10 @@
 - The lock receipt is protected like the tests: `Edit`/`Write` deny rules for `.gstack/acceptance-lock.json`, and `verify` exits 1 when the receipt differs from HEAD. A failed second commit of `lock` names the recovery; `unlock` no longer writes "(user request)" into its commit subject.
 - `/adapt` reports a classic project without a pin exactly as 3.5.1 did (the workflow note no longer becomes the Snapshot reason), and a vibe block removed under classic is no longer listed as project-authored text.
 - `workflow-metrics` recipe measures `tokens` on both sides of the change.
+- Lock hardening: a receipt `commit` must be a full hash that exists (an option-shaped one no longer reaches git; a missing one is exit 2 with its own message), `verify` fails when the lock commit is no longer an ancestor of HEAD or a commit not made by the script touched the receipt, reports new files under a locked path and assume-unchanged/skip-worktree flags, `lock` refuses symlinks and never force-adds an ignored `.claude/settings.json` (only the receipt). The threat model is stated: mistakes and shortcuts, not deliberate history rewriting.
+- `workflow-metrics` counts the final `output_tokens` per message (the largest over its events); an earlier analysis counted the first event, about half.
+- The context skill's `description` is written as a quoted YAML scalar, so a project title such as `Acme: Billing #2` stays valid.
+- The vibe skill writes and commits its lessons before verifying and landing (they used to be written after landing and never reached the default branch); the overview lists the exact files and the lock SHA is reported.
 
 ### Tests
 - `test_adapt_script.py`: the pin (missing, vibe, invalid values), the block emitted / not emitted / removed / kept when grown / idempotent and its gates and length, the context skill (created, reused and never overwritten, none for classic, dry run, worktree naming, `--project-name`, a file in the way, `--set CONTEXT_SKILL` refused, no token leak).

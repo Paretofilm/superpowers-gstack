@@ -54,7 +54,8 @@ acceptance criteria) and `PLAN.md` (small tasks; each has one test and one
 Write the acceptance tests from the criteria, in a directory of their own (for example
 `Tests/Acceptance/` or `tests/acceptance/`). For visual work the test is a truth check
 against the reference — a screenshot or render measured against it — not only unit
-tests. Then send ONE message: a short overview (test name, what it checks), and this
+tests. Then send ONE message: a short overview that lists the exact files (test name, what it
+checks — the user approves an overview, but `lock` commits what is on disk), and this
 line for the user to paste:
 
 ```
@@ -70,7 +71,8 @@ python3 "$LOCK" lock --feature <feature> --path '<acceptance-test glob>'
 
 From here on, never edit a locked test to turn red into green, by any tool. If a test
 is wrong, stop and say which one and why; only the user unlocks
-(`python3 "$LOCK" unlock --feature <feature>`).
+(`python3 "$LOCK" unlock --feature <feature>`). Send the lock commit SHA the script
+printed in your next message, so the user can check what was locked.
 
 ## Step 4: One fresh subagent per phase
 
@@ -104,26 +106,33 @@ Invoke `/superpowers-gstack:pitfall-verification` once, after the last phase, on
 whole branch; its tier is computed as always. Fix critical and important findings; do
 not re-review minor ones. No plan reviews, no `/autoplan`.
 
-## Step 7: The lock must hold
+## Step 7: Lessons, committed before landing
+
+Read `ROUNDS.md`: a mistake that came back in two phases or more becomes one working
+rule — at most three per feature — in the **How we work** section of the context skill,
+never into CLAUDE.md. Commit the change now, on the feature branch: lessons written
+after landing never reach the default branch and vanish with the worktree. Touch neither
+the locked tests nor the contract in this step.
+
+## Step 8: The lock must hold
 
 ```bash
 python3 "$LOCK" verify --feature <feature>
 ```
 
-Exit 0 is required before landing. Exit 1 names each changed file (and the receipt
-`.gstack/acceptance-lock.json` if it was edited): restore it from the lock commit, or
-stop and tell the user which test is wrong.
+Exit 0 is required before landing. Exit 1 names each changed file (the receipt
+`.gstack/acceptance-lock.json`, a new file under a locked path and a hidden
+assume-unchanged flag included): restore it from the lock commit, or stop and tell the
+user which test is wrong. The lock defends against mistakes and shortcuts, not against
+deliberate history rewriting.
 
-## Step 8: Land
+## Step 9: Land
 
 Land by the project's `Landing mode:` line — `solo` → `/superpowers-gstack:land`,
 `pr` → `/ship` — with no options menu. Ask once about the push only when the project
 requires it. The lock stays after landing as the record: the landed tests remain
 protected, and only the user unlocks them.
 
-## Step 9: Final report and lessons
+## Step 10: Final report
 
 One message: what was built, how the user verifies it, every Ruling, deferred findings.
-Then read `ROUNDS.md`: a mistake that came back in two phases or more becomes one working
-rule — at most three per feature — in the **How we work** section of the context skill,
-never into CLAUDE.md. Touch neither the locked tests nor the contract in this step.

@@ -415,3 +415,16 @@ def test_the_skill_recipe_measures_both_sides_of_the_change_for_tokens():
     s = (REPO / "skills" / "workflow-metrics" / "SKILL.md").read_text()
     assert 'tokens --project <dir substring> --until <change>' in s
     assert 'tokens --project <dir substring> --since <change>' in s
+
+
+def test_output_tokens_are_the_final_count_per_message(tmp_path):
+    d = tmp_path / "-Users-ann-Developer-demo"
+    write(d / "s.jsonl", [
+        human("2026-10-01T10:00:00Z", "go"),
+        assistant("2026-10-01T10:00:05Z", "m1", [{"type": "thinking", "thinking": "…"}], usage={**USAGE, "output_tokens": 5}),
+        assistant("2026-10-01T10:00:06Z", "m1", [{"type": "text", "text": "a"}], usage={**USAGE, "output_tokens": 20}),
+        assistant("2026-10-01T10:00:07Z", "m1", [{"type": "text", "text": "b"}], usage={**USAGE, "output_tokens": 50}),
+    ])
+    calls = list(lib.api_calls(str(d / "s.jsonl")))
+    assert len(calls) == 1 and calls[0][1]["output_tokens"] == 50 and calls[0][2] == 1110
+    assert "Total: 1 model calls" in cli(tmp_path, "tokens")
