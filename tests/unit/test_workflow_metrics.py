@@ -108,7 +108,11 @@ def test_asks_recognises_the_recommended_answer_and_short_approvals(tmp_path):
 
 def test_overhead_reports_the_first_call_baseline(tmp_path):
     out = cli(fixture(tmp_path), "overhead")
-    assert "main: 3 model calls" in out and "subagent: 1 model calls" in out
+    # main: s1 first call m1 = 10+1000+100 = 1110 (F), m2 = 2110; baseline = min(F, C):
+    # 1110 + 1110; s2 m9 = 1110, baseline 1110. Baseline 3330 of 4330 context = 76.9% -> 77%.
+    assert "main: 3 model calls, 0.00 billion context tokens reused; the baseline alone 0.00 billion (77%)." in out
+    # subagent: one call, so the baseline is the whole context -> 100%.
+    assert "subagent: 1 model calls, 0.00 billion context tokens reused; the baseline alone 0.00 billion (100%)." in out
 
 
 def test_a_missing_root_is_exit_two(tmp_path):
@@ -127,3 +131,61 @@ def test_a_bad_date_is_a_usage_error(tmp_path):
 def test_an_empty_scope_prints_a_notice_instead_of_crashing(tmp_path, command):
     out = cli(fixture(tmp_path), command, "--project", "nomatch")
     assert "No transcripts in scope." in out
+
+
+def test_odd_events_are_skipped_not_fatal(tmp_path):
+    d = tmp_path / "-Users-ann-Developer-odd"
+    odd = [
+        {"type": "assistant", "timestamp": "2026-10-01T10:00:06Z", "message": "oops"},
+        {"type": "user", "timestamp": "2026-10-01T10:00:06Z", "message": "oops"},
+        {"type": "assistant", "timestamp": "2026-10-01T10:00:07Z", "message": {"id": "x1", "content": 5, "usage": [1]}},
+        {"type": "assistant", "timestamp": "2026-10-01T10:00:08Z",
+         "message": {"id": "x2", "content": ["str", 3, None, {"type": "tool_use", "name": ["l"], "input": "s"},
+                                             {"type": "tool_use", "name": "AskUserQuestion", "input": {"questions": "q"}}],
+                     "usage": {"input_tokens": None, "cache_read_input_tokens": "n/a"}}},
+        {"type": "assistant", "timestamp": "2026-10-01T10:00:09Z", "message": {"id": ["unhashable"], "content": [], "usage": USAGE}},
+        {"type": "user", "timestamp": "2026-10-01T10:00:10Z", "message": {"role": "user", "content": [None, 1, {"type": "tool_result"}]}},
+        [1, 2], "string-line", None,
+    ]
+    events = [human("2026-10-01T10:00:00Z", "ja"), assistant("2026-10-01T10:00:05Z", "m1", [{"type": "text", "text": "hi"}])]
+    events[1:1] = odd
+    write(d / "s.jsonl", events)
+    for command in ("tokens", "asks", "overhead"):
+        out = cli(tmp_path, command)
+        assert "Traceback" not in out
+    # valid numbers unchanged: m1 and the id-less-hashable event count; x1/x2 have no tokens and are skipped
+    assert "Total: 2 model calls" in cli(tmp_path, "tokens")
+    assert "Total: 1 messages from you" in cli(tmp_path, "asks")
+
+
+def test_an_unreadable_transcript_is_exit_two(tmp_path):
+    import os
+    root = fixture(tmp_path)
+    target = root / "-Users-ann-Developer-demo" / "s1.jsonl"
+    target.chmod(0)
+    try:
+        if os.geteuid() == 0 or os.access(target, os.R_OK):
+            pytest.skip("file is still readable here")
+        p = subprocess.run([sys.executable, str(CLI), "tokens", "--root", str(root)], capture_output=True, text=True)
+        assert p.returncode == 2 and "UNREADABLE:" in p.stderr and "Traceback" not in p.stderr
+    finally:
+        target.chmod(0o644)
+
+
+def test_until_is_exclusive_and_since_is_inclusive_at_the_boundary(tmp_path):
+    root = fixture(tmp_path)
+    boundary = "2026-10-01T10:00:00+00:00"   # the demo session's first timestamp
+    until = cli(root, "tokens", "--until", boundary)
+    assert "| demo |" not in until and "| other |" in until
+    since = cli(root, "tokens", "--since", boundary)
+    assert "| demo |" in since and "| other |" not in since
+
+
+def test_out_writes_what_it_prints_and_an_unwritable_out_is_exit_two(tmp_path):
+    root = fixture(tmp_path)
+    dest = tmp_path / "report.md"
+    printed = cli(root, "tokens", "--out", str(dest))
+    assert dest.read_text() == printed
+    p = subprocess.run([sys.executable, str(CLI), "tokens", "--root", str(root), "--out", str(tmp_path / "nodir" / "r.md")],
+                       capture_output=True, text=True)
+    assert p.returncode == 2 and "UNREADABLE:" in p.stderr

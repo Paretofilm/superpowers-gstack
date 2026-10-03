@@ -56,20 +56,27 @@ def report(scope: lib.Scope) -> str:
                 for b in lib.blocks(o):
                     if b.get("type") == "tool_use":
                         if b.get("name") == "Skill":
-                            active = (b.get("input") or {}).get("skill")
-                        if b.get("name") == "AskUserQuestion":
-                            pend[b["id"]] = (b.get("input") or {}, active)
+                            inp = b.get("input")
+                            active = inp.get("skill") if isinstance(inp, dict) else None
+                        if b.get("name") == "AskUserQuestion" and isinstance(b.get("id"), str):
+                            inp = b.get("input")
+                            pend[b["id"]] = (inp if isinstance(inp, dict) else {}, active)
                             ask_calls[label] += 1
             elif ty == "user":
                 for b in lib.blocks(o):
-                    if b.get("type") == "tool_result" and b.get("tool_use_id") in pend:
+                    if b.get("type") == "tool_result" and isinstance(b.get("tool_use_id"), str) and b.get("tool_use_id") in pend:
                         inp, act = pend.pop(b["tool_use_id"])
                         res = b.get("content")
                         res = res if isinstance(res, str) else json.dumps(res, ensure_ascii=False)
                         answers = {q: a for q, a in ANS.findall(res)}
-                        for q in inp.get("questions", []):
+                        qs = inp.get("questions")
+                        for q in (qs if isinstance(qs, list) else []):
+                            if not isinstance(q, dict):
+                                continue
                             qt = q.get("question", "")
-                            labels = [x.get("label", "") for x in q.get("options", [])]
+                            qt = qt if isinstance(qt, str) else ""
+                            opts = q.get("options")
+                            labels = [x.get("label", "") for x in (opts if isinstance(opts, list) else []) if isinstance(x, dict)]
                             a = answers.get(qt.replace('"', '\\"')) or answers.get(qt)
                             if a is None and len(answers) == 1:
                                 a = list(answers.values())[0]

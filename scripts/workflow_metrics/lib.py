@@ -41,6 +41,16 @@ def project_label(dirname: str) -> str:
     return s or dirname
 
 
+def _int(v) -> int:
+    """int/float -> int; anything else (None, str, list) -> 0. bool counts as 0."""
+    return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else 0
+
+
+def message(o) -> dict:
+    m = o.get("message")
+    return m if isinstance(m, dict) else {}
+
+
 def events(path):
     with open(path, errors="ignore") as fh:
         for line in fh:
@@ -69,7 +79,8 @@ def first_ts(path):
 
 def sessions(scope: Scope, include_sub: bool = True):
     """(label, dirname, path, is_sub) for every transcript file in scope. The date
-    filter uses each file's first timestamp."""
+    filter uses each file's own first timestamp, subagent files included: a subagent
+    file can be in scope while its parent session is not."""
     for d in sorted(os.listdir(scope.root)):
         p = os.path.join(scope.root, d)
         if not os.path.isdir(p) or (scope.project and scope.project not in d):
@@ -87,7 +98,8 @@ def sessions(scope: Scope, include_sub: bool = True):
 
 
 def msg_id(o):
-    return (o.get("message") or {}).get("id")
+    i = message(o).get("id")
+    return i if isinstance(i, (str, int)) else None
 
 
 def api_calls(path):
@@ -101,21 +113,22 @@ def api_calls(path):
             if i in seen:
                 continue
             seen.add(i)
-        u = (o.get("message") or {}).get("usage") or {}
-        C = u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0) + u.get("cache_creation_input_tokens", 0)
+        u = message(o).get("usage")
+        u = u if isinstance(u, dict) else {}
+        C = _int(u.get("input_tokens")) + _int(u.get("cache_read_input_tokens")) + _int(u.get("cache_creation_input_tokens"))
         yield o, u, C
 
 
 def blocks(o):
-    c = (o.get("message") or {}).get("content")
+    c = message(o).get("content")
     return [b for b in c if isinstance(b, dict)] if isinstance(c, list) else []
 
 
 def text_of(o):
-    c = (o.get("message") or {}).get("content")
+    c = message(o).get("content")
     if isinstance(c, str):
         return c
-    return "\n".join(b.get("text", "") for b in blocks(o) if b.get("type") == "text")
+    return "\n".join(b["text"] for b in blocks(o) if b.get("type") == "text" and isinstance(b.get("text"), str))
 
 
 def is_human(o):

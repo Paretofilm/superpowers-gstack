@@ -26,9 +26,9 @@ def report(scope: lib.Scope) -> str:
             a = A[label]
             a[kind + "_calls"] += 1
             a[kind + "_ctx"] += C
-            a[kind + "_out"] += u.get("output_tokens", 0)
-            a[kind + "_cr"] += u.get("cache_read_input_tokens", 0)
-            a[kind + "_cc"] += u.get("cache_creation_input_tokens", 0)
+            a[kind + "_out"] += lib._int(u.get("output_tokens"))
+            a[kind + "_cr"] += lib._int(u.get("cache_read_input_tokens"))
+            a[kind + "_cc"] += lib._int(u.get("cache_creation_input_tokens"))
             n += 1
             s += C
         if not is_sub and n:
@@ -38,7 +38,7 @@ def report(scope: lib.Scope) -> str:
         for o in lib.events(f):
             for b in lib.blocks(o):
                 if b.get("type") == "tool_use":
-                    tool_calls[(label, b.get("name"))] += 1
+                    tool_calls[(label, str(b.get("name")))] += 1
     if not files:
         return EMPTY
     out = ["# Tokens and sessions per project (deduplicated on message.id)\n",

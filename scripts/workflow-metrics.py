@@ -37,8 +37,8 @@ def main(argv=None) -> int:
     ap.add_argument("command", choices=sorted(COMMANDS))
     ap.add_argument("--root", default=lib.DEFAULT_ROOT)
     ap.add_argument("--project", help="substring of the transcript directory name")
-    ap.add_argument("--since", help="sessions starting on or after this ISO date/time (local time)")
-    ap.add_argument("--until", help="sessions starting before this ISO date/time (local time)")
+    ap.add_argument("--since", help="transcript files starting on or after this ISO date/time (local time unless a zone is given). Each file, a subagent's included, is filtered by its own first timestamp, so a subagent file can be in scope while its parent session is not")
+    ap.add_argument("--until", help="transcript files starting before this ISO date/time (exclusive; same per-file rule as --since)")
     ap.add_argument("--out", help="also write the report to this file")
     a = ap.parse_args(argv)
     try:
@@ -46,7 +46,11 @@ def main(argv=None) -> int:
     except SystemExit as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    text = COMMANDS[a.command](scope)
+    try:
+        text = COMMANDS[a.command](scope)
+    except OSError as exc:
+        print(f"UNREADABLE: {exc}", file=sys.stderr)
+        return 2
     if a.out:
         try:
             Path(a.out).write_text(text, encoding="utf-8")
