@@ -198,6 +198,7 @@ lever.
 | `/superpowers-gstack:apple-native-review`    | sonnet    |
 | `/superpowers-gstack:e2e-scaffold`           | haiku     |
 | `/superpowers-gstack:spec-drift`             | sonnet    |
+| `/superpowers-gstack:vibe`                   | opus      |
 | `/superpowers-gstack:e2e-route`              | haiku     |
 | `/superpowers-gstack:context-handoff`        | haiku     |
 | `/superpowers-gstack:htmlify`                | haiku     |
