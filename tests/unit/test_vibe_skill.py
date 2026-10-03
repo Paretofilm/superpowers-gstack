@@ -58,3 +58,26 @@ def test_lessons_go_to_the_context_skill_not_claude_md():
 
 def test_the_skill_never_enters_plan_mode_itself():
     assert "Do not enter plan mode yourself" in VIBE
+
+
+ADAPT_RAW = (REPO / "skills" / "adapt" / "SKILL.md").read_text()
+ADAPT = " ".join(ADAPT_RAW.split())
+
+
+def test_adapt_asks_for_the_profile_once_and_pins_it_committably():
+    assert "**Workflow profile.**" in ADAPT
+    assert "If `.gstack/workflow` exists the script reads and validates it; do not re-ask." in ADAPT
+    assert "printf '%s\\n' \"$PROFILE\" > .gstack/workflow" in ADAPT_RAW
+    assert "git add -f .gstack/workflow" in ADAPT
+
+
+def test_adapt_defaults_to_classic_with_nobody_to_answer():
+    assert "nobody to answer" in ADAPT and "writes no `.gstack/workflow`" in ADAPT
+
+
+def test_adapt_lists_contradictions_with_the_vibe_contract():
+    assert "contradicts the vibe contract" in ADAPT
+
+
+def test_adapt_points_a_vibe_project_at_the_vibe_skill():
+    assert "/superpowers-gstack:vibe" in ADAPT

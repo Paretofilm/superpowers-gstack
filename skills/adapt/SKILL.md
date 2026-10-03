@@ -188,6 +188,31 @@ then the base tiers for the selected skills and the inferred sensitivity, and as
    `apple-native-review` and `macos-/ios-e2e-scaffold` → `e2e-scaffold`, and
    drops `ios-visual-explore` rows itself.
 
+5. **Workflow profile.** If `.gstack/workflow` exists the script reads and validates it; do not re-ask. If it does not exist, ask **once** with `AskUserQuestion`:
+
+   > How should this project work?
+   >
+   > - **Vibe** (recommended) — one intake round, then the feature is finished autonomously and you review it once. Your one checkpoint on the way is the acceptance tests, which are then locked. Adds the `Vibe contract` section and a project context skill.
+   > - **Classic** — the skills' own approval gates (design, plan, execution method, landing menu), as before.
+
+   Write the pin and keep it committable:
+
+   ```bash
+   mkdir -p .gstack && printf '%s\n' "$PROFILE" > .gstack/workflow   # vibe or classic
+   if git check-ignore -q .gstack/workflow 2>/dev/null; then
+     grep -q '^!\.gstack/workflow$' .gitignore 2>/dev/null \
+       || echo '!.gstack/workflow' >> .gitignore
+     git add .gitignore && git add -f .gstack/workflow
+   else
+     git add .gstack/workflow
+   fi
+   ```
+
+   A run with nobody to answer writes no `.gstack/workflow`: the script then uses
+   classic and says so in its notes. With `vibe` the script also creates
+   `.claude/skills/<project>-context/SKILL.md` from a template when no `*-context` or
+   `*-kontekst` skill exists, and never overwrites one.
+
 ### Step 5: Dry run, then ask
 
 ```bash
@@ -207,7 +232,9 @@ Present, in this order:
 
 1. The gap analysis: what already works, what the run will add or upgrade, anything in
    the existing CLAUDE.md that contradicts the workflow ("never use subagents", "don't
-   use TDD"), whether there is a remote and a branch workflow (`/review` and `/ship`
+   use TDD"). With the vibe profile, also list every rule that contradicts the vibe
+   contract ("write a PRD before any code", "ask before each phase") and let the user
+   choose which one stands. Also note whether there is a remote and a branch workflow (`/review` and `/ship`
    need both; if on `main` with uncommitted work, warn and do not branch for the user).
 2. The report's `Deferred` entries, if any. Each is a plugin-managed section that has
    grown past its block — project knowledge is living inside it, and replacing it would
@@ -264,6 +291,7 @@ you find and re-verify.
 ### Step 7: Suggest next steps
 
 > **Next steps:**
+> - Vibe profile? → `/superpowers-gstack:vibe <what to build>` — and fill in the context skill as you learn the project
 > - Working on a new feature? → `/superpowers:brainstorming`
 > - Have code ready for review? → `/review`
 > - Want a product-framing session first? → type `/office-hours` yourself; it is never routed automatically
