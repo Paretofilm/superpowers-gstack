@@ -466,6 +466,7 @@ def test_each_failure_class_has_its_own_advice(tmp_path):
     p = run(r, "verify", expect=1)
     assert "restore the receipt as the script wrote it" in p.stderr
     assert "remove the file, or ask the user to unlock and re-lock" in p.stderr
+    assert "A locked file or the receipt carries an assume-unchanged/skip-worktree flag" in p.stderr
     assert "git update-index --no-assume-unchanged --no-skip-worktree" in p.stderr
     f.write_text("changed\n")
     git(r, "update-index", "--no-assume-unchanged", "Tests/Acceptance/test_a.py")
@@ -506,13 +507,18 @@ def test_a_committed_modification_is_caught_after_the_working_copy_is_restored(t
     assert "CHANGED radid Tests/Acceptance/test_a.py" in p.stdout
 
 
-def test_an_ignored_new_file_is_flagged_but_pycache_is_not(tmp_path):
+def test_an_ignored_new_file_is_flagged_but_caches_are_not(tmp_path):
     r = repo(tmp_path)
     lock(r)
     (r / ".git" / "info" / "exclude").write_text("conftest.py\n")
     (r / "Tests" / "Acceptance" / "conftest.py").write_text("collect_ignore_glob = ['*']\n")
     (r / "Tests" / "Acceptance" / "__pycache__").mkdir()
     (r / "Tests" / "Acceptance" / "__pycache__" / "x.pyc").write_text("x")
+    (r / "Tests" / "Acceptance" / ".pytest_cache").mkdir()
+    (r / "Tests" / "Acceptance" / ".pytest_cache" / "v").write_text("x")
+    (r / "Tests" / "Acceptance" / ".DS_Store").write_text("x")
     (r / "Tests" / "Acceptance" / "stray.pyc").write_text("x")
     p = run(r, "verify", expect=1)
-    assert p.stdout.splitlines() == ["CHANGED radid Tests/Acceptance/conftest.py (new file under a locked path)"]
+    assert sorted(p.stdout.splitlines()) == [
+        "CHANGED radid Tests/Acceptance/conftest.py (new file under a locked path)",
+        "CHANGED radid Tests/Acceptance/stray.pyc (new file under a locked path)"]

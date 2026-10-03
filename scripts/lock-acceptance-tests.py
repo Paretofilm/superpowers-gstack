@@ -25,8 +25,8 @@ receipt, re-points it at a newer commit). It is a gate for mistakes, not proof. 
     that none carries an assume-unchanged / skip-worktree flag (the receipt included);
   - receipt integrity: its bytes equal HEAD's, and every commit that touched it since the lock
     has a script subject (`chore(acceptance): ` / `test(acceptance): `);
-  - new files under a locked path that no lock lists (only `__pycache__` directories, `*.pyc`
-    and `.DS_Store` are exempt; git-ignored files are not).
+  - new files under a locked path that no lock lists (only `__pycache__` and `.pytest_cache`
+    directories and `.DS_Store` are exempt; git-ignored files are not).
 Limits, plainly: a `conftest.py`, pytest configuration (`addopts`, plugins) or other code
 outside the locked paths can change what the tests do; a faked or amended commit subject on
 the receipt (`git commit --amend` of the script's own commit) passes; a history rewrite
@@ -246,7 +246,8 @@ def matched_files(top: Path, globs: list[str]) -> set[str]:
             continue
         for p in glob.glob(g, root_dir=str(top), recursive=True, include_hidden=True):
             pp = Path(p)
-            if ".git" in pp.parts or "__pycache__" in pp.parts or pp.name in EXEMPT_NEW or pp.suffix == ".pyc":
+            if ".git" in pp.parts or "__pycache__" in pp.parts or ".pytest_cache" in pp.parts \
+                    or pp.name in EXEMPT_NEW:
                 continue
             if (top / p).is_file() or (top / p).is_symlink():
                 out.add(pp.as_posix())
@@ -272,7 +273,7 @@ ADVICE = {
                "re-lock; if this came from merging two features' locks, re-lock.",
     "new": "A new file sits under a locked path: remove the file, or ask the user to unlock and re-lock "
            "to include it.",
-    "flag": "A locked file carries an assume-unchanged/skip-worktree flag: run "
+    "flag": "A locked file or the receipt carries an assume-unchanged/skip-worktree flag: run "
             "`git update-index --no-assume-unchanged --no-skip-worktree <file>`.",
 }
 

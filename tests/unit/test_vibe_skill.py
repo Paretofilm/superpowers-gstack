@@ -119,3 +119,8 @@ def test_verify_is_described_as_a_gate_not_proof_with_its_limits():
     assert "`verify` is a gate, not proof" in VIBE
     assert "conftest.py" in VIBE and "pytest configuration" in VIBE
     assert "After a rebase it warns" in VIBE
+
+
+def test_verify_notes_the_pr_mode_relock_and_the_exemptions():
+    assert "receipt changed by commit" in VIBE and "re-lock" in VIBE
+    assert "`__pycache__`, `.pytest_cache` and `.DS_Store`" in VIBE

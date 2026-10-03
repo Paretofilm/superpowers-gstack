@@ -129,7 +129,10 @@ commit in the working tree, the index and HEAD, and checks the receipt and new f
 under the locked paths. It cannot see a `conftest.py` or pytest configuration outside
 those paths that changes what the tests do, a faked or amended commit subject on the
 receipt, or a rewritten history. After a rebase it warns that the lock commit left the
-branch's history: tell the user, who can re-lock.
+branch's history: tell the user, who can re-lock. In `pr` landing mode, when another
+feature's squash-merge commit changed the receipt on main, `verify` exits 1 ("receipt
+changed by commit …") after a rebase: re-lock. Only `__pycache__`, `.pytest_cache` and
+`.DS_Store` are exempt from the new-file check.
 
 ## Step 9: Land
 
