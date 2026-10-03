@@ -16,7 +16,8 @@ tests are the contract for the rest of the feature.
           needs. Run it only when the user asks.
 
 A deny rule stops the Edit and Write tools, not `sed` through Bash. `verify` is the
-gate; the rules make the honest path the easy one.
+gate; the rules make the honest path the easy one. verify ignores untracked files and
+cannot see `assume-unchanged`/`skip-worktree` flags: it is a gate for the honest path.
 
 Exit 0 ok, 1 changed (verify), 2 refused — the reason is on stderr. Never a traceback.
 """
@@ -66,6 +67,30 @@ def read_json(path: Path, default):
     return data
 
 
+def read_receipt(top: Path, default):
+    receipt = read_json(top / RECEIPT, default)
+    if receipt is None:
+        return None
+    locks = receipt.get("locks", [])
+    bad = None
+    if not isinstance(locks, list):
+        bad = "`locks` is not a list"
+    else:
+        for i, lk in enumerate(locks):
+            if not isinstance(lk, dict):
+                bad = f"lock #{i} is not an object"
+            elif not all(isinstance(lk.get(k), str) for k in ("feature", "commit")):
+                bad = f"lock #{i} lacks a string `feature`/`commit`"
+            elif not all(isinstance(lk.get(k, []), list) and all(isinstance(x, str) for x in lk.get(k, []))
+                         for k in ("paths", "files", "rules", "added")):
+                bad = f"lock #{i} has a `paths`/`files`/`rules`/`added` that is not a list of strings"
+            if bad:
+                break
+    if bad:
+        raise Refusal(f"BLOCKED — {RECEIPT} is malformed ({bad}); fix it by hand — nothing was changed")
+    return receipt
+
+
 def write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -83,7 +108,7 @@ def expand(top: Path, globs: list[str]) -> list[str]:
         if g.startswith("/") or ".." in Path(g).parts:
             raise Refusal(f"BLOCKED — --path {g!r} must be relative to the repository root and stay inside it")
         # glob.glob, not Path.glob: on Python 3.12 a trailing `**` in Path.glob yields directories only.
-        hits = [Path(p) for p in glob.glob(g, root_dir=str(top), recursive=True)
+        hits = [Path(p) for p in glob.glob(g, root_dir=str(top), recursive=True, include_hidden=True)
                 if (top / p).is_file() and ".git" not in Path(p).parts]
         if not hits:
             raise Refusal(f"BLOCKED — --path {g!r} matches no file; write the acceptance tests first")
@@ -108,7 +133,7 @@ def commit_meta(top: Path, message: str) -> None:
 
 
 def cmd_lock(top: Path, feature: str, globs: list[str]) -> int:
-    receipt = read_json(top / RECEIPT, {"locks": []})
+    receipt = read_receipt(top, {"locks": []})
     settings = read_json(top / SETTINGS, {})
     deny = deny_list(settings)
     if any(lk.get("feature") == feature for lk in receipt.setdefault("locks", [])):
@@ -132,7 +157,7 @@ def cmd_lock(top: Path, feature: str, globs: list[str]) -> int:
 
 
 def cmd_verify(top: Path, feature: str | None) -> int:
-    receipt = read_json(top / RECEIPT, None)
+    receipt = read_receipt(top, None)
     if receipt is None:
         print(f"no acceptance lock in this project ({RECEIPT} is missing)", file=sys.stderr)
         return 2
@@ -142,19 +167,22 @@ def cmd_verify(top: Path, feature: str | None) -> int:
         return 2
     changed = []
     for lk in locks:
-        out = git(top, "diff", "--name-only", lk["commit"], "--", *[f":(glob){g}" for g in lk["paths"]])
-        changed += [f"CHANGED {lk['feature']} {f}" for f in out.splitlines() if f]
+        if not lk.get("files"):
+            continue
+        out = git(top, "diff", "-z", "--name-only", lk["commit"], "--", *[f":(literal){f}" for f in lk["files"]])
+        changed += [f"CHANGED {lk['feature']} {f}" for f in out.split("\0") if f]
     if changed:
         print("\n".join(changed))
         print("A locked acceptance test differs from what the user approved. Restore it "
-              "(`git checkout <commit> -- <file>`), or stop and tell the user which test is wrong and why.")
+              "(`git checkout <commit> -- <file>`), or stop and tell the user which test is wrong and why.",
+              file=sys.stderr)
         return 1
     print(f"acceptance tests unchanged: {', '.join(lk['feature'] for lk in locks) or 'no locks'}")
     return 0
 
 
 def cmd_unlock(top: Path, feature: str) -> int:
-    receipt = read_json(top / RECEIPT, None)
+    receipt = read_receipt(top, None)
     lock = next((lk for lk in (receipt or {}).get("locks", []) if lk.get("feature") == feature), None)
     if lock is None:
         raise Refusal(f"BLOCKED — no acceptance lock named {feature!r}")

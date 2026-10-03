@@ -191,3 +191,52 @@ def test_a_single_star_glob_also_matches_files(tmp_path):
     r = repo(tmp_path)
     lock(r, "radid", "Tests/Acceptance/*.py")
     assert receipt(r)["locks"][0]["files"] == ["Tests/Acceptance/test_a.py", "Tests/Acceptance/test_b.py"]
+
+
+@pytest.mark.parametrize("body", ['{"locks": 5}', '{"locks": [1]}', '{"locks": [{"feature": "x"}]}'])
+@pytest.mark.parametrize("cmd", ["lock", "verify", "unlock"])
+def test_a_malformed_receipt_is_refused_with_two(tmp_path, body, cmd):
+    r = repo(tmp_path)
+    (r / ".gstack").mkdir()
+    (r / ".gstack" / "acceptance-lock.json").write_text(body)
+    before = git(r, "rev-parse", "HEAD")
+    args = {"lock": ("lock", "--feature", "radid", "--path", "Tests/Acceptance/**"),
+            "verify": ("verify",), "unlock": ("unlock", "--feature", "radid")}[cmd]
+    p = run(r, *args, expect=2)
+    assert "BLOCKED" in p.stderr and "malformed" in p.stderr
+    assert git(r, "rev-parse", "HEAD") == before
+
+
+def test_overlapping_locks_do_not_break_each_other(tmp_path):
+    r = repo(tmp_path)
+    lock(r, "one")
+    (r / "Tests" / "Acceptance" / "test_c.py").write_text("def test_c():\n    pass\n")
+    lock(r, "two")
+    run(r, "verify")
+    run(r, "verify", "--feature", "one")
+    (r / "Tests" / "Acceptance" / "test_a.py").write_text("changed\n")
+    p = run(r, "verify", expect=1)
+    assert p.stdout.splitlines().count("CHANGED one Tests/Acceptance/test_a.py") == 1
+    assert p.stdout.splitlines().count("CHANGED two Tests/Acceptance/test_a.py") == 1
+
+
+def test_dotfiles_are_locked_and_verified(tmp_path):
+    r = repo(tmp_path)
+    h = r / "Tests" / "Acceptance" / ".hidden_test.py"
+    h.write_text("x = 1\n")
+    lock(r)
+    assert "Tests/Acceptance/.hidden_test.py" in receipt(r)["locks"][0]["files"]
+    h.write_text("x = 2\n")
+    p = run(r, "verify", expect=1)
+    assert "CHANGED radid Tests/Acceptance/.hidden_test.py" in p.stdout
+
+
+def test_non_ascii_names_are_unquoted_and_stdout_is_pure(tmp_path):
+    r = repo(tmp_path)
+    f = r / "Tests" / "Acceptance" / "test_ø.py"
+    f.write_text("x = 1\n")
+    lock(r)
+    f.write_text("x = 2\n")
+    p = run(r, "verify", expect=1)
+    assert p.stdout.splitlines() == ["CHANGED radid Tests/Acceptance/test_ø.py"]
+    assert "Restore it" in p.stderr
