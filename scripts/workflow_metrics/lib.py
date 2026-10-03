@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 import glob
 import json
+import math
 import os
 import re
 from dataclasses import dataclass
@@ -42,8 +43,11 @@ def project_label(dirname: str) -> str:
 
 
 def _int(v) -> int:
-    """int/float -> int; anything else (None, str, list) -> 0. bool counts as 0."""
-    return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else 0
+    """Finite, non-negative int/float -> int; anything else (None, str, list, bool, NaN,
+    Infinity, a negative) -> 0."""
+    if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v >= 0:
+        return int(v)
+    return 0
 
 
 def message(o) -> dict:
@@ -122,6 +126,16 @@ def api_calls(path):
 def blocks(o):
     c = message(o).get("content")
     return [b for b in c if isinstance(b, dict)] if isinstance(c, list) else []
+
+
+def tool_input(b) -> dict:
+    i = b.get("input")
+    return i if isinstance(i, dict) else {}
+
+
+def key(v):
+    """A value usable as a dict key (a string), else None. Guards unhashable junk."""
+    return v if isinstance(v, str) else None
 
 
 def text_of(o):

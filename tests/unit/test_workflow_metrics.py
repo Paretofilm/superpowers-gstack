@@ -8,6 +8,7 @@ repeats a message id on purpose.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -189,3 +190,120 @@ def test_out_writes_what_it_prints_and_an_unwritable_out_is_exit_two(tmp_path):
     p = subprocess.run([sys.executable, str(CLI), "tokens", "--root", str(root), "--out", str(tmp_path / "nodir" / "r.md")],
                        capture_output=True, text=True)
     assert p.returncode == 2 and "UNREADABLE:" in p.stderr
+
+
+def fixture_more(root: Path) -> Path:
+    fixture(root)
+    d = root / "-Users-ann-Developer-demo"
+    write(d / "s3.jsonl", [
+        {"type": "attachment", "timestamp": "2026-10-02T08:00:00Z",
+         "attachment": {"type": "skill_listing", "content": "- superpowers:brainstorming: Use before building\n- unused-skill: Never called"}},
+        human("2026-10-02T08:00:01Z", "test it"),
+        assistant("2026-10-02T08:00:05Z", "m4", [{"type": "tool_use", "id": "s1", "name": "Skill", "input": {"skill": "superpowers:brainstorming"}}]),
+        assistant("2026-10-02T08:00:06Z", "m5", [{"type": "tool_use", "id": "b1", "name": "Bash", "input": {"command": "swift test --filter Foo"}}]),
+        {"type": "user", "timestamp": "2026-10-02T08:02:06Z",
+         "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "b1", "content": "ok"}]}},
+        assistant("2026-10-02T08:02:10Z", "m6", [{"type": "tool_use", "id": "x1", "name": "mcp__XcodeBuildMCP__build_sim", "input": {}}]),
+    ])
+    return root
+
+
+def test_skills_lists_used_and_never_used_skills(tmp_path):
+    out = cli(fixture_more(tmp_path), "skills")
+    assert "Never used: 1 of 2" in out and "unused-skill" in out
+
+
+def test_skills_without_a_skill_listing_prints_a_note(tmp_path):
+    out = cli(fixture(tmp_path), "skills")
+    assert "No skill listing found" in out
+
+
+def test_triggers_counts_build_and_test_commands(tmp_path):
+    out = cli(fixture_more(tmp_path), "triggers")
+    assert "| demo | swift test | 1 |" in out
+
+
+def test_mcp_counts_calls_per_server_without_reading_secrets(tmp_path):
+    cj = tmp_path / "claude.json"
+    cj.write_text(json.dumps({"mcpServers": {"XcodeBuildMCP": {"env": {"TOKEN": "secret"}}, "idle": {}}}))
+    out = cli(fixture_more(tmp_path / "root"), "mcp", "--claude-json", str(cj))
+    assert "| XcodeBuildMCP | 1 | demo (1) |" in out and "| idle | 0 | – |" in out
+    assert "secret" not in out
+
+
+def test_mcp_with_a_missing_claude_json_still_reports_call_counts(tmp_path):
+    out = cli(fixture_more(tmp_path / "root"), "mcp", "--claude-json", str(tmp_path / "nope.json"))
+    assert "not found" in out and "| XcodeBuildMCP | 1 | demo (1) |" in out
+
+
+@pytest.mark.parametrize("content", ["{not json", "[1, 2]"])
+def test_mcp_with_an_unreadable_claude_json_is_exit_two(tmp_path, content):
+    cj = tmp_path / "claude.json"
+    cj.write_text(content)
+    p = subprocess.run([sys.executable, str(CLI), "mcp", "--root", str(fixture_more(tmp_path / "root")), "--claude-json", str(cj)],
+                       capture_output=True, text=True)
+    assert p.returncode == 2 and "UNREADABLE:" in p.stderr and "Traceback" not in p.stderr
+
+
+def test_digest_of_one_session(tmp_path):
+    root = fixture_more(tmp_path)
+    out = cli(root, "digest", "--session", str(root / "-Users-ann-Developer-demo" / "s1.jsonl"))
+    assert "Which store?" in out and "SQLite (Recommended)" in out
+
+
+def test_digest_top_lists_the_longest_sessions(tmp_path):
+    out = cli(fixture_more(tmp_path), "digest", "--top", "1")
+    assert "| demo |" in out and "| other |" in out
+
+
+def test_digest_without_session_or_top_is_a_usage_error(tmp_path):
+    p = subprocess.run([sys.executable, str(CLI), "digest", "--root", str(fixture(tmp_path))], capture_output=True, text=True)
+    assert p.returncode == 2 and "USAGE ERROR:" in p.stderr
+
+
+def test_digest_with_a_missing_session_file_is_exit_two(tmp_path):
+    p = subprocess.run([sys.executable, str(CLI), "digest", "--root", str(fixture(tmp_path)), "--session", str(tmp_path / "nope.jsonl")],
+                       capture_output=True, text=True)
+    assert p.returncode == 2 and "UNREADABLE:" in p.stderr and "Traceback" not in p.stderr
+
+
+@pytest.mark.parametrize("args", [("skills",), ("triggers",), ("mcp",), ("digest", "--top", "2")])
+def test_an_empty_scope_prints_a_notice_for_the_second_half_too(tmp_path, args):
+    out = cli(fixture(tmp_path), *args, "--project", "nomatch")
+    assert "No transcripts in scope." in out
+
+
+def test_second_half_commands_survive_odd_events(tmp_path):
+    d = tmp_path / "-Users-ann-Developer-odd"
+    write(d / "s.jsonl", [
+        human("2026-10-01T10:00:00Z", "go"),
+        {"type": "attachment", "timestamp": "2026-10-01T10:00:01Z", "attachment": {"type": "skill_listing", "content": 5}},
+        assistant("2026-10-01T10:00:02Z", "a", [{"type": "tool_use", "id": ["x"], "name": "Skill", "input": "s"},
+                                                {"type": "tool_use", "id": ["y"], "name": "Bash", "input": {"command": ["l"]}},
+                                                {"type": "tool_use", "id": "z", "name": 7, "input": None},
+                                                {"type": "tool_use", "id": "q", "name": "AskUserQuestion", "input": {"questions": [1, "s"]}},
+                                                {"type": "tool_use", "id": "m", "name": "mcp__", "input": {}}]),
+        {"type": "user", "timestamp": "2026-10-01T10:00:03Z",
+         "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": ["x"]}, {"type": "tool_result", "tool_use_id": "q", "content": None}]}},
+        "junk", [1],
+    ])
+    for args in (("skills",), ("triggers",), ("mcp", "--claude-json", str(tmp_path / "none")), ("digest", "--session", str(d / "s.jsonl")), ("digest", "--top", "1")):
+        assert "Traceback" not in cli(tmp_path, *args)
+
+
+def test_int_rejects_nan_infinity_negatives_and_booleans(tmp_path):
+    for bad in (float("nan"), float("inf"), -1, -0.5, True, False, None, "5", [1]):
+        assert lib._int(bad) == 0
+    assert lib._int(7) == 7 and lib._int(7.9) == 7
+    d = tmp_path / "-Users-ann-Developer-numbers"
+    d.mkdir()
+    ev = [human("2026-10-01T10:00:00Z", "go")]
+    lines = [json.dumps(ev[0]),
+             '{"type": "assistant", "timestamp": "2026-10-01T10:00:05Z", "message": {"id": "n1", "content": [], '
+             '"usage": {"input_tokens": NaN, "cache_read_input_tokens": -500, "cache_creation_input_tokens": Infinity, "output_tokens": -3}}}',
+             json.dumps(assistant("2026-10-01T10:00:06Z", "n2", [{"type": "text", "text": "ok"}]))]
+    (d / "s.jsonl").write_text("\n".join(lines) + "\n")
+    for command in ("tokens", "overhead"):
+        out = cli(tmp_path, command)
+        assert not re.search(r"\b(nan|inf|infinity)\b", out, re.I)
+        assert not any(tok.startswith("-") and tok[1:2].isdigit() for tok in out.split())
