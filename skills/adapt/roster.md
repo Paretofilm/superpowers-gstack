@@ -10,19 +10,20 @@ unless the user asks for it.
 
 | Skill | Consider relevant when... |
 |---|---|
-| `/superpowers:brainstorming` | Almost always — skip only for trivial projects |
-| `/superpowers:writing-plans` | Almost always — skip only for single-file changes |
+| `/superpowers:brainstorming` | Almost always — skip only for trivial projects; finds out why you want the thing before proposing features |
+| `/superpowers:writing-plans` | Almost always — skip only for single-file changes; you review the saved plan before anything runs |
 | `/superpowers:subagent-driven-development` | Projects with 5+ tasks, benefits from parallel TDD |
-| `/superpowers:executing-plans` | Smaller projects (< 5 tasks), or when user wants more control |
+| `/superpowers:executing-plans` | Smaller projects (< 5 tasks), or when user wants more control; runs the whole plan then one review at the end |
 | `/superpowers:systematic-debugging` | Any project with code that can have bugs |
 | `/superpowers:dispatching-parallel-agents` | Projects with clearly independent modules |
 | `/superpowers:using-git-worktrees` | Projects where feature isolation matters |
 | `/superpowers:finishing-a-development-branch` | Projects using feature branches and PRs |
-| `/superpowers:test-driven-development` | Projects with testable code (most projects) |
+| `/superpowers:test-driven-development` | Projects with testable code (most projects); runs the project's full test suite, not just the named file |
 | `/superpowers:verification-before-completion` | Complex projects where correctness is critical |
 | `/superpowers:requesting-code-review` | Multi-file changes (runs automatically during SDD, but can be invoked manually) |
 | `/superpowers:receiving-code-review` | After `/review` or PR feedback requires code changes — structures the response with TDD |
 | `/superpowers:writing-skills` | Only for Claude Code plugin/skill projects |
+| `/superpowers:diagnosing-superpowers` | When a session goes wrong — repeated work, ignored plan, skill that didn't fire, surprising bill; reads transcripts on disk with path:line evidence |
 
 **GStack skills — Phase 1 (Planning):**
 
@@ -63,7 +64,7 @@ unless the user asks for it.
 | `/learn` | Long-running projects (> 2 weeks) — saves cross-session learnings |
 | `/setup-gbrain` | Long-running projects wanting cross-session memory (PGLite local or Supabase) |
 | `/sync-gbrain` | Long-running projects with gbrain — keeps the brain current with this repo's code and refreshes CLAUDE.md search guidance |
-| `/health` | Projects with existing linting, type checking, or test suites |
+| `/health` | Projects with existing linting, type checking, or test suites; scores disclose coverage (checked and unavailable categories); runs with no checks report N/A |
 | `/make-pdf` | Projects needing publication-quality documentation or reports; renders through Aside when available |
 
 **GStack skills — Utility:**

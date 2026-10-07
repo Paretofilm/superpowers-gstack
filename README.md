@@ -105,6 +105,7 @@ This generates a CLAUDE.md with routing rules tailored to your project type, tec
 | Code complete, ready for review | `/review` |
 | Ready to ship | `/ship` |
 | Long session, save state | `/context-handoff` |
+| Something went wrong in a session | `/superpowers:diagnosing-superpowers` |
 
 ## The Workflow
 
@@ -177,6 +178,10 @@ Long sessions degrade Claude's output quality — a problem known as context rot
 **Manual use:** Run `/context-handoff` anytime to save state before a `/clear`.
 
 No hooks, no orchestration overhead, no nesting. Just save and restore.
+
+## When Something Goes Wrong
+
+If a session behaves unexpectedly — repeated work, an ignored plan, a skill that didn't fire, a surprising bill — run `/superpowers:diagnosing-superpowers`. It reads the transcripts on disk and reports what happened with `path:line` evidence for every finding. On request it can build a scrubbed bundle or draft a GitHub issue for your approval.
 
 ## Common Scenarios
 
@@ -266,6 +271,8 @@ Spec or plan written? (after writing-specs / writing-plans / plan-eng-review)
 Code written?  → /clear → /review
 Review feedback needs changes? → /superpowers:receiving-code-review → fix → /review
 Review passed? → /qa → /cso → /ship
+
+Something went wrong?  → /superpowers:diagnosing-superpowers
 ```
 
 ### GStack Commands
@@ -295,7 +302,7 @@ Review passed? → /qa → /cso → /ship
 | `/setup-deploy` | Configure deploy platform (one-time) |
 | `/document-release` | Update docs |
 | `/retro` | Sprint retrospective; harvests shortcut-debt markers |
-| `/health` | Code quality dashboard |
+| `/health` | Code quality dashboard; scores disclose coverage (checked and unavailable categories); runs with no checks report N/A |
 | `/context-save` | Save progress, save state |
 | `/context-restore` | Resume where left off |
 | `/context-handoff` | Write handoff to repo before /clear (cross-machine, no gstack required) |
@@ -318,19 +325,20 @@ Review passed? → /qa → /cso → /ship
 
 | Command | When to Use |
 |---------|------------|
-| `/superpowers:brainstorming` | Refining technical approach |
-| `/superpowers:writing-plans` | Creating TDD task breakdown |
+| `/superpowers:brainstorming` | Refining technical approach; finds out why you want the thing before proposing features |
+| `/superpowers:writing-plans` | Creating TDD task breakdown; saved plan shown for review before anything runs |
 | `/superpowers:subagent-driven-development` | Executing with subagents + TDD |
-| `/superpowers:executing-plans` | Inline execution (small projects) |
+| `/superpowers:executing-plans` | Inline execution (small projects); runs the whole plan, then one review at the end |
 | `/superpowers:dispatching-parallel-agents` | Independent parallel tasks |
 | `/superpowers:systematic-debugging` | Finding root cause of bugs |
 | `/superpowers:using-git-worktrees` | Feature branch isolation — asks for consent before creating; detects if already in a worktree |
 | `/superpowers:finishing-a-development-branch` | Merge/PR/discard — only cleans up worktrees it created (inside `.worktrees/`) |
-| `/superpowers:test-driven-development` | Manual TDD enforcement |
+| `/superpowers:test-driven-development` | Manual TDD enforcement; runs the project's full test suite, not just the named file |
 | `/superpowers:verification-before-completion` | Verify before claiming done |
 | `/superpowers:requesting-code-review` | Dispatch review subagent (uses `general-purpose` agent with self-contained template) |
 | `/superpowers:receiving-code-review` | Handle review feedback |
 | `/superpowers:writing-skills` | Plugin/skill projects only |
+| `/superpowers:diagnosing-superpowers` | When a session goes wrong — reads transcripts on disk, reports findings with path:line evidence |
 
 ### Model Routing (v0.2)
 

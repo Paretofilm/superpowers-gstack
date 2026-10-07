@@ -1,5 +1,21 @@
 # Changelog
 
+## [3.6.1] - 2026-10-07
+
+**The manual catches up with Superpowers 6.4.1 and GStack 1.87.4: `/superpowers:diagnosing-superpowers` is routed, and the changed upstream skills are described as they now behave.**
+
+Ported from the auto-update PR #87 (2026-09-21), which was built on 3.3.0 and claimed 3.4.0 — a number 3.4.0 had since taken. Two of its edits were wrong and are left out: it listed `diagnosing-superpowers` among this plugin's own skills (README count and the superpowers-gstack roster table), and it named the skill without its `superpowers:` namespace.
+
+### Added
+
+- **`/superpowers:diagnosing-superpowers`** (Superpowers 6.4.1) in the roster, the README command tables and a new "When Something Goes Wrong" section: when a session goes wrong — repeated work, an ignored plan, a skill that didn't fire, a surprising bill — it reads the transcripts on disk and reports findings with `path:line` evidence; on request it builds a scrubbed bundle or drafts a GitHub issue for your approval.
+
+### Changed
+
+- Roster and README descriptions for the Superpowers 6.4.1 changes: `brainstorming` finds out why you want the thing before proposing features; `writing-plans` shows you the saved plan before anything runs; `executing-plans` runs the whole plan, then one review at the end; `test-driven-development` runs the project's full test suite, not just the named file.
+- `/health` (GStack 1.87.4): scores disclose coverage — checked and unavailable categories — and a run with no checks reports N/A.
+- `VERSIONS.md`: GStack 1.87.4.0, Superpowers 6.4.1 — the versions this content was verified against. Later GStack releases (to 1.91.33) are not yet reviewed for the manual.
+
 ## [3.6.0] - 2026-10-03
 
 **The vibe profile: a project can choose, once, to be built with one intake round, locked acceptance tests as the only checkpoint and one review at the end.** Opt-in per project with `.gstack/workflow`; without it everything is as in 3.5.1.
