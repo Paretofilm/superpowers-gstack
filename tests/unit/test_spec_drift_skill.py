@@ -41,7 +41,10 @@ UPSTREAM_PATH = "~/" + str(MOD.UPSTREAM_REL)
 
 # Text that exists only in the upstream section. Present in SKILL.md, it means
 # Step 8 was pasted in; absent from the snapshot, the guard has gone vacuous.
-STEP8_ONLY = ("Path concreteness rule", "Be conservative with DONE", "_PLAN_SLUG=", "VAS-449",
+# "VAS-449" left in gstack 1.91.33 (the incident reference was reworded out of Gate
+# Logic); "PLAN_CANDIDATE:" — the candidate list the rewritten Plan File Discovery
+# prints — replaced it.
+STEP8_ONLY = ("Path concreteness rule", "Be conservative with DONE", "_PLAN_SLUG=", "PLAN_CANDIDATE:",
               "### Actionable Item Extraction", "### Verification Mode",
               "### Cross-Reference Against Diff", "### Output Format", "CONTENT-SHAPE")
 # Upstream wording the skill's OWN logic keys on. If a re-pin accepts a section

@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.6.2] - 2026-10-07
+
+**`/superpowers-gstack:spec-drift` re-pinned to gstack 1.91.33's Step 8, with the overrides re-read against it. None needed changing.**
+
+### Changed (spec-drift pin, against 1.91.33)
+- **Plan File Discovery moved out of the subagent prompt.** The parent now binds the plan before dispatch (conversation context, a `Plan: <path>` line in the PR body, or a candidate list offered with AskUserQuestion), and the prompt opens with "Audit only the plan the parent supplied". Override 2 — skip discovery entirely, the plan is `<PLAN_PATH>` — covers the new binding steps as it covered the old search.
+- **An unreadable plan is an audit error upstream, never zero counts.** The wrapper already lands there: override 2 emits `total_items` 0 with the reason, and `verdict` turns 0 into `COULD-NOT-RUN (exit 2)`.
+- Gate Logic and Prior Learnings were reworded (the VAS-449 incident reference is gone); override 4 replaces Gate Logic and Prior Learnings is outside the run.
+- The paste-detector needle `VAS-449` in `test_spec_drift_skill.py` is replaced by `PLAN_CANDIDATE:`, text only the new section carries, so the guard against inlining Step 8 still has something to find. The pin test that has been red locally since the gstack upgrade is green again.
+
 ## [3.6.1] - 2026-10-07
 
 **The manual catches up with Superpowers 6.4.1 and GStack 1.87.4: `/superpowers:diagnosing-superpowers` is routed, and the changed upstream skills are described as they now behave.**
