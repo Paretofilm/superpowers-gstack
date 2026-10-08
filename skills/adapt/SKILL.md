@@ -218,11 +218,14 @@ then the base tiers for the selected skills and the inferred sensitivity, and as
    keys) exist only in the primary checkout, and the `Worktrees and solo landing` block
    keeps work that needs them out of worktrees. If CLAUDE.md already has a line starting
    `Local state:` outside the plugin's sections, the script keeps it; do not re-ask.
-   Otherwise list candidates from the primary checkout, leaving out build output and
-   caches (`.build/`, `node_modules/`, `DerivedData/`, `.venv/`, `__pycache__/`, `.gstack/`):
+   Otherwise list candidates from the **primary** checkout (in a worktree the ignored
+   files do not exist, and an empty list would wrongly suggest "none"), leaving out
+   build output and caches (`.build/`, `node_modules/`, `DerivedData/`, `.venv/`,
+   `__pycache__/`, `.gstack/`):
 
    ```bash
-   git ls-files --others --ignored --exclude-standard --directory
+   PRIMARY=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
+   git -C "$PRIMARY" ls-files --others --ignored --exclude-standard --directory
    ```
 
    Then ask **once** with `AskUserQuestion`, the candidates in the question:
@@ -234,7 +237,8 @@ then the base tiers for the selected skills and the inferred sensitivity, and as
 
    Pass the answer as `--local-state '<paths>'` or `--local-state none`. The script
    writes `Local state: …` under `## <project> local state`, a heading the project owns
-   from then on. A run with nobody to answer passes no flag and writes no line.
+   from then on, and never edits again: a wrong answer is corrected by editing that
+   line by hand. A run with nobody to answer passes no flag and writes no line.
 
 ### Step 5: Dry run, then ask
 

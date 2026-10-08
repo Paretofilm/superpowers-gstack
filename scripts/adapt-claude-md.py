@@ -907,6 +907,19 @@ def apply_model_routing(lines: list[str], ctx: Context, report: Report) -> list[
 LOCAL_STATE_RE = re.compile(r"^Local state:\s*\S")
 
 
+def linked_worktree(project: Path) -> bool:
+    """True in a second checkout, where the files git ignores do not exist."""
+    def rev(arg: str) -> str:
+        try:
+            out = subprocess.run(["git", "-C", str(project), "rev-parse", "--path-format=absolute", arg],
+                                 capture_output=True, text=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+        return out.stdout.strip() if out.returncode == 0 else ""
+    git_dir, common = rev("--git-dir"), rev("--git-common-dir")
+    return bool(git_dir and common and git_dir != common)
+
+
 def apply_local_state(lines: list[str], ctx: Context, report: Report) -> list[str]:
     """The project's own `Local state:` line, like `Landing mode:`: it lives outside
     every managed section, because an upgrade replaces those whole. Written once, under
@@ -923,9 +936,16 @@ def apply_local_state(lines: list[str], ctx: Context, report: Report) -> list[st
     if ctx.local_state is None:
         return lines
     heading = f"## {ctx.project} local state"
-    report.changes.append(f"Local state: added `Local state: {ctx.local_state}` under `{heading}` "
-                          f"(the project's section from now on; /adapt never edits it)")
-    return _append(lines, [heading, "", f"Local state: {ctx.local_state}"])
+    line = f"Local state: {ctx.local_state}"
+    report.changes.append(f"Local state: added `{line}` under `{heading}` (the project's section from now "
+                          f"on; /adapt never edits it — correct the line by hand if it is wrong)")
+    # A heading the project already wrote (without the line) gets the line, not a twin.
+    own = next((i for i, lvl, raw in headings(lines)
+                if lvl == 2 and heading_text(raw).lower() == f"{ctx.project} local state".lower()), None)
+    if own is not None:
+        below = own + 2 if own + 1 < len(lines) and SETEXT_H2_RE.match(lines[own + 1]) else own + 1
+        return _splice(lines, below, below, ["", line])
+    return _append(lines, [heading, "", line])
 
 
 def merge(text: str | None, ctx: Context) -> tuple[str, Report]:
@@ -1222,6 +1242,11 @@ def main(argv=None) -> int:
                 content = render_context_skill(ctx_skill, ctx.project)   # a missing template refuses here
         new_text, report = merge(text, ctx)
         report.notes = pre_notes.notes + report.notes
+        if local_state == "none" and any(c.startswith("Local state: added") for c in report.changes) \
+                and linked_worktree(project):
+            report.notes.append("`Local state: none` was written from a linked worktree, where ignored files do "
+                                "not exist: check it against the primary checkout and correct the line by hand "
+                                "if the project does keep such files")
         unresolved = sorted(t for t in ctx.needed if t not in sets)
         if unresolved:
             raise Refusal("UNRESOLVED PLACEHOLDER: " + ", ".join(unresolved) +

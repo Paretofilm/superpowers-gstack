@@ -10,12 +10,19 @@ Source: KvitteriAi, 2026-10-09. Its data (`data/`, `bankutskrifter/`, `kvitteria
 
 ### Changed
 - **`Worktrees and solo landing` block (`gstack-worktrunk-v3`).** It gains one rule. Data, local configuration and keys that git ignores live only in the primary checkout. Work that needs them runs in a session started there after landing, with `git pull --ff-only` and the build first. Such files are never copied into a worktree or linked from one. The project's `Local state: <paths>` or `Local state: none` line sits outside the section, under a heading the project owns. If the line is missing, the agent asks once.
-- **`/superpowers-gstack:adapt` asks once.** Step 4 lists candidates with `git ls-files --others --ignored --exclude-standard --directory`, leaving out build output and caches, and asks whether the project keeps such files.
-- **`adapt-claude-md.py` writes the line once.** The answer goes in through `--local-state '<paths>|none'`. The script writes the line under `## <project> local state` only when no `Local state:` line exists outside the managed sections and code fences. An existing line is kept and never edited, and a value of more than one line is refused.
+- **`/superpowers-gstack:adapt` asks once.** Step 4 lists candidates with `git ls-files --others --ignored --exclude-standard --directory`, run in the **primary** checkout, and leaves out build output and caches. Run in a worktree, the list would be empty and suggest "none". It then asks whether the project keeps such files.
+- **`adapt-claude-md.py` writes the line once.** The answer goes in through `--local-state '<paths>|none'`.
+  - The script writes the line only when no `Local state:` line exists outside the managed sections and code fences.
+  - The line goes under a `## <project> local state` heading the project already wrote, otherwise under a new one.
+  - An existing line is kept and never edited, so a wrong answer is corrected by hand. A value of more than one line is refused.
+  - `none` written from a linked worktree comes with a note to check it against the primary checkout.
 - **This repo's own line:** `Local state: .update-state.json`.
 
 ### Lint
 - E7 denylist: `gstack-worktrunk-v2`.
+
+### Deferred
+- **A machine check for the symlink trap.** For now the rule is prose. A check in `land`'s pre-merge, or at worktree creation, for a link whose name matches a trailing-slash ignore pattern would enforce it. Trigger: the first time such a link is staged.
 
 ## [3.7.0] - 2026-10-08
 

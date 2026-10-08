@@ -1179,3 +1179,29 @@ def test_a_bad_local_state_value_refuses_and_writes_nothing(tmp_path, value):
     p = run(proj, *WEB_SETS, "--local-state", value, expect=2)
     assert "USAGE ERROR" in p.stderr
     assert not (proj / "CLAUDE.md").exists()
+
+
+@pytest.mark.parametrize("own_heading", ["## Kvitt local state\n", "Kvitt local state\n---\n"])
+def test_a_heading_the_project_already_wrote_gets_the_line_not_a_twin(tmp_path, own_heading):
+    """Third lens: an existing `## <project> local state` without a line got a second heading."""
+    proj = project(tmp_path, f"# Kvitt\n\n{own_heading}\nThe data lives in the main folder.\n")
+    run(proj, *WEB_SETS, "--local-state", "data/")
+    text = (proj / "CLAUDE.md").read_text()
+    assert text.lower().count("kvitt local state") == 1
+    head = own_heading.rstrip("\n")
+    assert f"{head}\n\nLocal state: data/\n" in text
+    assert "The data lives in the main folder." in text
+
+
+def test_none_written_from_a_linked_worktree_is_flagged(tmp_path):
+    """Third lens: in a worktree the ignored files do not exist, so `none` may be wrong."""
+    main = project(tmp_path, "# Kvitt\n")
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "i"],
+                   cwd=main, check=True)
+    wt = tmp_path / "wt"
+    subprocess.run(["git", "worktree", "add", "-q", str(wt), "-b", "topic"], cwd=main, check=True)
+    (wt / "CLAUDE.md").write_text("# Kvitt\n")
+    p = run(wt, *WEB_SETS, "--local-state", "none")
+    assert any("linked worktree" in n for n in last_json(p)["notes"])
+    p = run(project(tmp_path / "other", "# Other\n"), *WEB_SETS, "--local-state", "none")
+    assert not any("linked worktree" in n for n in last_json(p)["notes"])
