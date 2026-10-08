@@ -528,3 +528,74 @@ def test_setup_refuses_a_directory_outside_git(tmp_path):
     r = subprocess.run(["bash", str(copy / "setup-hooks.sh")], capture_output=True, text=True,
                        env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)})
     assert r.returncode == 1 and "not a git checkout" in r.stdout
+
+
+# --- second review wave ---------------------------------------------------------
+
+def test_osascript_fallback_passes_text_as_arguments(env):
+    """AppleScript has no \\u escape: quoting "—" or "å" into the source was a syntax error."""
+    write_stub(env["bindir"], "terminal-notifier", "import sys\nsys.exit(1)\n")
+    run(env, "notify", extra_env={"SG_REPORT_NOW": at(17)})
+    args = json.loads(env["osa"].read_text().splitlines()[0])
+    assert args[:2] == ["-e", "on run argv"]
+    assert args[-1] == "Ulest rapport — klikk for å åpne"
+    assert not any("\\u" in a for a in args)
+
+
+def test_version_1_state_does_not_raise_a_false_stale_warning(env):
+    run(env, "collect")
+    for rid in ("gh-issue-7", "gh-issue-90", "gh-pr-12"):
+        run(env, "seen", rid)
+    s = state(env)
+    s.pop("last_ok_fetch")
+    s["version"] = 1
+    state_file(env).write_text(json.dumps(s))
+    assert run(env, "banner") == ""
+
+
+def test_a_timestamp_ahead_of_the_clock_does_not_block_fetching(env):
+    run(env, "collect")
+    patch_state(env, fetched_at=time.time() + 30 * 86400)
+    run(env, "collect")
+    assert len(env["gh_calls"].read_text().splitlines()) == 6
+
+
+def test_the_slot_survives_the_spring_dst_night(env):
+    t = "1806273000"  # 2027-03-29 00:30 CEST; t - 86400 lands on 03-27 23:30 (the old bug)
+    run(env, "notify", extra_env={"SG_REPORT_NOW": t, "TZ": "Europe/Oslo"})
+    assert state(env)["last_slot"] == "2027-03-28"
+
+
+def test_a_click_from_a_web_page_gets_a_confirm_page_not_a_blank_403(env):
+    run(env, "collect")
+    status, _, body = http(env, "/seen/gh-issue-90",
+                           extra="Sec-Fetch-Site: cross-site\r\nSec-Fetch-Dest: document\r\n")
+    assert status == 403 and b"/seen/gh-issue-90" in body
+    assert "gh-issue-90" not in state(env)["seen"]
+    status, _, _ = http(env, "/seen/gh-issue-90",
+                        extra=f"Sec-Fetch-Site: same-origin\r\nReferer: http://127.0.0.1:{PORT}/seen/gh-issue-90\r\n")
+    assert status == 302 and "gh-issue-90" in state(env)["seen"]
+
+
+def test_a_cross_site_subresource_gets_no_confirm_page(env):
+    run(env, "collect")
+    status, _, body = http(env, "/seen/gh-issue-90", extra="Sec-Fetch-Site: cross-site\r\nSec-Fetch-Dest: image\r\n")
+    assert status == 403 and body == b""
+
+
+def test_safari_preview_is_not_a_visit(env):
+    run(env, "collect")
+    status, _, _ = http(env, "/seen/gh-issue-90", extra="X-Purpose: preview\r\n")
+    assert status == 403 and "gh-issue-90" not in state(env)["seen"]
+
+
+def test_hook_stdin_left_open_does_not_block_the_banner(env):
+    run(env, "collect")
+    r, w = os.pipe()
+    os.write(w, b'{"source": "startup"}')
+    t = time.monotonic()
+    p = subprocess.run([sys.executable, str(SCRIPT), "banner"], stdin=r, capture_output=True,
+                       env=env["env"], timeout=20)
+    os.close(w)
+    os.close(r)
+    assert time.monotonic() - t < 3 and b"Unread reports" in p.stdout

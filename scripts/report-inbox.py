@@ -29,6 +29,7 @@ lock). Environment: SG_REPORT_REPO (owner/name) overrides the repo; SG_REPORT_TO
 Python 3.9+ (launchd runs /usr/bin/python3). Every path exits 0 except usage errors.
 """
 
+import datetime
 import fcntl
 import hashlib
 import html
@@ -100,6 +101,14 @@ def load_state():
     merged.update(data)
     # Read marks are epoch seconds; anything else (an older format) counts as "read now".
     merged["seen"] = {k: v if isinstance(v, (int, float)) else now() for k, v in merged["seen"].items()}
+    # Version 1 had no last_ok_fetch: its fetched_at was a successful fetch, not "never".
+    if "last_ok_fetch" not in data:
+        merged["last_ok_fetch"] = merged["fetched_at"]
+    # A timestamp ahead of the clock (it moved back) would block fetching and the
+    # stale warning until real time caught up: treat it as never.
+    for key in ("fetched_at", "last_ok_fetch"):
+        if float(merged.get(key) or 0) > now() + 60:
+            merged[key] = 0
     return merged
 
 
@@ -107,12 +116,16 @@ def save_state(state):
     d = state_dir()
     d.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(d), prefix=".report-inbox.", suffix=".tmp")
-    with os.fdopen(fd, "w") as f:
-        json.dump(state, f, indent=2, sort_keys=True)
-        f.write("\n")
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp, str(state_path()))
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(state, f, indent=2, sort_keys=True)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, str(state_path()))
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
 
 
 @contextmanager
@@ -320,15 +333,21 @@ def hook_source():
     try:
         if sys.stdin is None or sys.stdin.isatty() or not select.select([sys.stdin], [], [], 0.2)[0]:
             return ""
-        return str(json.loads(sys.stdin.read(65536) or "{}").get("source", ""))
+        # os.read returns what is there; sys.stdin.read would wait for end-of-file.
+        raw = os.read(sys.stdin.fileno(), 65536).decode("utf-8", "replace")
+        return str(json.loads(raw or "{}").get("source", ""))
     except (OSError, ValueError, AttributeError):
         return ""
 
 
 def refresh_in_background():
-    subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "collect"],
-                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                     start_new_session=True, close_fds=True)
+    """A refresh that cannot start must not cost the banner it was meant to feed."""
+    try:
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "collect"],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True, close_fds=True)
+    except OSError as e:
+        print(f"report-inbox: background refresh failed: {e}", file=sys.stderr)
 
 
 def cmd_banner():
@@ -383,10 +402,15 @@ def notify_one(title, message, url, group):
                   file=sys.stderr)
         except (OSError, subprocess.TimeoutExpired) as e:
             print(f"terminal-notifier failed: {e}", file=sys.stderr)
-    script = f"display notification {json.dumps(message)} with title {json.dumps(title)}"
+    # Text goes in as arguments, never into the script source: AppleScript has no \u
+    # escape, and "—" or "å" quoted any other way is a syntax error.
     osa = find_tool("osascript") or "osascript"
     try:
-        subprocess.run([osa, "-e", script], capture_output=True, timeout=15)
+        r = subprocess.run([osa, "-e", "on run argv", "-e",
+                            "display notification (item 1 of argv) with title (item 2 of argv)",
+                            "-e", "end run", message, title], capture_output=True, timeout=15)
+        if r.returncode != 0:
+            print(f"osascript exited {r.returncode}: {r.stderr.decode(errors='replace').strip()}", file=sys.stderr)
     except (OSError, subprocess.TimeoutExpired) as e:
         print(f"osascript failed: {e}", file=sys.stderr)
     return False
@@ -395,10 +419,10 @@ def notify_one(title, message, url, group):
 def current_slot(t):
     """The date of the most recent 17:00. A run caught up at 08:00 belongs to yesterday's
     slot, so it does not cancel today's 17:00 reminder."""
-    lt = time.localtime(t)
-    if lt.tm_hour < NOTIFY_HOUR:
-        lt = time.localtime(t - 86400)
-    return time.strftime("%Y-%m-%d", lt)
+    day = datetime.date.fromtimestamp(t)
+    if time.localtime(t).tm_hour < NOTIFY_HOUR:
+        day -= datetime.timedelta(days=1)  # calendar arithmetic: a DST night is not 86400 s
+    return day.isoformat()
 
 
 def cmd_notify(force=False):
@@ -445,7 +469,7 @@ def foreign(value):
 
 
 def cmd_serve_one(stdin=None, stdout=None):
-    signal.alarm(REQUEST_TIMEOUT)  # an idle connection must not hold a process forever
+    signal.alarm(REQUEST_TIMEOUT)  # bounds the whole request: an idle client must not hold a process
     inp = stdin or sys.stdin.buffer
     out = stdout or sys.stdout.buffer
     request_line = inp.readline(8192).decode("latin-1").strip()
@@ -465,20 +489,29 @@ def cmd_serve_one(stdin=None, stdout=None):
     # name to 127.0.0.1 would otherwise be able to read local reports.
     if headers.get("host", "") not in (f"127.0.0.1:{PORT}", f"localhost:{PORT}"):
         return http_response(out, 403)
-    # A click in the terminal or a notification is a top-level navigation the browser
-    # marks Sec-Fetch-Site: none. Another site's <img src=…> carries the right Host too;
-    # it gives itself away through Sec-Fetch-Site, or, in a browser that does not send
-    # Fetch Metadata, through Referer/Origin. Prefetch and prerender are not a visit.
-    site = headers.get("sec-fetch-site")
-    purpose = (headers.get("sec-purpose", "") + headers.get("purpose", "")).lower()
-    if (site is not None and site != "none") or foreign(headers.get("referer")) \
-            or foreign(headers.get("origin")) or "prefetch" in purpose or "prerender" in purpose:
-        return http_response(out, 403)
     if method not in ("GET", "HEAD"):
         return http_response(out, 405, {"Allow": "GET, HEAD"})
     m = re.match(r"^/seen/([^/?#]+)(?:\?.*)?$", target)
     rid = m.group(1) if m and ID_RE.fullmatch(m.group(1)) else ""
     item = load_state()["items"].get(rid) if rid else None
+    # A click in the terminal or a notification is a top-level navigation the browser
+    # marks Sec-Fetch-Site: none; the confirm page below is same-origin (served reports
+    # are sandboxed, so they never are). Another site's <img src=…> carries the right
+    # Host too; it gives itself away through Sec-Fetch-Site, or, in a browser that does
+    # not send Fetch Metadata, through Referer/Origin. Prefetch and preview are not a visit.
+    site = headers.get("sec-fetch-site")
+    purpose = " ".join(headers.get(h, "") for h in ("sec-purpose", "purpose", "x-purpose")).lower()
+    if any(p in purpose for p in ("prefetch", "prerender", "preview")):
+        return http_response(out, 403)
+    if (site is not None and site not in ("none", "same-origin")) or foreign(headers.get("referer")) \
+            or foreign(headers.get("origin")):
+        if item and headers.get("sec-fetch-dest", "document") == "document":
+            # A real person who followed the link from a web page: say why nothing was
+            # recorded and let one click on this page (same-origin) record it.
+            body = page("Bekreft", f"<p>Lenken ble åpnet fra en nettside, så den ble ikke registrert som lest.</p>"
+                                   f"<p><a href='/seen/{rid}'>Marker som lest og åpne «{html.escape(item['title'])}»</a></p>")
+            return http_response(out, 403, {"Content-Type": "text/html; charset=utf-8"}, body)
+        return http_response(out, 403)
     if not item:
         body = page("Ukjent rapport", "<p>Rapporten finnes ikke lenger i innboksen (lukket eller fjernet).</p>")
         return http_response(out, 404, {"Content-Type": "text/html; charset=utf-8"}, body)

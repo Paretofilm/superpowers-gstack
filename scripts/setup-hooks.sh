@@ -22,7 +22,7 @@
 
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd -P)"  # -P: a dev-mode symlink resolves to the clone
 NOTIFY_SCRIPT="$REPO_DIR/scripts/notify-pending-updates.sh"
 INBOX_SCRIPT="$REPO_DIR/scripts/report-inbox.py"
 SETTINGS_FILE="$HOME/.claude/settings.json"
@@ -115,7 +115,18 @@ if not any("notify-pending-updates" in cmd for cmd in existing_commands):
     print("Added: notify-pending-updates (maintainer hook)")
     print(f"Saved to {settings_path}. Restart Claude Code to activate.")
 else:
-    print("notify-pending-updates already configured.")
+    import os
+    home = os.path.expanduser("~")
+    # A hand-edited entry may start with a guard, so ~ is not always leading: expand every one.
+    stale = [c for c in existing_commands if "notify-pending-updates" in c
+             and notify_script not in c.replace("~/", home + "/")]
+    if stale:
+        print("WARNING: the notify-pending-updates hook in settings.json points at another copy:")
+        for c in stale:
+            print(f"         {c}")
+        print(f"         Change its path to {notify_script} in {settings_path}.")
+    else:
+        print("notify-pending-updates already configured.")
 PYEOF
 
 # --- report inbox: launchd agents (macOS only) ---------------------------------
