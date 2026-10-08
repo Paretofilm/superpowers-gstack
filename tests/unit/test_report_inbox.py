@@ -323,9 +323,38 @@ def test_banner_warns_when_github_has_been_unreachable(env):
     run(env, "collect")
     for rid in ("gh-issue-7", "gh-issue-90", "gh-pr-12"):
         run(env, "seen", rid)
-    patch_state(env, last_ok_fetch=time.time() - 5 * 86400, last_error="gh exited 1", fetched_at=time.time())
+    patch_state(env, last_ok_fetch=time.time() - 5 * 86400, last_error="gh exited 1", fetched_at=time.time(),
+                failing_since=time.time() - 86400)
     out = run(env, "banner")
-    assert "GitHub has not been reached" in out and "gh exited 1" in out
+    assert "GitHub has not been reached for over 3 days" in out and "gh exited 1" in out
+
+
+def test_one_failed_fetch_is_not_a_stale_warning(env):
+    """Third lens: a single failure used to print "over 3 days" seconds after the first try."""
+    env["fixture"].write_text(json.dumps({"fail": True}))
+    run(env, "collect")
+    assert run(env, "banner") == ""
+
+
+def test_a_github_never_reached_is_reported_after_two_retry_windows(env):
+    env["fixture"].write_text(json.dumps({"fail": True}))
+    run(env, "collect")
+    patch_state(env, failing_since=time.time() - 3 * 600, fetched_at=time.time())
+    out = run(env, "banner")
+    assert "GitHub has not been reachable since" in out and "gh exited 1" in out
+
+
+def test_concurrent_notify_runs_send_once(env):
+    procs = [subprocess.Popen([sys.executable, str(SCRIPT), "notify"], env=dict(env["env"], SG_REPORT_NOW=at(17)),
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) for _ in range(4)]
+    for p in procs:
+        p.wait(timeout=60)
+    assert len(notifications(env)) == 3
+
+
+def test_unparseable_hook_input_keeps_quiet(env):
+    run(env, "collect")
+    assert run(env, "banner", stdin=b"{not json") == ""
 
 
 def test_banner_is_silent_without_any_gh_on_first_run(env):

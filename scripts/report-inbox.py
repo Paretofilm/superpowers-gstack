@@ -86,8 +86,8 @@ def state_path():
 
 
 def empty_state():
-    return {"version": 2, "fetched_at": 0, "last_ok_fetch": 0, "last_error": "", "items": {},
-            "seen": {}, "last_slot": "", "alert_hint_shown": False}
+    return {"version": 2, "fetched_at": 0, "last_ok_fetch": 0, "last_error": "", "failing_since": 0,
+            "items": {}, "seen": {}, "last_slot": "", "alert_hint_shown": False}
 
 
 def load_state():
@@ -288,8 +288,10 @@ def collect(force=False, network=True):
             st["fetched_at"] = t
             st["last_ok_fetch"] = t
             st["last_error"] = ""
+            st["failing_since"] = 0
         elif do_fetch:
             st["last_error"] = error  # keep the previous items: an outage must not read as "all read"
+            st["failing_since"] = st.get("failing_since") or t
         st["items"] = dict(gh_items, **local)
         st["seen"] = {k: v for k, v in st["seen"].items() if k in st["items"]}
         state = json.loads(json.dumps(st))
@@ -331,13 +333,35 @@ def tracker_problem():
 def hook_source():
     """SessionStart passes JSON on stdin; read it without ever blocking a manual run."""
     try:
-        if sys.stdin is None or sys.stdin.isatty() or not select.select([sys.stdin], [], [], 0.2)[0]:
+        if sys.stdin is None or sys.stdin.isatty():
             return ""
-        # os.read returns what is there; sys.stdin.read would wait for end-of-file.
-        raw = os.read(sys.stdin.fileno(), 65536).decode("utf-8", "replace")
-        return str(json.loads(raw or "{}").get("source", ""))
+        fd = sys.stdin.fileno()
     except (OSError, ValueError, AttributeError):
         return ""
+    raw = b""
+    deadline = time.monotonic() + 0.5
+    # os.read returns what is there (sys.stdin.read would wait for end-of-file); keep
+    # reading until the JSON is whole, the writer closes, or the deadline passes.
+    while time.monotonic() < deadline:
+        try:
+            if not select.select([fd], [], [], max(0.0, deadline - time.monotonic()))[0]:
+                break
+            chunk = os.read(fd, 65536)
+        except OSError:
+            break
+        if not chunk:
+            break
+        raw += chunk
+        try:
+            return str(json.loads(raw.decode("utf-8", "replace")).get("source", ""))
+        except ValueError:
+            continue
+    if not raw.strip():
+        return ""  # nothing on stdin: a manual run, show the banner
+    try:
+        return str(json.loads(raw.decode("utf-8", "replace")).get("source", ""))
+    except (ValueError, AttributeError):
+        return "compact"  # unreadable hook input: staying quiet is the safe side
 
 
 def refresh_in_background():
@@ -358,8 +382,18 @@ def cmd_banner():
     if t - float(state.get("fetched_at") or 0) >= FETCH_TTL:
         refresh_in_background()
     rows = unread(state)
-    attempted = float(state.get("fetched_at") or 0) > 0
-    stale = attempted and t - float(state.get("last_ok_fetch") or 0) > STALE_WARNING
+    # Blind, not just unlucky: failing now, and either never reached for longer than two
+    # retry windows (gh missing or logged out) or last reached more than STALE_WARNING ago.
+    failing_since = float(state.get("failing_since") or 0)
+    last_ok = float(state.get("last_ok_fetch") or 0)
+    if not failing_since:
+        stale = ""
+    elif not last_ok and t - failing_since > 2 * RETRY_AFTER_FAILURE:
+        stale = "has not been reachable since " + time.strftime("%Y-%m-%d %H:%M", time.localtime(failing_since))
+    elif last_ok and t - last_ok > STALE_WARNING:
+        stale = f"has not been reached for over {STALE_WARNING // 86400} days"
+    else:
+        stale = ""
     if not rows and not stale:
         return
     problem = tracker_problem()
@@ -372,8 +406,7 @@ def cmd_banner():
         print(f"    {it['url'] if problem else link(rid)}")
     if stale:
         reason = state.get("last_error") or "no successful fetch"
-        print(f"  ⚠ GitHub has not been reached for over {STALE_WARNING // 86400} days ({reason});"
-              " reports may be missing. Check `gh auth status`.")
+        print(f"  ⚠ GitHub {stale} ({reason}); reports may be missing. Check `gh auth status`.")
     if rows and not problem:
         print("  Tell the user in one line that these reports are unread and list the links;"
               " clicking a link opens the report and marks it read.")
@@ -427,8 +460,12 @@ def current_slot(t):
 
 def cmd_notify(force=False):
     slot = current_slot(now())
-    if not force and load_state().get("last_slot") == slot:
-        return
+    # Claim the slot under the lock before any work, as collect() claims a fetch: two
+    # runs at once (a catch-up at wake and a manual one) must not both send.
+    with locked_state() as st:
+        if st.get("last_slot") == slot and not force:
+            return
+        st["last_slot"] = slot
     state = collect(force=True)
     rows = unread(state, newest_first=True)  # the newest report must never hide behind old ones
     clickable = True
@@ -439,8 +476,6 @@ def cmd_notify(force=False):
     if rows and not clickable:
         print("Notifications were not clickable: install terminal-notifier (brew install terminal-notifier).",
               file=sys.stderr)
-    with locked_state() as st:
-        st["last_slot"] = slot
 
 
 def http_response(out, status, headers=None, body=b""):
@@ -523,12 +558,19 @@ def cmd_serve_one(stdin=None, stdout=None):
     report = Path(item["url"]).resolve()
     if report.parent != reports_dir().resolve() or not report.is_file():
         return http_response(out, 404)
+    try:
+        # O_NOFOLLOW: a file swapped for a symlink after the check above is refused, not followed.
+        fd = os.open(str(report), os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, "rb") as f:
+            body = f.read()
+    except OSError:
+        return http_response(out, 404)
     mark_read(method, rid)
     ctype = "text/html; charset=utf-8" if report.suffix == ".html" else "text/plain; charset=utf-8"
     # sandbox gives the report an opaque origin: a script in it cannot use this server.
     csp = "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:"
-    body = b"" if method == "HEAD" else report.read_bytes()
-    return http_response(out, 200, {"Content-Type": ctype, "Content-Security-Policy": csp}, body)
+    return http_response(out, 200, {"Content-Type": ctype, "Content-Security-Policy": csp},
+                         b"" if method == "HEAD" else body)
 
 
 def mark_read(method, rid):

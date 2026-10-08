@@ -16,7 +16,7 @@ Three `model-review` issues (#64, #89, #90) sat unread for a month. The only rem
     - A local report file that changes after it was read becomes unread again.
     - Report ids include a hash of the filename, so `Rapport å.md` and `Rapport ø.md` do not collide.
   - **Titles are made safe.** They are cut to one line with control characters removed, and capped at 120 characters, before they reach the terminal or the agent's context.
-  - **Silence means "all read", never "broken".** The banner warns when GitHub has not been reached for three days. It also flags a click tracker that is missing or points at another copy of the script.
+  - **Silence means "all read", never "broken".** The banner warns when GitHub is failing and was last reached more than three days ago, or has never been reached across two retry windows. A single failed fetch does not warn. It also flags a click tracker that is missing or points at another copy of the script.
   - **The banner stays out of compaction.** It is skipped on `compact`, so a long autonomous run is not interrupted.
   - **State** lives in `~/.claude/superpowers-gstack/report-inbox.json`, written atomically under a lock with `fsync`.
 - **Click-to-mark-read.** Each report's link is `http://127.0.0.1:47817/seen/<id>`. A launchd agent in inetd mode starts one short process per click, so nothing stays resident. The process marks the report read, then redirects to the issue or serves the local file.
@@ -31,7 +31,7 @@ Three `model-review` issues (#64, #89, #90) sat unread for a month. The only rem
   - An idle connection is dropped after 10 s.
 - **Daily reminder.** A second launchd agent runs `report-inbox.py notify` at 17:00.
   - It sends one `terminal-notifier` notification per unread report: newest first, at most 5, the last one counting the rest.
-  - It sends once per 17:00 slot. A run missed while the Mac slept happens at wake and counts toward the previous evening's slot, so it does not cancel today's.
+  - It sends once per 17:00 slot, claimed under the lock before any work, so two runs at once send once. A run missed while the Mac slept happens at wake and counts toward the previous evening's slot, so it does not cancel today's.
   - A failing `terminal-notifier` falls back to `osascript`.
   - Tools are looked up in Homebrew's directories too, because launchd's `PATH` lacks them.
 
@@ -41,6 +41,7 @@ Three `model-review` issues (#64, #89, #90) sat unread for a month. The only rem
   - It refuses to run from a linked worktree, the plugin cache, or a directory outside git, because the agents store absolute paths.
 
 ### Known
+- A browser that sends neither Fetch Metadata nor a Referer (Safari before 16.4) cannot be told apart from a terminal click. A page open in such a browser could mark a report read. It cannot read a report: the same-origin policy hides the response, and the `Host` check blocks DNS rebinding.
 - The agents run `report-inbox.py` from the primary checkout. Checking out a branch there runs that branch's copy at 17:00 and on every click. The banner flags a tracker that points elsewhere, but not a different version of the same file.
 
 ## [3.6.2] - 2026-10-07
