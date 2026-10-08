@@ -359,7 +359,8 @@ def test_unparseable_hook_input_keeps_quiet(env):
 
 def test_banner_is_silent_without_any_gh_on_first_run(env):
     (env["bindir"] / "gh").unlink()
-    assert run(env, "banner") == ""
+    # PATH is the stub dir only: GitHub's Linux runners ship a real gh in /usr/bin (and /bin).
+    assert run(env, "banner", extra_env={"PATH": str(env["bindir"])}) == ""
 
 
 def test_wrapper_hook_exits_zero_and_prints_banner(env):
@@ -431,7 +432,9 @@ def test_tools_are_found_outside_path_like_under_launchd(env, tmp_path):
     brew.mkdir()
     for n in ("gh", "terminal-notifier"):
         (env["bindir"] / n).rename(brew / n)
-    run(env, "notify", extra_env={"PATH": f"{env['bindir']}:/usr/bin:/bin", "SG_REPORT_TOOL_DIRS": str(brew),
+    # PATH is the stub dir only, like launchd's lacks Homebrew: a real gh in /usr/bin (GitHub's
+    # Linux runners have one) would otherwise be found first and the fallback never exercised.
+    run(env, "notify", extra_env={"PATH": str(env["bindir"]), "SG_REPORT_TOOL_DIRS": str(brew),
                                   "SG_REPORT_NOW": at(17)})
     assert len(notifications(env)) == 3
 
