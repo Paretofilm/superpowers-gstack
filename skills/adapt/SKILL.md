@@ -214,6 +214,28 @@ then the base tiers for the selected skills and the inferred sensitivity, and as
    `apple-native-review` and `macos-/ios-e2e-scaffold` → `e2e-scaffold`, and
    drops `ios-visual-explore` rows itself.
 
+6. **Local state.** Files git ignores but the project needs (data, local configuration,
+   keys) exist only in the primary checkout, and the `Worktrees and solo landing` block
+   keeps work that needs them out of worktrees. If CLAUDE.md already has a line starting
+   `Local state:` outside the plugin's sections, the script keeps it; do not re-ask.
+   Otherwise list candidates from the primary checkout, leaving out build output and
+   caches (`.build/`, `node_modules/`, `DerivedData/`, `.venv/`, `__pycache__/`, `.gstack/`):
+
+   ```bash
+   git ls-files --others --ignored --exclude-standard --directory
+   ```
+
+   Then ask **once** with `AskUserQuestion`, the candidates in the question:
+
+   > Does this project keep files outside git that its work depends on — data, local settings, keys? They will stay in the main folder only, and work that needs them runs there after landing.
+   >
+   > - **Yes: `<candidates>`** (recommended when any were found) — edit the list under Other if it is wrong.
+   > - **No** — the project has none.
+
+   Pass the answer as `--local-state '<paths>'` or `--local-state none`. The script
+   writes `Local state: …` under `## <project> local state`, a heading the project owns
+   from then on. A run with nobody to answer passes no flag and writes no line.
+
 ### Step 5: Dry run, then ask
 
 ```bash
@@ -221,7 +243,7 @@ SKILL_DIR='<the base directory the Skill tool printed>'
 SCRIPT="$SKILL_DIR/../../scripts/adapt-claude-md.py"
 python3 "$SCRIPT" --dry-run --mkdirs \
   --set 'DOMAIN_SENSITIVITY=<value>' [--set 'IOS_SIMULATOR=<value>' --set 'DEVELOPMENT_TEAM=<value>'] \
-  [--routing-file .gstack/adapt-routing.md] [--no-model-routing]
+  [--routing-file .gstack/adapt-routing.md] [--no-model-routing] [--local-state '<answer>']
 ```
 
 Exit 2 is a refusal with the reason on stderr (`BLOCKED`, `UNRESOLVED PLACEHOLDER`,

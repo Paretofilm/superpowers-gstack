@@ -20,7 +20,10 @@ touches the file, deterministically:
                 fires), sentinel attribution, H3 demotion, `<!-- emitted=N -->`
   7. model      Model Routing: an emitted or table-shaped section is replaced, a
                 user's own is kept
-  8. verify     every removed line the new block does not carry verbatim is
+  8. local      `--local-state` writes the project's `Local state:` line under a
+                heading the project then owns, only when no such line exists
+                outside the managed sections; an existing line is never touched
+  9. verify     every removed line the new block does not carry verbatim is
                 listed, in full, under "Removed (not plugin prose)"
 
 Exit 0: written (or --dry-run completed). Exit 2: refused — nothing written; the
@@ -400,6 +403,7 @@ class Context:
     model_routing: bool
     project: str
     profile: str = "classic"
+    local_state: str | None = None   # --local-state: the answer to adapt's one question, or None
     needed: set[str] = field(default_factory=set)   # placeholders in blocks emitted this run
 
 
@@ -900,6 +904,30 @@ def apply_model_routing(lines: list[str], ctx: Context, report: Report) -> list[
     return _insert_after(lines, section_end(lines, sr[0], sr[1]), new)
 
 
+LOCAL_STATE_RE = re.compile(r"^Local state:\s*\S")
+
+
+def apply_local_state(lines: list[str], ctx: Context, report: Report) -> list[str]:
+    """The project's own `Local state:` line, like `Landing mode:`: it lives outside
+    every managed section, because an upgrade replaces those whole. Written once, under
+    a heading carrying the project's name (no block heading can match it), and never
+    edited again — the line is the project's from then on."""
+    mask = fence_mask(lines)
+    managed = _managed_ranges(lines)
+    present = any(LOCAL_STATE_RE.match(line) and not mask[i] and not any(s <= i < e for s, e in managed)
+                  for i, line in enumerate(lines))
+    if present:
+        report.preserved.append("Local state: the project's line is present, kept as-is"
+                                + (" (--local-state ignored)" if ctx.local_state is not None else ""))
+        return lines
+    if ctx.local_state is None:
+        return lines
+    heading = f"## {ctx.project} local state"
+    report.changes.append(f"Local state: added `Local state: {ctx.local_state}` under `{heading}` "
+                          f"(the project's section from now on; /adapt never edits it)")
+    return _append(lines, [heading, "", f"Local state: {ctx.local_state}"])
+
+
 def merge(text: str | None, ctx: Context) -> tuple[str, Report]:
     report = Report()
     lines = text.split("\n") if text else []
@@ -920,6 +948,7 @@ def merge(text: str | None, ctx: Context) -> tuple[str, Report]:
     for blk in BLOCKS:
         lines = apply_block(lines, blk, ctx, report)
     lines = apply_model_routing(lines, ctx, report)
+    lines = apply_local_state(lines, ctx, report)
     return "\n".join(lines).rstrip("\n") + "\n", report
 
 
@@ -1119,6 +1148,8 @@ def main(argv=None) -> int:
     ap.add_argument("--plugin-version")
     ap.add_argument("--blocks", default=str(DEFAULT_BLOCKS))
     ap.add_argument("--project-name")
+    ap.add_argument("--local-state", metavar="PATHS|none",
+                    help="the project's files outside git, e.g. 'data/, settings.json', or 'none'")
     a = ap.parse_args(argv)
     try:
         project = Path(a.project_dir).expanduser().resolve()
@@ -1130,6 +1161,11 @@ def main(argv=None) -> int:
             raise Refusal(f"USAGE ERROR: --plugin-version must be X.Y.Z, got {version!r} — the header the "
                           f"next run looks for would not match it")
         sets = parse_sets(a.set)
+        local_state = None
+        if a.local_state is not None:
+            local_state = a.local_state.strip()
+            if not local_state or "\n" in local_state or "\r" in local_state or "<!--" in local_state:
+                raise Refusal("USAGE ERROR: --local-state takes one line — the paths git ignores, or `none`")
         pre_notes = Report()
         track = read_track(project, a.track, pre_notes)
         profile = read_workflow(project, pre_notes)
@@ -1169,7 +1205,7 @@ def main(argv=None) -> int:
         ctx = Context(blocks=blocks, version=version, track=track, sets=sets, rescue=set(a.rescue),
                       routing=routing, model_routing=not a.no_model_routing,
                       project=a.project_name or project_name(text or "", project),
-                      profile=profile)
+                      profile=profile, local_state=local_state)
         ctx_skill, content, skill_file = None, None, None
         # the name is needed under every profile: a vibe block removed under classic is
         # compared in its filled-in form

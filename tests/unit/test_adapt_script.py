@@ -1138,3 +1138,44 @@ def test_a_project_title_with_yaml_punctuation_gives_a_valid_description(tmp_pat
     assert value == ("Project knowledge for Acme: Billing #2 — architecture, domain truths, pitfalls, findings, "
                      "how to run and test, and the working rules. Load before planning or changing Acme: Billing #2.")
     assert len(value.split()) < 40 and "{{" not in text
+
+
+# --- Local state: the project's own line, written once (3.8.0) -----------------------
+
+def test_local_state_is_written_once_under_a_heading_the_project_owns(tmp_path):
+    proj = project(tmp_path, "# Kvitt\n\nSome notes.\n")
+    p = run(proj, *WEB_SETS, "--local-state", "data/, kvitteriai.json")
+    text = (proj / "CLAUDE.md").read_text()
+    assert "## Kvitt local state\n\nLocal state: data/, kvitteriai.json\n" in text
+    assert any(c.startswith("Local state: added") for c in last_json(p)["changes"])
+    p = run(proj, *WEB_SETS, "--local-state", "something else")
+    assert (proj / "CLAUDE.md").read_text() == text, "an existing line is the project's"
+    assert any("Local state: the project's line is present" in s for s in last_json(p)["preserved"])
+
+
+def test_a_local_state_line_under_the_projects_own_heading_is_kept(tmp_path):
+    proj = project(tmp_path, "# Kvitt\n\n## Kommandoer\n\nLocal state: data/\n")
+    run(proj, *WEB_SETS, "--local-state", "none")
+    text = (proj / "CLAUDE.md").read_text()
+    assert re.findall(r"^Local state:.*$", text, re.M) == ["Local state: data/"]
+    assert "local state\n\nLocal state" not in text
+
+
+def test_a_local_state_line_inside_a_fence_or_a_managed_section_does_not_count(tmp_path):
+    proj = project(tmp_path, "# Kvitt\n\n```\nLocal state: data/\n```\n")
+    run(proj, *WEB_SETS, "--local-state", "none")
+    assert "## Kvitt local state\n\nLocal state: none\n" in (proj / "CLAUDE.md").read_text()
+
+
+def test_without_the_flag_no_local_state_line_is_written(tmp_path):
+    proj = project(tmp_path)
+    run(proj, *WEB_SETS)
+    assert not re.search(r"^Local state:", (proj / "CLAUDE.md").read_text(), re.M)
+
+
+@pytest.mark.parametrize("value", ["", "   ", "a\nb", "x <!-- y"])
+def test_a_bad_local_state_value_refuses_and_writes_nothing(tmp_path, value):
+    proj = project(tmp_path)
+    p = run(proj, *WEB_SETS, "--local-state", value, expect=2)
+    assert "USAGE ERROR" in p.stderr
+    assert not (proj / "CLAUDE.md").exists()

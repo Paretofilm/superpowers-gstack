@@ -1,4 +1,4 @@
-## Worktrees and solo landing <!-- gstack-worktrunk-v2 -->
+## Worktrees and solo landing <!-- gstack-worktrunk-v3 -->
 
 Work on a branch in its own worktree, and land it on `main` with one command when nobody else reviews this repository. This is what makes a solo developer's day faster: no branch switching, no stash, no pull request to wait for.
 
@@ -7,4 +7,5 @@ Work on a branch in its own worktree, and land it on `main` with one command whe
 - **`solo`:** land with `/superpowers-gstack:land`. It runs the project's own pre-merge checks, fast-forwards `main`, pushes, and reports the CI run for the pushed commit. **`pr`:** use `/ship`.
 - **The checks are the safety net that replaces the pull request, so never skip them.** No `--no-hooks`, no `--yes`. A red check is fixed, not bypassed. A project without a `pre-merge` hook in `.config/wt.toml` cannot land solo: propose one that runs the same commands as CI, and let the user approve it with `wt config approvals add`.
 - **Handoff files live in the primary checkout,** not in a worktree. A worktree is removed after landing and takes its untracked files with it.
+- **Files outside git live only in the primary checkout.** Data, local configuration and keys that git ignores exist there and nowhere else. Work that needs them runs in a session started in the primary checkout after landing: `git pull --ff-only` and the build there first. Never copy them into a worktree or link to them from one. A copy splits state that must stay one, and a `.gitignore` pattern with a trailing slash (`data/`) matches only a directory, not a symlink of the same name, so `git add` can stage the link. The project names this state once, on its own line reading `Local state: <paths>` or `Local state: none`, outside this section, under a heading the project owns. If the line is missing, ask the user once whether the project keeps such files, and write the answer there.
 - **After landing,** leave the worktree first (`ExitWorktree` with `keep`), then `wt remove <branch>`. Removing the folder a session stands in leaves the session with no working directory.

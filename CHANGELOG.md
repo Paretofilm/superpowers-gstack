@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.8.0] - 2026-10-09
+
+**Files outside git live only in the primary checkout. Each project names them once, on its own `Local state:` line.**
+
+Source: KvitteriAi, 2026-10-09. Its data (`data/`, `bankutskrifter/`, `kvitteriai.json`) is ignored by git and exists only in the main folder, so work on real data runs there, after landing. Two traps made that a rule:
+- **Copy:** a copy in a worktree splits state that must stay one.
+- **Symlink:** a link named `data` is not matched by the `.gitignore` pattern `data/`, which matches only directories, so `git add` stages the link.
+
+### Changed
+- **`Worktrees and solo landing` block (`gstack-worktrunk-v3`).** It gains one rule. Data, local configuration and keys that git ignores live only in the primary checkout. Work that needs them runs in a session started there after landing, with `git pull --ff-only` and the build first. Such files are never copied into a worktree or linked from one. The project's `Local state: <paths>` or `Local state: none` line sits outside the section, under a heading the project owns. If the line is missing, the agent asks once.
+- **`/superpowers-gstack:adapt` asks once.** Step 4 lists candidates with `git ls-files --others --ignored --exclude-standard --directory`, leaving out build output and caches, and asks whether the project keeps such files.
+- **`adapt-claude-md.py` writes the line once.** The answer goes in through `--local-state '<paths>|none'`. The script writes the line under `## <project> local state` only when no `Local state:` line exists outside the managed sections and code fences. An existing line is kept and never edited, and a value of more than one line is refused.
+- **This repo's own line:** `Local state: .update-state.json`.
+
+### Lint
+- E7 denylist: `gstack-worktrunk-v2`.
+
 ## [3.7.0] - 2026-10-08
 
 **Maintainer report inbox: every report the pipeline produces is listed at session start and reminded about daily at 17:00 until its link is clicked.**

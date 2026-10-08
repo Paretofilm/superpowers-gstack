@@ -14,13 +14,25 @@ BLOCK = REPO / "skills" / "adapt" / "blocks" / "worktrunk.md"
 
 def test_heading_carries_the_marker_and_the_file_ends_with_newline():
     text = BLOCK.read_text()
-    assert re.match(r"^## Worktrees and solo landing <!-- gstack-worktrunk-v2 -->\n", text)
+    assert re.match(r"^## Worktrees and solo landing <!-- gstack-worktrunk-v3 -->\n", text)
     assert text.endswith("\n")
 
 
 def test_block_never_holds_the_parsable_mode_line():
     for line in BLOCK.read_text().splitlines():
         assert not re.match(r"^Landing mode: (solo|pr)$", line), f"reset-on-upgrade trap: {line!r}"
+        assert not re.match(r"^Local state:", line), f"reset-on-upgrade trap: {line!r}"
+
+
+def test_files_outside_git_stay_in_the_primary_checkout():
+    """3.8.0 (from KvitteriAi, 2026-10-09): a copy splits state that must be one, and
+    `data/` in .gitignore does not match a symlink named data, so git add stages it."""
+    text = " ".join(BLOCK.read_text().split())
+    assert "Files outside git live only in the primary checkout" in text
+    assert "git pull --ff-only" in text
+    assert "Never copy them into a worktree or link to them from one" in text
+    assert "matches only a directory, not a symlink" in text
+    assert "`Local state: <paths>` or `Local state: none`" in text
 
 
 def test_block_forbids_the_shortcuts_the_gate_depends_on():
