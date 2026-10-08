@@ -8,19 +8,40 @@ Three `model-review` issues (#64, #89, #90) sat unread for a month. The only rem
 
 ### Added
 - **`scripts/report-inbox.py`.** Keeps an inbox of open `notification` and `model-review` issues, `auto-repair` PRs, and files in `~/.claude/superpowers-gstack/reports/`. Auto-update PRs are left out because their `notification` issue already links them.
-  - GitHub is queried at most once an hour, with the three calls run in parallel inside the SessionStart budget.
-  - An outage keeps the previous list, and a closed issue drops out.
-  - State lives in `~/.claude/superpowers-gstack/report-inbox.json`, written atomically under a lock.
+  - **GitHub is fetched at most once an hour, and never inside the SessionStart hook.** A stale inbox is refreshed by a detached `collect`, so the hook only reads local state. In review, the first version stalled for 30 s on a hanging `gh` whose child held the output pipe. `gh` now runs in its own process group and is killed together with its children.
+  - **Fetches can't pile up or repeat after a kill.** Each fetch is claimed under the lock before any network call, so a killed run still backs off and two sessions starting together fetch once.
+  - **The inbox doesn't lose reports.**
+    - An outage, a partly failed fetch, or a full page (200 rows per label) keeps the previous list.
+    - A closed issue drops out.
+    - A local report file that changes after it was read becomes unread again.
+    - Report ids include a hash of the filename, so `Rapport å.md` and `Rapport ø.md` do not collide.
+  - **Titles are made safe.** They are cut to one line with control characters removed, and capped at 120 characters, before they reach the terminal or the agent's context.
+  - **Silence means "all read", never "broken".** The banner warns when GitHub has not been reached for three days. It also flags a click tracker that is missing or points at another copy of the script.
+  - **The banner stays out of compaction.** It is skipped on `compact`, so a long autonomous run is not interrupted.
+  - **State** lives in `~/.claude/superpowers-gstack/report-inbox.json`, written atomically under a lock with `fsync`.
 - **Click-to-mark-read.** Each report's link is `http://127.0.0.1:47817/seen/<id>`. A launchd agent in inetd mode starts one short process per click, so nothing stays resident. The process marks the report read, then redirects to the issue or serves the local file.
-  - Only ids that are in the inbox are accepted.
-  - It only redirects to the URL stored for that id.
-  - A foreign `Host` header is refused (a guard against DNS rebinding).
+  - It only marks a report read on a user's click. Requests are refused (403) when they:
+    - carry a foreign `Host` header (a guard against DNS rebinding)
+    - carry any `Sec-Fetch-Site` other than `none`
+    - name another page in `Referer` or `Origin`
+    - are a prefetch or prerender
   - `HEAD` never marks a report read.
-- **Daily reminder.** A second launchd agent runs `report-inbox.py notify` at 17:00: one `terminal-notifier` notification per unread report (at most 5), at most once per calendar day. A run missed while the Mac sleeps happens at wake.
+  - Only ids that are in the inbox are accepted. A request only redirects to the URL stored for its id.
+  - Local reports are served with `Content-Security-Policy: sandbox`, so a script inside one cannot use the server. A symlink out of the reports directory is refused.
+  - An idle connection is dropped after 10 s.
+- **Daily reminder.** A second launchd agent runs `report-inbox.py notify` at 17:00.
+  - It sends one `terminal-notifier` notification per unread report: newest first, at most 5, the last one counting the rest.
+  - It sends once per 17:00 slot. A run missed while the Mac slept happens at wake and counts toward the previous evening's slot, so it does not cancel today's.
+  - A failing `terminal-notifier` falls back to `osascript`.
+  - Tools are looked up in Homebrew's directories too, because launchd's `PATH` lacks them.
 
 ### Changed
 - `notify-pending-updates.sh` is now a thin wrapper around `report-inbox.py banner` and deletes its old 24-hour cache. Existing `settings.json` entries keep working unchanged.
-- `setup-hooks.sh` installs and loads both launchd agents. `--uninstall-report-inbox` removes them. It refuses to run from a linked worktree, because the agents store absolute paths.
+- `setup-hooks.sh` installs and loads both launchd agents, which `report-inbox.py write-plists` generates; labels, port and paths live in one place. `--uninstall-report-inbox` removes the agents.
+  - It refuses to run from a linked worktree, the plugin cache, or a directory outside git, because the agents store absolute paths.
+
+### Known
+- The agents run `report-inbox.py` from the primary checkout. Checking out a branch there runs that branch's copy at 17:00 and on every click. The banner flags a tracker that points elsewhere, but not a different version of the same file.
 
 ## [3.6.2] - 2026-10-07
 

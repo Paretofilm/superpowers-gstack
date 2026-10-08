@@ -43,7 +43,22 @@ if [ "${1:-}" = "--uninstall-report-inbox" ]; then
   exit 0
 fi
 
-if [ "$(git -C "$REPO_DIR" rev-parse --git-dir 2>/dev/null)" != "$(git -C "$REPO_DIR" rev-parse --git-common-dir 2>/dev/null)" ]; then
+# The agents store absolute paths, so they must point at a checkout that stays put:
+# not a linked worktree (removed after landing), not the plugin cache (replaced on
+# every plugin update), not a directory outside git at all.
+case "$REPO_DIR" in
+  "$HOME/.claude/plugins/"*)
+    echo "Error: $REPO_DIR is the plugin cache, which plugin updates replace."
+    echo "       Run this from your clone of superpowers-gstack."
+    exit 1 ;;
+esac
+GIT_DIR_PATH="$(git -C "$REPO_DIR" rev-parse --git-dir 2>/dev/null || true)"
+GIT_COMMON_PATH="$(git -C "$REPO_DIR" rev-parse --git-common-dir 2>/dev/null || true)"
+if [ -z "$GIT_DIR_PATH" ]; then
+  echo "Error: $REPO_DIR is not a git checkout. Run this from your clone of superpowers-gstack."
+  exit 1
+fi
+if [ "$GIT_DIR_PATH" != "$GIT_COMMON_PATH" ]; then
   echo "Error: $REPO_DIR is a linked worktree. Run this from the primary checkout —"
   echo "       the launchd agents store absolute paths and a worktree is removed after landing."
   exit 1
@@ -108,26 +123,10 @@ if [ "$(uname)" != "Darwin" ]; then
   echo "Not macOS: skipped the 17:00 reminder and click tracking."
   exit 0
 fi
-mkdir -p "$AGENTS_DIR" "$HOME/Library/Logs"
-python3 - "$AGENTS_DIR" "$INBOX_SCRIPT" "$HOME/Library/Logs/sg-report-inbox.log" << 'PYEOF'
-import plistlib, sys
-agents_dir, script, log = sys.argv[1:4]
-common = {"StandardErrorPath": log, "StandardOutPath": log, "ProcessType": "Background",
-          # launchd's default PATH lacks Homebrew, where gh and terminal-notifier live.
-          "EnvironmentVariables": {"PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"}}
-notify = dict(common, Label="com.paretofilm.sg-report-notify",
-              ProgramArguments=["/usr/bin/python3", script, "notify"],
-              StartCalendarInterval={"Hour": 17, "Minute": 0})
-# inetd mode: stdin/stdout are the accepted connection, so stdout must not go to the log.
-seen = {"Label": "com.paretofilm.sg-report-seen", "StandardErrorPath": log, "ProcessType": "Background",
-        "ProgramArguments": ["/usr/bin/python3", script, "serve-one"],
-        "inetdCompatibility": {"Wait": False},
-        "Sockets": {"Listener": {"SockNodeName": "127.0.0.1", "SockServiceName": "47817",
-                                 "SockType": "stream", "SockFamily": "IPv4"}}}
-for spec in (notify, seen):
-    with open(f"{agents_dir}/{spec['Label']}.plist", "wb") as f:
-        plistlib.dump(spec, f)
-PYEOF
+mkdir -p "$HOME/Library/Logs"
+# report-inbox.py owns the labels, port, paths and launchd PATH; LABELS above must match
+# (tests/unit/test_report_inbox.py checks it).
+/usr/bin/python3 "$INBOX_SCRIPT" write-plists "$AGENTS_DIR" "$HOME/Library/Logs/sg-report-inbox.log" >/dev/null
 unload_agents
 for label in "${LABELS[@]}"; do
   # bootout returns before launchd has finished tearing down, and a bootstrap that
@@ -138,6 +137,6 @@ for label in "${LABELS[@]}"; do
     sleep 1
   done
 done
-echo "Loaded: daily reminder at 17:00 and click tracking on http://127.0.0.1:47817"
+echo "Loaded: daily reminder at 17:00 and click tracking on 127.0.0.1 (agents: ${LABELS[*]})"
 echo "Tip: System Settings → Notifications → terminal-notifier → Alerts keeps the reminder on screen until clicked."
 command -v terminal-notifier >/dev/null 2>&1 || echo "Note: install terminal-notifier (brew install terminal-notifier) for clickable reminders."
