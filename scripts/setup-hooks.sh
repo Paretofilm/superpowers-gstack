@@ -112,7 +112,9 @@ mkdir -p "$AGENTS_DIR" "$HOME/Library/Logs"
 python3 - "$AGENTS_DIR" "$INBOX_SCRIPT" "$HOME/Library/Logs/sg-report-inbox.log" << 'PYEOF'
 import plistlib, sys
 agents_dir, script, log = sys.argv[1:4]
-common = {"StandardErrorPath": log, "StandardOutPath": log, "ProcessType": "Background"}
+common = {"StandardErrorPath": log, "StandardOutPath": log, "ProcessType": "Background",
+          # launchd's default PATH lacks Homebrew, where gh and terminal-notifier live.
+          "EnvironmentVariables": {"PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"}}
 notify = dict(common, Label="com.paretofilm.sg-report-notify",
               ProgramArguments=["/usr/bin/python3", script, "notify"],
               StartCalendarInterval={"Hour": 17, "Minute": 0})
@@ -128,7 +130,13 @@ for spec in (notify, seen):
 PYEOF
 unload_agents
 for label in "${LABELS[@]}"; do
-  launchctl bootstrap "$DOMAIN" "$AGENTS_DIR/$label.plist"
+  # bootout returns before launchd has finished tearing down, and a bootstrap that
+  # follows at once fails with "5: Input/output error" — retry briefly.
+  for attempt in 1 2 3 4 5; do
+    launchctl bootstrap "$DOMAIN" "$AGENTS_DIR/$label.plist" 2>/dev/null && break
+    [ "$attempt" = 5 ] && { echo "Error: could not load $label (launchctl bootstrap failed 5 times)"; exit 1; }
+    sleep 1
+  done
 done
 echo "Loaded: daily reminder at 17:00 and click tracking on http://127.0.0.1:47817"
 echo "Tip: System Settings → Notifications → terminal-notifier → Alerts keeps the reminder on screen until clicked."

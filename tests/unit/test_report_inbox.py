@@ -87,8 +87,8 @@ def install_tracker(env):
     (agents / "com.paretofilm.sg-report-seen.plist").write_text("x")
 
 
-def http(env, path, method="GET", host=f"127.0.0.1:{PORT}"):
-    req = f"{method} {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: t\r\n\r\n".encode()
+def http(env, path, method="GET", host=f"127.0.0.1:{PORT}", extra=""):
+    req = f"{method} {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: t\r\n{extra}\r\n".encode()
     out = run(env, "serve-one", stdin=req)
     head, _, body = out.partition(b"\r\n\r\n")
     lines = head.decode().split("\r\n")
@@ -221,6 +221,16 @@ def test_foreign_host_header_is_refused(env):
     status, _, _ = http(env, "/seen/gh-issue-90", host=f"evil.example:{PORT}")
     assert status == 403
     assert "gh-issue-90" not in state(env)["seen"]
+
+
+def test_cross_site_request_cannot_mark_read(env):
+    """Another page's <img src=...> carries the right Host; Sec-Fetch-Site gives it away."""
+    run(env, "collect")
+    status, _, _ = http(env, "/seen/gh-issue-90", extra="Sec-Fetch-Site: cross-site\r\n")
+    assert status == 403
+    assert "gh-issue-90" not in state(env)["seen"]
+    status, _, _ = http(env, "/seen/gh-issue-90", extra="Sec-Fetch-Site: none\r\n")
+    assert status == 302 and "gh-issue-90" in state(env)["seen"]
 
 
 def test_local_report_is_served_and_marked_read(env):

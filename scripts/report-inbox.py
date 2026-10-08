@@ -115,9 +115,20 @@ def detect_repo():
     return m.group(1) if m else DEFAULT_REPO
 
 
+def find_tool(name):
+    """launchd runs agents with PATH=/usr/bin:/bin:/usr/sbin:/sbin — look where Homebrew installs too."""
+    found = shutil.which(name)
+    if found:
+        return found
+    for d in ("/opt/homebrew/bin", "/usr/local/bin"):
+        if os.access(os.path.join(d, name), os.X_OK):
+            return os.path.join(d, name)
+    return None
+
+
 def fetch_github(repo):
     """Return {id: item} for every open report on GitHub, or None if any call failed."""
-    gh = shutil.which("gh")
+    gh = find_tool("gh")
     if not gh:
         return None
     procs = []
@@ -250,8 +261,7 @@ def cmd_banner():
 
 
 def notify_one(title, message, url, group):
-    tn = shutil.which("terminal-notifier") or ("/opt/homebrew/bin/terminal-notifier"
-                                                 if os.path.exists("/opt/homebrew/bin/terminal-notifier") else None)
+    tn = find_tool("terminal-notifier")
     if tn:
         subprocess.run([tn, "-title", title, "-message", message, "-open", url, "-group", group],
                        capture_output=True, timeout=15)
@@ -317,6 +327,11 @@ def cmd_serve_one(stdin=None, stdout=None):
     # Only answer requests addressed to this host: a page that rebinds its own DNS
     # name to 127.0.0.1 would otherwise be able to read local reports.
     if headers.get("host", "") not in (f"127.0.0.1:{PORT}", f"localhost:{PORT}"):
+        return http_response(out, 403)
+    # A link clicked in the terminal or a notification is a top-level navigation the
+    # browser marks Sec-Fetch-Site: none. Another site's <img src=…> would carry the
+    # right Host too, but says cross-site — it must not be able to mark reports read.
+    if headers.get("sec-fetch-site", "none") not in ("none", "same-origin"):
         return http_response(out, 403)
     if method not in ("GET", "HEAD"):
         return http_response(out, 405, {"Allow": "GET, HEAD"})
