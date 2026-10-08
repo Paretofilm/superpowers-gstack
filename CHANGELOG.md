@@ -1,5 +1,27 @@
 # Changelog
 
+## [3.7.0] - 2026-10-08
+
+**Maintainer report inbox: every report the pipeline produces is listed at session start and reminded about daily at 17:00 until its link is clicked.**
+
+Three `model-review` issues (#64, #89, #90) sat unread for a month. The only reminder, `notify-pending-updates.sh`, looked at the `notification` label alone, cached its answer for 24 hours, and could not tell read from unread.
+
+### Added
+- **`scripts/report-inbox.py`.** Keeps an inbox of open `notification` and `model-review` issues, `auto-repair` PRs, and files in `~/.claude/superpowers-gstack/reports/`. Auto-update PRs are left out because their `notification` issue already links them.
+  - GitHub is queried at most once an hour, with the three calls run in parallel inside the SessionStart budget.
+  - An outage keeps the previous list, and a closed issue drops out.
+  - State lives in `~/.claude/superpowers-gstack/report-inbox.json`, written atomically under a lock.
+- **Click-to-mark-read.** Each report's link is `http://127.0.0.1:47817/seen/<id>`. A launchd agent in inetd mode starts one short process per click, so nothing stays resident. The process marks the report read, then redirects to the issue or serves the local file.
+  - Only ids that are in the inbox are accepted.
+  - It only redirects to the URL stored for that id.
+  - A foreign `Host` header is refused (a guard against DNS rebinding).
+  - `HEAD` never marks a report read.
+- **Daily reminder.** A second launchd agent runs `report-inbox.py notify` at 17:00: one `terminal-notifier` notification per unread report (at most 5), at most once per calendar day. A run missed while the Mac sleeps happens at wake.
+
+### Changed
+- `notify-pending-updates.sh` is now a thin wrapper around `report-inbox.py banner` and deletes its old 24-hour cache. Existing `settings.json` entries keep working unchanged.
+- `setup-hooks.sh` installs and loads both launchd agents. `--uninstall-report-inbox` removes them. It refuses to run from a linked worktree, because the agents store absolute paths.
+
 ## [3.6.2] - 2026-10-07
 
 **`/superpowers-gstack:spec-drift` re-pinned to gstack 1.91.33's Step 8, with the overrides re-read against it. None needed changing.**

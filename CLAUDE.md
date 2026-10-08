@@ -39,7 +39,7 @@ A GitHub Action (`.github/workflows/check-updates.yml`) runs weekly and:
 
 A **separate, independent** `check-models` job (`scripts/check-new-models.py`) queries the Anthropic `/v1/models` API and compares it, per tier, against the model IDs `skills/adapt/model-routing.md` references. When a newer model ships (e.g. Sonnet 5 on 2026-06-30), it opens a `model-review` issue — it never edits model IDs or feeds the auto-edit job, because model IDs are pinned snapshots with behaviour differences and adopting one is a human review call, not an auto-merge. Detection is stateless (version-tuple compare, unparseable/preview IDs skipped) and idempotent (won't re-open an issue already covering the model). The job self-tests its detection logic in CI before the live query.
 
-The plugin ships a SessionStart hook (`hooks/hooks.json` → `scripts/check-plugin-version.sh`) that nudges `/adapt` when a project's generated CLAUDE.md lags the installed plugin version — every plugin user gets it automatically, and it exempts this repo. A second, maintainer-only hook (`scripts/notify-pending-updates.sh`, surfaces pending auto-update PRs) is opt-in via `./scripts/setup-hooks.sh`.
+The plugin ships a SessionStart hook (`hooks/hooks.json` → `scripts/check-plugin-version.sh`) that nudges `/adapt` when a project's generated CLAUDE.md lags the installed plugin version — every plugin user gets it automatically, and it exempts this repo. A second, maintainer-only hook (`scripts/notify-pending-updates.sh` → `scripts/report-inbox.py`, lists unread reports with click-to-mark-read links, plus a daily 17:00 reminder) is opt-in via `./scripts/setup-hooks.sh`.
 
 Since 2.50.0 the plugin also ships a session-continuity hook pair: `scripts/capture-session-tail.sh` (SessionEnd) deterministically salvages the last user/assistant exchange plus a git snapshot into `<git-dir>/gstack-last-session.md` when a session ends — including `/clear`, where no model is available to write a handoff — and `scripts/session-resume.sh` (SessionStart, matcher `startup|clear`) prints a "Where this project left off" banner from `progress.md`, a complete `handoff.md`, and that capture, before the user types anything. Both are read-only toward `handoff.md` (classification/consumption stays with the Session Continuity rules below), silent when the sources are absent, and active only in repos with a `docs/superpowers/` directory.
 
@@ -76,10 +76,17 @@ Install via marketplace (in Claude Code):
 ```
 
 The version-check hook is shipped by the plugin — no setup needed. For the
-maintainer-only update-notification hook (optional, after cloning the repo):
+maintainer-only report inbox (optional, after cloning the repo; run it from the
+primary checkout, not a worktree):
 ```bash
-./scripts/setup-hooks.sh      # Add the notify-pending-updates SessionStart hook
+./scripts/setup-hooks.sh      # SessionStart hook + 17:00 reminder + click tracking (macOS launchd)
+./scripts/setup-hooks.sh --uninstall-report-inbox   # remove the two launchd agents
 ```
+The inbox (`scripts/report-inbox.py`) holds every open `notification` / `model-review`
+issue, `auto-repair` PR, and file in `~/.claude/superpowers-gstack/reports/`. Each
+unread report is listed at session start and gets one macOS notification a day at
+17:00; its link (`http://127.0.0.1:47817/seen/<id>`) opens the report and marks it
+read. A future report only has to land in one of those places to be delivered.
 If you previously ran an older `setup-hooks.sh` that installed the version-check
 hook into `~/.claude/settings.json`, remove that entry — the plugin now ships it,
 so the settings.json copy causes a double nag. (`setup-hooks.sh` warns if it sees one.)
