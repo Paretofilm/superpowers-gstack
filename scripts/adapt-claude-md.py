@@ -937,10 +937,13 @@ def apply_local_state(lines: list[str], ctx: Context, report: Report) -> list[st
         def has_value(i: int) -> bool:
             if lines[i][len("Local state:"):].strip():
                 return True
-            nxt = next((l.strip() for l in lines[i + 1:] if l.strip()), "")
-            return bool(re.match(r"([-*+]|\d+[.)])\s", nxt))
-        if not any(has_value(i) for i in found):
-            report.notes.append("`Local state:` has no value on its own line and no list below it: "
+            # The first non-blank line below, if it is a list item of the project's own
+            # text: not fenced, not managed, not an indented code block (4+ spaces).
+            j = next((j for j in range(i + 1, len(lines)) if lines[j].strip()), None)
+            return (j is not None and not mask[j] and not any(s <= j < e for s, e in managed)
+                    and bool(re.match(r" {0,3}([-*+]|\d+[.)])\s", lines[j])))
+        if not all(has_value(i) for i in found):
+            report.notes.append("a `Local state:` label has no value on its own line and no list below it: "
                                 "write the paths there, or `none`")
         return lines
     if ctx.local_state is None:

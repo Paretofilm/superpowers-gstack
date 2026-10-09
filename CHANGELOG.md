@@ -12,6 +12,7 @@ Found by a cross-model benchmark on the 3.8.0 diff (`/benchmark-models`: Claude,
 ### Tests
 - A `Local state:` line inside a managed section does not count (the old test promised fences and managed sections but covered only fences; it is renamed to what it tests).
 - A bare label with a list below is kept, with no note; a bare label alone gets the note.
+- Third lens (GLM-5.3): the look-below for a list skips fenced code, managed sections and indented code (4+ spaces), and a bare leftover beside a filled line still gets the note.
 
 ## [3.8.0] - 2026-10-09
 

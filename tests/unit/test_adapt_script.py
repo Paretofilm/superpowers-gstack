@@ -1199,6 +1199,21 @@ def test_any_markdown_list_below_a_bare_label_is_a_value(tmp_path, item):
     assert not any("no value" in n for n in last_json(p)["notes"])
 
 
+@pytest.mark.parametrize("below", ["    - data/\n", "```\n- data/\n```\n"])
+def test_a_list_in_code_below_a_bare_label_is_not_a_value(tmp_path, below):
+    """Third lens: the look-below skipped the fence and indented-code guards."""
+    proj = project(tmp_path, f"# Kvitt\n\n## Kommandoer\n\nLocal state:\n\n{below}")
+    p = run(proj, *WEB_SETS)
+    assert any("no value on its own line" in n for n in last_json(p)["notes"])
+
+
+def test_a_bare_leftover_beside_a_filled_line_still_gets_the_note(tmp_path):
+    """Third lens: one filled line used to silence the note for a bare leftover."""
+    proj = project(tmp_path, "# Kvitt\n\n## A\n\nLocal state: data/\n\n## B\n\nLocal state:\n")
+    p = run(proj, *WEB_SETS)
+    assert any("no value on its own line" in n for n in last_json(p)["notes"])
+
+
 def test_an_empty_local_state_label_alone_gets_a_note(tmp_path):
     proj = project(tmp_path, "# Kvitt\n\n## Kommandoer\n\nLocal state:\n")
     p = run(proj, *WEB_SETS)
