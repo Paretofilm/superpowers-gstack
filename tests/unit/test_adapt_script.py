@@ -1161,10 +1161,48 @@ def test_a_local_state_line_under_the_projects_own_heading_is_kept(tmp_path):
     assert "local state\n\nLocal state" not in text
 
 
-def test_a_local_state_line_inside_a_fence_or_a_managed_section_does_not_count(tmp_path):
+def test_a_local_state_line_inside_a_fence_does_not_count(tmp_path):
     proj = project(tmp_path, "# Kvitt\n\n```\nLocal state: data/\n```\n")
     run(proj, *WEB_SETS, "--local-state", "none")
     assert "## Kvitt local state\n\nLocal state: none\n" in (proj / "CLAUDE.md").read_text()
+
+
+def test_a_local_state_line_inside_a_managed_section_does_not_count(tmp_path):
+    """The plugin owns a managed section, so a line there is not the project's."""
+    proj = project(tmp_path)
+    run(proj, *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    marker = "<!-- gstack-worktrunk-v3 -->"
+    at = text.index("\n", text.index(marker))
+    (proj / "CLAUDE.md").write_text(text[:at] + "\n\nLocal state: data/\n" + text[at:])
+    run(proj, *WEB_SETS, "--local-state", "none")
+    text = (proj / "CLAUDE.md").read_text()
+    assert "local state\n\nLocal state: none\n" in text
+
+
+def test_a_bare_local_state_label_with_a_list_below_counts_as_the_line(tmp_path):
+    """Benchmark lenses (Claude, GPT): `^Local state:\\s*\\S` missed a label whose paths
+    follow as a list, and the next run added a second, conflicting line."""
+    proj = project(tmp_path, "# Kvitt\n\n## Kommandoer\n\nLocal state:\n- data/\n- kvitteriai.json\n")
+    p = run(proj, *WEB_SETS, "--local-state", "none")
+    text = (proj / "CLAUDE.md").read_text()
+    assert re.findall(r"^Local state:.*$", text, re.M) == ["Local state:"]
+    assert "local state\n\n" not in text
+    assert any("Local state: the project's line is present" in s for s in last_json(p)["preserved"])
+    assert not any("no value" in n for n in last_json(p)["notes"]), "a list below is fine, no nag"
+
+
+@pytest.mark.parametrize("item", ["+ data/", "1. data/", "2) data/"])
+def test_any_markdown_list_below_a_bare_label_is_a_value(tmp_path, item):
+    proj = project(tmp_path, f"# Kvitt\n\n## Kommandoer\n\nLocal state:\n\n{item}\n")
+    p = run(proj, *WEB_SETS)
+    assert not any("no value" in n for n in last_json(p)["notes"])
+
+
+def test_an_empty_local_state_label_alone_gets_a_note(tmp_path):
+    proj = project(tmp_path, "# Kvitt\n\n## Kommandoer\n\nLocal state:\n")
+    p = run(proj, *WEB_SETS)
+    assert any("no value on its own line" in n for n in last_json(p)["notes"])
 
 
 def test_without_the_flag_no_local_state_line_is_written(tmp_path):

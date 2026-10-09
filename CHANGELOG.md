@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.8.1] - 2026-10-09
+
+**A bare `Local state:` label counts as the project's line.**
+
+Found by a cross-model benchmark on the 3.8.0 diff (`/benchmark-models`: Claude, GPT and Gemini). Claude and GPT both caught it; Claude alone caught the test gap.
+
+### Fixed
+- **`adapt-claude-md.py` recognised the line only with a value on the same line** (`^Local state:\s*\S`). A project that wrote `Local state:` with its paths as a list below got a second heading and a second, conflicting line on the next `--local-state` run. The bare label now counts. When it has no value and no list below it, the report carries a note asking for the paths or `none`.
+
+### Tests
+- A `Local state:` line inside a managed section does not count (the old test promised fences and managed sections but covered only fences; it is renamed to what it tests).
+- A bare label with a list below is kept, with no note; a bare label alone gets the note.
+
 ## [3.8.0] - 2026-10-09
 
 **Files outside git live only in the primary checkout. Each project names them once, on its own `Local state:` line.**

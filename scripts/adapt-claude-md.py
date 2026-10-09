@@ -904,7 +904,8 @@ def apply_model_routing(lines: list[str], ctx: Context, report: Report) -> list[
     return _insert_after(lines, section_end(lines, sr[0], sr[1]), new)
 
 
-LOCAL_STATE_RE = re.compile(r"^Local state:\s*\S")
+# The bare label counts: a project may list its paths on the lines below it.
+LOCAL_STATE_RE = re.compile(r"^Local state:")
 
 
 def linked_worktree(project: Path) -> bool:
@@ -927,11 +928,20 @@ def apply_local_state(lines: list[str], ctx: Context, report: Report) -> list[st
     edited again — the line is the project's from then on."""
     mask = fence_mask(lines)
     managed = _managed_ranges(lines)
-    present = any(LOCAL_STATE_RE.match(line) and not mask[i] and not any(s <= i < e for s, e in managed)
-                  for i, line in enumerate(lines))
-    if present:
+    found = [i for i, line in enumerate(lines)
+             if LOCAL_STATE_RE.match(line) and not mask[i] and not any(s <= i < e for s, e in managed)]
+    if found:
         report.preserved.append("Local state: the project's line is present, kept as-is"
                                 + (" (--local-state ignored)" if ctx.local_state is not None else ""))
+
+        def has_value(i: int) -> bool:
+            if lines[i][len("Local state:"):].strip():
+                return True
+            nxt = next((l.strip() for l in lines[i + 1:] if l.strip()), "")
+            return bool(re.match(r"([-*+]|\d+[.)])\s", nxt))
+        if not any(has_value(i) for i in found):
+            report.notes.append("`Local state:` has no value on its own line and no list below it: "
+                                "write the paths there, or `none`")
         return lines
     if ctx.local_state is None:
         return lines
