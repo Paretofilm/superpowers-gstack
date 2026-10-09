@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.9.0] - 2026-10-09
+
+**The checks before landing run without local state, as CI does. A check that needs it gets committed stand-ins or runs after landing.**
+
+Found by the same `/benchmark-models` run as 3.8.1: Gemini read the 3.8.0 rule as a trap. The pre-merge checks run in the worktree, where the files git ignores do not exist, so a check that needs them could never pass. The answer is not an exception: the pre-merge hook mirrors CI, and CI runs on a fresh clone without those files, so such a check is already broken there. An exception for "test configuration" would reopen both traps the rule closes (split state, a symlink `git add` stages).
+
+### Changed
+- **`Worktrees and solo landing` block (`gstack-worktrunk-v4`).** The rule on files outside git gains one sentence: the checks before landing run without these files, exactly as CI does on a fresh clone. A check that needs them gets committed stand-ins (an `.env.example`, a fixture under `tests/`), or runs in the primary-checkout session after landing.
+
+### Lint
+- E7 denylist: `gstack-worktrunk-v3`.
+
 ## [3.8.1] - 2026-10-09
 
 **A bare `Local state:` label counts as the project's line.**

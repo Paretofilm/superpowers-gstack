@@ -14,7 +14,7 @@ BLOCK = REPO / "skills" / "adapt" / "blocks" / "worktrunk.md"
 
 def test_heading_carries_the_marker_and_the_file_ends_with_newline():
     text = BLOCK.read_text()
-    assert re.match(r"^## Worktrees and solo landing <!-- gstack-worktrunk-v3 -->\n", text)
+    assert re.match(r"^## Worktrees and solo landing <!-- gstack-worktrunk-v4 -->\n", text)
     assert text.endswith("\n")
 
 
@@ -33,6 +33,15 @@ def test_files_outside_git_stay_in_the_primary_checkout():
     assert "Never copy them into a worktree or link to them from one" in text
     assert "matches only a directory, not a symlink" in text
     assert "`Local state: <paths>` or `Local state: none`" in text
+
+
+def test_checks_before_landing_run_without_local_state():
+    """3.9.0 (benchmark finding, Gemini): a pre-merge check that needs ignored files cannot
+    pass in a worktree. CI cannot run it either, so the fix is the check, not a copy."""
+    text = " ".join(BLOCK.read_text().split())
+    assert "The checks before landing run without these files, exactly as CI does on a fresh clone" in text
+    assert "committed stand-ins" in text
+    assert "run it in the primary-checkout session after landing" in text
 
 
 def test_block_forbids_the_shortcuts_the_gate_depends_on():

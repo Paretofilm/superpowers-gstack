@@ -1172,7 +1172,7 @@ def test_a_local_state_line_inside_a_managed_section_does_not_count(tmp_path):
     proj = project(tmp_path)
     run(proj, *WEB_SETS)
     text = (proj / "CLAUDE.md").read_text()
-    marker = "<!-- gstack-worktrunk-v3 -->"
+    marker = "<!-- gstack-worktrunk-v4 -->"
     at = text.index("\n", text.index(marker))
     (proj / "CLAUDE.md").write_text(text[:at] + "\n\nLocal state: data/\n" + text[at:])
     run(proj, *WEB_SETS, "--local-state", "none")
