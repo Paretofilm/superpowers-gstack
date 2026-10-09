@@ -40,8 +40,10 @@ def test_checks_before_landing_run_without_local_state():
     pass in a worktree. CI cannot run it either, so the fix is the check, not a copy."""
     text = " ".join(BLOCK.read_text().split())
     assert "The checks before landing run without these files, exactly as CI does on a fresh clone" in text
-    assert "committed stand-ins" in text
+    assert "committed stand-ins first" in text
+    assert "never copied from the local file" in text
     assert "run it in the primary-checkout session after landing" in text
+    assert "tell the user that this check did not gate the landing" in text
 
 
 def test_block_forbids_the_shortcuts_the_gate_depends_on():

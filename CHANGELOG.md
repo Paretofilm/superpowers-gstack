@@ -7,7 +7,7 @@
 Found by the same `/benchmark-models` run as 3.8.1: Gemini read the 3.8.0 rule as a trap. The pre-merge checks run in the worktree, where the files git ignores do not exist, so a check that needs them could never pass. The answer is not an exception: the pre-merge hook mirrors CI, and CI runs on a fresh clone without those files, so such a check is already broken there. An exception for "test configuration" would reopen both traps the rule closes (split state, a symlink `git add` stages).
 
 ### Changed
-- **`Worktrees and solo landing` block (`gstack-worktrunk-v4`).** The rule on files outside git gains one sentence: the checks before landing run without these files, exactly as CI does on a fresh clone. A check that needs them gets committed stand-ins (an `.env.example`, a fixture under `tests/`), or runs in the primary-checkout session after landing.
+- **`Worktrees and solo landing` block (`gstack-worktrunk-v4`).** The rule on files outside git gains one sentence: the checks before landing run without these files, exactly as CI does on a fresh clone. A check that needs them gets committed stand-ins first: an `.env.example` written by hand with placeholder values, never copied from the local file, or a fixture under `tests/`. Only when no stand-in can do, it runs in the primary-checkout session after landing, and the user is told that this check did not gate the landing (third lens, GLM-5.3: deferral needs a guardrail, and a copied `.env` is how keys get committed).
 
 ### Lint
 - E7 denylist: `gstack-worktrunk-v3`.
