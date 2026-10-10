@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.10.1] - 2026-10-10
+
+**`land` no longer asks the user to approve the gate with a `!` command, which cannot work.**
+
+On exit 3 the skill told the agent to have the user run the approval "in this session" with a `!` prefix. A `!` command has no terminal, and `wt config approvals add` must ask the user to confirm, so it fails every time with "Cannot prompt for approval in non-interactive environment". The skill now sends the user to a real terminal; when the session can open a terminal tab (Calyx), the agent opens one in the worktree and runs the command there, the user answers the prompt themselves, and the agent checks with `wt config approvals list` before landing again.
+
+### Fixed
+- `skills/land/SKILL.md`, exit 3.
+
+### Lint
+- E7 denylist: a `!`-prefixed `wt … approvals add` in backticks.
+
 ## [3.10.0] - 2026-10-10
 
 **htmlify explain: after every spec and plan, a hand-made page that explains it with diagrams, checked for cut and overlapping text before anyone sees it.**
