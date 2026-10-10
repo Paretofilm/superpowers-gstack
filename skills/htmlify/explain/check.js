@@ -36,6 +36,30 @@
     }
   }
 
+  // 2b. HTML text drawn over other HTML text (a negative margin, an absolute badge).
+  // Compared per line box of each text node, so text that merely sits close is fine.
+  const lines = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const host = n.parentElement;
+    if (!n.textContent.trim() || !host || host.closest("svg, script, style")) continue;
+    const range = document.createRange();
+    range.selectNodeContents(n);
+    for (const r of range.getClientRects()) if (r.width > 1 && r.height > 1) lines.push({ host, r });
+  }
+  const seen = new Set();
+  for (let i = 0; i < lines.length; i++) {
+    for (let j = i + 1; j < lines.length; j++) {
+      const a = lines[i].r, b = lines[j].r;
+      const ov = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
+                 Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+      if (ov > 0.2 * Math.min(a.width * a.height, b.width * b.height) && !seen.has(lines[i].host)) {
+        seen.add(lines[i].host);
+        add("text-overlap", lines[i].host, `overlaps «${label(lines[j].host)}»`);
+      }
+    }
+  }
+
   // 3. SVG text: cut by the drawing's edge, overlapping other text, or wider than its box.
   const inter = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
                           Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));

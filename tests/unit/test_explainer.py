@@ -75,7 +75,7 @@ def test_a_new_spec_gets_one_reminder_per_draft(tmp_path):
     root = project(tmp_path)
     spec = root / "docs/superpowers/specs/2026-10-10-x-design.md"
     touch(spec)
-    msg = hook(tmp_path, spec)
+    msg = hook(tmp_path, spec, cwd=root)
     assert "/superpowers-gstack:htmlify explain docs/superpowers/specs/2026-10-10-x-design.md" in msg
     assert "the spec" in msg and "has no explainer page yet" in msg and "local" in msg
     touch(spec, "edited in self-review")
@@ -130,6 +130,42 @@ def test_relative_paths_resolve_against_cwd_and_bad_input_is_silent(tmp_path):
     assert hook(tmp_path, None, raw=json.dumps({"tool_input": {}})) is None
     missing = root / "docs/superpowers/specs/gone-design.md"
     assert hook(tmp_path, missing) is None
+
+
+def test_state_is_private_and_week_old_sessions_are_dropped(tmp_path):
+    root = project(tmp_path)
+    spec = root / "docs/superpowers/specs/a-design.md"
+    touch(spec)
+    state_dir = tmp_path / "tmp" / "superpowers-gstack-explainer"
+    state_dir.mkdir(parents=True)
+    old = state_dir / "old-session.json"
+    old.write_text("{}")
+    week = time.time() - 8 * 86400
+    os.utime(old, (week, week))
+    assert hook(tmp_path, spec, session="fresh")
+    assert not old.exists()
+    mine = state_dir / "fresh.json"
+    assert mine.is_file() and (mine.stat().st_mode & 0o077) == 0, "readable by the user only"
+
+
+def test_the_pin_is_found_above_a_docs_folder_in_a_subproject(tmp_path):
+    repo = tmp_path / "proj"
+    (repo / ".git").mkdir(parents=True)
+    (repo / ".gstack").mkdir()
+    (repo / ".gstack" / "explainer").write_text("artifact\n")
+    spec = repo / "app" / "docs/superpowers/specs/a-design.md"
+    spec.parent.mkdir(parents=True)
+    touch(spec)
+    assert "as an Artifact page" in hook(tmp_path, spec)
+    # ... but never from above the repository root
+    outer = tmp_path / ".gstack"
+    outer.mkdir()
+    (outer / "explainer").write_text("artifact\n")
+    (repo / ".gstack" / "explainer").unlink()
+    spec2 = repo / "docs/superpowers/specs/b-design.md"
+    spec2.parent.mkdir(parents=True)
+    touch(spec2)
+    assert "(`.gstack/explainer`: local)" in hook(tmp_path, spec2)
 
 
 def test_an_invalid_pin_falls_back_to_local(tmp_path):

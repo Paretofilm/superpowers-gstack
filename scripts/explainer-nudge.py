@@ -24,6 +24,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 SKIP_NAMES = {"progress.md", "handoff.md"}
@@ -40,12 +41,20 @@ def doc_kind(path: Path):
     return "spec" if parts[-2] == "specs" else "plan"
 
 
-def target_of(root: Path) -> str:
-    try:
-        value = (root / ".gstack" / "explainer").read_text().removesuffix("\n")
-    except OSError:
-        return "local"
-    return value if value in ("local", "artifact") else "local"
+def target_of(docs_parent: Path) -> str:
+    """The pin nearest above the docs folder, stopping at the repository root: a
+    project whose docs sit in a subfolder keeps its `.gstack/` at the top."""
+    for d in (docs_parent, *docs_parent.parents):
+        pin = d / ".gstack" / "explainer"
+        if pin.is_file():
+            try:
+                value = pin.read_text().removesuffix("\n")
+            except OSError:
+                return "local"
+            return value if value in ("local", "artifact") else "local"
+        if (d / ".git").exists():
+            break
+    return "local"
 
 
 def state_file(session: str) -> Path:
@@ -62,6 +71,7 @@ def decide(event: dict):
     path = Path(raw)
     if not path.is_absolute():
         path = Path(event.get("cwd") or os.getcwd()) / path
+    path = path.resolve()
     kind = doc_kind(path)
     if kind is None or not path.is_file():
         return None
@@ -72,6 +82,9 @@ def decide(event: dict):
     if target == "local" and html_mtime >= path.stat().st_mtime:
         return None
 
+    # Read-modify-write without a lock: two hooks racing in one session can drop each
+    # other's entry. The cost is one extra reminder later, never a missing one, since
+    # the reminder below is printed whatever happens to the state.
     sf = state_file(event.get("session_id", ""))
     try:
         state = json.loads(sf.read_text())
@@ -84,14 +97,22 @@ def decide(event: dict):
         return None
     state[key] = html_mtime
     sf.parent.mkdir(parents=True, exist_ok=True)
-    # a unique temp name: parallel Edit calls in one session run this hook concurrently
+    # one file per session; drop the ones a week old so the folder does not grow forever
+    for old in sf.parent.glob("*.json"):
+        try:
+            if time.time() - old.stat().st_mtime > 7 * 86400:
+                old.unlink()
+        except OSError:
+            pass
+    # a unique temp name (mode 0600): parallel Edit calls in one session run this hook concurrently
     fd, tmp = tempfile.mkstemp(dir=sf.parent, suffix=".tmp")
     with os.fdopen(fd, "w") as fh:
         fh.write(json.dumps(state))
     os.replace(tmp, sf)
 
+    # the path as the session can use it: relative to its cwd when inside it
     try:
-        shown = path.relative_to(root)
+        shown = path.relative_to(Path(event.get("cwd") or os.getcwd()).resolve())
     except ValueError:
         shown = path
     where = ("next to it as " + html.name) if target == "local" else "as an Artifact page"

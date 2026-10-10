@@ -240,7 +240,9 @@ def main(argv):
     except OSError as e:
         print(f"explain-check: cannot read {page}: {e}", file=sys.stderr)
         return 4
-    out = (out or Path(tempfile.gettempdir()) / f"explain-check-{page.stem}").resolve()
+    # a fresh folder per run: two sessions checking pages with the same name must never
+    # look at each other's screenshots
+    out = (out or Path(tempfile.mkdtemp(prefix=f"explain-check-{page.stem}-"))).resolve()
     out.mkdir(parents=True, exist_ok=True)
 
     findings, warnings = rule_findings(html)
