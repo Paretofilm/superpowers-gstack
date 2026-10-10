@@ -42,7 +42,7 @@ klikker på appen i Docken, skal den nyeste `main` starte, ikke en eldre kopi i
 | 1 | `scripts/work-state.py` (ny) | `report` og `install`, som beskrevet i del 2 og 3. Bare standardbiblioteket. Trenger Python 3.11 eller nyere, som `land-worktree.py`. |
 | 2 | `skills/work-state/SKILL.md` (ny) | Finner skriptet ut fra skillens egen mappe og tolker kodene. En delt blokk i `CLAUDE.md` kan ikke peke på en sti i pluginen, så blokken og skillene peker på denne skillen. Ruting: «er alt committet», «er det ryddet», «installer appen», «tilstand». |
 | 3 | `skills/land/SKILL.md` | Etter kode 0 og ryddingen i `remaining`: kjør `/superpowers-gstack:work-state` og avslutt med linjen (del 4). |
-| 4 | `skills/verify-and-land/SKILL.md` | Fase 7: når landingen går til `/ship` (`pr`), kjør `work-state` etterpå. Ved `solo` gjør `land` det allerede. |
+| 4 | `skills/verify-and-land/SKILL.md` | Fase 6: valget nevner installeringen i `/Applications`. Fase 7: bunten fra fase 5 sendes videre som `--quit-path`. Når landingen går til `/ship` (`pr`), kjøres `work-state` etterpå. Ved `solo` gjør `land` det allerede. |
 | 5 | `skills/adapt/blocks/git-hygiene.md` v13 → v14 | Ny regel: før siste melding i en oppgave som har endret filer, kjør `work-state`, rydd det som er trygt, og avslutt med linjen. |
 | 6 | `scripts/lint-skills.py` | Utvid mønsteret mot gamle markører til å fange `v13`. Ny skill i rutingdekningen. |
 | 7 | `scripts/adapt-claude-md.py` + `skills/adapt/SKILL.md` | `--installable`, skrevet én gang under en overskrift prosjektet eier, slik som `Local state:`. Spørsmålet i steg 4. |
@@ -133,15 +133,21 @@ tillegg til `detail` og `items`. Kode 0 betyr at alt er ✓ eller –, kode 1 at
 ## Del 3 — `install` for `macos-app`
 
 ```
-work-state.py install [--repo <sti>] [--quit-running] [--accept-migration] [--replace-unstamped]
+work-state.py install [--repo <sti>] [--quit-running | --quit-path <app>] [--accept-migration] [--replace-unstamped]
 ```
 
-Én installering om gangen per repo: en kjernelås på `gstack-install.lock` i git-mappen,
-som i `land`. Skillen kjører den i bakgrunnen. Blir en kjøring avbrutt, kan den
-midlertidige kopien `/Applications/.<navn>.gstack-new-<pid>` bli liggende. Neste
-kjøring fjerner slike kopier når prosessen med den PID-en ikke lever lenger.
+- **Én installering om gangen per repo.** En kjernelås på `gstack-install.lock` i
+  git-mappen, som i `land`.
+- **Rester etter avbrutte kjøringer.** Blir en kjøring avbrutt, kan den midlertidige
+  kopien `/Applications/.<navn>.gstack-new-<pid>` bli liggende. Den som holder låsen er
+  den eneste installeringen som kjører. Derfor er alle slike kopier for samme bundle-ID
+  rester, og de fjernes uten at PID-en sjekkes. En PID kan bli brukt på nytt.
+- **Resultatet lagres.** Hver kjøring skriver koden, årsaken og commiten atomisk til
+  `gstack-install-result.json` i git-mappen. Står det en stoppkode der, viser `report`
+  den under `ask` til en ny kjøring lykkes. En stopp i bakgrunnen går derfor aldri tapt,
+  selv når økten er ferdig.
 
-1. **Hovedmappen holder `main`, og den er ren.** Det sjekkes med `git status --porcelain --untracked-files=no`. Ignorerte lokale filer er i orden, de hører til `Local state`. Deretter kjøres `git pull --ff-only`. Står hovedmappen på en annen gren, er den skitten, eller feiler hentingen, bygges ingenting (kode 3).
+1. **Hovedmappen holder `main`, og den er ren.** Det sjekkes med `git status --porcelain --untracked-files=no`. Ignorerte lokale filer er i orden, de hører til `Local state`. Deretter kjøres `git pull --ff-only` mens skriptet holder `land`s lås (`gstack-land.lock`). Låsen holdes bare under hentingen, ikke under bygget. Står hovedmappen på en annen gren, er den skitten, eller feiler hentingen, bygges ingenting (kode 3). Commiten som bygges, noteres.
 2. **Beholder, skjema og innstillinger** finnes slik `verify-and-land` fase 2 gjør:
    - `xcodegen generate` når `project.yml` er nyere
    - arbeidsområde før prosjekt
@@ -149,13 +155,15 @@ kjøring fjerner slike kopier når prosessen med den PID-en ikke lever lenger.
    - `-configuration Release -destination 'platform=macOS'`
    - `BUILT_PRODUCTS_DIR`, `FULL_PRODUCT_NAME`, `PRODUCT_BUNDLE_IDENTIFIER` og `EXECUTABLE_NAME` lest gjennom den samme destinasjonen. Mangler én av dem, stopper skriptet.
 3. **Spør i fire tilfeller.** Skriptet stopper med en kode, og skillen spør brukeren én gang. Ved ja kjøres skriptet igjen med flagget:
-   - **Appen kjører** (`pgrep -f "/Contents/MacOS/<EXECUTABLE_NAME>$"`, navnet escapet med `re.escape`), kode 4. Med `--quit-running` bes appen avslutte seg selv (`tell application id "<bundle-id>" to quit`), og skriptet venter i inntil 20 sekunder. Kjører den fortsatt, stopper skriptet. Det bruker aldri `kill`, og appen startes ikke på nytt etterpå.
+   - **Appen kjører,** kode 4. Prosessene finnes med `ps -Axo pid=,comm=`. På macOS er `comm` den fulle stien til programfilen, og den sammenlignes som tekst med `…/Contents/MacOS/<EXECUTABLE_NAME>`, ikke som regulært uttrykk. Med `--quit-running` bes appen avslutte seg selv (`tell application id "<bundle-id>" to quit`), og skriptet venter i inntil 20 sekunder. Kjører den fortsatt, stopper skriptet. Det bruker aldri `kill`, og appen startes ikke på nytt etterpå.
+     `--quit-path <app>` er for `verify-and-land`, der brukeren nettopp har sett gren-bygget og sagt ja. Det gjør det samme, men bare når hver kjørende instans har sin programfil inne i akkurat den bunten. Kjører også en annen kopi, for eksempel den i `/Applications`, er koden fortsatt 4.
    - **Landingen kan endre data på disk,** kode 5. `classify-change.py --diff --diff-base <stempel-commit>` mot `origin/main` gir signalet `migration`. Uten stempel kan dette ikke måles, og da gjelder neste punkt. Finnes ikke stempelets commit lenger i historikken, for eksempel etter en omskriving, regnes spennet som ukjent og gir også kode 5. Flagg: `--accept-migration`.
    - **Første installering over en kopi uten stempel,** kode 6. Det finnes en app med samme navn i `/Applications`, men ikke noe stempel. Da er forrige versjon ukjent. Flagg: `--replace-unstamped`.
    - **Kopien i `/Applications` er en annen app** (annen bundle-ID), kode 7. Det finnes ikke noe flagg for dette. Brukeren rydder selv.
 4. **Bygger** med `-derivedDataPath <git-mappe>/gstack-install-build`, så neste bygg tar med bare det som er endret. Ingen overstyring av signering. Feiler bygget, er det kode 8, med stien til loggen.
 5. **Kontrollerer før byttet.** Kopierer med `ditto` til `/Applications/.<navn>.gstack-new-<pid>`. Sjekker `codesign --verify --deep --strict` og leser bundle-ID-en med `plutil`. Feiler noe, fjernes den midlertidige kopien, den gamle står urørt, og koden er 9.
 6. **Bytter i ett steg.** Finnes en gammel kopi, byttes de med `renamex_np(RENAME_SWAP)` via `ctypes`. Den gamle, som nå har det midlertidige navnet, legges i papirkurven gjennom Finder, så «Legg tilbake» virker. Uten Finder flyttes den til `~/.Trash` med tidsstempel. Finnes ingen gammel kopi, holder `os.rename`. Er `/Applications` ikke skrivbar, er det kode 10. Skriptet bruker aldri `sudo`.
+   Før byttet sjekkes det at hovedmappens `HEAD` fortsatt er commiten som ble bygget. Har en landing i en annen arbeidsmappe flyttet `main` under bygget, kan bygget blande to versjoner. Da byttes ingenting, ingenting stemples, og koden er 11. En ny kjøring bygger det som er endret.
 7. **Registrerer og stempler.** `lsregister -f <app>` kjøres (`/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister`), og signaturen kontrolleres én gang til på den endelige stien. Deretter skrives `gstack-installed-app.json` atomisk i git-mappen, med `scheme`, `bundle_id`, `commit`, `app_path`, `version` og `installed_at`.
 
 | Kode | Betyr |
@@ -168,7 +176,8 @@ kjøring fjerner slike kopier når prosessen med den PID-en ikke lever lenger.
 | 8 | Bygget feilet (stien til loggen skrives ut) |
 | 9 | Kontrollen feilet, og den gamle kopien er urørt |
 | 10 | `/Applications` er ikke skrivbar |
-| 12 | En annen installering holder låsen |
+| 11 | `main` flyttet seg under bygget, ingenting er byttet |
+| 12 | En annen installering holder låsen, eller `land` holdt sin lås lenger enn 60 sekunder |
 | 64 / 70 | Feil bruk / uventet feil, med tilstanden målt og skrevet ut |
 
 **Feilprinsipp:** Prosjektets innstillinger endres aldri. Den gamle kopien står til den
@@ -178,9 +187,15 @@ nye er kontrollert. Docken har alltid en app som virker.
 
 - **`land`, kode 0:** Først ryddingen i `remaining`, så `work-state`. Viser `report`
   `macos-app` med status `stale`, starter `install` i bakgrunnen. Meldingen avsluttes
-  med linjen, og linjen skrives på nytt når `install` er ferdig.
-- **`verify-and-land`:** Ved `solo` gjør `land` dette. Ved `pr` kjøres `work-state`
-  etter `/ship`, og linjen sier at arbeidet venter på en pull request.
+  med linjen.
+  - **Når `install` er ferdig,** varsler Claude Code økten. Agenten skriver linjen på nytt.
+  - **Stoppet `install` på et spørsmål** (kode 4–6), stiller agenten det bare hvis økten ikke er midt i en annen oppgave. Ellers står spørsmålet i `ask` ved neste `report`, fordi resultatet er lagret.
+- **`verify-and-land`:** Valget i fase 6 sier nå «gjør dette til den gjeldende
+  versjonen, og installer den i `/Applications`». Ja dekker da også at gren-bygget som
+  ble åpnet i fase 5, avsluttes. Agenten sender `--quit-path <bunten fra fase 5>`
+  videre til `install`, så den vanligste stien ikke stopper på kode 4. Ved `solo` kjører
+  `land` `work-state`. Ved `pr` kjøres `work-state` etter `/ship`, og linjen sier at
+  arbeidet venter på en pull request.
 - **Git-hygiene v14:** Før siste melding i en oppgave som har endret filer, kjøres
   `/superpowers-gstack:work-state`. Agenten gjør det som står i `safe_actions` og
   spør én gang om det som står i `ask`. Meldingen avsluttes med linjen. Gjelder ikke
