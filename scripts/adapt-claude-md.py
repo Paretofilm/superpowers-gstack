@@ -77,6 +77,7 @@ TRACKS = NATIVE | {"web"}
 SENSITIVITIES = ("very high", "high", "medium", "low")
 EXECUTORS = ("host", "vm")
 PROFILES = ("vibe", "classic")
+EXPLAINER_TARGETS = ("local", "artifact")
 NO_TEAM_TEXT = "<none — no paid developer account was found; stable signing requires a Team ID>"
 
 RATIO = 1.5          # section more than 1.5x the block's line count
@@ -1105,6 +1106,19 @@ def read_executor(project: Path) -> str | None:
     return value
 
 
+def read_explainer(project: Path) -> str:
+    """Where htmlify's explainer page for a spec or plan goes. Exactly `local` or
+    `artifact`; the newline is the only thing stripped, so `local ` is refused. No file
+    is `local`: the explainer reads the pin itself, adapt only refuses a wrong value."""
+    f = project / ".gstack" / "explainer"
+    if not f.is_file():
+        return "local"
+    value = f.read_text().removesuffix("\n")
+    if value not in EXPLAINER_TARGETS:
+        raise Refusal(f"BLOCKED — invalid .gstack/explainer {value!r}: must be exactly local or artifact")
+    return value
+
+
 NO_WORKFLOW_NOTE = ("no .gstack/workflow file — classic profile "
                     "(write `vibe` there to opt in to the vibe contract)")
 
@@ -1202,6 +1216,7 @@ def main(argv=None) -> int:
         pre_notes = Report()
         track = read_track(project, a.track, pre_notes)
         profile = read_workflow(project, pre_notes)
+        read_explainer(project)
         if track in NATIVE:
             # the pin is authoritative; --set may only agree with it or stand in for it
             pin = read_executor(project)

@@ -151,6 +151,19 @@ def test_e2e_executor_pin_is_read_validated_and_never_normalised(tmp_path):
     assert "BLOCKED" in p.stderr and "e2e-executor" in p.stderr
 
 
+def test_explainer_pin_is_validated_and_never_normalised(tmp_path):
+    """3.10.0: `.gstack/explainer` says where htmlify's explainer page goes. adapt
+    writes nothing from it, but a wrong value is refused rather than read as local."""
+    proj = project(tmp_path)
+    (proj / ".gstack").mkdir(exist_ok=True)
+    for ok in ("local\n", "artifact\n", "artifact"):
+        (proj / ".gstack" / "explainer").write_text(ok)
+        run(proj, *WEB_SETS)
+    (proj / ".gstack" / "explainer").write_text("artifact \n")
+    p = run(proj, *WEB_SETS, expect=2)
+    assert "BLOCKED" in p.stderr and ".gstack/explainer" in p.stderr
+
+
 def test_an_invalid_track_is_blocked(tmp_path):
     proj = project(tmp_path, track="tvos")
     p = run(proj, *NATIVE_SETS, expect=2)

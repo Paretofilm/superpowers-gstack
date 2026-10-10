@@ -82,7 +82,7 @@ unless the user asks for it.
 | `/pair-agent` | When pairing a remote AI agent with your browser session |
 | `/setup-browser-cookies` | One-time: import cookies for authenticated `/qa` and `/browse` testing |
 | `/context-handoff` | Long implementation sessions, projects using SDD, or any multi-step workflow |
-| `/superpowers-gstack:htmlify` | Offline HTML rendering of MD artefacts when the Artifact tool is unavailable; otherwise prefer the Artifact tool. |
+| `/superpowers-gstack:htmlify` | `explain`: a visual explainer page after every spec and plan (local file, or an Artifact page per `.gstack/explainer`). Also offline HTML rendering of MD artefacts when the Artifact tool is unavailable. |
 | `/context-save` | Save progress and working state |
 | `/context-restore` | Resume where you left off |
 | `/benchmark` | Projects with performance monitoring needs; drives Aside first |

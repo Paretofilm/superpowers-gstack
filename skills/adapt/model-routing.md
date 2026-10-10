@@ -202,7 +202,8 @@ lever.
 | `/superpowers-gstack:workflow-metrics`       | haiku     |
 | `/superpowers-gstack:e2e-route`              | haiku     |
 | `/superpowers-gstack:context-handoff`        | haiku     |
-| `/superpowers-gstack:htmlify`                | haiku     |
+| `/superpowers-gstack:htmlify` (rendering)    | haiku     |
+| `/superpowers-gstack:htmlify explain`        | sonnet    |
 
 ## Phase-level routing (for "see phases" entries)
 

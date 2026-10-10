@@ -144,6 +144,7 @@ Key routing rules:
 - Resume previous session, restore state → invoke context-restore
 - Context long, before /clear, before /compact → invoke context-handoff
 - Code quality, health check → invoke health
+- A spec or plan is finished (after its self-review, before the user reviews it), or "explain this spec visually" → invoke /superpowers-gstack:htmlify explain <doc.md>. Hand-made explainer page in `styles/explainer.css` with inline SVG and as little text as possible; a `PostToolUse` hook (`scripts/explainer-nudge.py`) reminds the session when a file under `docs/superpowers/specs/` or `plans/` is written. Lands next to the document, or as an Artifact page when `.gstack/explainer` says `artifact`; `bin/explain-check` measures clipped and overlapping text and screenshots the page before it is opened.
 - Render a Markdown artefact as local HTML when the Artifact tool is unavailable → invoke /superpowers-gstack:htmlify (offline fallback; otherwise publish with the Artifact tool)
 
 ## Release gate (this repo)

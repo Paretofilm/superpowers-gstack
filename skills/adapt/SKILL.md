@@ -240,6 +240,30 @@ then the base tiers for the selected skills and the inferred sensitivity, and as
    from then on, and never edits again: a wrong answer is corrected by editing that
    line by hand. A run with nobody to answer passes no flag and writes no line.
 
+7. **Explainer page.** After every spec and plan, `/superpowers-gstack:htmlify explain`
+   makes a visual page that explains it. If `.gstack/explainer` exists the script
+   validates it; do not re-ask. If it does not exist, ask **once** with `AskUserQuestion`:
+
+   > Where should the visual explainer page for each spec and plan go?
+   >
+   > - **Local file** (recommended) — an HTML file next to the document, committed with it and opened in your browser.
+   > - **Artifact page** — published as a private page on claude.ai, which you can share and comment on.
+
+   Write the pin and keep it committable:
+
+   ```bash
+   mkdir -p .gstack && printf '%s\n' "$TARGET" > .gstack/explainer   # local or artifact
+   if git check-ignore -q .gstack/explainer 2>/dev/null; then
+     grep -q '^!\.gstack/explainer$' .gitignore 2>/dev/null \
+       || echo '!.gstack/explainer' >> .gitignore
+     git add .gitignore && git add -f .gstack/explainer
+   else
+     git add .gstack/explainer
+   fi
+   ```
+
+   A run with nobody to answer writes no file, which means `local`.
+
 ### Step 5: Dry run, then ask
 
 ```bash

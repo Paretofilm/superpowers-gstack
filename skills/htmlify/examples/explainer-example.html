@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hentevarsel – oversikt</title>
+<style>
+/* explainer.css: the style of an htmlify explainer page (explain mode).
+   Copy this file unchanged into the page's first <style>; page-specific rules go in a
+   second <style>. explain-check compares the two and refuses a drifted copy.
+
+   Tokens: one accent per card, cyan, violet, magenta, amber or emerald (red only for a
+   failure path), each with a soft fill (--<accent>-s). Light theme on :root, dark under
+   prefers-color-scheme and [data-theme="dark"]; the theme button sets data-theme.
+
+   Parts: .wrap page · .top header with .toggle · section.glass card · .tag badge
+   (.t-cyan .t-violet .t-magenta .t-amber .t-emerald) · .key the card's one insight ·
+   .chip tile (.ic icon, <b> title, <span> one line) · .grid with .g2/.g3 tile grids ·
+   .scroll around a wide <svg> · .big headline number · .bars/.bar dot rows ·
+   .who three columns · ol.done numbered checklist · footer. */
+:root{
+  --bg:#f4f5fa;--bg2:#e9ecf6;--fg:#141826;--muted:#5c6378;--line:rgba(20,24,38,.10);
+  --glass:rgba(255,255,255,.62);--glass-edge:rgba(255,255,255,.95);
+  --cyan:#0891b2;--magenta:#c026d3;--violet:#7c3aed;--amber:#d97706;--emerald:#059669;--red:#dc2626;
+  --cyan-s:rgba(8,145,178,.12);--magenta-s:rgba(192,38,211,.10);--violet-s:rgba(124,58,237,.11);
+  --amber-s:rgba(217,119,6,.12);--emerald-s:rgba(5,150,105,.12);--red-s:rgba(220,38,38,.10);
+  --shadow:0 10px 40px -12px rgba(30,40,80,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#07080f;--bg2:#0e1020;--fg:#eef0fb;--muted:#9aa1bb;--line:rgba(255,255,255,.09);
+  --glass:rgba(22,25,44,.55);--glass-edge:rgba(255,255,255,.22);
+  --cyan:#22d3ee;--magenta:#f0abfc;--violet:#a78bfa;--amber:#fbbf24;--emerald:#34d399;--red:#f87171;
+  --cyan-s:rgba(34,211,238,.13);--magenta-s:rgba(240,171,252,.12);--violet-s:rgba(167,139,250,.14);
+  --amber-s:rgba(251,191,36,.12);--emerald-s:rgba(52,211,153,.12);--red-s:rgba(248,113,113,.13);
+  --shadow:0 10px 40px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#07080f;--bg2:#0e1020;--fg:#eef0fb;--muted:#9aa1bb;--line:rgba(255,255,255,.09);
+  --glass:rgba(22,25,44,.55);--glass-edge:rgba(255,255,255,.22);
+  --cyan:#22d3ee;--magenta:#f0abfc;--violet:#a78bfa;--amber:#fbbf24;--emerald:#34d399;--red:#f87171;
+  --cyan-s:rgba(34,211,238,.13);--magenta-s:rgba(240,171,252,.12);--violet-s:rgba(167,139,250,.14);
+  --amber-s:rgba(251,191,36,.12);--emerald-s:rgba(52,211,153,.12);--red-s:rgba(248,113,113,.13);
+  --shadow:0 10px 40px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;color:var(--fg);background:var(--bg);
+  font:16px/1.5 -apple-system,"SF Pro Text",system-ui,sans-serif;
+  background-image:
+    radial-gradient(900px 600px at 8% -5%,var(--violet-s),transparent 60%),
+    radial-gradient(800px 500px at 100% 10%,var(--cyan-s),transparent 60%),
+    radial-gradient(700px 600px at 50% 110%,var(--magenta-s),transparent 60%);
+  background-attachment:fixed;
+}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 16px 80px}
+h1,h2{font-family:-apple-system,"SF Pro Display",system-ui,sans-serif;letter-spacing:-.02em;margin:0}
+h1{font-size:clamp(30px,6vw,52px);line-height:1.05}
+h2{font-size:clamp(22px,3.6vw,30px);margin-bottom:6px}
+.sub{color:var(--muted);margin:6px 0 0}
+.mono,code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-variant-numeric:tabular-nums}
+code{font-size:.88em;padding:1px 6px;border-radius:6px;background:var(--line)}
+.glass{
+  position:relative;background:var(--glass);border-radius:22px;padding:24px;
+  backdrop-filter:blur(22px) saturate(170%);-webkit-backdrop-filter:blur(22px) saturate(170%);
+  box-shadow:var(--shadow);margin-top:22px;
+}
+.glass::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(140deg,var(--glass-edge),transparent 40%,transparent 70%,var(--glass-edge));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.toggle{border:0;cursor:pointer;border-radius:999px;padding:8px 14px;font:inherit;font-size:14px;
+  color:var(--fg);background:var(--glass);box-shadow:var(--shadow)}
+.tag{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 10px;border-radius:999px;margin-bottom:10px}
+.t-cyan{color:var(--cyan);background:var(--cyan-s)}.t-violet{color:var(--violet);background:var(--violet-s)}
+.t-magenta{color:var(--magenta);background:var(--magenta-s)}.t-amber{color:var(--amber);background:var(--amber-s)}
+.t-emerald{color:var(--emerald);background:var(--emerald-s)}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;fill:var(--fg)}
+svg .m{fill:var(--muted)} svg .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.chip{border-radius:16px;padding:14px 16px;background:var(--line);display:flex;gap:12px;align-items:flex-start}
+.chip .ic{font-size:24px;line-height:1}
+.chip b{display:block}
+.chip span{color:var(--muted);font-size:14px}
+.bars{display:grid;gap:8px;margin-top:16px}
+.bar{display:grid;grid-template-columns:150px 1fr 120px;gap:10px;align-items:center;font-size:14px}
+.bar .track{display:flex;gap:4px}
+.bar .dot{height:22px;flex:0 0 22px;border-radius:7px}
+.bar .how{font-size:12px;font-weight:600;text-align:right}
+@media (max-width:560px){.bar{grid-template-columns:96px 1fr;}.bar .how{grid-column:2;text-align:left}}
+.who{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:700px){.who{grid-template-columns:1fr}}
+.who > div{border-radius:18px;padding:16px;background:var(--line)}
+.who h3{margin:0 0 8px;font-size:17px}
+.who ul{margin:0;padding-left:18px;font-size:14px;color:var(--muted)}
+.who li{margin:3px 0}
+.done{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:8px}
+.done li{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:14px;background:var(--line)}
+.done .n{flex:0 0 28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:14px;
+  color:var(--emerald);background:var(--emerald-s)}
+.big{font-size:clamp(40px,8vw,64px);font-weight:700;letter-spacing:-.03em;line-height:1}
+.key{margin-top:14px;padding:14px 16px;border-radius:14px;border-left:3px solid var(--violet);background:var(--violet-s);font-size:15px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll svg{min-width:640px}
+footer{color:var(--muted);font-size:13px;margin-top:28px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- Oppdiktet eksempel: et bibliotek som varsler når en reservert bok ligger klar.
+     Oppbygningen er den en forklaringsside skal ha; innholdet er bare fyll. -->
+
+<!-- ═════════ TOPP ═════════ -->
+<div class="top">
+  <div>
+    <span class="tag t-violet">Spesifikasjon · eksempel</span>
+    <h1>Hentevarsel</h1>
+    <p class="sub">Reserverte bøker som ligger klare: varsel på SMS, og påminnelse før de går tilbake.</p>
+  </div>
+  <button class="toggle" id="tg" aria-label="Bytt mellom lyst og mørkt">◐ Tema</button>
+</div>
+
+<!-- ═════════ PROBLEMET ═════════ -->
+<section class="glass">
+  <span class="tag t-amber">Problemet</span>
+  <div style="display:flex;gap:22px;align-items:center;flex-wrap:wrap">
+    <div><div class="big">12</div><div class="sub">reserveringer gikk ut<br>uten at noen hentet dem</div></div>
+    <div style="flex:1;min-width:260px" class="bars">
+      <div class="bar"><span>Sentrum</span><span class="track"><i class="dot" style="background:var(--cyan)"></i><i class="dot" style="background:var(--cyan)"></i></span><span class="how" style="color:var(--cyan)">✉️ SMS</span></div>
+      <div class="bar"><span>Nordbyen</span><span class="track"><i class="dot" style="background:var(--magenta)"></i><i class="dot" style="background:var(--magenta)"></i><i class="dot" style="background:var(--magenta)"></i><i class="dot" style="background:var(--magenta)"></i></span><span class="how" style="color:var(--magenta)">🗣️ skranken</span></div>
+      <div class="bar"><span>Havna</span><span class="track"><i class="dot" style="background:var(--magenta)"></i><i class="dot" style="background:var(--magenta)"></i></span><span class="how" style="color:var(--magenta)">🗣️ skranken</span></div>
+      <div class="bar"><span>Bokbussen</span><span class="track"><i class="dot" style="background:var(--magenta)"></i></span><span class="how" style="color:var(--magenta)">🗣️ skranken</span></div>
+      <div class="bar"><span>Uten nummer</span><span class="track"><i class="dot" style="background:var(--muted);opacity:.45"></i><i class="dot" style="background:var(--muted);opacity:.45"></i><i class="dot" style="background:var(--muted);opacity:.45"></i></span><span class="how" style="color:var(--muted)">📮 brev, utenfor</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ HELHETEN ═════════ -->
+<section class="glass">
+  <span class="tag t-violet">Helheten</span>
+  <h2>Nye veier inn, samme varsel ut</h2>
+  <div class="scroll">
+  <svg viewBox="0 0 960 330" role="img" aria-label="Fire veier legger bøker på hentehylla, varselet sender beskjed til låneren">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+    </defs>
+    <g>
+      <rect x="10" y="14" width="230" height="62" rx="16" fill="var(--line)"/>
+      <text x="30" y="42" font-size="17" font-weight="600">📚  Innlevering</text><text x="30" y="62" font-size="13" class="m">som i dag</text>
+      <rect x="10" y="90" width="230" height="62" rx="16" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/>
+      <text x="30" y="118" font-size="17" font-weight="600">📦  Fjernlån</text><text x="30" y="138" font-size="13" class="m">ny vei inn</text>
+      <rect x="10" y="166" width="230" height="62" rx="16" fill="var(--magenta-s)" stroke="var(--magenta)" stroke-width="1.5"/>
+      <text x="30" y="194" font-size="17" font-weight="600">🔁  Overføring</text><text x="30" y="214" font-size="13" class="m">ny · mellom filialene</text>
+      <rect x="10" y="242" width="230" height="62" rx="16" fill="var(--line)"/>
+      <text x="30" y="270" font-size="17" font-weight="600">✋  Satt av ved skranken</text><text x="30" y="290" font-size="13" class="m">som i dag</text>
+    </g>
+    <path d="M240,121 C300,121 300,150 352,150" fill="none" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M240,197 C300,197 300,170 352,170" fill="none" stroke="var(--magenta)" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M240,273 C300,273 300,190 352,190" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M240,45 C520,45 560,60 642,110" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 5" marker-end="url(#ar)"/>
+    <rect x="356" y="112" width="220" height="116" rx="18" fill="var(--glass)" stroke="var(--line)"/>
+    <text x="376" y="146" font-size="18" font-weight="700">Hentehylla</text>
+    <text x="376" y="172" font-size="13" class="m">📗 reservert bok</text>
+    <text x="376" y="192" font-size="13" class="m">📘 fjernlån</text>
+    <text x="376" y="214" font-size="13" fill="var(--amber)">📅 varseldato  (ny)</text>
+    <path d="M576,170 L642,170" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+    <rect x="646" y="96" width="150" height="148" rx="18" fill="var(--violet-s)" stroke="var(--violet)" stroke-width="1.5"/>
+    <text x="666" y="128" font-size="18" font-weight="700">⚙️ varsel</text>
+    <text x="666" y="154" font-size="13" class="m">nummer i profilen?</text>
+    <text x="666" y="174" font-size="13" class="m">åpent i dag?</text>
+    <text x="666" y="204" font-size="13" fill="var(--violet)" font-weight="600">+ samlet henting</text>
+    <text x="666" y="222" font-size="12" class="m">(ny regel)</text>
+    <path d="M796,170 L852,170" fill="none" stroke="var(--emerald)" stroke-width="2.5" marker-end="url(#ar)"/>
+    <rect x="856" y="128" width="96" height="84" rx="18" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
+    <text x="904" y="166" font-size="26" text-anchor="middle">✅</text>
+    <text x="904" y="194" font-size="15" font-weight="600" text-anchor="middle">hentet</text>
+  </svg>
+  </div>
+  <div class="key">💡 Hylla <b>vet bare at boka ligger der</b>. Hvem som får beskjed, avgjøres av den samme varselkoden som i dag.</div>
+</section>
+
+<!-- ═════════ DEL 1 ═════════ -->
+<section class="glass">
+  <span class="tag t-cyan">Del 1</span>
+  <h2>✉️ <code>bibliotek varsel send --dag i-dag</code></h2>
+  <div class="scroll">
+  <svg viewBox="0 0 960 250" role="img" aria-label="Fem steg i varselutsendingen, med stopp når nummeret mangler">
+    <defs><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--cyan)"/></marker>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--red)"/></marker></defs>
+    <g font-size="14">
+      <circle cx="80" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="80" y="80" font-size="30" text-anchor="middle">🔎</text>
+      <text x="80" y="140" text-anchor="middle" font-weight="600">Klar på hylla?</text><text x="80" y="158" text-anchor="middle" class="m" font-size="12">skannet inn</text>
+      <path d="M126,70 L230,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/>
+      <circle cx="276" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="276" y="80" font-size="30" text-anchor="middle">📇</text>
+      <text x="276" y="140" text-anchor="middle" font-weight="600">Finner låneren</text><text x="276" y="158" text-anchor="middle" class="m" font-size="12">bare navn og nummer</text>
+      <path d="M322,70 L426,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/>
+      <circle cx="472" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="472" y="80" font-size="30" text-anchor="middle">🕘</text>
+      <text x="472" y="140" text-anchor="middle" font-weight="600">Venter til dagtid</text><text x="472" y="158" text-anchor="middle" class="m" font-size="12">aldri etter kl. 21</text>
+      <path d="M518,70 L622,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/>
+      <circle cx="668" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="668" y="80" font-size="30" text-anchor="middle">📨</text>
+      <text x="668" y="140" text-anchor="middle" font-weight="600">Sender SMS</text><text x="668" y="158" text-anchor="middle" class="m" font-size="12">bare til nummeret i profilen</text>
+      <path d="M714,70 L818,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/>
+      <circle cx="864" cy="70" r="44" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/><text x="864" y="80" font-size="30" text-anchor="middle">💾</text>
+      <text x="864" y="140" text-anchor="middle" font-weight="600">Fører varseldato</text><text x="864" y="158" text-anchor="middle" class="m" font-size="12">i utlånsloggen</text>
+    </g>
+    <path d="M80,166 L80,196" stroke="var(--red)" stroke-width="2" marker-end="url(#arr)"/>
+    <rect x="20" y="200" width="520" height="40" rx="12" fill="var(--red-s)" stroke="var(--red)" stroke-width="1"/>
+    <text x="36" y="225" font-size="13">⛔ mangler nummer → havner på listen: </text><text x="290" y="225" font-size="13" class="mono" fill="var(--red)">varsel liste --uten-nummer</text>
+  </svg>
+  </div>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="chip"><span class="ic">🔐</span><div><b>Ingen numre i loggen</b><span>bare at varselet ble sendt</span></div></div>
+    <div class="chip"><span class="ic">🌙</span><div><b>Aldri om natten</b><span>sendes neste morgen</span></div></div>
+    <div class="chip"><span class="ic">✋</span><div><b>Første ekte utsending</b><span>krever ja fra deg</span></div></div>
+  </div>
+  <div class="key">💡 Utsendingen <b>leser bare profilen</b>. Hva låneren har lånt før, ser den aldri.</div>
+</section>
+
+<!-- ═════════ DATO ═════════ -->
+<section class="glass">
+  <span class="tag t-amber">Viktig detalj</span>
+  <h2>📅 Fristen regnes fra varselet</h2>
+  <p class="sub">Regnet fra hylla kan en bok gå tilbake før låneren visste at den lå klar.</p>
+  <div class="scroll">
+  <svg viewBox="0 0 960 230" role="img" aria-label="Tidslinje: en frist regnet fra varselet treffer riktig henting, en frist uten varseldato er uviss">
+    <line x1="40" y1="190" x2="920" y2="190" stroke="var(--line)" stroke-width="2"/>
+    <g font-size="13" class="m">
+      <text x="120" y="214" text-anchor="middle" class="m">uke 40</text>
+      <text x="420" y="214" text-anchor="middle" class="m">uke 41</text>
+      <text x="720" y="214" text-anchor="middle" class="m">uke 42</text>
+    </g>
+    <rect x="300" y="30" width="250" height="150" rx="14" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-dasharray="6 5"/>
+    <text x="425" y="50" font-size="12" text-anchor="middle" fill="var(--emerald)" font-weight="600">fristen: 7 dager etter varselet</text>
+    <g font-size="12">
+      <rect x="130" y="150" width="60" height="26" rx="7" fill="var(--line)"/><text x="160" y="168" text-anchor="middle">henting</text>
+      <rect x="430" y="150" width="60" height="26" rx="7" fill="var(--line)"/><text x="460" y="168" text-anchor="middle">henting</text>
+      <rect x="750" y="150" width="60" height="26" rx="7" fill="var(--line)"/><text x="780" y="168" text-anchor="middle">henting</text>
+    </g>
+    <text x="380" y="98" font-size="26">📗</text><text x="412" y="96" font-size="13" font-weight="600" fill="var(--emerald)">varslet, med dato</text>
+    <path d="M396,104 L456,146" stroke="var(--emerald)" stroke-width="2.5"/><text x="470" y="132" font-size="18">✅</text>
+    <text x="640" y="80" font-size="26">📗</text><text x="672" y="78" font-size="13" font-weight="600" fill="var(--red)">uten varseldato (i dag)</text>
+    <path d="M650,88 L170,146" stroke="var(--red)" stroke-width="1.5" stroke-dasharray="4 4"/>
+    <path d="M654,88 L466,146" stroke="var(--red)" stroke-width="1.5" stroke-dasharray="4 4"/>
+    <path d="M660,88 L776,146" stroke="var(--red)" stroke-width="1.5" stroke-dasharray="4 4"/>
+    <text x="826" y="128" font-size="13" fill="var(--red)">⚠️ frist uviss</text>
+  </svg>
+  </div>
+  <div class="key">💡 Varseldatoen føres i utlånsloggen. Bøker satt av ved skranken oppfører seg som før.</div>
+</section>
+
+<!-- ═════════ DEL 2 ═════════ -->
+<section class="glass">
+  <span class="tag t-violet">Del 2</span>
+  <h2>➕ Samlet henting: flere bøker, ett varsel</h2>
+  <div class="scroll">
+  <svg viewBox="0 0 960 220" role="img" aria-label="En bok mandag og to bøker tirsdag til samme låner blir ett varsel om tre bøker">
+    <defs><marker id="av" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--violet)"/></marker></defs>
+    <rect x="20" y="24" width="260" height="66" rx="16" fill="var(--line)"/>
+    <text x="40" y="52" font-size="13" class="m">mandag · Sentrum</text><text x="40" y="76" font-size="20" font-weight="700">📗 1 bok</text>
+    <rect x="20" y="124" width="260" height="66" rx="16" fill="var(--line)"/>
+    <text x="40" y="152" font-size="13" class="m">tirsdag · Sentrum</text><text x="40" y="176" font-size="20" font-weight="700">📘 2 bøker</text>
+    <path d="M280,57 C340,57 340,107 388,107" fill="none" stroke="var(--violet)" stroke-width="2"/>
+    <path d="M280,157 C340,157 340,107 388,107" fill="none" stroke="var(--violet)" stroke-width="2"/>
+    <circle cx="420" cy="107" r="32" fill="var(--violet-s)" stroke="var(--violet)" stroke-width="1.5"/>
+    <text x="420" y="117" font-size="28" text-anchor="middle" fill="var(--violet)">Σ</text>
+    <path d="M452,107 L520,107" stroke="var(--violet)" stroke-width="2" marker-end="url(#av)"/>
+    <text x="486" y="96" font-size="14" text-anchor="middle" font-weight="700">3</text>
+    <rect x="526" y="40" width="210" height="134" rx="16" fill="var(--glass)" stroke="var(--line)"/>
+    <text x="546" y="72" font-size="15" font-weight="700">📨 Ett varsel</text>
+    <rect x="546" y="88" width="170" height="10" rx="5" fill="var(--line)"/>
+    <rect x="546" y="106" width="120" height="10" rx="5" fill="var(--line)"/>
+    <text x="546" y="152" font-size="18" font-weight="700" fill="var(--emerald)">3 bøker klare ✓</text>
+    <path d="M736,107 L800,107" stroke="var(--emerald)" stroke-width="2.5" marker-end="url(#av)"/>
+    <text x="820" y="96" font-size="15" font-weight="600">1 SMS</text>
+    <text x="820" y="118" font-size="13" class="m">samme låner,</text>
+    <text x="820" y="136" font-size="13" class="m">én melding</text>
+  </svg>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div>
+      <div class="tag t-emerald">Slås sammen bare når</div>
+      <div class="grid" style="gap:8px">
+        <div class="chip"><span class="ic">🏷️</span><div><b>Samme låner og filial</b></div></div>
+        <div class="chip"><span class="ic">🔢</span><div><b>Innen tre dager</b><span>aldri lenger</span></div></div>
+        <div class="chip"><span class="ic">🎯</span><div><b>Ingen bok har gått ut</b><span>og alle ligger på hylla</span></div></div>
+      </div>
+    </div>
+    <div>
+      <div class="tag t-amber">Hver for seg når</div>
+      <div class="grid" style="gap:8px">
+        <div class="chip"><span class="ic">🏢</span><div><b>Bøkene ligger i ulike filialer</b></div></div>
+        <div class="chip"><span class="ic">📦</span><div><b>Ett av dem er fjernlån</b><span>med egen frist</span></div></div>
+        <div class="chip"><span class="ic">🙅</span><div><b>Låneren har bedt om det</b></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="key">💡 Gjelder alle filialer, ikke bare Sentrum. Ingen filialregel i koden.</div>
+</section>
+
+<!-- ═════════ DEL 3 ═════════ -->
+<section class="glass">
+  <span class="tag t-magenta">Del 3</span>
+  <h2>🗣️ Lånere uten nummer, med deg ved skranken</h2>
+  <div class="scroll">
+  <svg viewBox="0 0 960 300" role="img" aria-label="Sekvens: systemet lister lånere uten nummer, du ringer, assistenten skriver beskjeden, systemet fører fristen">
+    <defs><marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+    <g font-size="14" font-weight="700">
+      <rect x="0" y="10" width="960" height="80" rx="14" fill="var(--amber-s)"/><text x="16" y="56">🙋 Du</text>
+      <rect x="0" y="104" width="960" height="80" rx="14" fill="var(--magenta-s)"/><text x="16" y="150">🤖 Assistent</text>
+      <rect x="0" y="198" width="960" height="80" rx="14" fill="var(--violet-s)"/><text x="16" y="244">⚙️ Systemet</text>
+    </g>
+    <g font-size="13">
+      <rect x="120" y="212" width="150" height="52" rx="12" fill="var(--glass)"/><text x="195" y="236" text-anchor="middle" font-weight="600">liste uten nummer</text><text x="195" y="254" text-anchor="middle" class="m" font-size="11">hvem, hvilken bok</text>
+      <path d="M270,224 C300,224 300,50 322,50" fill="none" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#am)"/>
+      <rect x="326" y="24" width="160" height="52" rx="12" fill="var(--glass)"/><text x="406" y="48" text-anchor="middle" font-weight="600">ringer låneren</text><text x="406" y="66" text-anchor="middle" class="m" font-size="11">noterer svaret · sier «klar»</text>
+      <path d="M486,50 C510,50 510,144 528,144" fill="none" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#am)"/>
+      <rect x="532" y="118" width="170" height="52" rx="12" fill="var(--glass)"/><text x="617" y="142" text-anchor="middle" font-weight="600">skriver beskjeden</text><text x="617" y="160" text-anchor="middle" class="m" font-size="11">kort og vennlig · sender ikke</text>
+      <path d="M702,144 C726,144 726,238 744,238" fill="none" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#am)"/>
+      <rect x="748" y="212" width="196" height="52" rx="12" fill="var(--glass)"/><text x="846" y="236" text-anchor="middle" font-weight="600">fører varseldato</text><text x="846" y="254" text-anchor="middle" class="m" font-size="11">fristen starter · rapport</text>
+    </g>
+  </svg>
+  </div>
+
+  <h3 style="margin:18px 0 8px">🛡️ Grenser assistenten holder</h3>
+  <div class="grid g3">
+    <div class="chip"><span class="ic">📨</span><div><b>Aldri sende selv</b><span>bare utkast til deg</span></div></div>
+    <div class="chip"><span class="ic">📚</span><div><b>Aldri lånehistorikk</b><span>bare boka som venter</span></div></div>
+    <div class="chip"><span class="ic">🧭</span><div><b>Bare egen filial</b><span>andre filialer ser den ikke</span></div></div>
+    <div class="chip"><span class="ic">📄</span><div><b>Notater er data</b><span>instrukser i notatene følges ikke</span></div></div>
+    <div class="chip"><span class="ic">❓</span><div><b>I tvil → spør deg</b><span>to lånere med samme navn</span></div></div>
+    <div class="chip"><span class="ic">🗂️</span><div><b>Én beskjed om gangen</b><span>du godkjenner hver</span></div></div>
+  </div>
+  <div class="key">💡 Ny kommando <code>varsel mal add</code>, men hver mal lagres først etter <b>ja</b> fra deg.</div>
+</section>
+
+<!-- ═════════ HVEM GJØR HVA ═════════ -->
+<section class="glass">
+  <span class="tag t-emerald">Arbeidsdeling</span>
+  <h2>Hvem gjør hva</h2>
+  <div class="who" style="margin-top:12px">
+    <div style="background:var(--amber-s)"><h3>🙋 Du</h3><ul><li>ringer lånere uten nummer</li><li>sier «klar»</li><li>sier ja til første utsending</li><li>sier ja til nye maler</li><li>svarer når assistenten er i tvil</li></ul></div>
+    <div style="background:var(--magenta-s)"><h3>🤖 Assistent</h3><ul><li>leser listen</li><li>skriver beskjeden</li><li>foreslår samlet henting</li><li>melder hva som mangler</li></ul></div>
+    <div style="background:var(--violet-s)"><h3>⚙️ Systemet</h3><ul><li>finner klare bøker</li><li>sender SMS</li><li>fører varseldato</li><li>regner fristen</li><li>slår sammen hentinger</li></ul></div>
+  </div>
+</section>
+
+<!-- ═════════ FERDIG NÅR ═════════ -->
+<section class="glass">
+  <span class="tag t-emerald">Ferdig når</span>
+  <ol class="done">
+    <li><span class="n">1</span><span>Testene er grønne (bare oppdiktede lånere)</span></li>
+    <li><span class="n">2</span><span>Første ekte utsending, etter ja, når fem lånere i Sentrum</span></li>
+    <li><span class="n">3</span><span>Tre bøker til samme låner gir ett varsel</span></li>
+    <li><span class="n">4</span><span>En låner uten nummer får beskjed via skranken, med deg til stede</span></li>
+    <li><span class="n">5</span><span>Brukerveiledningen beskriver kommandoene</span></li>
+  </ol>
+</section>
+
+<!-- ═════════ BEGRENSNINGER ═════════ -->
+<section class="glass">
+  <span class="tag t-amber">Verdt å vite</span>
+  <div class="grid g2">
+    <div class="chip"><span class="ic">🔍</span><div><b>Fjernlån har egen frist</b><span>biblioteket som lånte ut bestemmer den</span></div></div>
+    <div class="chip"><span class="ic">❔</span><div><b>Hvilken avsender?</b><span>to SMS-avsendere i dag; første utsending avgjør</span></div></div>
+    <div class="chip"><span class="ic">👀</span><div><b>Skranke-delen krever tilsyn</b><span>går ikke av seg selv</span></div></div>
+    <div class="chip"><span class="ic">🚫</span><div><b>Utenfor nå</b><span>brev, e-post og varsel i appen</span></div></div>
+  </div>
+</section>
+
+<footer>Kilde: <span class="mono">eksempel-hentevarsel-design.md</span> · oppdiktet eksempel</footer>
+</div>
+<script>
+(function(){
+  var root=document.documentElement,btn=document.getElementById('tg');
+  try{var s=localStorage.getItem('explainer-tema');if(s)root.setAttribute('data-theme',s);}catch(e){}
+  btn.addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    var next=cur==='dark'?'light':'dark';root.setAttribute('data-theme',next);
+    try{localStorage.setItem('explainer-tema',next);}catch(e){}
+  });
+})();
+</script>
+</body>
+</html>
