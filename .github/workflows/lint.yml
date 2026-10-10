@@ -9,6 +9,8 @@ name: Lint + unit tests
 # Also runs the pytest suite (tests/unit) — stdlib-only,
 # no API calls. Added by the 2026-07-05 audit: 153 tests previously ran only
 # when someone remembered to run them locally.
+#
+# And htmlify's bun suite (2026-10-10): 158 tests that ran only by hand until then.
 
 on:
   push:
@@ -35,3 +37,8 @@ jobs:
         run: pytest tests/unit -q
       - name: Skill contract tests (shell)
         run: for t in skills/*/tests/required-sections.test.sh; do bash "$t"; done
+      - uses: oven-sh/setup-bun@v2
+      - name: htmlify tests (bun)
+        run: |
+          bun install --frozen-lockfile --cwd skills/htmlify
+          bun test --cwd skills/htmlify

@@ -7,3 +7,5 @@
 lint = "python3 scripts/lint-skills.py"
 unit = "python3 -m pytest tests/unit -q -p no:cacheprovider --deselect tests/unit/test_lint_upstream_skills.py::test_roster_matches_installed_upstream_when_present --deselect tests/unit/test_spec_drift_upstream_alarm.py::test_pin_matches_installed_gstack_when_present"
 contract = "for t in skills/*/tests/required-sections.test.sh; do bash \"$t\" || exit 1; done"
+# node_modules finnes ikke i en ny arbeidsmappe; installasjonen fra låsefila tar under ett sekund fra bufferen.
+htmlify = "bun install --frozen-lockfile --cwd skills/htmlify >/dev/null && bun test --cwd skills/htmlify"
