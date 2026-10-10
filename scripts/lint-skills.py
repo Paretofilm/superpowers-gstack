@@ -126,7 +126,7 @@ DENYLIST = [
      "gstack /review owns the Codex pass since 3.0.0 — say `/review`, never chain `/codex review` on a diff"),
     (re.compile(r"setup-htmlify-hook|htmlify-posttooluse|close every window"),
      "htmlify's Safari flow and PostToolUse hook were removed in 3.0.0 — previews go through the Artifact tool"),
-    (re.compile(r"`!\s*wt\b[^`]*\bapprovals\s+add"),
+    (re.compile(r"!\s*wt\b[^\n]{0,80}?\bapprovals\s+add"),
      "`! wt … approvals add` cannot work: a `!` command has no terminal for wt's prompt — a real terminal, 3.10.1"),
     # 2.48.0: Step 6 used to ask for a diff against a file Step 5 had already
     # overwritten. An unperformable verification is always answered

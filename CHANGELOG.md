@@ -10,7 +10,10 @@ On exit 3 the skill told the agent to have the user run the approval "in this se
 - `skills/land/SKILL.md`, exit 3.
 
 ### Lint
-- E7 denylist: a `!`-prefixed `wt … approvals add` in backticks.
+- E7 denylist: a `!`-prefixed `wt … approvals add`, on one line, in code or prose.
+
+### Review
+- GLM-5.3 (Codex disabled): the agent must wait for the user to say they answered before checking, since the command ending does not mean yes (added); the denylist matched only inside one code span (widened). Refuted: that `<worktree>` reaches the user as a placeholder — the script prints the real path, and the skill now says so. Cost $0.011.
 
 ## [3.10.0] - 2026-10-10
 
