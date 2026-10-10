@@ -84,8 +84,10 @@ def decide(event: dict):
         return None
     state[key] = html_mtime
     sf.parent.mkdir(parents=True, exist_ok=True)
-    tmp = sf.with_suffix(".tmp")
-    tmp.write_text(json.dumps(state))
+    # a unique temp name: parallel Edit calls in one session run this hook concurrently
+    fd, tmp = tempfile.mkstemp(dir=sf.parent, suffix=".tmp")
+    with os.fdopen(fd, "w") as fh:
+        fh.write(json.dumps(state))
     os.replace(tmp, sf)
 
     try:

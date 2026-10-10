@@ -163,52 +163,60 @@ def find_browse():
     return None
 
 
-def run(b, *args):
-    r = subprocess.run([b, *args], capture_output=True, text=True, timeout=120)
+def run(b, env, *args):
+    r = subprocess.run([b, *args], capture_output=True, text=True, timeout=120, env=env)
     if r.returncode != 0:
         raise RuntimeError(f"browse {' '.join(args)}: {r.stderr.strip() or r.stdout.strip()}")
     return r.stdout.strip()
 
 
 def layout(b, page: Path, out: Path):
-    """Layout findings and screenshot paths. gstack's browser only opens files under
-    the temp dir or its own project, so the page and the check go to a temp dir."""
+    """Layout findings and screenshot paths.
+
+    gstack's browse runs one shared browser per git repository, so another session's
+    /qa in the same project would find its tab switched and its viewport resized.
+    BROWSE_STATE_FILE in a private temp dir gives this run a browser of its own, which
+    is stopped at the end. That browser only opens files under its own root and the
+    temp dir, so the page, the check and the screenshots all live in the work dir."""
     work = Path(tempfile.mkdtemp(prefix="explain-check-"))
+    (work / ".gstack").mkdir()
+    (work / "shots").mkdir()
     shutil.copy(page, work / "page.html")
     shutil.copy(CHECK_JS, work / "check.js")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("BROWSE_")}
+    env["BROWSE_STATE_FILE"] = str(work / ".gstack" / "browse.json")
     url = (work / "page.html").as_uri()
     findings, shots = [], []
-    tab = None
+
+    def shot(name, *selector):
+        tmp = work / "shots" / name
+        run(b, env, "screenshot", *selector, str(tmp))
+        dest = out / name
+        shutil.copy(tmp, dest)
+        shots.append(str(dest))
+
     try:
-        opened = run(b, "newtab", "about:blank")
-        m = re.search(r"tab (\d+)", opened)
-        tab = m.group(1) if m else None
         for name, size in WIDTHS:
-            run(b, "viewport", size)
-            run(b, "goto", url)
-            raw = run(b, "eval", str(work / "check.js"))
+            run(b, env, "viewport", size)
+            run(b, env, "goto", url)
+            raw = run(b, env, "eval", str(work / "check.js"))
             for f in json.loads(raw.splitlines()[-1]):
                 f["width"] = name
                 findings.append(f)
             themes = ("light", "dark") if name == "desktop" else ("light",)
             for theme in themes:
-                run(b, "js", f"document.documentElement.setAttribute('data-theme','{theme}')")
-                shot = out / f"full-{name}-{theme}.png"
-                run(b, "screenshot", str(shot))
-                shots.append(str(shot))
+                run(b, env, "js", f"document.documentElement.setAttribute('data-theme','{theme}')")
+                shot(f"full-{name}-{theme}.png")
             if name == "desktop":
-                run(b, "js", "document.documentElement.setAttribute('data-theme','light')")
+                run(b, env, "js", "document.documentElement.setAttribute('data-theme','light')")
                 # number the cards in the page itself: nth-of-type breaks when cards are not siblings
-                n = int(run(b, "js", "(()=>{const s=document.querySelectorAll('section');"
-                                     "s.forEach((e,i)=>e.setAttribute('data-explain-card',i+1));"
-                                     "return s.length})()").splitlines()[-1])
+                n = int(run(b, env, "js", "(()=>{const s=document.querySelectorAll('section');"
+                                          "s.forEach((e,i)=>e.setAttribute('data-explain-card',i+1));"
+                                          "return s.length})()").splitlines()[-1])
                 for i in range(1, n + 1):
-                    shot = out / f"card-{i:02d}.png"
-                    run(b, "screenshot", f'[data-explain-card="{i}"]', str(shot))
-                    shots.append(str(shot))
+                    shot(f"card-{i:02d}.png", f'[data-explain-card="{i}"]')
     finally:
-        if tab:
-            subprocess.run([b, "closetab", tab], capture_output=True, text=True)
+        subprocess.run([b, "stop"], capture_output=True, text=True, env=env, timeout=30)
         shutil.rmtree(work, ignore_errors=True)
     return findings, shots
 
