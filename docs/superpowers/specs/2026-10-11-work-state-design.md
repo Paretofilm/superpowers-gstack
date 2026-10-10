@@ -110,9 +110,21 @@ tillegg til `detail` og `items`. Kode 0 betyr at alt er ✓ eller –, kode 1 at
 - **«Bare hurtigbuffer»** betyr at hver fil i mappen ligger under en av `.gstack/`,
   `node_modules/`, `.build/`, `DerivedData/`, `__pycache__/` eller `.pytest_cache/`.
   Listen er én konstant i skriptet.
-- **«Bevist landet»** betyr `git merge-base --is-ancestor <gren> origin/main`. En
+- **«Bevist landet»** betyr at begge vilkårene holder:
+  - `git merge-base --is-ancestor <gren> origin/main`
+  - grenens reflog har minst én oppføring etter opprettelsen, altså en commit. En tom eller utløpt reflog beviser ingenting.
+
+  En gren som nettopp er laget fra `main`, er også forfar til `origin/main`, og uten det
+  andre vilkåret ville en annen økts ferske arbeidsmappe sett landet ut. En
   squash-fletting er ikke bevist, og grenen nevnes da i `ask`. Skriptet foreslår aldri
-  `-D`.
+  `-D`. `git branch -d` kjøres fra hovedmappen etter `pull --ff-only`, så git selv også
+  ser grenen som flettet.
+- **«Ren»** betyr at `git status --porcelain --ignored` er tom, eller at de eneste
+  ignorerte filene er hurtigbuffer. `wt remove` og `git worktree remove` sletter
+  ignorerte filer uten å spørre, og slike filer kan være data noen la der.
+- **I bruk:** En arbeidsmappe eller rest der en prosess har arbeidsmappe
+  (`lsof -d cwd -Fn`, sammenlignet med stiprefiks), står aldri i `safe_actions`. Det kan
+  være en annen økt som står der. Den nevnes som `i bruk`.
 - **Arbeidsmappen økten står i** ryddes aldri av `report`. Etter `land` er den allerede
   borte.
 - **Linjen sier aldri ✓ når noe står igjen.** Den skriver hva som står igjen, for
@@ -125,7 +137,9 @@ work-state.py install [--repo <sti>] [--quit-running] [--accept-migration] [--re
 ```
 
 Én installering om gangen per repo: en kjernelås på `gstack-install.lock` i git-mappen,
-som i `land`. Kjøres i bakgrunnen av skillen.
+som i `land`. Skillen kjører den i bakgrunnen. Blir en kjøring avbrutt, kan den
+midlertidige kopien `/Applications/.<navn>.gstack-new-<pid>` bli liggende. Neste
+kjøring fjerner slike kopier når prosessen med den PID-en ikke lever lenger.
 
 1. **Hovedmappen holder `main`, og den er ren.** Det sjekkes med `git status --porcelain --untracked-files=no`. Ignorerte lokale filer er i orden, de hører til `Local state`. Deretter kjøres `git pull --ff-only`. Står hovedmappen på en annen gren, er den skitten, eller feiler hentingen, bygges ingenting (kode 3).
 2. **Beholder, skjema og innstillinger** finnes slik `verify-and-land` fase 2 gjør:
@@ -135,14 +149,14 @@ som i `land`. Kjøres i bakgrunnen av skillen.
    - `-configuration Release -destination 'platform=macOS'`
    - `BUILT_PRODUCTS_DIR`, `FULL_PRODUCT_NAME`, `PRODUCT_BUNDLE_IDENTIFIER` og `EXECUTABLE_NAME` lest gjennom den samme destinasjonen. Mangler én av dem, stopper skriptet.
 3. **Spør i fire tilfeller.** Skriptet stopper med en kode, og skillen spør brukeren én gang. Ved ja kjøres skriptet igjen med flagget:
-   - **Appen kjører** (`pgrep -f "/Contents/MacOS/<EXECUTABLE_NAME>$"`), kode 4. Med `--quit-running` bes appen avslutte seg selv (`tell application id "<bundle-id>" to quit`), og skriptet venter i inntil 20 sekunder. Kjører den fortsatt, stopper skriptet. Det bruker aldri `kill`, og appen startes ikke på nytt etterpå.
-   - **Landingen kan endre data på disk,** kode 5. `classify-change.py --diff --diff-base <stempel-commit>` mot `origin/main` gir signalet `migration`. Uten stempel kan dette ikke måles, og da gjelder neste punkt. Flagg: `--accept-migration`.
+   - **Appen kjører** (`pgrep -f "/Contents/MacOS/<EXECUTABLE_NAME>$"`, navnet escapet med `re.escape`), kode 4. Med `--quit-running` bes appen avslutte seg selv (`tell application id "<bundle-id>" to quit`), og skriptet venter i inntil 20 sekunder. Kjører den fortsatt, stopper skriptet. Det bruker aldri `kill`, og appen startes ikke på nytt etterpå.
+   - **Landingen kan endre data på disk,** kode 5. `classify-change.py --diff --diff-base <stempel-commit>` mot `origin/main` gir signalet `migration`. Uten stempel kan dette ikke måles, og da gjelder neste punkt. Finnes ikke stempelets commit lenger i historikken, for eksempel etter en omskriving, regnes spennet som ukjent og gir også kode 5. Flagg: `--accept-migration`.
    - **Første installering over en kopi uten stempel,** kode 6. Det finnes en app med samme navn i `/Applications`, men ikke noe stempel. Da er forrige versjon ukjent. Flagg: `--replace-unstamped`.
    - **Kopien i `/Applications` er en annen app** (annen bundle-ID), kode 7. Det finnes ikke noe flagg for dette. Brukeren rydder selv.
 4. **Bygger** med `-derivedDataPath <git-mappe>/gstack-install-build`, så neste bygg tar med bare det som er endret. Ingen overstyring av signering. Feiler bygget, er det kode 8, med stien til loggen.
 5. **Kontrollerer før byttet.** Kopierer med `ditto` til `/Applications/.<navn>.gstack-new-<pid>`. Sjekker `codesign --verify --deep --strict` og leser bundle-ID-en med `plutil`. Feiler noe, fjernes den midlertidige kopien, den gamle står urørt, og koden er 9.
 6. **Bytter i ett steg.** Finnes en gammel kopi, byttes de med `renamex_np(RENAME_SWAP)` via `ctypes`. Den gamle, som nå har det midlertidige navnet, legges i papirkurven gjennom Finder, så «Legg tilbake» virker. Uten Finder flyttes den til `~/.Trash` med tidsstempel. Finnes ingen gammel kopi, holder `os.rename`. Er `/Applications` ikke skrivbar, er det kode 10. Skriptet bruker aldri `sudo`.
-7. **Registrerer og stempler.** `lsregister -f <app>` kjøres, og signaturen kontrolleres én gang til på den endelige stien. Deretter skrives `gstack-installed-app.json` atomisk i git-mappen, med `scheme`, `bundle_id`, `commit`, `app_path`, `version` og `installed_at`.
+7. **Registrerer og stempler.** `lsregister -f <app>` kjøres (`/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister`), og signaturen kontrolleres én gang til på den endelige stien. Deretter skrives `gstack-installed-app.json` atomisk i git-mappen, med `scheme`, `bundle_id`, `commit`, `app_path`, `version` og `installed_at`.
 
 | Kode | Betyr |
 |---|---|
