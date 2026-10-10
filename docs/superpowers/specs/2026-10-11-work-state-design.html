@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arbeidstilstand – oversikt</title>
+<style>
+/* explainer.css: the style of an htmlify explainer page (explain mode).
+   Copy this file unchanged into the page's first <style>; page-specific rules go in a
+   second <style>. explain-check compares the two and refuses a drifted copy.
+
+   Tokens: one accent per card, cyan, violet, magenta, amber or emerald (red only for a
+   failure path), each with a soft fill (--<accent>-s). Light theme on :root, dark under
+   prefers-color-scheme and [data-theme="dark"]; the theme button sets data-theme.
+
+   Parts: .wrap page · .top header with .toggle · section.glass card · .tag badge
+   (.t-cyan .t-violet .t-magenta .t-amber .t-emerald) · .key the card's one insight ·
+   .chip tile (.ic icon, <b> title, <span> one line) · .grid with .g2/.g3 tile grids ·
+   .scroll around a wide <svg> · .big headline number · .bars/.bar dot rows ·
+   .who three columns · ol.done numbered checklist · footer. */
+:root{
+  --bg:#f4f5fa;--bg2:#e9ecf6;--fg:#141826;--muted:#5c6378;--line:rgba(20,24,38,.10);
+  --glass:rgba(255,255,255,.62);--glass-edge:rgba(255,255,255,.95);
+  --cyan:#0891b2;--magenta:#c026d3;--violet:#7c3aed;--amber:#d97706;--emerald:#059669;--red:#dc2626;
+  --cyan-s:rgba(8,145,178,.12);--magenta-s:rgba(192,38,211,.10);--violet-s:rgba(124,58,237,.11);
+  --amber-s:rgba(217,119,6,.12);--emerald-s:rgba(5,150,105,.12);--red-s:rgba(220,38,38,.10);
+  --shadow:0 10px 40px -12px rgba(30,40,80,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#07080f;--bg2:#0e1020;--fg:#eef0fb;--muted:#9aa1bb;--line:rgba(255,255,255,.09);
+  --glass:rgba(22,25,44,.55);--glass-edge:rgba(255,255,255,.22);
+  --cyan:#22d3ee;--magenta:#f0abfc;--violet:#a78bfa;--amber:#fbbf24;--emerald:#34d399;--red:#f87171;
+  --cyan-s:rgba(34,211,238,.13);--magenta-s:rgba(240,171,252,.12);--violet-s:rgba(167,139,250,.14);
+  --amber-s:rgba(251,191,36,.12);--emerald-s:rgba(52,211,153,.12);--red-s:rgba(248,113,113,.13);
+  --shadow:0 10px 40px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#07080f;--bg2:#0e1020;--fg:#eef0fb;--muted:#9aa1bb;--line:rgba(255,255,255,.09);
+  --glass:rgba(22,25,44,.55);--glass-edge:rgba(255,255,255,.22);
+  --cyan:#22d3ee;--magenta:#f0abfc;--violet:#a78bfa;--amber:#fbbf24;--emerald:#34d399;--red:#f87171;
+  --cyan-s:rgba(34,211,238,.13);--magenta-s:rgba(240,171,252,.12);--violet-s:rgba(167,139,250,.14);
+  --amber-s:rgba(251,191,36,.12);--emerald-s:rgba(52,211,153,.12);--red-s:rgba(248,113,113,.13);
+  --shadow:0 10px 40px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;color:var(--fg);background:var(--bg);
+  font:16px/1.5 -apple-system,"SF Pro Text",system-ui,sans-serif;
+  background-image:
+    radial-gradient(900px 600px at 8% -5%,var(--violet-s),transparent 60%),
+    radial-gradient(800px 500px at 100% 10%,var(--cyan-s),transparent 60%),
+    radial-gradient(700px 600px at 50% 110%,var(--magenta-s),transparent 60%);
+  background-attachment:fixed;
+}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 16px 80px}
+h1,h2{font-family:-apple-system,"SF Pro Display",system-ui,sans-serif;letter-spacing:-.02em;margin:0}
+h1{font-size:clamp(30px,6vw,52px);line-height:1.05}
+h2{font-size:clamp(22px,3.6vw,30px);margin-bottom:6px}
+.sub{color:var(--muted);margin:6px 0 0}
+.mono,code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-variant-numeric:tabular-nums}
+code{font-size:.88em;padding:1px 6px;border-radius:6px;background:var(--line)}
+.glass{
+  position:relative;background:var(--glass);border-radius:22px;padding:24px;
+  backdrop-filter:blur(22px) saturate(170%);-webkit-backdrop-filter:blur(22px) saturate(170%);
+  box-shadow:var(--shadow);margin-top:22px;
+}
+.glass::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(140deg,var(--glass-edge),transparent 40%,transparent 70%,var(--glass-edge));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.toggle{border:0;cursor:pointer;border-radius:999px;padding:8px 14px;font:inherit;font-size:14px;
+  color:var(--fg);background:var(--glass);box-shadow:var(--shadow)}
+.tag{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 10px;border-radius:999px;margin-bottom:10px}
+.t-cyan{color:var(--cyan);background:var(--cyan-s)}.t-violet{color:var(--violet);background:var(--violet-s)}
+.t-magenta{color:var(--magenta);background:var(--magenta-s)}.t-amber{color:var(--amber);background:var(--amber-s)}
+.t-emerald{color:var(--emerald);background:var(--emerald-s)}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;fill:var(--fg)}
+svg .m{fill:var(--muted)} svg .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.chip{border-radius:16px;padding:14px 16px;background:var(--line);display:flex;gap:12px;align-items:flex-start}
+.chip .ic{font-size:24px;line-height:1}
+.chip b{display:block}
+.chip span{color:var(--muted);font-size:14px}
+.bars{display:grid;gap:8px;margin-top:16px}
+.bar{display:grid;grid-template-columns:150px 1fr 120px;gap:10px;align-items:center;font-size:14px}
+.bar .track{display:flex;gap:4px}
+.bar .dot{height:22px;flex:0 0 22px;border-radius:7px}
+.bar .how{font-size:12px;font-weight:600;text-align:right}
+@media (max-width:560px){.bar{grid-template-columns:96px 1fr;}.bar .how{grid-column:2;text-align:left}}
+.who{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:700px){.who{grid-template-columns:1fr}}
+.who > div{border-radius:18px;padding:16px;background:var(--line)}
+.who h3{margin:0 0 8px;font-size:17px}
+.who ul{margin:0;padding-left:18px;font-size:14px;color:var(--muted)}
+.who li{margin:3px 0}
+.done{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:8px}
+.done li{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:14px;background:var(--line)}
+.done .n{flex:0 0 28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:14px;
+  color:var(--emerald);background:var(--emerald-s)}
+.big{font-size:clamp(40px,8vw,64px);font-weight:700;letter-spacing:-.03em;line-height:1}
+.key{margin-top:14px;padding:14px 16px;border-radius:14px;border-left:3px solid var(--violet);background:var(--violet-s);font-size:15px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll svg{min-width:640px}
+footer{color:var(--muted);font-size:13px;margin-top:28px;text-align:center}
+</style>
+<style>
+.state{margin-top:14px;padding:14px 16px;border-radius:14px;background:var(--line);font-size:15px;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ═════════ TOPP ═════════ -->
+<div class="top">
+  <div>
+    <span class="tag t-violet">Spesifikasjon · 11. oktober 2026</span>
+    <h1>Arbeidstilstand</h1>
+    <p class="sub">Én linje etter hver oppgave: committet, pushet, ryddet, og appen i Docken er nyeste main.</p>
+  </div>
+  <button class="toggle" id="tg" aria-label="Bytt mellom lyst og mørkt">◐ Tema</button>
+</div>
+
+<!-- ═════════ PROBLEMET ═════════ -->
+<section class="glass">
+  <span class="tag t-amber">Problemet</span>
+  <div style="display:flex;gap:22px;align-items:center;flex-wrap:wrap">
+    <div><div class="big">4</div><div class="sub">spørsmål du stiller selv<br>etter nesten hver oppgave</div></div>
+    <div style="flex:1;min-width:260px" class="grid g2">
+      <div class="chip"><span class="ic">💾</span><div><b>Er alt committet?</b></div></div>
+      <div class="chip"><span class="ic">☁️</span><div><b>Er alt pushet?</b></div></div>
+      <div class="chip"><span class="ic">🧹</span><div><b>Er mappene ryddet?</b></div></div>
+      <div class="chip"><span class="ic">🖥️</span><div><b>Er appen installerbar?</b></div></div>
+    </div>
+  </div>
+  <div class="key">💡 Docken åpner kopien i <code>/Applications</code>. Den er fra forrige installering, <b>ikke nyeste main</b>.</div>
+</section>
+
+<!-- ═════════ HELHETEN ═════════ -->
+<section class="glass">
+  <span class="tag t-violet">Helheten</span>
+  <h2>Tre anledninger, én sjekk, én linje</h2>
+  <div class="scroll">
+  <svg viewBox="0 0 960 330" role="img" aria-label="Tre anledninger starter tilstandssjekken, som gir linjen, trygge ryddesteg, ett spørsmål og eventuelt en installering">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+    </defs>
+    <rect x="10" y="40" width="230" height="62" rx="16" fill="var(--line)"/>
+    <text x="30" y="68" font-size="16" font-weight="600">🛬  Etter landing</text><text x="30" y="88" font-size="13" class="m">rett på main</text>
+    <rect x="10" y="134" width="230" height="62" rx="16" fill="var(--line)"/>
+    <text x="30" y="162" font-size="16" font-weight="600">👀  Etter godkjent bygg</text><text x="30" y="182" font-size="13" class="m">også via pull request</text>
+    <rect x="10" y="228" width="230" height="62" rx="16" fill="var(--line)"/>
+    <text x="30" y="256" font-size="16" font-weight="600">💬  Før siste melding</text><text x="30" y="276" font-size="13" class="m">når filer er endret</text>
+    <path d="M240,71 C280,71 280,140 316,140" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M240,165 L316,165" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M240,259 C280,259 280,190 316,190" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+    <rect x="320" y="70" width="230" height="190" rx="18" fill="var(--violet-s)" stroke="var(--violet)" stroke-width="1.5"/>
+    <text x="340" y="104" font-size="18" font-weight="700">📋 Tilstandssjekk</text>
+    <text x="340" y="134" font-size="14" class="m">committet · pushet</text>
+    <text x="340" y="158" font-size="14" class="m">mapper ryddet</text>
+    <text x="340" y="182" font-size="14" class="m">installerbar</text>
+    <text x="340" y="232" font-size="13" fill="var(--violet)" font-weight="600">endrer ingenting selv</text>
+    <path d="M550,120 C590,120 590,48 626,48" fill="none" stroke="var(--emerald)" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M550,150 C590,150 590,128 626,128" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M550,180 C590,180 590,208 626,208" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M550,210 C590,210 590,288 626,288" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+    <rect x="630" y="20" width="320" height="56" rx="16" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
+    <text x="650" y="45" font-size="15" font-weight="600">✅  Tilstandslinjen</text><text x="650" y="64" font-size="12" class="m">siste linje i meldingen</text>
+    <rect x="630" y="100" width="320" height="56" rx="16" fill="var(--line)"/>
+    <text x="650" y="125" font-size="15" font-weight="600">🧹  Trygge ryddesteg</text><text x="650" y="144" font-size="12" class="m">agenten kjører dem selv</text>
+    <rect x="630" y="180" width="320" height="56" rx="16" fill="var(--amber-s)" stroke="var(--amber)" stroke-width="1"/>
+    <text x="650" y="205" font-size="15" font-weight="600">❓  Ett samlet spørsmål</text><text x="650" y="224" font-size="12" class="m">det som ikke er bevist trygt</text>
+    <rect x="630" y="260" width="320" height="56" rx="16" fill="var(--line)"/>
+    <text x="650" y="285" font-size="15" font-weight="600">🖥️  Installering i bakgrunnen</text><text x="650" y="304" font-size="12" class="m">når Mac-appen er eldre enn main</text>
+  </svg>
+  </div>
+  <div class="state">Tilstand: committet ✓ · pushet ✓ · mapper ryddet ✓ · installerbar ✓ (3.10.1 på main, du har 3.10.0)</div>
+  <div class="key">💡 Sjekken <b>måler og foreslår</b>. Agenten gjør bare det sjekken har bevist at er trygt.</div>
+</section>
+
+<!-- ═════════ DEL 1 ═════════ -->
+<section class="glass">
+  <span class="tag t-cyan">Del 1</span>
+  <h2>🏷️ Hva «installerbar» betyr, bestemt én gang</h2>
+  <p class="sub">Én linje <code>Installable:</code> i prosjektets CLAUDE.md. <code>/adapt</code> spør én gang og foreslår svaret.</p>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="chip"><span class="ic">🖥️</span><div><b>macos-app &lt;skjema&gt;</b><span>nyeste main ligger i /Applications</span></div></div>
+    <div class="chip"><span class="ic">🧩</span><div><b>plugin</b><span>godkjent, med CHANGELOG, pushet</span></div></div>
+    <div class="chip"><span class="ic">🛠️</span><div><b>command &lt;kommando&gt;</b><span>prosjektets egen sjekk, for eksempel iPhone</span></div></div>
+    <div class="chip"><span class="ic">➖</span><div><b>none</b><span>ingenting å installere</span></div></div>
+  </div>
+  <div class="key">💡 Linjen leses fra <code>origin/main</code>. <b>En gren kan ikke endre</b> hva som installeres. Mangler linjen, står det «kjør /adapt».</div>
+</section>
+
+<!-- ═════════ DEL 2 ═════════ -->
+<section class="glass">
+  <span class="tag t-magenta">Del 2</span>
+  <h2>🧹 Hva agenten rydder selv, og hva den spør om</h2>
+  <div class="grid g2" style="margin-top:12px">
+    <div>
+      <div class="tag t-emerald">Gjør selv</div>
+      <div class="grid" style="gap:8px">
+        <div class="chip"><span class="ic">💾</span><div><b>Committer egne endringer</b><span>bare filer den selv har endret</span></div></div>
+        <div class="chip"><span class="ic">☁️</span><div><b>Pusher egne commits</b><span>aldri med tvang</span></div></div>
+        <div class="chip"><span class="ic">🗂️</span><div><b>Fjerner landede mapper</b><span>rene og ikke i bruk</span></div></div>
+        <div class="chip"><span class="ic">🗑️</span><div><b>Rester med bare hurtigbuffer</b><span>til papirkurven</span></div></div>
+      </div>
+    </div>
+    <div>
+      <div class="tag t-amber">Spør først</div>
+      <div class="grid" style="gap:8px">
+        <div class="chip"><span class="ic">👥</span><div><b>Andres endringer</b><span>fra en annen økt eller fra deg</span></div></div>
+        <div class="chip"><span class="ic">🌿</span><div><b>Grener som ikke er bevist landet</b><span>også squash-flettede</span></div></div>
+        <div class="chip"><span class="ic">📁</span><div><b>Mapper med ukjent innhold</b></div></div>
+        <div class="chip"><span class="ic">🏷️</span><div><b>Versjon og publisering</b><span>alltid ditt valg</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="key">💡 Linjen sier <b>aldri ✓ når noe står igjen</b>. Den sier hva som står igjen.</div>
+</section>
+
+<!-- ═════════ VIKTIG DETALJ ═════════ -->
+<section class="glass">
+  <span class="tag t-amber">Viktig detalj</span>
+  <h2>🌿 En helt ny gren ser landet ut</h2>
+  <p class="sub">Begge grenene ligger i main. Bare den ene har gjort noe arbeid.</p>
+  <div class="scroll">
+  <svg viewBox="0 0 960 230" role="img" aria-label="To grener som begge ligger i main: den landede har egne commits og ryddes, den nye har ingen og blir stående">
+    <line x1="40" y1="70" x2="420" y2="70" stroke="var(--line)" stroke-width="3"/>
+    <circle cx="80" cy="70" r="10" fill="var(--muted)"/><circle cx="160" cy="70" r="10" fill="var(--muted)"/><circle cx="240" cy="70" r="10" fill="var(--muted)"/>
+    <circle cx="320" cy="70" r="10" fill="var(--emerald)"/><circle cx="400" cy="70" r="10" fill="var(--emerald)"/>
+    <rect x="364" y="22" width="72" height="24" rx="7" fill="var(--emerald-s)"/><text x="400" y="39" font-size="12" text-anchor="middle" font-weight="600">gren</text>
+    <text x="470" y="62" font-size="14" font-weight="600">✓ ligger i main   ✓ egne commits</text>
+    <text x="470" y="84" font-size="14" fill="var(--emerald)" font-weight="600">→ ryddes</text>
+    <line x1="40" y1="180" x2="420" y2="180" stroke="var(--line)" stroke-width="3"/>
+    <circle cx="80" cy="180" r="10" fill="var(--muted)"/><circle cx="160" cy="180" r="10" fill="var(--muted)"/><circle cx="240" cy="180" r="10" fill="var(--muted)"/>
+    <circle cx="320" cy="180" r="10" fill="var(--muted)"/><circle cx="400" cy="180" r="10" fill="var(--muted)"/>
+    <rect x="356" y="132" width="88" height="24" rx="7" fill="var(--amber-s)"/><text x="400" y="149" font-size="12" text-anchor="middle" font-weight="600">ny gren</text>
+    <text x="470" y="172" font-size="14" font-weight="600">✓ ligger i main   ✗ egne commits</text>
+    <text x="470" y="194" font-size="14" fill="var(--amber)" font-weight="600">→ blir stående: kan være en annen økts nye mappe</text>
+  </svg>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="chip"><span class="ic">🔒</span><div><b>Mappe i bruk ryddes aldri</b><span>en annen økt kan stå der</span></div></div>
+    <div class="chip"><span class="ic">🙈</span><div><b>Ignorerte filer teller</b><span>bare hurtigbuffer regnes som tomt</span></div></div>
+  </div>
+  <div class="key">💡 «Landet» krever <b>både</b> at grenen ligger i main <b>og</b> at den har fått commits.</div>
+</section>
+
+<!-- ═════════ DEL 3 ═════════ -->
+<section class="glass">
+  <span class="tag t-cyan">Del 3</span>
+  <h2>🖥️ Nyeste main i Docken</h2>
+  <div class="scroll">
+  <svg viewBox="0 0 960 280" role="img" aria-label="Fem steg i installeringen, med stopp for spørsmål og en feilvei der den gamle kopien står urørt">
+    <defs><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--cyan)"/></marker>
+    <marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--amber)"/></marker>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--red)"/></marker></defs>
+    <g font-size="14">
+      <circle cx="80" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="80" y="80" font-size="30" text-anchor="middle">⬇️</text>
+      <text x="80" y="140" text-anchor="middle" font-weight="600">Henter main</text><text x="80" y="158" text-anchor="middle" class="m" font-size="12">hovedmappen, ren</text>
+      <path d="M126,70 L230,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/>
+      <circle cx="276" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="276" y="80" font-size="30" text-anchor="middle">🔨</text>
+      <text x="276" y="140" text-anchor="middle" font-weight="600">Bygger Release</text><text x="276" y="158" text-anchor="middle" class="m" font-size="12">eget skjema og signering</text>
+      <path d="M322,70 L426,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/>
+      <circle cx="472" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="472" y="80" font-size="30" text-anchor="middle">🔍</text>
+      <text x="472" y="140" text-anchor="middle" font-weight="600">Kontrollerer kopien</text><text x="472" y="158" text-anchor="middle" class="m" font-size="12">signatur og app-ID</text>
+      <path d="M518,70 L622,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/>
+      <circle cx="668" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="668" y="80" font-size="30" text-anchor="middle">🔁</text>
+      <text x="668" y="140" text-anchor="middle" font-weight="600">Bytter i ett steg</text><text x="668" y="158" text-anchor="middle" class="m" font-size="12">gammel til papirkurven</text>
+      <path d="M714,70 L818,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/>
+      <circle cx="864" cy="70" r="44" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/><text x="864" y="80" font-size="30" text-anchor="middle">🏷️</text>
+      <text x="864" y="140" text-anchor="middle" font-weight="600">Stempler</text><text x="864" y="158" text-anchor="middle" class="m" font-size="12">hvilken commit</text>
+    </g>
+    <path d="M80,166 L80,196" stroke="var(--amber)" stroke-width="2" marker-end="url(#aa)"/>
+    <rect x="20" y="200" width="440" height="60" rx="12" fill="var(--amber-s)" stroke="var(--amber)" stroke-width="1"/>
+    <text x="36" y="224" font-size="14" font-weight="600">✋ Spør deg først når</text>
+    <text x="36" y="246" font-size="13" class="m">appen kjører · data kan endres · ukjent kopi · annen app</text>
+    <path d="M472,166 L520,196" stroke="var(--red)" stroke-width="2" marker-end="url(#arr)"/>
+    <rect x="490" y="200" width="450" height="60" rx="12" fill="var(--red-s)" stroke="var(--red)" stroke-width="1"/>
+    <text x="506" y="224" font-size="14" font-weight="600">⛔ Bygg eller kontroll feiler</text>
+    <text x="506" y="246" font-size="13" class="m">den gamle kopien står urørt i Docken</text>
+  </svg>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="chip"><span class="ic">⚙️</span><div><b>Prosjektets innstillinger røres aldri</b></div></div>
+    <div class="chip"><span class="ic">🚫</span><div><b>Aldri sudo, aldri tvang</b><span>appen bes avslutte seg selv</span></div></div>
+    <div class="chip"><span class="ic">♻️</span><div><b>Gammel kopi i papirkurven</b><span>kan legges tilbake</span></div></div>
+    <div class="chip"><span class="ic">⚡</span><div><b>Bare det som er endret</b><span>første bygg tar noen minutter</span></div></div>
+  </div>
+  <div class="key">💡 Den gamle kopien står til den nye er kontrollert. <b>Docken har alltid en app som virker.</b></div>
+</section>
+
+<!-- ═════════ DEL 4 ═════════ -->
+<section class="glass">
+  <span class="tag t-magenta">Del 4</span>
+  <h2>⏱️ Etter en landing</h2>
+  <div class="scroll">
+  <svg viewBox="0 0 960 240" role="img" aria-label="Etter landingen ryddes mappen, sjekken kjører og linjen skrives; er Mac-appen eldre enn main, installeres den i bakgrunnen og linjen skrives på nytt">
+    <defs><marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--magenta)"/></marker></defs>
+    <rect x="10" y="30" width="200" height="56" rx="14" fill="var(--line)"/>
+    <text x="28" y="55" font-size="15" font-weight="600">🛬 Landet</text><text x="28" y="74" font-size="12" class="m">main er pushet</text>
+    <path d="M210,58 L246,58" stroke="var(--magenta)" stroke-width="2" marker-end="url(#am)"/>
+    <rect x="250" y="30" width="200" height="56" rx="14" fill="var(--line)"/>
+    <text x="268" y="55" font-size="15" font-weight="600">🧹 Mappe og gren</text><text x="268" y="74" font-size="12" class="m">fjernet</text>
+    <path d="M450,58 L486,58" stroke="var(--magenta)" stroke-width="2" marker-end="url(#am)"/>
+    <rect x="490" y="30" width="200" height="56" rx="14" fill="var(--magenta-s)" stroke="var(--magenta)" stroke-width="1.5"/>
+    <text x="508" y="55" font-size="15" font-weight="600">📋 Tilstandssjekk</text><text x="508" y="74" font-size="12" class="m">måler alt fire</text>
+    <path d="M690,58 L726,58" stroke="var(--magenta)" stroke-width="2" marker-end="url(#am)"/>
+    <rect x="730" y="30" width="220" height="56" rx="14" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
+    <text x="748" y="55" font-size="15" font-weight="600">✅ Linjen</text><text x="748" y="74" font-size="12" class="m">i meldingen</text>
+    <path d="M590,86 L590,146" stroke="var(--magenta)" stroke-width="2" stroke-dasharray="5 5" marker-end="url(#am)"/>
+    <text x="604" y="122" font-size="12" class="m">Mac-app eldre enn main</text>
+    <rect x="490" y="150" width="200" height="56" rx="14" fill="var(--line)"/>
+    <text x="508" y="175" font-size="15" font-weight="600">🖥️ Installering</text><text x="508" y="194" font-size="12" class="m">i bakgrunnen</text>
+    <path d="M690,178 L726,178" stroke="var(--magenta)" stroke-width="2" marker-end="url(#am)"/>
+    <rect x="730" y="150" width="220" height="56" rx="14" fill="var(--line)"/>
+    <text x="748" y="175" font-size="15" font-weight="600">🔔 Linjen på nytt</text><text x="748" y="194" font-size="12" class="m">eller ett spørsmål</text>
+  </svg>
+  </div>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="chip"><span class="ic">👀</span><div><b>Etter godkjent bygg</b><span>ja dekker at testbygget lukkes</span></div></div>
+    <div class="chip"><span class="ic">💬</span><div><b>Før siste melding</b><span>i hver oppgave som endret filer</span></div></div>
+    <div class="chip"><span class="ic">📌</span><div><b>Stopp går ikke tapt</b><span>spørsmålet venter til neste sjekk</span></div></div>
+  </div>
+  <div class="key">💡 Du trenger <b>aldri å huske kommandoene</b>. Landingen og avslutningen av oppgaven kjører dem.</div>
+</section>
+
+<!-- ═════════ HVEM GJØR HVA ═════════ -->
+<section class="glass">
+  <span class="tag t-emerald">Arbeidsdeling</span>
+  <h2>Hvem gjør hva</h2>
+  <div class="who" style="margin-top:12px">
+    <div style="background:var(--amber-s)"><h3>🙋 Du</h3><ul><li>svarer på det samlede spørsmålet</li><li>bestemmer versjon og publisering</li><li>sier ja til at appen avsluttes</li><li>er til stede ved første ekte kjøring</li></ul></div>
+    <div style="background:var(--magenta-s)"><h3>🤖 Agenten</h3><ul><li>kjører sjekken</li><li>gjør de trygge stegene</li><li>spør én gang</li><li>starter installeringen</li></ul></div>
+    <div style="background:var(--violet-s)"><h3>⚙️ Skriptet</h3><ul><li>måler tilstanden</li><li>bygger og installerer</li><li>stopper ved tvil</li><li>husker hvor det stoppet</li></ul></div>
+  </div>
+</section>
+
+<!-- ═════════ FERDIG NÅR ═════════ -->
+<section class="glass">
+  <span class="tag t-emerald">Ferdig når</span>
+  <ol class="done">
+    <li><span class="n">1</span><span>Linjen står etter hver landing og hver oppgave som endret filer</span></li>
+    <li><span class="n">2</span><span>Testene er grønne, og ingen av dem rører den ekte maskinen</span></li>
+    <li><span class="n">3</span><span>Øvingsrunden i reserve-Mac-en bygger bare det som er endret, andre gang</span></li>
+    <li><span class="n">4</span><span>Første ekte kjøring på én av dine Mac-apper, med deg til stede</span></li>
+    <li><span class="n">5</span><span><code>/adapt</code> spør om «installerbar» én gang og husker svaret</span></li>
+  </ol>
+</section>
+
+<!-- ═════════ VERDT Å VITE ═════════ -->
+<section class="glass">
+  <span class="tag t-amber">Verdt å vite</span>
+  <div class="grid g2">
+    <div class="chip"><span class="ic">📱</span><div><b>iOS går gjennom egen sjekk</b><span>innebygd støtte kommer senere</span></div></div>
+    <div class="chip"><span class="ic">🔄</span><div><b>Hver ny main bygges</b><span>også ren dokumentasjon, men det går fort</span></div></div>
+    <div class="chip"><span class="ic">⏸️</span><div><b>Appen startes ikke på nytt</b><span>åpne den fra Docken</span></div></div>
+    <div class="chip"><span class="ic">🚫</span><div><b>Utenfor nå</b><span>TestFlight, notarisering og en sperre-krok</span></div></div>
+  </div>
+</section>
+
+<footer>Kilde: <span class="mono">2026-10-11-work-state-design.md</span></footer>
+</div>
+<script>
+(function(){
+  var root=document.documentElement,btn=document.getElementById('tg');
+  try{var s=localStorage.getItem('explainer-tema');if(s)root.setAttribute('data-theme',s);}catch(e){}
+  btn.addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    var next=cur==='dark'?'light':'dark';root.setAttribute('data-theme',next);
+    try{localStorage.setItem('explainer-tema',next);}catch(e){}
+  });
+})();
+</script>
+</body>
+</html>
