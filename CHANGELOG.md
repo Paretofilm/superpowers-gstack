@@ -1,5 +1,23 @@
 # Changelog
 
+## [3.10.2] - 2026-10-11
+
+**Model refresh: the router now points at the 5.5 generation, and the model-review issue no longer sends the maintainer to a path that does not exist.**
+
+Issues #89 (opus) and #90 (sonnet) had been open since 2026-09-28 and 2026-10-05. Haiku was one generation stale as well.
+
+### Changed
+- `skills/adapt/model-routing.md`: `opus` → `claude-opus-5-5`, `sonnet` → `claude-sonnet-5-5`, `haiku` → `claude-haiku-5-5`. `fable` stays `claude-fable-5-1`. All four verified against the models overview on 2026-10-11 as current tier heads and general availability, not previews.
+- Fable's premium is now written as roughly 2.5× Opus (was 2×): Opus 5.5 is cheaper than Opus 5, so the gap widened. The "earns its" heading and the exploration-budget sentence carry the new factor. The gating rules for when to use `fable` are unchanged.
+- The domain-sensitivity floors and the sonnet→opus rationale are **not** changed. Opus 5.5 and Sonnet 5.5 kept the same price ratio to each other, and nothing checked here shows the capability gap moving, so there is no evidence to re-calibrate on.
+
+### Fixed
+- `scripts/check-new-models.py`: the issue body pointed at `skills/setup-routing/model-routing.md` (the file lives in `skills/adapt/`) and told the maintainer to update "BOTH generators" under E8. The emitted `blocks/model-routing-section.md` carries tier names, not ids, so only `model-routing.md` needs the new id. Both steps are corrected.
+- Self-test gains two assertions for point releases: `5.5` flags against `5`, and a dated snapshot of `5.5` flags as `5.5`, not as a newer version.
+
+### Process note
+Haiku was not missed by the job. Anthropic's retirement dates put the 5.5 releases at 2026-09-22 (opus), 2026-09-28 (sonnet) and 2026-10-07 (haiku); the weekly Monday run flagged each one on the first run after it shipped, and Haiku 5.5 landed after the 2026-10-05 run. The next run, 2026-10-12, would have opened the Haiku issue. The detection logic handles all three. The cost is up to a week of latency, which is the cron cadence, not a bug.
+
 ## [3.10.1] - 2026-10-10
 
 **`land` no longer asks the user to approve the gate with a `!` command, which cannot work.**

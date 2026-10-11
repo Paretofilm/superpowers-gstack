@@ -34,15 +34,15 @@ place they map to model ids. Update the ids here when a new model ships
 (`scripts/check-new-models.py` opens an issue when Anthropic lists a newer one).
 
 - `fable` — `claude-fable-5-1` — top tier. Novel, long-horizon, autonomous work
-  where the approach must be *invented*, not mapped. Roughly twice the price of
-  Opus; its lead grows with task length. On short, well-scoped tasks it is close
-  to Opus — don't pay the premium there.
-- `opus` — `claude-opus-5` — heavy reasoning, novel synthesis, strategic
+  where the approach must be *invented*, not mapped. Roughly 2.5× the price of
+  Opus (list prices checked 2026-10-11); its lead grows with task length. On short,
+  well-scoped tasks it is close to Opus — don't pay the premium there.
+- `opus` — `claude-opus-5-5` — heavy reasoning, novel synthesis, strategic
   challenge, and the default for high-blast-radius coding.
-- `sonnet` — `claude-sonnet-5` — structured engineering, code review, planning,
+- `sonnet` — `claude-sonnet-5-5` — structured engineering, code review, planning,
   contained-blast-radius coding with tests as the net. The split against opus is
   mostly about blast radius; on genuinely hard reasoning, opus still buys capability.
-- `haiku` — `claude-haiku-4-5` — mechanical, templated, deterministic.
+- `haiku` — `claude-haiku-5-5` — mechanical, templated, deterministic.
 
 ## The domain-sensitivity axis
 
@@ -74,7 +74,7 @@ wrote the code.
 | Format plumbing / serialization             | low         | sonnet / haiku    | round-trip tests are a strong net |
 | Templated scaffolding / mechanical refactor | low         | haiku             | deterministic |
 
-## When Fable earns its 2× (and when it does NOT)
+## When Fable earns its 2.5× (and when it does NOT)
 
 **Use `fable` only when ALL hold:**
 - Technique is genuinely novel (invent the approach, not map a known one)
@@ -91,7 +91,7 @@ lever.
 ### Dispatching a Fable subagent
 
 1. **Scope open on approach, bounded on deliverable.** Over-specifying the
-   *approach* destroys the exploration you're paying 2× for; leaving the
+   *approach* destroys the exploration you're paying 2.5× for; leaving the
    *deliverable* unbounded burns tokens on integration opus does cheaper. Let
    Fable choose the *how*; you choose *where it stops* (e.g. "research +
    architecture + prototype + tests — do NOT integrate into the RT path").

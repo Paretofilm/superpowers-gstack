@@ -190,7 +190,7 @@ def create_issue(flags: list[dict[str, str]]) -> None:
         f"| `{f['tier']}` | `{f['new_id']}` (v{f['new_version']}) | v{f['router_version']} |"
         for f in flags
     )
-    body = f"""A newer Claude model is available than `skills/setup-routing/model-routing.md` references.
+    body = f"""A newer Claude model is available than `skills/adapt/model-routing.md` references.
 
 | Tier | Newest on `/v1/models` | Router currently uses |
 |------|------------------------|-----------------------|
@@ -198,7 +198,7 @@ def create_issue(flags: list[dict[str, str]]) -> None:
 
 ## Action (manual — this is a flag, not an auto-change)
 1. Verify on https://platform.claude.com/docs/en/about-claude/models/overview that the new model is a real tier head (not a preview / limited-availability id) and check its capability + pricing notes.
-2. If adopting, update the ID in `model-routing.md` **and** the emitted `## Model Routing` block in BOTH generators (lint **E8** enforces the two stay byte-identical).
+2. If adopting, update the ID in `skills/adapt/model-routing.md`. The emitted `## Model Routing` block (`skills/adapt/blocks/model-routing-section.md`) carries tier names, not ids, so it only needs a change if the tier rules themselves change.
 3. Reconsider the domain-sensitivity floor if the capability/cost calculus shifted (a near-Opus Sonnet narrows the sonnet→opus gap).
 4. Bump `plugin.json` + add a CHANGELOG entry (release gate), then merge.
 
@@ -238,6 +238,12 @@ def run_self_test() -> int:
     router_dated = {"fable": (5,), "opus": (4, 8), "sonnet": (5,), "haiku": (4, 5)}
     assert find_new_models(router_dated, newest_api_versions(
         ["claude-sonnet-5", "claude-sonnet-5-20260630"])) == [], "dated snapshot must not re-flag"
+    # Point releases: 5.5 is newer than 5, and the dated form of 5.5 is not newer than 5.5
+    assert parse_version("claude-haiku-5-5", "haiku") == (5, 5) and (5, 5) > (5,) > (4, 5)
+    assert find_new_models({"haiku": (4, 5), "opus": (5,)}, newest_api_versions(
+        ["claude-haiku-5-5", "claude-haiku-4-5", "claude-opus-5-5-20261001"])) == [
+        {"tier": "haiku", "router_version": "4.5", "new_id": "claude-haiku-5-5", "new_version": "5.5"},
+        {"tier": "opus", "router_version": "5", "new_id": "claude-opus-5-5-20261001", "new_version": "5.5"}], "5.5 point releases must flag"
     # After wiring sonnet-5 in, no flag
     router2 = {**router, "sonnet": (5,)}
     assert find_new_models(router2, newest_api_versions(api_ids)) == [], "should clear once wired"
@@ -275,7 +281,7 @@ def run_self_test() -> int:
         assert fetch_models("k") == ["claude-opus-4-8", "claude-sonnet-5"], "clean walk"
     finally:
         urllib.request.urlopen = orig
-    print("self-test: PASS (11 assertions)")
+    print("self-test: PASS (13 assertions)")
     return 0
 
 
