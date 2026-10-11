@@ -49,6 +49,31 @@ Write `docs/superpowers/vibe/<YYYY-MM-DD>-<feature>/SPEC.md` (goal, non-goals,
 acceptance criteria) and `PLAN.md` (small tasks; each has one test and one
 "done when" line; no code). Commit both. Do not wait for a spec or plan review.
 
+**A pending `## Project` in CLAUDE.md** (`<!-- gstack-project-pending -->` on the
+heading, left by `/superpowers-gstack:adapt` in an empty folder) is filled in now, once,
+from what the intake settled — no new question. Write `.gstack/adapt-project.md`:
+`## Project` with `### Tech Stack / Testing / QA URL / Deployment` (omit what does not
+apply) and `### Routing for this stack` (`/qa <url>` for a browser UI, `/cso` before
+`/review` when the acceptance criteria touch auth, user data, payments or external
+APIs, the Apple skills on a native track). Pick the sensitivity the way adapt does
+(`very high` for real-time audio or lock-free concurrency, `high` for migrations, data
+transforms or security signals, `medium` for UI work, `low` for CLI tools and
+libraries). For a native platform write `.gstack/track` (`ios` | `macos` | `both`)
+first and resolve `IOS_SIMULATOR` and `DEVELOPMENT_TEAM` per adapt's
+`blocks/PLACEHOLDERS.md`. Then:
+
+```bash
+ADAPT="$SKILL_DIR/../../scripts/adapt-claude-md.py"
+[ -f "$ADAPT" ] || ADAPT=$(ls ~/.claude/plugins/cache/*/superpowers-gstack/*/scripts/adapt-claude-md.py 2>/dev/null | sort -V | tail -1)
+python3 "$ADAPT" --project-section .gstack/adapt-project.md --set 'DOMAIN_SENSITIVITY=<level>' \
+  [--set 'IOS_SIMULATOR=…' --set 'DEVELOPMENT_TEAM=…']
+```
+
+The script replaces the pending section once and drops the marker; exit 2 means the
+section is already the project's own — leave it and say so. Commit CLAUDE.md with
+the spec, and write one line in the log: `Filled in ## Project: <stack>, tests via
+<command>, sensitivity <level>.`
+
 ## Step 3: Acceptance tests — the one checkpoint
 
 Write the acceptance tests from the criteria, in a directory of their own (for example

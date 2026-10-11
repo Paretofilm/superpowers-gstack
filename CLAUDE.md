@@ -65,7 +65,7 @@ This repo is also a Claude Code plugin (`superpowers-gstack`). The skill `adapt`
 - Install via marketplace: `/plugin marketplace add Paretofilm/claude-marketplace` then `/plugin install superpowers-gstack@paretofilm-plugins`
 - Dev mode: `./scripts/install-plugin.sh --dev` (creates symlink, skills won't be discoverable in the skills list)
 - Skills:
-  - `/superpowers-gstack:adapt` — set up a new project or adapt an existing one (preserves CLAUDE.md content; the merge itself is `scripts/adapt-claude-md.py`, deterministic and tested)
+  - `/superpowers-gstack:adapt` — set up a new project or adapt an existing one (preserves CLAUDE.md content; the merge itself is `scripts/adapt-claude-md.py`, deterministic and tested). An empty folder gets the short path with no questions (`--fresh`, the script decides what fresh means); its `## Project` is filled in once after the first spec (`--project-section`, by vibe Step 2 or by `/adapt` on the marker)
 
 ## Setup
 

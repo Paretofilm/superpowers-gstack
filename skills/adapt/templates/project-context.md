@@ -31,7 +31,9 @@ commit, a measurement), not opinions, and delete what is no longer true.
 
 ## Running and testing
 
-<!-- The exact commands: build, run, the fast tests, the full suite, the end-to-end check. -->
+<!-- The exact commands: build, run, the fast tests, the full suite, the end-to-end check.
+The stack itself, the test command and the deploy target live in CLAUDE.md under
+`## Project` (filled in after the first spec) — point there, do not repeat them. -->
 
 ## How we work
 

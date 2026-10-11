@@ -515,7 +515,7 @@ def test_the_report_ends_with_one_json_line_the_skill_can_read(tmp_path):
 
 def test_the_blocks_roster_is_exactly_the_marker_blocks_on_disk():
     m = module()
-    on_disk = {f.name for f in BLOCKS.glob("*.md")} - {"PLACEHOLDERS.md", "model-routing-section.md"}
+    on_disk = {f.name for f in BLOCKS.glob("*.md")} - {"PLACEHOLDERS.md", "model-routing-section.md", "routing-default.md"}
     assert {b.file for b in m.BLOCKS} == on_disk
     for b in m.BLOCKS:
         assert re.match(r"^## .*<!-- " + re.escape(b.marker) + r"-v\d+ -->$", block(b.file).split("\n", 1)[0]), b.file
@@ -1271,3 +1271,275 @@ def test_none_written_from_a_linked_worktree_is_flagged(tmp_path):
     assert any("linked worktree" in n for n in last_json(p)["notes"])
     p = run(project(tmp_path / "other", "# Other\n"), *WEB_SETS, "--local-state", "none")
     assert not any("linked worktree" in n for n in last_json(p)["notes"])
+
+
+# --- 3.11.0: the fresh path — an empty folder gets CLAUDE.md with no questions -------
+
+def fresh_project(tmp_path, *files: str, git: bool = True) -> Path:
+    p = tmp_path / "proj"
+    p.mkdir(parents=True)
+    if git:
+        subprocess.run(["git", "init", "-q"], cwd=p, check=True)
+    for f in files:
+        (p / f).parent.mkdir(parents=True, exist_ok=True)
+        (p / f).write_text("x\n")
+    return p
+
+
+def detect(proj: Path) -> tuple[bool, str]:
+    j = last_json(run(proj, "--dry-run", "--set", "DOMAIN_SENSITIVITY=medium"))
+    return j["fresh"], j["fresh_reason"]
+
+
+@pytest.mark.parametrize("files, fresh, reason", [
+    ((), True, "0 file(s)"),
+    ((".gstack/track", ".gstack/workflow"), True, "0 file(s)"),
+    (("README.md", ".gitignore"), True, "2 file(s)"),
+    (("docs/superpowers/specs/.gitkeep", "docs/superpowers/plans/.gitkeep", "README.md"), True, "1 file(s)"),
+    (("package.json",), False, "package.json exists"),
+    ((".claude-plugin/plugin.json",), False, ".claude-plugin/plugin.json exists"),
+    (("App.xcodeproj/project.pbxproj",), False, "App.xcodeproj exists"),
+    (("a", "b", "c", "d", "e"), False, "5 or more files"),
+    (("src/a", "src/b", "src/c", "src/d", "src/e"), False, "5 or more files"),
+])
+def test_freshness_is_decided_by_the_script_and_the_reason_names_the_signal(tmp_path, files, fresh, reason):
+    proj = fresh_project(tmp_path, *files)
+    if ".gstack/track" in files:
+        (proj / ".gstack" / "track").write_text("web\n")
+        (proj / ".gstack" / "workflow").write_text("vibe\n")
+    got, why = detect(proj)
+    assert got is fresh, why
+    assert reason in why
+
+
+def test_a_claude_md_alone_is_not_fresh(tmp_path):
+    proj = project(tmp_path, claude_md="# P\n")
+    assert detect(proj) == (False, "CLAUDE.md exists")
+
+
+def test_fresh_refuses_on_a_project_that_is_not_fresh_and_writes_nothing(tmp_path):
+    proj = project(tmp_path, claude_md="# P\n\nkeep me\n")
+    p = run(proj, "--fresh", "--mkdirs", expect=2)
+    assert "BLOCKED — not a fresh project: CLAUDE.md exists" in p.stderr
+    assert (proj / "CLAUDE.md").read_text() == "# P\n\nkeep me\n"
+    assert not (proj / ".gstack").exists()
+    proj2 = fresh_project(tmp_path / "two", "package.json")
+    p = run(proj2, "--fresh", expect=2)
+    assert "package.json" in p.stderr and not (proj2 / "CLAUDE.md").exists() and not (proj2 / ".gstack").exists()
+
+
+def test_fresh_writes_everything_in_one_run_and_says_what_it_assumed(tmp_path):
+    proj = fresh_project(tmp_path, "README.md")
+    p = run(proj, "--fresh", "--mkdirs")
+    text = (proj / "CLAUDE.md").read_text()
+    assert text.splitlines()[2] == "# proj", "a fresh file starts with its title"
+    assert "{{" not in text
+    assert text.count("<!-- gstack-project-pending -->") == 1
+    assert "## Project <!-- gstack-project-pending -->" in text
+    assert "## Skill routing" in text and "Model Routing" in text
+    assert "domain sensitivity: medium" in text
+    assert "Local state: none" in text
+    assert marker("vibe-contract.md") in text
+    assert "gstack-xcode-tools" not in text
+    assert (proj / ".gstack" / "workflow").read_text() == "vibe\n"
+    assert (proj / ".gstack" / "explainer").read_text() == "local\n"
+    assert (proj / ".claude" / "skills" / "proj-context" / "SKILL.md").is_file()
+    assert (proj / "docs" / "superpowers" / "specs" / ".gitkeep").is_file()
+    staged = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=proj, capture_output=True, text=True).stdout.split()
+    assert ".gstack/workflow" in staged and ".gstack/explainer" in staged
+    j = last_json(p)
+    assert j["fresh"] is True
+    assert j["assumed"].startswith("Assumed: web track, vibe workflow, local explainer, no local state, medium sensitivity")
+    assert p.stdout.splitlines()[2] == j["assumed"], "the Assumed line is the first line under the report title"
+    assert "wrote .gstack/workflow = vibe and staged it" in j["changes"]
+    assert NOTHING in p.stdout
+
+
+def test_fresh_dry_run_writes_no_pin_and_reports_the_vibe_profile(tmp_path):
+    proj = fresh_project(tmp_path)
+    p = run(proj, "--fresh", "--mkdirs", "--dry-run")
+    assert not (proj / ".gstack").exists() and not (proj / "CLAUDE.md").exists() and not (proj / "docs").exists()
+    j = last_json(p)
+    assert "workflow vibe" in p.stdout.splitlines()[0]
+    assert "would write .gstack/workflow = vibe" in j["notes"]
+    assert "would write .gstack/explainer = local" in j["notes"]
+    assert not any("classic profile" in n for n in j["notes"]), "a fresh dry run must not call the project classic"
+    assert j["assumed"].startswith("Assumed: web track, vibe workflow")
+
+
+def test_after_fresh_a_plain_run_is_a_no_op_and_the_project_is_no_longer_fresh(tmp_path):
+    proj = fresh_project(tmp_path)
+    run(proj, "--fresh", "--mkdirs")
+    once = (proj / "CLAUDE.md").read_bytes()
+    p = run(proj, "--dry-run", "--set", "DOMAIN_SENSITIVITY=medium")
+    j = last_json(p)
+    assert j["fresh"] is False and j["fresh_reason"] == "CLAUDE.md exists"
+    assert j["changes"] == [] and j["removed"] == []
+    run(proj, "--set", "DOMAIN_SENSITIVITY=medium")
+    assert (proj / "CLAUDE.md").read_bytes() == once
+    p = run(proj, "--fresh", expect=2)
+    assert "not a fresh project" in p.stderr
+
+
+def test_fresh_keeps_an_existing_pin_and_a_classic_pin_gets_no_vibe_contract(tmp_path):
+    proj = fresh_project(tmp_path)
+    (proj / ".gstack").mkdir()
+    (proj / ".gstack" / "workflow").write_text("classic\n")
+    p = run(proj, "--fresh", "--mkdirs")
+    text = (proj / "CLAUDE.md").read_text()
+    assert (proj / ".gstack" / "workflow").read_text() == "classic\n"
+    assert "gstack-vibe" not in text
+    assert not (proj / ".claude").exists()
+    assert (proj / ".gstack" / "explainer").read_text() == "local\n"
+    j = last_json(p)
+    assert j["assumed"].startswith("Assumed: web track, classic workflow, local explainer")
+    assert not any("workflow = " in c for c in j["changes"])
+
+
+def test_fresh_honours_explicit_values_over_its_defaults(tmp_path):
+    proj = fresh_project(tmp_path)
+    p = run(proj, "--fresh", "--set", "DOMAIN_SENSITIVITY=high", "--local-state", "data/")
+    text = (proj / "CLAUDE.md").read_text()
+    assert "domain sensitivity: high" in text and "Local state: data/" in text
+    assert "high sensitivity" in last_json(p)["assumed"] and "local state `data/`" in last_json(p)["assumed"]
+
+
+def test_fresh_stages_the_pins_through_an_ignored_gstack_folder(tmp_path):
+    proj = fresh_project(tmp_path, ".gitignore")
+    (proj / ".gitignore").write_text(".gstack/\n")
+    run(proj, "--fresh")
+    assert "!.gstack/workflow" in (proj / ".gitignore").read_text().splitlines()
+    assert "!.gstack/explainer" in (proj / ".gitignore").read_text().splitlines()
+    staged = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=proj, capture_output=True, text=True).stdout.split()
+    assert {".gstack/workflow", ".gstack/explainer", ".gitignore"} <= set(staged)
+
+
+def test_fresh_works_outside_a_git_repository(tmp_path):
+    proj = fresh_project(tmp_path, git=False)
+    p = run(proj, "--fresh")
+    assert (proj / ".gstack" / "workflow").read_text() == "vibe\n"
+    assert "wrote .gstack/workflow = vibe" in last_json(p)["changes"]
+    assert "Traceback" not in p.stderr
+
+
+def test_fresh_and_project_section_together_are_a_usage_error(tmp_path):
+    proj = fresh_project(tmp_path)
+    (tmp_path / "s.md").write_text("## Project\n\nStack: x\n")
+    p = run(proj, "--fresh", "--project-section", str(tmp_path / "s.md"), expect=2)
+    assert "USAGE ERROR" in p.stderr and not (proj / "CLAUDE.md").exists()
+
+
+# --- 3.11.0: filling in `## Project` once the stack is known ---------------------------
+
+SECTION = "## Project\n\n### Tech Stack\nNext.js 15, TypeScript.\n\n### Testing\n`npm test`\n\n### QA URL\nhttp://localhost:3000\n"
+
+
+def test_project_section_replaces_the_pending_section_once_and_only_that(tmp_path):
+    proj = fresh_project(tmp_path)
+    run(proj, "--fresh")
+    before = (proj / "CLAUDE.md").read_text()
+    f = tmp_path / "section.md"
+    f.write_text(SECTION)
+    p = run(proj, "--project-section", str(f), "--set", "DOMAIN_SENSITIVITY=high")
+    after = (proj / "CLAUDE.md").read_text()
+    assert "gstack-project-pending" not in after
+    assert SECTION.rstrip("\n") in after
+    assert "domain sensitivity: high" in after
+    # everything outside `## Project` and `Model Routing` is byte-identical
+    def strip(text: str) -> str:
+        return re.sub(r"## Project.*?(?=\n## )", "", re.sub(r"## Model Routing.*?(?=\n## )", "", text, flags=re.S), flags=re.S)
+    assert strip(before) == strip(after)
+    j = last_json(p)
+    assert any(c.startswith("Project: filled in from --project-section") for c in j["changes"])
+    assert j["removed"] == [], "the placeholder is plugin prose, not the project's"
+    assert (proj / ".gstack" / "CLAUDE.md.pre-adapt").is_file()
+    # a second fill-in refuses: the section is the project's own now
+    once = (proj / "CLAUDE.md").read_bytes()
+    p = run(proj, "--project-section", str(f), "--set", "DOMAIN_SENSITIVITY=high", expect=2)
+    assert "no `## Project` section carries" in p.stderr
+    assert (proj / "CLAUDE.md").read_bytes() == once
+
+
+def test_project_section_refuses_on_a_project_that_owns_its_section(tmp_path):
+    proj = project(tmp_path, claude_md="# P\n\n## Project\n\nStack: mine\n")
+    f = tmp_path / "section.md"
+    f.write_text(SECTION)
+    p = run(proj, "--project-section", str(f), *WEB_SETS, expect=2)
+    assert "BLOCKED" in p.stderr and "gstack-project-pending" in p.stderr
+    assert (proj / "CLAUDE.md").read_text() == "# P\n\n## Project\n\nStack: mine\n"
+    assert not (proj / ".gstack").exists()
+
+
+def test_project_section_lists_lines_someone_wrote_into_the_pending_section(tmp_path):
+    proj = fresh_project(tmp_path)
+    run(proj, "--fresh")
+    text = (proj / "CLAUDE.md").read_text()
+    text = text.replace("## Project <!-- gstack-project-pending -->\n",
+                        "## Project <!-- gstack-project-pending -->\n\nMy early note.\n")
+    (proj / "CLAUDE.md").write_text(text)
+    f = tmp_path / "section.md"
+    f.write_text(SECTION)
+    p = run(proj, "--project-section", str(f), "--set", "DOMAIN_SENSITIVITY=medium")
+    j = last_json(p)
+    assert j["removed"] and j["removed"][0]["lines"] == ["My early note."]
+    assert REMOVED in p.stdout and "My early note." in p.stdout
+
+
+@pytest.mark.parametrize("content, why", [
+    ("### Tech Stack\nx\n", "must start with `## Project`"),
+    ("## Project <!-- gstack-project-pending -->\n\nx\n", "pending marker"),
+    ("## Project\n\nx\n\n## Other\n\ny\n", "one H2 section"),
+    ("## Project\n\n{{STACK}}\n", "placeholder"),
+    ("## Project <!-- gstack-routing-v3 -->\n\nx\n", "version marker"),
+])
+def test_a_malformed_project_section_file_is_refused_before_any_write(tmp_path, content, why):
+    proj = fresh_project(tmp_path)
+    run(proj, "--fresh")
+    once = (proj / "CLAUDE.md").read_bytes()
+    f = tmp_path / "section.md"
+    f.write_text(content)
+    p = run(proj, "--project-section", str(f), "--set", "DOMAIN_SENSITIVITY=medium", expect=2)
+    assert "BLOCKED" in p.stderr and why in p.stderr
+    assert (proj / "CLAUDE.md").read_bytes() == once
+
+
+def test_project_section_with_a_track_change_adds_the_native_blocks(tmp_path):
+    proj = fresh_project(tmp_path)
+    run(proj, "--fresh")
+    (proj / ".gstack" / "track").write_text("macos\n")
+    f = tmp_path / "section.md"
+    f.write_text("## Project\n\n### Tech Stack\nSwiftUI, macOS 26.\n")
+    run(proj, "--project-section", str(f), *NATIVE_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert marker("xcode-tools.md") in text and "gstack-project-pending" not in text and "{{" not in text
+
+
+def test_the_default_routing_block_is_the_fresh_projects_skill_routing(tmp_path):
+    proj = fresh_project(tmp_path)
+    run(proj, "--fresh")
+    text = (proj / "CLAUDE.md").read_text()
+    default = block("routing-default.md")
+    routing, pending = default.split("\n## Project <!-- gstack-project-pending -->")
+    assert routing.rstrip("\n") in text, "the default routing is inserted verbatim"
+    assert "## Project <!-- gstack-project-pending -->" + pending.rstrip("\n") in text, "the pending section comes with it"
+    assert "/qa <url>" not in routing and "/cso" not in routing, \
+        "stack-dependent rows wait for the fill-in"
+    assert "/superpowers-gstack:vibe" in default and "/superpowers:brainstorming" in default
+
+
+def test_a_refused_fresh_run_writes_no_pin_either(tmp_path):
+    """A fresh folder that already pins a native track needs the native placeholders;
+    without them the run refuses — and the refusal must come before the pins are
+    written, like every other refusal in this script."""
+    proj = fresh_project(tmp_path)
+    (proj / ".gstack").mkdir()
+    (proj / ".gstack" / "track").write_text("ios\n")
+    p = run(proj, "--fresh", "--mkdirs", expect=2)
+    assert "UNRESOLVED PLACEHOLDER" in p.stderr
+    assert sorted(x.name for x in (proj / ".gstack").iterdir()) == ["track"]
+    assert not (proj / "CLAUDE.md").exists() and not (proj / "docs").exists()
+    p = run(proj, "--fresh", "--mkdirs", *NATIVE_SETS)
+    assert (proj / ".gstack" / "workflow").read_text() == "vibe\n"
+    assert marker("xcode-tools.md") in (proj / "CLAUDE.md").read_text()
+    assert last_json(p)["assumed"].startswith("Assumed: ios track, vibe workflow")
+

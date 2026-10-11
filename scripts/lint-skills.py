@@ -152,7 +152,7 @@ MARKER_BLOCKS = [
     "companion-skills.md",
     "vibe-contract.md",
 ]
-PLAIN_BLOCKS = ["model-routing-section.md", "PLACEHOLDERS.md"]
+PLAIN_BLOCKS = ["model-routing-section.md", "PLACEHOLDERS.md", "routing-default.md"]
 
 # E13: the hand-surgery instructions /adapt must NOT carry any more. Each was
 # the site of a guard in the 2.x prose; their presence means a model is being
@@ -240,7 +240,7 @@ def adapt_script_blocks() -> list[str] | None:
         spec.loader.exec_module(mod)
     except Exception:
         return None
-    return [b.file for b in mod.BLOCKS] + [mod.MODEL_ROUTING_FILE]
+    return [b.file for b in mod.BLOCKS] + [mod.MODEL_ROUTING_FILE, mod.ROUTING_DEFAULT_FILE]
 
 
 def check_adapt_delegates(text: str) -> list[str]:
@@ -521,6 +521,18 @@ def main() -> int:
     if (blocks_dir / "model-routing-section.md").is_file():
         if "## Model Routing" not in (blocks_dir / "model-routing-section.md").read_text():
             errors.append("E8 blocks/model-routing-section.md lost its `## Model Routing` anchor")
+    # 3.11.0: the fresh-project routing is inserted as a --routing-file, so it must
+    # start the way the script demands of one, and its `## Project` must carry the
+    # pending marker — the one thing `--project-section` may ever replace.
+    if (blocks_dir / "routing-default.md").is_file():
+        rd = (blocks_dir / "routing-default.md").read_text()
+        if not rd.startswith("## Skill routing"):
+            errors.append("E8 blocks/routing-default.md must start with `## Skill routing` (the script refuses any other routing file)")
+        if not re.search(r"^## Project <!-- gstack-project-pending -->$", rd, re.M):
+            errors.append("E8 blocks/routing-default.md lost `## Project <!-- gstack-project-pending -->` — "
+                          "the vibe intake could never fill the section in")
+        if "{{" in rd:
+            errors.append("E8 blocks/routing-default.md carries a `{{` placeholder; the fresh path passes no --set for it")
     # Orphan guard: a blocks/*.md not in the known lists has no emitter — it
     # would silently never reach any generated CLAUDE.md.
     if blocks_dir.is_dir():

@@ -60,7 +60,75 @@ a different project (the superpowers-gstack repo itself, say), STOP:
 ## Process
 
 Follow the steps in order. Three `STOP HERE` gates ask the user something; end your
-message at the question each time.
+message at the question each time. **An empty folder skips all three** (Step 0): there
+is nothing in it to protect, and every question the gates ask has an answer the stack
+decides later.
+
+### Step 0: An empty folder gets the short path
+
+Run the dry run first, with no inputs:
+
+```bash
+SKILL_DIR='<the base directory the Skill tool printed>'
+SCRIPT="$SKILL_DIR/../../scripts/adapt-claude-md.py"
+python3 "$SCRIPT" --dry-run --set DOMAIN_SENSITIVITY=medium | tail -1
+```
+
+The JSON line carries `fresh` and `fresh_reason`. The script, not you, decides what
+fresh means: no `CLAUDE.md`, no package file (`package.json`, `Package.swift`,
+`Cargo.toml`, `pyproject.toml`, `go.mod`, `Gemfile`, `.claude-plugin/plugin.json`,
+`*.xcodeproj`, `*.xcworkspace`), and fewer than five files outside `.git/`, `.gstack/`,
+`.claude/` and `docs/superpowers/`. A folder with only a `README.md` and a `.gitignore`
+is fresh; a folder with a lone `package.json` is not, because the stack can be read off
+it, and Steps 1–7 fit it.
+
+**`fresh` is `false`** → continue with Step 1. Quote `fresh_reason` in one line when the
+folder looked empty to the user.
+
+**`fresh` is `true`** → one command does what Steps 2–6 would otherwise ask for over
+six stops:
+
+```bash
+python3 "$SCRIPT" --fresh --mkdirs
+```
+
+It refuses (exit 2, `BLOCKED — not a fresh project`) if the folder is not fresh after
+all, so a wrong call on a living project can never overwrite anything. A fresh folder
+that already pins a native track (`.gstack/track` = `ios` | `macos` | `both`) refuses with
+`UNRESOLVED PLACEHOLDER`: resolve `IOS_SIMULATOR` and `DEVELOPMENT_TEAM` per
+`blocks/PLACEHOLDERS.md`, add their `--set`s, and run it again — still no question for
+the user. Otherwise it
+writes `.gstack/workflow` = `vibe` and `.gstack/explainer` = `local` when they are
+missing (an existing pin is kept) and stages them; writes `CLAUDE.md` with the header,
+the routing from `blocks/routing-default.md`, every block, `Model Routing` at `medium`
+sensitivity, `Local state: none`, and a `## Project` section that holds only
+`Stack: not yet known` under the marker `<!-- gstack-project-pending -->`; creates the
+context skill (vibe) and `docs/superpowers/`; and prints its report with one extra line
+at the top:
+
+> Assumed: web track, vibe workflow, local explainer, no local state, medium sensitivity — change any of them in .gstack/ or CLAUDE.md, or run /superpowers-gstack:adapt again after the first spec.
+
+Relay that line and the report, `git add` the context skill the report names, and go
+straight on — no "is this right?", no "shall I proceed?", no offer of a review (Step 6's
+offer is a read-through of a file nobody has written in). With the vibe profile, invoke
+`/superpowers-gstack:vibe` with what the user said they want to build; with classic,
+`/superpowers:brainstorming`. The first stop of the session is then the first question
+about the product, not about the setup.
+
+Why these defaults and not questions: each is the answer the gates below mark
+`(recommended)`, and each costs one line to change — `.gstack/workflow`,
+`.gstack/explainer`, the `Local state:` line. The sensitivity is `medium`, not `low`,
+because it is unknown until the stack is: `medium` routes coding to sonnet, which is
+right for the common case, and the fill-in below corrects it; `low` could send DSP code
+to haiku before anyone has seen that it is DSP. The stack, test command, deploy target
+and the stack-dependent routing rows (`/qa <url>`, `/cso`, the Apple skills) are not
+guessed at all — they are filled in once the first spec has decided them:
+
+- **Vibe:** `/superpowers-gstack:vibe` Step 2 writes `## Project` from its intake and
+  calls `--project-section`; nothing to do here.
+- **Classic:** the routing line *Stack decided → `/superpowers-gstack:adapt`* brings the
+  user back here. Step 4 sees the marker and asks one confirmation instead of the Step 2
+  questionnaire.
 
 ### Step 1: Analyze the project
 
@@ -106,6 +174,35 @@ then the base tiers for the selected skills and the inferred sensitivity, and as
 **STOP HERE.** Repeat until confirmed.
 
 ### Step 4: Resolve the script's inputs
+
+**A pending `## Project` first.** If CLAUDE.md carries `<!-- gstack-project-pending -->`
+on its `## Project` heading, this run is the fill-in after a Step 0 setup, and the
+stack is now readable off the files and the first spec. The pins exist (the script reads
+them), so items 2, 4, 6 and 7 below are not asked again, and Steps 2–3 collapse into
+one confirmation with the answer in it:
+
+> I read this as a **[type]** on **[stack]**, tests via `[command]`, [deployed to X /
+> not deployed], [browser UI at X / none], sensitivity **[level]** because [reason].
+> Right?
+
+**STOP HERE** (this is the one question of a fill-in). Then write the section to
+`.gstack/adapt-project.md` — `## Project` with `### Tech Stack / Testing / QA URL /
+Deployment` (omit what does not apply) and `### Routing for this stack` holding the
+rows the stack adds (`/qa <url>` when there is a browser UI, `/cso` before `/review`
+when there is auth, user data, payments or external APIs, the Apple skills on a native
+track), nothing else — and run:
+
+```bash
+python3 "$SCRIPT" --project-section .gstack/adapt-project.md \
+  --set 'DOMAIN_SENSITIVITY=<level>' [--set 'IOS_SIMULATOR=…' --set 'DEVELOPMENT_TEAM=…']
+```
+
+The script replaces the pending section once, drops the marker (the section is the
+project's from then on; without the marker the flag refuses) and rewrites `Model
+Routing` with the sensitivity. A native platform decided since Step 0: write
+`.gstack/track` first (item 1) and resolve the native placeholders (item 3); the native
+blocks come in on the same run. Relay the report and go to Step 7; Steps 5–6 ask about a
+merge this run does not do.
 
 1. **Track.** `.gstack/track` if present (`ios` | `macos` | `both`; anything else is
    `BLOCKED — invalid .gstack/track`, stop and say so); absent means web. If Step 2

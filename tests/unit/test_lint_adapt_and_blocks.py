@@ -87,8 +87,8 @@ def test_header_comment_in_the_script_does_not_nest_a_comment_terminator():
 def test_the_script_roster_covers_every_block_and_nothing_else():
     roster = lint.adapt_script_blocks()
     assert roster is not None
-    assert set(roster) == set(lint.MARKER_BLOCKS) | {"model-routing-section.md"}
-    assert set(lint.PLAIN_BLOCKS) == {"model-routing-section.md", "PLACEHOLDERS.md"}
+    assert set(roster) == set(lint.MARKER_BLOCKS) | {"model-routing-section.md", "routing-default.md"}
+    assert set(lint.PLAIN_BLOCKS) == {"model-routing-section.md", "PLACEHOLDERS.md", "routing-default.md"}
 
 
 def test_every_marker_block_parses_as_a_heading():

@@ -1,5 +1,31 @@
 # Changelog
 
+## [3.11.0] - 2026-10-11
+
+**An empty folder gets its CLAUDE.md with no questions. The stack is filled in after the first spec, once.**
+
+`/adapt` was built to upgrade a CLAUDE.md that already exists without losing anything: snapshot, fail-closed script, deferred sections, "shall I proceed". In an empty folder there is nothing to protect, and the procedure cost the same. Measured on 2026-10-11 (`workflow-metrics`, one session that set up a folder from nothing): six stops where the user had to answer before anything happened, seven user messages before CLAUDE.md existed, 22 model calls. The first stop asked for the stack — in an empty folder the stack is a *result* of brainstorming, not a precondition for it. Design: `docs/superpowers/specs/2026-10-11-adapt-fresh-project-design.md`.
+
+### Added
+- **Freshness is the script's call.** `scripts/adapt-claude-md.py --dry-run` reports `fresh` and `fresh_reason` in its JSON line: no `CLAUDE.md`, no package file (`package.json`, `Package.swift`, `Cargo.toml`, `pyproject.toml`, `go.mod`, `Gemfile`, `.claude-plugin/plugin.json`, `*.xcodeproj`, `*.xcworkspace`), fewer than five files outside `.git/`, `.gstack/`, `.claude/` and `docs/superpowers/`. All three must hold. A folder with a lone `package.json` is not fresh: the stack can be read off it.
+- **`--fresh`**: one run writes the pins `.gstack/workflow` = `vibe` and `.gstack/explainer` = `local` when they are missing (an existing pin is kept) and stages them, then CLAUDE.md with its title, the routing from the new `blocks/routing-default.md`, every block, `Model Routing` at `medium`, `Local state: none`, and a `## Project` holding only `Stack: not yet known` under `<!-- gstack-project-pending -->`. The report starts with one `Assumed:` line naming every default. On a project that is not fresh it refuses (exit 2) and writes nothing.
+- **`--project-section <file>`** replaces the pending `## Project` exactly once, drops the marker, and takes `--set DOMAIN_SENSITIVITY=` and the track anew (the native blocks come in on the same run). Without the marker it refuses: the section is the project's own. A file that is not one `## Project` section, or carries a marker or a placeholder, is refused before any write.
+- **`blocks/routing-default.md`**: the routing every project has and no row that depends on a stack nobody has chosen; the stack-dependent rows (`/qa <url>`, `/cso`, the Apple skills) land under `## Project` → `### Routing for this stack` at the fill-in. Lint E8 checks it starts with `## Skill routing`, carries the pending marker and no placeholder.
+- **adapt Step 0**: dry run, read `fresh`; on `true`, `--fresh --mkdirs`, relay the `Assumed:` line, and go straight to `/superpowers-gstack:vibe` (vibe) or `/superpowers:brainstorming` (classic). None of the three `STOP HERE` gates, no review offer. Step 4 gains the fill-in: on a pending `## Project`, Steps 2–3 collapse into one confirmation with the answer in it, then `--project-section`; the pin questions are not asked again.
+- **vibe Step 2** fills the pending `## Project` from the intake, with no new question, and commits it with the spec.
+- `skills/adapt/tests/required-sections.test.sh` pins Step 0, the fill-in and the report labels.
+
+### Changed
+- `Model Routing`'s Removed report no longer lists the plugin's own sensitivity line when the sensitivity changes; a line in any form the plugin could have written is plugin prose.
+- A project with no CLAUDE.md names its rescue and local-state headings after the main checkout, as the context skill already did, so a worktree does not name them after the branch.
+- The context-skill template's `Running and testing` points at `## Project` for the stack, the test command and the deploy target instead of repeating them.
+
+### Measured
+- One session before the change (above). The after-measurement is the next empty folder set up with `/adapt` after this lands: the target is zero stops inside `/adapt`, with the session's first stop being the intake. One session on each side is an anecdote, and this entry says so.
+
+### Target version
+- The design named 3.12.0 to leave 3.11.0 to the work-state spec. Versions are taken at landing, not at drafting: this lands first and takes 3.11.0; the work-state change takes the next number when it lands.
+
 ## [3.10.1] - 2026-10-10
 
 **`land` no longer asks the user to approve the gate with a `!` command, which cannot work.**

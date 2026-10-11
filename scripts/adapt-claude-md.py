@@ -26,6 +26,18 @@ touches the file, deterministically:
   9. verify     every removed line the new block does not carry verbatim is
                 listed, in full, under "Removed (not plugin prose)"
 
+A FRESH project — no CLAUDE.md, no package file, fewer than five files outside
+`.git/`, `.gstack/`, `.claude/` and `docs/superpowers/` — has nothing to protect
+and nothing to read the stack off. `--dry-run` reports `fresh` and `fresh_reason`
+so the skill can take the short path: `--fresh` writes the pins `.gstack/workflow`
+(vibe) and `.gstack/explainer` (local) when they are missing, defaults the
+sensitivity to `medium`, the local state to `none` and the routing to
+`blocks/routing-default.md`, whose `## Project` carries
+`<!-- gstack-project-pending -->`, and says in one `Assumed:` line what it chose.
+`--project-section <file>` later replaces that pending section exactly once (the
+marker goes with it); without the marker it refuses, because the section is then
+the project's own. `--fresh` on a project that is not fresh refuses too.
+
 Exit 0: written (or --dry-run completed). Exit 2: refused — nothing written; the
 reason is on stderr (BLOCKED, UNRESOLVED PLACEHOLDER, UNREADABLE, USAGE ERROR,
 INTERNAL). Never a traceback. Every check that can refuse runs BEFORE the first
@@ -130,6 +142,20 @@ BLOCKS = (
           ("Standing approvals after intake", "/superpowers-gstack:vibe"), profiles=frozenset({"vibe"})),
 )
 MODEL_ROUTING_FILE = "model-routing-section.md"
+# The routing a fresh project gets without a Step 3: the rows every project has,
+# none that depend on a stack nobody has chosen yet. Its `## Project` carries the
+# pending marker, the one thing `--project-section` is allowed to replace.
+ROUTING_DEFAULT_FILE = "routing-default.md"
+PENDING_MARKER = "<!-- gstack-project-pending -->"
+# A fresh project: none of these at the root (the stack could be read off one) …
+PACKAGE_FILES = ("package.json", "Package.swift", "Cargo.toml", "pyproject.toml", "go.mod", "Gemfile",
+                 ".claude-plugin/plugin.json")
+PACKAGE_GLOBS = ("*.xcodeproj", "*.xcworkspace")
+# … and fewer than this many files, not counting the plugin's and git's own folders.
+FRESH_MAX_FILES = 5
+FRESH_SKIP_DIRS = frozenset({".git", ".gstack", ".claude"})
+FRESH_DEFAULTS = {"workflow": "vibe", "explainer": "local"}
+FRESH_SENSITIVITY = "medium"
 # A Model Routing section is the plugin's when its body carries the emitted block's
 # own sentence, or a routing TABLE (header row with a model/tier column, then a
 # separator row). A bare mention of `Pi/MLX` in prose is the project's.
@@ -355,6 +381,62 @@ def context_skill(project: Path, explicit: str | None) -> tuple[str, bool]:
     return slug(explicit or main_checkout_name(project)) + "-context", False
 
 
+def detect_fresh(project: Path) -> tuple[bool, str]:
+    """(fresh, reason). All three signals must hold: no CLAUDE.md, no package
+    file, fewer than FRESH_MAX_FILES files outside `.git/`, `.gstack/`, `.claude/`
+    and `docs/superpowers/`. The reason names the signal that decided it, so the
+    skill can quote it when it does NOT take the short path."""
+    if (project / "CLAUDE.md").is_file():
+        return False, "CLAUDE.md exists"
+    for name in PACKAGE_FILES:
+        if (project / name).exists():
+            return False, f"{name} exists — the stack can be read off it"
+    for pat in PACKAGE_GLOBS:
+        hit = sorted(project.glob(pat))
+        if hit:
+            return False, f"{hit[0].name} exists — the stack can be read off it"
+    count = 0
+    for root, dirs, files in os.walk(project):
+        rel = Path(root).relative_to(project)
+        dirs[:] = sorted(d for d in dirs if d not in FRESH_SKIP_DIRS and rel / d != Path("docs/superpowers"))
+        count += len(files)
+        if count >= FRESH_MAX_FILES:
+            return False, (f"{FRESH_MAX_FILES} or more files outside .git/, .gstack/, .claude/ and "
+                           f"docs/superpowers/ — not an empty folder")
+    return True, f"no CLAUDE.md, no package file, {count} file(s) outside .git/, .gstack/, .claude/ and docs/superpowers/"
+
+
+def write_pin(project: Path, name: str, value: str, report: "Report") -> None:
+    """`.gstack/<name>` = value, staged the way the skill stages a pin it wrote by
+    hand: `git add`, or a `!.gstack/<name>` line in .gitignore plus `git add -f`
+    when the folder is ignored. Not a git repository: the file alone."""
+    d = project / ".gstack"
+    d.mkdir(exist_ok=True)
+    _atomic_write(d / name, (value + "\n").encode("utf-8"))
+    rel = f".gstack/{name}"
+
+    def git(*args, check=False):
+        return subprocess.run(["git", "-C", str(project), *args], capture_output=True, text=True,
+                              timeout=10, check=check)
+    try:
+        if git("rev-parse", "--is-inside-work-tree").stdout.strip() != "true":
+            report.changes.append(f"wrote {rel} = {value}")
+            return
+        if git("check-ignore", "-q", rel).returncode == 0:
+            gi = project / ".gitignore"
+            current = gi.read_text(encoding="utf-8") if gi.is_file() else ""
+            if f"!{rel}" not in current.splitlines():
+                gi.write_text(current + ("" if not current or current.endswith("\n") else "\n") + f"!{rel}\n",
+                              encoding="utf-8")
+            git("add", ".gitignore", check=True)
+            git("add", "-f", rel, check=True)
+        else:
+            git("add", rel, check=True)
+        report.changes.append(f"wrote {rel} = {value} and staged it")
+    except (OSError, subprocess.SubprocessError):
+        report.changes.append(f"wrote {rel} = {value} (could not stage it — run `git add {rel}`)")
+
+
 def render_context_skill(name: str, project_display: str) -> str:
     if not CONTEXT_TEMPLATE.is_file():
         raise Refusal(f"UNREADABLE: {CONTEXT_TEMPLATE} is missing — run `/plugin update superpowers-gstack`")
@@ -381,6 +463,9 @@ class Report:
     notes: list = field(default_factory=list)
     snapshot: str | None = None
     rotated: str | None = None
+    fresh: bool = False
+    fresh_reason: str = ""
+    assumed: str | None = None   # the `--fresh` run's one line on what it chose
 
     def as_json(self) -> str:
         return json.dumps({
@@ -388,6 +473,7 @@ class Report:
             "removed": self.removed, "deferred": self.deferred,
             "unattributed": self.unattributed, "notes": self.notes,
             "snapshot": self.snapshot, "rotated": self.rotated,
+            "fresh": self.fresh, "fresh_reason": self.fresh_reason, "assumed": self.assumed,
         }, ensure_ascii=False)
 
 
@@ -405,6 +491,8 @@ class Context:
     project: str
     profile: str = "classic"
     local_state: str | None = None   # --local-state: the answer to adapt's one question, or None
+    project_section: str | None = None   # --project-section: the text that replaces the pending `## Project`
+    seed: list[str] = field(default_factory=list)   # lines a fresh file starts from (the H1)
     needed: set[str] = field(default_factory=set)   # placeholders in blocks emitted this run
 
 
@@ -855,6 +943,53 @@ def apply_routing(lines: list[str], ctx: Context, report: Report) -> list[str]:
     return _insert_after(lines, at, new)
 
 
+def validate_project_section(text: str) -> str:
+    """The `--project-section` file: one `## Project` section, nothing the script
+    would have to manage afterwards. Returns the text with its trailing newlines
+    trimmed; refuses anything else before the first write."""
+    lines = text.rstrip("\n").split("\n")
+    first = next((l for l in lines if l.strip()), "")
+    if not (first.lstrip().startswith("## ") and heading_text(first) == "Project"):
+        raise Refusal("BLOCKED — the --project-section file must start with `## Project`; "
+                      "it replaces exactly that section")
+    if PENDING_MARKER in text:
+        raise Refusal(f"BLOCKED — the --project-section file carries `{PENDING_MARKER}`; the section it "
+                      f"writes is the project's own, and a second pending marker would let a later run replace it again")
+    if MARKER_RE.search(text):
+        raise Refusal("BLOCKED — the --project-section file carries a gstack version marker; "
+                      "the plugin's own sections are emitted from blocks/, never through this flag")
+    if "{{" in text:
+        raise Refusal("BLOCKED — the --project-section file carries a `{{` placeholder; resolve it first")
+    h2 = [raw for i, lvl, raw in headings(lines) if lvl <= 2]
+    if len(h2) != 1:
+        raise Refusal("BLOCKED — the --project-section file must hold one H2 section (`## Project` and its "
+                      "H3 subsections); a second H1/H2 would land as a section of its own")
+    return "\n".join(lines)
+
+
+def apply_project_section(lines: list[str], ctx: Context, report: Report) -> list[str]:
+    """Replace the `## Project` section that carries the pending marker — once.
+    The marker leaves with the placeholder, so the section is the project's own
+    from then on and no later run can touch it."""
+    if ctx.project_section is None:
+        return lines
+    found = [(i, lvl) for i, lvl, raw in headings(lines)
+             if lvl == 2 and PENDING_MARKER in raw and heading_text(raw) == "Project"]
+    if not found:
+        raise Refusal(f"BLOCKED — no `## Project` section carries `{PENDING_MARKER}`; the section is the "
+                      f"project's own — edit it by hand, --project-section only fills in the pending one")
+    i, lvl = found[0]
+    end = section_end(lines, i, lvl)
+    default = BlockText(ctx.blocks[ROUTING_DEFAULT_FILE]) if ROUTING_DEFAULT_FILE in ctx.blocks else None
+    own = [l for l in lines[i + 1:end] if l.strip() and (default is None or not default.verbatim(l))]
+    if own:
+        report.removed.append({"section": "Project", "lines": own,
+                               "where": "written into the pending section before it was filled in; the snapshot has every line"})
+    report.changes.append("Project: filled in from --project-section; the pending marker is gone and the "
+                          "section is the project's own from now on")
+    return _splice(lines, i, end, ctx.project_section.split("\n"))
+
+
 def _model_routing_is_emitted(body_lines: list[str]) -> bool:
     if any(MODEL_ROUTING_SENTINEL in l for l in body_lines):
         return True
@@ -884,8 +1019,14 @@ def apply_model_routing(lines: list[str], ctx: Context, report: Report) -> list[
         if lines[i:content_end(lines, i, end)] == new:
             report.preserved.append("Model Routing: already current")
             return lines
-        resolved = BlockText(_resolve(raw, ctx))
-        at_risk = [l for l in body if l.strip() and not bt.verbatim(l) and not resolved.verbatim(l)]
+        # the block in every form the plugin itself could have written it: the raw
+        # template, this run's values, and any sensitivity an earlier run chose — a
+        # changed sensitivity line is the plugin's prose, not the project's
+        forms = [bt, BlockText(_resolve(raw, ctx))] + [
+            BlockText(PLACEHOLDER_RE.sub(lambda m, s=s: s if m.group(1) == "DOMAIN_SENSITIVITY"
+                                         else ctx.sets.get(m.group(1), m.group()), raw))
+            for s in SENSITIVITIES]
+        at_risk = [l for l in body if l.strip() and not any(f.verbatim(l) for f in forms)]
         if at_risk:
             report.removed.append({"section": "Model Routing", "lines": at_risk,
                                    "where": "not in the new block — old plugin prose or yours; the snapshot has every line"})
@@ -964,11 +1105,11 @@ def apply_local_state(lines: list[str], ctx: Context, report: Report) -> list[st
 
 def merge(text: str | None, ctx: Context) -> tuple[str, Report]:
     report = Report()
-    lines = text.split("\n") if text else []
+    lines = text.split("\n") if text else list(ctx.seed)
     if lines and lines[-1] == "":
         lines.pop()
     if text is None:
-        report.notes.append("no prior CLAUDE.md — nothing to snapshot; the file is created")
+        report.notes.append(NO_PRIOR_NOTE)
     open_at = unclosed_fence(lines)
     if open_at is not None:
         kind, at = open_at
@@ -979,6 +1120,7 @@ def merge(text: str | None, ctx: Context) -> tuple[str, Report]:
     lines = apply_autonomy(lines, report)
     lines = apply_renames(lines, report)
     lines = apply_routing(lines, ctx, report)
+    lines = apply_project_section(lines, ctx, report)
     for blk in BLOCKS:
         lines = apply_block(lines, blk, ctx, report)
     lines = apply_model_routing(lines, ctx, report)
@@ -991,6 +1133,8 @@ def merge(text: str | None, ctx: Context) -> tuple[str, Report]:
 def render(report: Report, ctx: Context, dry_run: bool) -> str:
     out = [f"ADAPT REPORT — {'dry run' if dry_run else 'applied'} (superpowers-gstack {ctx.version}, "
            f"track {ctx.track}, workflow {ctx.profile})", ""]
+    if report.assumed:
+        out += [report.assumed, ""]
     out += ["**Changes made:**"] + [f"- {c}" for c in report.changes] + (["- none"] if not report.changes else []) + [""]
     out += ["**Preserved:**"] + [f"- {p}" for p in report.preserved]
     for u in report.unattributed:
@@ -1028,7 +1172,8 @@ def render(report: Report, ctx: Context, dry_run: bool) -> str:
     else:
         # the workflow note is informational on every classic run; it must not stand in for
         # the reason the file was not rewritten (3.5.1 behaviour)
-        reasons = [n for n in report.notes if n != NO_WORKFLOW_NOTE]
+        reasons = ([n for n in report.notes if n.startswith(NO_PRIOR_NOTE)]
+                   or [n for n in report.notes if n != NO_WORKFLOW_NOTE and not n.startswith("no .gstack/track")])
         out.append("**Snapshot:** none — " + (reasons[0] if reasons else "the file was not rewritten"))
     for n in report.notes:
         out.append(f"Note: {n}")
@@ -1119,6 +1264,7 @@ def read_explainer(project: Path) -> str:
     return value
 
 
+NO_PRIOR_NOTE = "no prior CLAUDE.md — nothing to snapshot; the file is created"
 NO_WORKFLOW_NOTE = ("no .gstack/workflow file — classic profile "
                     "(write `vibe` there to opt in to the vibe contract)")
 
@@ -1155,6 +1301,13 @@ def load_blocks(blocks_dir: Path) -> dict[str, str]:
     if not f.is_file() or not f.read_text(encoding="utf-8").startswith("## Model Routing"):
         raise Refusal(f"UNREADABLE: block file {f} is missing or does not start with `## Model Routing`")
     blocks[MODEL_ROUTING_FILE] = f.read_text(encoding="utf-8")
+    f = blocks_dir / ROUTING_DEFAULT_FILE
+    if f.is_file():
+        raw = f.read_text(encoding="utf-8")
+        if not raw.startswith("## Skill routing") or PENDING_MARKER not in raw:
+            raise Refusal(f"UNREADABLE: block file {f} must start with `## Skill routing` and carry "
+                          f"`{PENDING_MARKER}` on its `## Project` heading")
+        blocks[ROUTING_DEFAULT_FILE] = raw
     return blocks
 
 
@@ -1197,12 +1350,31 @@ def main(argv=None) -> int:
     ap.add_argument("--project-name")
     ap.add_argument("--local-state", metavar="PATHS|none",
                     help="the project's files outside git, e.g. 'data/, settings.json', or 'none'")
+    ap.add_argument("--fresh", action="store_true",
+                    help="the short path for an empty folder: pins, defaults and a pending `## Project`, no questions; "
+                         "refuses when the project is not fresh")
+    ap.add_argument("--project-section", metavar="FILE",
+                    help="replace the pending `## Project` section (marker gstack-project-pending) with this file, once")
     a = ap.parse_args(argv)
     try:
         project = Path(a.project_dir).expanduser().resolve()
         if not project.is_dir():
             raise Refusal(f"UNREADABLE: {project} is not a directory")
+        if a.fresh and a.project_section:
+            raise Refusal("USAGE ERROR: --fresh and --project-section are two different runs — the first writes "
+                          "the pending section, the second fills it in")
         blocks = load_blocks(Path(a.blocks).expanduser())
+        fresh, fresh_reason = detect_fresh(project)
+        if a.fresh and not fresh:
+            raise Refusal(f"BLOCKED — not a fresh project: {fresh_reason}; run without --fresh, the full "
+                          f"procedure protects what is there")
+        if a.fresh and ROUTING_DEFAULT_FILE not in blocks:
+            raise Refusal(f"UNREADABLE: block file {Path(a.blocks) / ROUTING_DEFAULT_FILE} is missing — "
+                          f"run `/plugin update superpowers-gstack`")
+        project_section = None
+        if a.project_section:
+            project_section = validate_project_section(
+                Path(a.project_section).expanduser().read_text(encoding="utf-8"))
         version = a.plugin_version or json.loads(PLUGIN_JSON.read_text())["version"]
         if not VERSION_RE.match(version):
             raise Refusal(f"USAGE ERROR: --plugin-version must be X.Y.Z, got {version!r} — the header the "
@@ -1214,9 +1386,32 @@ def main(argv=None) -> int:
             if not local_state or "\n" in local_state or "\r" in local_state or "<!--" in local_state:
                 raise Refusal("USAGE ERROR: --local-state takes one line — the paths git ignores, or `none`")
         pre_notes = Report()
+        pre_notes.fresh, pre_notes.fresh_reason = fresh, fresh_reason
+        # the pins a --fresh run writes: decided here, read as if written, but written
+        # only in the write phase — a refusal further down (an unresolved native
+        # placeholder, say) must leave the folder exactly as it was
+        pending_pins: dict[str, str] = {}
+        if a.fresh:
+            for name, default in FRESH_DEFAULTS.items():
+                if not (project / ".gstack" / name).is_file():
+                    pending_pins[name] = default
+                    if a.dry_run:
+                        pre_notes.notes.append(f"would write .gstack/{name} = {default}")
+            sets.setdefault("DOMAIN_SENSITIVITY", FRESH_SENSITIVITY)
+            if local_state is None:
+                local_state = "none"
         track = read_track(project, a.track, pre_notes)
-        profile = read_workflow(project, pre_notes)
-        read_explainer(project)
+        profile = read_workflow(project, None if "workflow" in pending_pins else pre_notes)
+        explainer = read_explainer(project)
+        if "workflow" in pending_pins:
+            profile = pending_pins["workflow"]
+        if "explainer" in pending_pins:
+            explainer = pending_pins["explainer"]
+        if a.fresh:
+            state = "no local state" if local_state == "none" else f"local state `{local_state}`"
+            pre_notes.assumed = (f"Assumed: {track} track, {profile} workflow, {explainer} explainer, {state}, "
+                                 f"{sets['DOMAIN_SENSITIVITY']} sensitivity — change any of them in .gstack/ or "
+                                 f"CLAUDE.md, or run /superpowers-gstack:adapt again after the first spec.")
         if track in NATIVE:
             # the pin is authoritative; --set may only agree with it or stand in for it
             pin = read_executor(project)
@@ -1245,15 +1440,19 @@ def main(argv=None) -> int:
             if not (first.lstrip().startswith("## ") and heading_text(first) == "Skill routing"):
                 raise Refusal("BLOCKED — the --routing-file must start with `## Skill routing`; anything else "
                               "would be inserted again on every run")
+        elif a.fresh:
+            routing = blocks[ROUTING_DEFAULT_FILE]
         if a.mkdirs:
             for d in ("docs", "docs/superpowers", "docs/superpowers/specs", "docs/superpowers/plans"):
                 p = project / d
                 if p.exists() and not p.is_dir():
                     raise Refusal(f"BLOCKED — --mkdirs needs {d}/ to be a directory, but a file is in the way")
+        display = a.project_name or (main_checkout_name(project) if text is None else project_name(text, project))
         ctx = Context(blocks=blocks, version=version, track=track, sets=sets, rescue=set(a.rescue),
-                      routing=routing, model_routing=not a.no_model_routing,
-                      project=a.project_name or project_name(text or "", project),
-                      profile=profile, local_state=local_state)
+                      routing=routing, model_routing=not a.no_model_routing, project=display,
+                      profile=profile, local_state=local_state, project_section=project_section,
+                      # a fresh file starts with its title, so the next run reads the same name off the H1
+                      seed=[f"# {display}", ""] if a.fresh and text is None else [])
         ctx_skill, content, skill_file = None, None, None
         # the name is needed under every profile: a vibe block removed under classic is
         # compared in its filled-in form
@@ -1270,6 +1469,7 @@ def main(argv=None) -> int:
                 content = render_context_skill(ctx_skill, ctx.project)   # a missing template refuses here
         new_text, report = merge(text, ctx)
         report.notes = pre_notes.notes + report.notes
+        report.fresh, report.fresh_reason, report.assumed = pre_notes.fresh, pre_notes.fresh_reason, pre_notes.assumed
         if local_state == "none" and any(c.startswith("Local state: added") for c in report.changes) \
                 and linked_worktree(project):
             report.notes.append("`Local state: none` was written from a linked worktree, where ignored files do "
@@ -1291,6 +1491,8 @@ def main(argv=None) -> int:
         if not a.dry_run:
             if changed and claude.is_file() and claude.read_bytes() != original:
                 raise Refusal("BLOCKED — CLAUDE.md changed on disk while this run was computing; nothing was written. Re-run")
+            for name, value in pending_pins.items():
+                write_pin(project, name, value, report)
             if changed and original is not None:
                 snapshot(project, original, report)
             if changed:
