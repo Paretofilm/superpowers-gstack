@@ -1,5 +1,23 @@
 # Changelog
 
+## [3.17.1] - 2026-10-25
+
+**Model refresh: the router points at the 5.5 generation, and the model-review issue no longer sends the maintainer to a path that does not exist.**
+
+Closes #89 (opus), #90 (sonnet) and #94 (haiku), open since 2026-09-28, 2026-10-05 and 2026-10-12. The same change was written on 2026-10-11 on `fix/model-ids-5-5` (3.10.2) and never landed; this is that commit carried onto the current `main`.
+
+### Changed
+- `skills/adapt/model-routing.md`: `opus` → `claude-opus-5-5`, `sonnet` → `claude-sonnet-5-5`, `haiku` → `claude-haiku-5-5`. `fable` stays `claude-fable-5-1`. All four are the current tier heads in the models table, not previews.
+- Fable's premium is now written as roughly 2.5× Opus (was 2×): Opus 5.5 lists at $4 / $20 per MTok against Fable 5.1's $10 / $50, so the gap widened. The "earns its" heading and the exploration-budget sentence carry the new factor. The gating rules for when to use `fable` are unchanged.
+- The domain-sensitivity floors and the sonnet→opus rationale are **not** changed. Opus 5.5 and Sonnet 5.5 kept the same price ratio to each other, and nothing checked here shows the capability gap moving, so there is no evidence to re-calibrate on.
+
+### Fixed
+- `scripts/check-new-models.py`: the issue body pointed at `skills/setup-routing/model-routing.md` (the file lives in `skills/adapt/`) and told the maintainer to update "BOTH generators" under E8. The emitted `blocks/model-routing-section.md` carries tier names, not ids, so only `model-routing.md` needs the new id. Both steps are corrected.
+- Self-test gains two assertions for point releases: `5.5` flags against `5`, and a dated snapshot of `5.5` flags as `5.5`, not as a newer version.
+
+### Not in this release
+- The update and self-repair workflows still call `claude-sonnet-4-6`. Changing only the id would break them: both read `response["content"][0]["text"]`, and on Sonnet 5.5 thinking cannot be turned off, so the first content block is a thinking block with no `text`. That move needs its own change to the response parsing.
+
 ## [3.17.0] - 2026-10-25
 
 **The Xcode block stops sending agents to a generated entitlements file and to the user before `-allowProvisioningUpdates`; an old `## Skill routing` follows the project's renames and landing mode.**
