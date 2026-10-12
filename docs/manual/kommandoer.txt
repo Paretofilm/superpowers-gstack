@@ -1,0 +1,6 @@
+# Kommandoer manualen kan nevne i kodeformat uten å være plugin-egne skills.
+# Lint-sjekken E15a leser denne. Hold den kort: gstack endres ukentlig, så listen
+# skal bare inneholde det manualen faktisk lærer bort. W5 varsler på maskiner der
+# gstack er installert hvis en listet gstack-kommando ikke finnes.
+gstack: qa qa-only ship review investigate retro health office-hours codex cso careful freeze guard browse design-review document-release plan-eng-review plan-ceo-review autoplan context-save context-restore learn benchmark-models gstack-upgrade ios-qa
+claude-code: clear compact model plugin reload-plugins mcp init resume usage config doctor effort context

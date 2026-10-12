@@ -54,6 +54,13 @@ ERRORS (exit 1, CI-blocking):
       count into a project's CLAUDE.md at emit time; stored in the source it is a
       constant that goes stale on the next edit, and the growth check would trust it.
 
+  E15 the manual (docs/manual/) cannot drift from the skills it describes. a: every
+      skill reference in a chapter exists (own namespace via E2, `superpowers:` via E10,
+      a bare `/name` must be an own skill or listed in docs/manual/kommandoer.txt);
+      b: every skill in skills/ is referenced as a command in some chapter; c: the
+      committed manual.html is byte-identical to what scripts/build-manual.py gives now.
+      `python3 scripts/lint-skills.py --manual` runs only this check.
+
 WARNINGS (reported, exit 0):
   W1  frontmatter description over budget (target <=30 words; hard cap comes
       with the Phase-3 description rewrites)
@@ -61,6 +68,8 @@ WARNINGS (reported, exit 0):
   W3  SUPERPOWERS_SKILLS roster disagrees with the installed Superpowers plugin
       (maintainer machines only — CI has no upstream installed, so E10's roster
       is the CI-side source of truth and this is the drift alarm for it)
+  W5  a gstack command listed in docs/manual/kommandoer.txt is not installed in
+      ~/.claude/skills (maintainer machines only, like W3)
 
 Run: python3 scripts/lint-skills.py   (from the repo root or anywhere)
 """
@@ -380,7 +389,89 @@ def check_refs(path: Path, text: str, repo_doc: bool) -> None:
                     errors.append(f"E2 {path.relative_to(REPO)}: reference to nonexistent script 'scripts/{script}'")
 
 
+# E15 (3.11.0): the manual in docs/manual/ cannot drift from the skills it describes.
+MANUAL_BARE_COMMAND = re.compile(r"(?:`|^)/([a-z][a-z0-9-]*)(?=[\s`]|$)", re.M)
+
+
+def manual_commands(path: Path) -> dict[str, set[str]]:
+    """Labelled lines of docs/manual/kommandoer.txt: `gstack: qa ship`, `claude-code: clear`."""
+    found: dict[str, set[str]] = {}
+    if path.is_file():
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and ":" in line:
+                label, names = line.split(":", 1)
+                found.setdefault(label.strip(), set()).update(names.split())
+    return found
+
+
+def manual_gstack_missing(path: Path, skills_home: Path) -> list[str]:
+    """Listed gstack commands the installed gstack has no skill for (W5; maintainer machines)."""
+    listed = manual_commands(path).get("gstack", set())
+    return sorted(n for n in listed if not (skills_home / n / "SKILL.md").is_file())
+
+
+def check_manual(manual_dir: Path | None = None) -> list[str]:
+    """E15: findings for the manual, each starting E15a / E15b / E15c; [] when clean.
+
+    a  every skill reference exists: `superpowers-gstack:<x>` and `superpowers:<x>` go
+       through the existing E2 and E10 checks unchanged; a bare `/name` in code must be one
+       of this plugin's skills or be listed in docs/manual/kommandoer.txt
+    b  every skill in skills/ is referenced as a command in some chapter
+    c  docs/manual/manual.html is byte-identical to what scripts/build-manual.py gives now
+    """
+    manual_dir = manual_dir or (REPO / "docs" / "manual")
+    chapters = sorted(manual_dir.glob("[0-9][0-9]-*.md"))
+    if not chapters:
+        return []
+    found: list[str] = []
+    own = sorted(d.name for d in SKILLS.iterdir() if (d / "SKILL.md").is_file())
+    listed = manual_commands(manual_dir / "kommandoer.txt")
+    known = set(own).union(*listed.values()) if listed else set(own)
+    texts = []
+    for ch in chapters:
+        text = ch.read_text()
+        texts.append(text)
+        before = len(errors)
+        check_refs(ch, text, repo_doc=False)
+        check_upstream_skills(ch, text)
+        found += [f"E15a {e}" for e in errors[before:]]
+        del errors[before:]
+        for name in sorted(set(MANUAL_BARE_COMMAND.findall(text))):
+            if name not in known:
+                found.append(
+                    f"E15a {ch.relative_to(REPO)}: `/{name}` is neither a plugin skill nor listed in "
+                    f"docs/manual/kommandoer.txt — add it there if it is a real gstack or Claude Code command")
+    joined = "\n".join(texts)
+    for name in own:
+        if not re.search(rf"(?:/|superpowers-gstack:){re.escape(name)}(?![\w-])", joined):
+            found.append(f"E15b docs/manual: skill '{name}' is not referenced as a command in any chapter")
+    import importlib.util as _ilu
+    builder = Path(__file__).resolve().parent / "build-manual.py"
+    page = manual_dir / "manual.html"
+    try:
+        _spec = _ilu.spec_from_file_location("build_manual_e15", builder)
+        _mod = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        if not page.is_file() or page.read_text() != _mod.build(manual_dir):
+            found.append("E15c docs/manual/manual.html is missing or stale — run `python3 scripts/build-manual.py`")
+    except Exception as exc:  # a source the builder refuses is a finding, not a crash
+        found.append(f"E15c docs/manual/manual.html: build failed — {exc}")
+    return found
+
+
+def manual_report(manual_dir: Path | None = None) -> int:
+    """`lint-skills.py --manual`: only the manual's checks, for the author mid-chapter."""
+    found = check_manual(manual_dir)
+    for f in found:
+        print(f"ERROR {f}")
+    print(f"\nlint-skills --manual: {len(found)} finding(s)")
+    return 1 if found else 0
+
+
 def main() -> int:
+    if "--manual" in sys.argv[1:]:
+        return manual_report()
     skill_dirs = sorted(d for d in SKILLS.iterdir() if d.is_dir())
     claude_md = (REPO / "CLAUDE.md").read_text()
     readme = (REPO / "README.md").read_text()
