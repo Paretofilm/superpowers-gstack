@@ -18,7 +18,7 @@ Finn raden som ligner mest på situasjonen din, og skriv kommandoen i midtkolonn
 |---|---|---|
 | Feil, krasj eller «hvorfor virker ikke dette» | `/investigate` | Finner årsaken før noe rettes |
 | Ny idé du vil bygge, i et prosjekt med arbeidsmåten classic | `superpowers:brainstorming` | Claude stiller spørsmål og lager et design før noe bygges |
-| Ny funksjon i et prosjekt med arbeidsmåten vibe | `/superpowers-gstack:vibe` | Én spørsmålsrunde, så bygger Claude ferdig og lander |
+| Ny funksjon i et prosjekt med arbeidsmåten vibe | `/superpowers-gstack:vibe` | Du velger startmåte (brainstorm, Hurtig, ferdig spec, utforsk først), én spørsmålsrunde, så bygger Claude ferdig og lander |
 | Du lurer på om ideen er verdt å bygge | `/superpowers-gstack:office-hours-track-aware` | Pakker inn GStacks `/office-hours` og legger designdokumentet i `docs/` |
 | En spec (spesifikasjon) eller plan er nettopp skrevet | `/superpowers-gstack:pitfall-verification` | Leter etter feller i spec eller plan: virker det? |
 | En spec eller plan er nettopp skrevet | `/superpowers-gstack:quality-review` | Spør om resultatet vil føles bra, i tillegg til om det virker |

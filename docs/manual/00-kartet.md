@@ -29,7 +29,7 @@ Pilen under kartet viser at flyten kan deles over flere økter. Da skriver Claud
 
 ### Snarveier
 
-- `/superpowers-gstack:vibe` bygger én funksjon fra start til landing med én runde spørsmål, låste akseptansetester (tester som sier når funksjonen er ferdig, og som Claude ikke kan endre underveis, bare du kan låse dem opp) som eneste sjekkpunkt og en ny underagent per fase.
+- `/superpowers-gstack:vibe` bygger én funksjon fra start til landing. Du velger først hvordan du vil begynne: brainstorme ideen, gå rett på (Hurtig), bygge fra en ferdig spec eller plan, eller la Claude utforske koden først. Deretter kommer én runde spørsmål, låste akseptansetester (tester som sier når funksjonen er ferdig, og som Claude ikke kan endre underveis, bare du kan låse dem opp) som eneste sjekkpunkt og en ny underagent per fase.
 - `/superpowers-gstack:autoimplement` kjører en ferdig plan med flere faser: én underagent per fase, gjennomgang og feller-sjekk mellom hver fase, og stopp når den finner noe du må ta stilling til.
 
 > 💡 Du sier ja tre steder: designet, planen og når du har sett at det virker. Alt annet gjør Claude.

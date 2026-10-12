@@ -1,9 +1,9 @@
-## Vibe contract (standing approvals; overrides skill gates) <!-- gstack-vibe-v1 -->
+## Vibe contract (standing approvals; overrides skill gates) <!-- gstack-vibe-v2 -->
 
-This project chose the vibe workflow (`.gstack/workflow`): one intake, autonomous completion,
-one review by the user. A new feature starts with `/superpowers-gstack:vibe` (the procedure),
-not `superpowers:brainstorming` → `writing-plans`; no spec or plan review (pitfall-verification,
-quality-review, apple-native-review) runs before the end.
+This project chose the vibe workflow (`.gstack/workflow`): one intake, autonomous completion, one review by the user.
+A new feature starts with `/superpowers-gstack:vibe` (the procedure), not `superpowers:brainstorming` → `writing-plans`.
+Vibe first asks how to start (Brainstorm, Hurtig, Fra ferdig spec/plan, Utforsk først); Brainstorm runs the brainstorming
+skill inside vibe, without its gate. No spec or plan review (pitfall-verification, quality-review, apple-native-review) runs before the end.
 
 **Standing approvals after intake.** Design, spec and plan are pre-approved. This overrides the
 HARD-GATE in `superpowers:brainstorming`, the execution-method choice in `superpowers:writing-plans`

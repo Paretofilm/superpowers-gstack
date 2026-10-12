@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.14.0] - 2026-10-15
+
+**`/vibe` asks how to start.**
+
+A vibe session used to open with one fixed interview, which assumed the idea was clear. It now opens with one question, Step 0b, with four ways in: **Brainstorm** (the short form of `superpowers:brainstorming`, without its gate or a spec), **Hurtig** (today's single intake round, the default for a clear idea), **Fra ferdig spec/plan** (acceptance criteria drawn from an existing document, which is reused as `SPEC.md`) and **Utforsk først** (read-only: the code is read and two or three possible features are proposed with their risk tier). Every way ends in the same Step 1 confirmation and continues unchanged from Step 2: one checkpoint (the locked acceptance tests), a fresh subagent per phase, one review, landing.
+
+### Changed
+- `skills/vibe/SKILL.md`: new Step 0b. `skills/adapt/blocks/vibe-contract.md` is now `gstack-vibe-v2`: **projects with the vibe profile get the new text the next time `/superpowers-gstack:adapt` runs**; until then they keep the v1 contract, which does not mention the choice (the skill itself already asks, because the skill ships with the plugin).
+- The manual (chapters 0, 1 and 2), README and the CLAUDE.md routing line describe the start choice.
+
 ## [3.13.0] - 2026-10-15
 
 **A Norwegian manual for vibe coders, kept honest by the release gate.**

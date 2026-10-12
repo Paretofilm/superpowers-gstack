@@ -124,3 +124,40 @@ def test_verify_is_described_as_a_gate_not_proof_with_its_limits():
 def test_verify_notes_the_pr_mode_relock_and_the_exemptions():
     assert "receipt changed by commit" in VIBE and "re-lock" in VIBE
     assert "`__pycache__`, `.pytest_cache` and `.DS_Store`" in VIBE
+
+
+def test_the_start_choice_comes_first_with_four_ways_in():
+    assert "## Step 0b: Choose how to start" in VIBE
+    step = VIBE.split("## Step 0b: Choose how to start")[1].split("## Step 1")[0]
+    for way in ("Brainstorm", "Hurtig", "Fra ferdig spec/plan", "Utforsk først"):
+        assert way in step
+    assert "one `AskUserQuestion`" in step
+
+
+def test_hurtig_is_todays_intake_and_the_others_end_in_it():
+    step = VIBE.split("## Step 0b: Choose how to start")[1].split("## Step 1")[0]
+    assert "Hurtig" in step and "Step 1 as written" in step
+    assert "every way ends in step 1" in step.lower()
+
+
+def test_brainstorm_runs_without_the_gate_and_writes_no_spec():
+    step = VIBE.split("## Step 0b: Choose how to start")[1].split("## Step 1")[0]
+    assert "superpowers:brainstorming" in step
+    assert "no spec" in step and "no HARD-GATE" in step
+
+
+def test_a_ready_spec_is_reused_as_spec_md():
+    step = VIBE.split("## Step 0b: Choose how to start")[1].split("## Step 1")[0]
+    assert "reuse the file as `SPEC.md`" in step
+
+
+def test_explore_is_read_only_and_uses_the_tier_classifier():
+    step = VIBE.split("## Step 0b: Choose how to start")[1].split("## Step 1")[0]
+    assert "read-only" in step and "classify-change.py" in step
+
+
+def test_the_contract_names_brainstorm_as_a_start_choice_and_the_marker_is_v2():
+    block = (REPO / "skills" / "adapt" / "blocks" / "vibe-contract.md").read_text()
+    assert "gstack-vibe-v2" in block
+    assert "Brainstorm" in block
+    assert "gstack-vibe-v2" in VIBE

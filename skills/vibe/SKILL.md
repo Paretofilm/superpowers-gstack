@@ -9,7 +9,7 @@ Invoke with: `/superpowers-gstack:vibe <what to build>`
 
 The user answers questions once, reads the acceptance tests once, and reviews the
 finished work once. Everything between is yours to decide and log. The rules live in
-the project's CLAUDE.md section **Vibe contract** (marker `gstack-vibe-v1`); this skill
+the project's CLAUDE.md section **Vibe contract** (marker `gstack-vibe-v2`); this skill
 is the procedure. If `.gstack/workflow` is not `vibe`, say so in one line of the intake
 (the contract's standing approvals then hold for this invocation only) and suggest
 `/superpowers-gstack:adapt` to choose the profile for good.
@@ -28,9 +28,31 @@ LOCK="$SKILL_DIR/../../scripts/lock-acceptance-tests.py"
 Load the project's context skill (`.claude/skills/*-context` or `*-kontekst`) if there
 is one, then the code the feature touches. Classify the scope: files, tracks, whether
 the result is visual (UI, render, video), and the risk tier
-`scripts/classify-change.py` would give it. Steps 0–2 change no code. Do not enter plan
+`scripts/classify-change.py` would give it. Steps 0–2 change no code (Brainstorm and Utforsk først write nothing either). Do not enter plan
 mode yourself: leaving it asks the user a second time, and the acceptance tests are the
 one checkpoint.
+
+## Step 0b: Choose how to start
+
+Ask one `AskUserQuestion` before any intake, recommended way first, so the user picks
+how much of the idea is still open. The names below are what the user sees:
+
+- **Brainstorm** — the idea is vague. Run `superpowers:brainstorming` in its short form:
+  one question at a time, two or three approaches with a recommendation, no spec and no
+  HARD-GATE wait (the contract overrides it). Its result becomes the reference and a draft
+  of the acceptance criteria.
+- **Hurtig** — the idea is clear. Go straight to Step 1 as written. This is the default
+  when the user gives no other signal.
+- **Fra ferdig spec/plan** — a spec, plan or office-hours document already exists. Ask for
+  the path, read it, draw 5–10 acceptance criteria and the out-of-scope list from it, and
+  reuse the file as `SPEC.md` in Step 2 instead of writing a new one.
+- **Utforsk først** — read-only. Read the code, propose two or three possible features or
+  moves with scope and the tier `scripts/classify-change.py` would give each, and let the
+  user pick one. The pick is then handled like Brainstorm's result.
+
+Every way ends in Step 1: the reference and acceptance criteria, and what is out of scope,
+are always confirmed there, and from Step 2 on nothing differs. The questions Step 1 asks
+that the chosen way already answered are skipped, not asked again.
 
 ## Step 1: Intake — one round
 
