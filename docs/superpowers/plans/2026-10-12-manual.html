@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual: implementasjonsplan – oversikt</title>
+<style>
+/* explainer.css: the style of an htmlify explainer page (explain mode).
+   Copy this file unchanged into the page's first <style>; page-specific rules go in a
+   second <style>. explain-check compares the two and refuses a drifted copy.
+
+   Tokens: one accent per card, cyan, violet, magenta, amber or emerald (red only for a
+   failure path), each with a soft fill (--<accent>-s). Light theme on :root, dark under
+   prefers-color-scheme and [data-theme="dark"]; the theme button sets data-theme.
+
+   Parts: .wrap page · .top header with .toggle · section.glass card · .tag badge
+   (.t-cyan .t-violet .t-magenta .t-amber .t-emerald) · .key the card's one insight ·
+   .chip tile (.ic icon, <b> title, <span> one line) · .grid with .g2/.g3 tile grids ·
+   .scroll around a wide <svg> · .big headline number · .bars/.bar dot rows ·
+   .who three columns · ol.done numbered checklist · footer. */
+:root{
+  --bg:#f4f5fa;--bg2:#e9ecf6;--fg:#141826;--muted:#5c6378;--line:rgba(20,24,38,.10);
+  --glass:rgba(255,255,255,.62);--glass-edge:rgba(255,255,255,.95);
+  --cyan:#0891b2;--magenta:#c026d3;--violet:#7c3aed;--amber:#d97706;--emerald:#059669;--red:#dc2626;
+  --cyan-s:rgba(8,145,178,.12);--magenta-s:rgba(192,38,211,.10);--violet-s:rgba(124,58,237,.11);
+  --amber-s:rgba(217,119,6,.12);--emerald-s:rgba(5,150,105,.12);--red-s:rgba(220,38,38,.10);
+  --shadow:0 10px 40px -12px rgba(30,40,80,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#07080f;--bg2:#0e1020;--fg:#eef0fb;--muted:#9aa1bb;--line:rgba(255,255,255,.09);
+  --glass:rgba(22,25,44,.55);--glass-edge:rgba(255,255,255,.22);
+  --cyan:#22d3ee;--magenta:#f0abfc;--violet:#a78bfa;--amber:#fbbf24;--emerald:#34d399;--red:#f87171;
+  --cyan-s:rgba(34,211,238,.13);--magenta-s:rgba(240,171,252,.12);--violet-s:rgba(167,139,250,.14);
+  --amber-s:rgba(251,191,36,.12);--emerald-s:rgba(52,211,153,.12);--red-s:rgba(248,113,113,.13);
+  --shadow:0 10px 40px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#07080f;--bg2:#0e1020;--fg:#eef0fb;--muted:#9aa1bb;--line:rgba(255,255,255,.09);
+  --glass:rgba(22,25,44,.55);--glass-edge:rgba(255,255,255,.22);
+  --cyan:#22d3ee;--magenta:#f0abfc;--violet:#a78bfa;--amber:#fbbf24;--emerald:#34d399;--red:#f87171;
+  --cyan-s:rgba(34,211,238,.13);--magenta-s:rgba(240,171,252,.12);--violet-s:rgba(167,139,250,.14);
+  --amber-s:rgba(251,191,36,.12);--emerald-s:rgba(52,211,153,.12);--red-s:rgba(248,113,113,.13);
+  --shadow:0 10px 40px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;color:var(--fg);background:var(--bg);
+  font:16px/1.5 -apple-system,"SF Pro Text",system-ui,sans-serif;
+  background-image:
+    radial-gradient(900px 600px at 8% -5%,var(--violet-s),transparent 60%),
+    radial-gradient(800px 500px at 100% 10%,var(--cyan-s),transparent 60%),
+    radial-gradient(700px 600px at 50% 110%,var(--magenta-s),transparent 60%);
+  background-attachment:fixed;
+}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 16px 80px}
+h1,h2{font-family:-apple-system,"SF Pro Display",system-ui,sans-serif;letter-spacing:-.02em;margin:0}
+h1{font-size:clamp(30px,6vw,52px);line-height:1.05}
+h2{font-size:clamp(22px,3.6vw,30px);margin-bottom:6px}
+.sub{color:var(--muted);margin:6px 0 0}
+.mono,code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-variant-numeric:tabular-nums}
+code{font-size:.88em;padding:1px 6px;border-radius:6px;background:var(--line)}
+.glass{
+  position:relative;background:var(--glass);border-radius:22px;padding:24px;
+  backdrop-filter:blur(22px) saturate(170%);-webkit-backdrop-filter:blur(22px) saturate(170%);
+  box-shadow:var(--shadow);margin-top:22px;
+}
+.glass::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(140deg,var(--glass-edge),transparent 40%,transparent 70%,var(--glass-edge));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.toggle{border:0;cursor:pointer;border-radius:999px;padding:8px 14px;font:inherit;font-size:14px;
+  color:var(--fg);background:var(--glass);box-shadow:var(--shadow)}
+.tag{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 10px;border-radius:999px;margin-bottom:10px}
+.t-cyan{color:var(--cyan);background:var(--cyan-s)}.t-violet{color:var(--violet);background:var(--violet-s)}
+.t-magenta{color:var(--magenta);background:var(--magenta-s)}.t-amber{color:var(--amber);background:var(--amber-s)}
+.t-emerald{color:var(--emerald);background:var(--emerald-s)}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;fill:var(--fg)}
+svg .m{fill:var(--muted)} svg .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.chip{border-radius:16px;padding:14px 16px;background:var(--line);display:flex;gap:12px;align-items:flex-start}
+.chip .ic{font-size:24px;line-height:1}
+.chip b{display:block}
+.chip span{color:var(--muted);font-size:14px}
+.bars{display:grid;gap:8px;margin-top:16px}
+.bar{display:grid;grid-template-columns:150px 1fr 120px;gap:10px;align-items:center;font-size:14px}
+.bar .track{display:flex;gap:4px}
+.bar .dot{height:22px;flex:0 0 22px;border-radius:7px}
+.bar .how{font-size:12px;font-weight:600;text-align:right}
+@media (max-width:560px){.bar{grid-template-columns:96px 1fr;}.bar .how{grid-column:2;text-align:left}}
+.who{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:700px){.who{grid-template-columns:1fr}}
+.who > div{border-radius:18px;padding:16px;background:var(--line)}
+.who h3{margin:0 0 8px;font-size:17px}
+.who ul{margin:0;padding-left:18px;font-size:14px;color:var(--muted)}
+.who li{margin:3px 0}
+.done{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:8px}
+.done li{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:14px;background:var(--line)}
+.done .n{flex:0 0 28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:14px;
+  color:var(--emerald);background:var(--emerald-s)}
+.big{font-size:clamp(40px,8vw,64px);font-weight:700;letter-spacing:-.03em;line-height:1}
+.key{margin-top:14px;padding:14px 16px;border-radius:14px;border-left:3px solid var(--violet);background:var(--violet-s);font-size:15px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll svg{min-width:640px}
+footer{color:var(--muted);font-size:13px;margin-top:28px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="top">
+  <div>
+    <span class="tag t-violet">Plan · 12. oktober 2026</span>
+    <h1>Manual: slik bygges den</h1>
+    <p class="sub">Tolv oppgaver fra byggeskript til landing på main.</p>
+  </div>
+  <button class="toggle" id="tg" aria-label="Bytt mellom lyst og mørkt">◐ Tema</button>
+</div>
+
+<section class="glass">
+  <span class="tag t-amber">Målet</span>
+  <div style="display:flex;gap:22px;align-items:center;flex-wrap:wrap">
+    <div><div class="big">12</div><div class="sub">oppgaver, hver med<br>egen commit</div></div>
+    <div style="flex:1;min-width:260px" class="grid g3">
+      <div class="chip"><span class="ic">📖</span><div><b>11 kapitler</b><span>norsk tekst</span></div></div>
+      <div class="chip"><span class="ic">🎨</span><div><b>7 figurer</b><span>håndtegnet</span></div></div>
+      <div class="chip"><span class="ic">🐕</span><div><b>1 vakthund</b><span>i release-sjekken</span></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="glass">
+  <span class="tag t-violet">Helheten</span>
+  <h2>Verktøy først, innhold så, levering sist</h2>
+  <div class="scroll">
+  <svg viewBox="0 0 960 250" role="img" aria-label="Fire etapper: oppgave 1 til 3 bygger verktøyene, oppgave 4 er et prøveskudd, oppgave 5 til 10 skriver innholdet, oppgave 11 og 12 leverer">
+    <defs>
+      <marker id="pa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+    </defs>
+    <rect x="10" y="20" width="210" height="200" rx="18" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/>
+    <text x="28" y="52" font-size="16" font-weight="700" fill="var(--cyan)">Verktøy</text>
+    <text x="28" y="86" font-size="14">1  Tekst til side</text>
+    <text x="28" y="116" font-size="14">2  Bygg og sjekk</text>
+    <text x="28" y="146" font-size="14">3  Vakthunden</text>
+    <text x="28" y="196" font-size="12" class="m">med tester først</text>
+    <path d="M220,120 L254,120" stroke="var(--muted)" stroke-width="2" fill="none" marker-end="url(#pa)"/>
+    <rect x="258" y="20" width="190" height="200" rx="18" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
+    <text x="276" y="52" font-size="16" font-weight="700" fill="var(--emerald)">Prøveskudd</text>
+    <text x="276" y="86" font-size="14">4  Ett kapittel</text>
+    <text x="276" y="116" font-size="14">   gjennom alt</text>
+    <text x="276" y="196" font-size="12" class="m">før de ti andre</text>
+    <path d="M448,120 L482,120" stroke="var(--muted)" stroke-width="2" fill="none" marker-end="url(#pa)"/>
+    <rect x="486" y="20" width="250" height="200" rx="18" fill="var(--violet-s)" stroke="var(--violet)" stroke-width="1.5"/>
+    <text x="504" y="52" font-size="16" font-weight="700" fill="var(--violet)">Innhold</text>
+    <text x="504" y="86" font-size="14">5  Kapittel 1–2</text>
+    <text x="504" y="110" font-size="14">6  Kapittel 3–4</text>
+    <text x="504" y="134" font-size="14">7  Kapittel 5–6</text>
+    <text x="504" y="158" font-size="14">8  Kapittel 7–8</text>
+    <text x="504" y="182" font-size="14">9  Kapittel 9–10</text>
+    <text x="504" y="206" font-size="14">10 Gjennomlesing</text>
+    <path d="M736,120 L770,120" stroke="var(--muted)" stroke-width="2" fill="none" marker-end="url(#pa)"/>
+    <rect x="774" y="20" width="176" height="200" rx="18" fill="var(--amber-s)" stroke="var(--amber)" stroke-width="1.5"/>
+    <text x="792" y="52" font-size="16" font-weight="700" fill="var(--amber)">Levering</text>
+    <text x="792" y="86" font-size="14">11 Inn i gaten</text>
+    <text x="792" y="116" font-size="14">12 Bevis, lenke,</text>
+    <text x="792" y="136" font-size="14">    landing</text>
+  </svg>
+  </div>
+  <div class="key">💡 Oppgave 4 bygger <b>ett</b> kapittel helt ferdig først. Feil i byggingen oppdages da, ikke etter ti kapitler.</div>
+</section>
+
+<section class="glass">
+  <span class="tag t-cyan">Hvert kapittel</span>
+  <h2>Samme runde hver gang</h2>
+  <div class="scroll">
+  <svg viewBox="0 0 960 200" role="img" aria-label="Fem steg per kapittel: bygg siden, kjør sjekken, mål siden, se skjermbildene, lagre og push">
+    <defs><marker id="pc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--cyan)"/></marker></defs>
+    <g font-size="14">
+      <circle cx="90" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="90" y="80" font-size="30" text-anchor="middle">⚙️</text>
+      <text x="90" y="140" text-anchor="middle" font-weight="600">Bygg</text><text x="90" y="158" text-anchor="middle" class="m" font-size="12">én side</text>
+      <path d="M136,70 L224,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#pc)"/>
+      <circle cx="270" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="270" y="80" font-size="30" text-anchor="middle">🐕</text>
+      <text x="270" y="140" text-anchor="middle" font-weight="600">Vakthund</text><text x="270" y="158" text-anchor="middle" class="m" font-size="12">finnes skillen?</text>
+      <path d="M316,70 L404,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#pc)"/>
+      <circle cx="450" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="450" y="80" font-size="30" text-anchor="middle">📏</text>
+      <text x="450" y="140" text-anchor="middle" font-weight="600">Mål</text><text x="450" y="158" text-anchor="middle" class="m" font-size="12">avklipt tekst</text>
+      <path d="M496,70 L584,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#pc)"/>
+      <circle cx="630" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="630" y="80" font-size="30" text-anchor="middle">👀</text>
+      <text x="630" y="140" text-anchor="middle" font-weight="600">Se</text><text x="630" y="158" text-anchor="middle" class="m" font-size="12">skjermbildene</text>
+      <path d="M676,70 L764,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#pc)"/>
+      <circle cx="810" cy="70" r="44" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/><text x="810" y="80" font-size="30" text-anchor="middle">💾</text>
+      <text x="810" y="140" text-anchor="middle" font-weight="600">Lagre</text><text x="810" y="158" text-anchor="middle" class="m" font-size="12">commit og push</text>
+    </g>
+  </svg>
+  </div>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="chip"><span class="ic">📚</span><div><b>Kilder leses først</b><span>ingenting skrives fra hukommelsen</span></div></div>
+    <div class="chip"><span class="ic">🔎</span><div><b>Hver påstand sjekkes</b><span>mot skillens egen fil</span></div></div>
+    <div class="chip"><span class="ic">🗓️</span><div><b>Tall får dato</b><span>de er et øyeblikksbilde</span></div></div>
+  </div>
+  <div class="key">💡 Hvert kapittel er <b>skrevet, bygget og målt</b> før det neste startes.</div>
+</section>
+
+<section class="glass">
+  <span class="tag t-amber">Viktig detalj</span>
+  <h2>Seks feil som testene må fange</h2>
+  <div class="grid g2">
+    <div class="chip"><span class="ic">🧨</span><div><b>HTML i kapitteltekst</b><span>skal vises som tekst, aldri kjøres</span></div></div>
+    <div class="chip"><span class="ic">2️⃣</span><div><b>To innsikter i ett kapittel</b><span>bygget stopper med tydelig melding</span></div></div>
+    <div class="chip"><span class="ic">🏹</span><div><b>To figurer med samme pilnavn</b><span>pilene forsvinner uten at noe feiler</span></div></div>
+    <div class="chip"><span class="ic">🌗</span><div><b>Fast farge i en figur</b><span>ser riktig ut i lyst, galt i mørkt</span></div></div>
+    <div class="chip"><span class="ic">💻</span><div><b>Siden blir ulik på to maskiner</b><span>sjekken feiler i CI, ikke hos deg</span></div></div>
+    <div class="chip"><span class="ic">🔢</span><div><b>Hull i kapittelnummer</b><span>innholdsfortegnelsen blir feil</span></div></div>
+  </div>
+  <div class="key">💡 Hver feil har en <b>egen test</b> i oppgaven som eier koden.</div>
+</section>
+
+<section class="glass">
+  <span class="tag t-emerald">Arbeidsdeling</span>
+  <h2>Hvem gjør hva</h2>
+  <div class="who" style="margin-top:12px">
+    <div style="background:var(--amber-s)"><h3>🙋 Du</h3><ul><li>velger hvordan planen kjøres</li><li>leser siden før landing</li><li>sier ja til landing</li></ul></div>
+    <div style="background:var(--magenta-s)"><h3>🤖 Claude</h3><ul><li>skriver tester og kode</li><li>skriver kapitler og figurer</li><li>sjekker mot skill-filene</li></ul></div>
+    <div style="background:var(--violet-s)"><h3>⚙️ Skriptene</h3><ul><li>bygger siden</li><li>måler tekst</li><li>stopper landing ved rød sjekk</li></ul></div>
+  </div>
+</section>
+
+<section class="glass">
+  <span class="tag t-emerald">Ferdig når</span>
+  <ol class="done">
+    <li><span class="n">1</span><span>Testene for bygger og vakthund er grønne</span></li>
+    <li><span class="n">2</span><span>Alle elleve kapitler er bygget og målt uten avklipt tekst</span></li>
+    <li><span class="n">3</span><span>Release-sjekken er grønn, med versjon 3.11.0 og endringslogg</span></li>
+    <li><span class="n">4</span><span>Siden er publisert privat, og du har lest den</span></li>
+    <li><span class="n">5</span><span>Landet på main</span></li>
+  </ol>
+</section>
+
+<section class="glass">
+  <span class="tag t-amber">Verdt å vite</span>
+  <div class="grid g2">
+    <div class="chip"><span class="ic">🤝</span><div><b>Du velger kjøremåte</b><span>én ny agent per oppgave, eller alt i denne økten</span></div></div>
+    <div class="chip"><span class="ic">⏳</span><div><b>Vakthunden slås på sent</b><span>først når alle kapitlene finnes</span></div></div>
+    <div class="chip"><span class="ic">✍️</span><div><b>Innholdsoppgavene er rammer</b><span>teksten skrives mot kildene, ikke fra minnet</span></div></div>
+    <div class="chip"><span class="ic">🖼️</span><div><b>Hver figur står én gang</b><span>et annet kapittel lenker til den</span></div></div>
+  </div>
+</section>
+
+<footer>Kilde: <span class="mono">docs/superpowers/plans/2026-10-12-manual.md</span></footer>
+</div>
+<script>
+(function(){
+  var root=document.documentElement,btn=document.getElementById('tg');
+  try{var s=localStorage.getItem('explainer-tema');if(s)root.setAttribute('data-theme',s);}catch(e){}
+  btn.addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    var next=cur==='dark'?'light':'dark';root.setAttribute('data-theme',next);
+    try{localStorage.setItem('explainer-tema',next);}catch(e){}
+  });
+})();
+</script>
+</body>
+</html>

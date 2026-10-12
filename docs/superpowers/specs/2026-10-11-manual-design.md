@@ -68,7 +68,9 @@ scripts/build-manual.py               kapitler + figurer → manual.html
 - Deterministisk: samme kilder gir byte-lik utdata, slik at «bygget fra gjeldende kapitler» kan sjekkes ved å bygge på nytt og sammenligne.
 - Kjører `skills/htmlify/bin/explain-check` på resultatet (avklipt og overlappende tekst, skjermbilde).
 
-**Gjenbruk:** `htmlify` leverer `styles/explainer.css` og `explain-check`. Antakelsen er at `explain-check` brukes som den er, og at `manual.css` låner fargetokens og glassflater fra `explainer.css` i stedet for å kopiere dem (manualen er én lang side, `explainer.css` er laget for én spec). Ingen av filene er lest ennå; kodegjenbrukssjekken (søk, les, velg gjenbruk/utvid/skriv nytt) gjøres første steg i planfasen, og planen oppdateres hvis antakelsen ikke holder.
+**Gjenbruk (sjekket 2026-10-12, REUSE):** `explain-check` har ingen «bare mål»-modus. Regelsjekken krever at første `<style>` er `skills/htmlify/styles/explainer.css` uendret, at hvert kort starter med en `.tag`-etikett, har høyst én `.key`, og at hver `<svg>` har `role="img"` og `aria-label`. Manualsiden bygges derfor etter den samme kontrakten: første `<style>` er `explainer.css` uendret, andre `<style>` er `manual.css` (prosa, innholdsfortegnelse, tabeller, kodeblokker), og hvert kapittel er ett kort. Da kjører `explain-check` uendret, og testene kan kalle dens rene funksjon `rule_findings`. Ingen tokens kopieres.
+
+**Kapittelformat:** hver `.md`-fil har frontmatter med `nummer`, `tag`, `tittel`, `aksent` (en av cyan, violet, magenta, amber, emerald), `bruk` og `ferdig` (de to linjene fra kapittel-regelen i punkt 3). Kapittel 0 har i tillegg `oppdatert` (dato i overskriften; ingen klokkeslett, slik at byggingen er deterministisk). Brødteksten bruker bare: `###`-overskrifter, avsnitt, punktlister, nummererte lister, tabeller, kodeblokker, `![[navn.svg]]` og én blokksitat (`> `) per kapittel, som blir kortets ene `.key`.
 
 **Alternativer som ble forkastet:** håndskrevet HTML (lint-sjekken må tolke HTML, teksten driver fra virkeligheten, slik README gjorde) og `htmlify explain` per kapittel (laget for én spec om gangen; gir mange sider, og brukeren valgte én).
 
@@ -76,7 +78,7 @@ scripts/build-manual.py               kapitler + figurer → manual.html
 
 Ny sjekk i `scripts/lint-skills.py`, i release-porten (CI og `pre-merge`-hooken i `.config/wt.toml`):
 
-- **E15a:** hver skill-referanse i `docs/manual/*.md` (`/superpowers-gstack:<navn>`, `superpowers:<navn>`, gstack-kommandoer som `/qa`) må finnes. Plugin-skills sjekkes mot `skills/`. Superpowers-skills sjekkes mot den innsjekkede listen fra E10. gstack-kommandoer sjekkes mot en innsjekket liste over gstack-kommandoer manualen får lov å nevne.
+- **E15a:** hver skill-referanse i `docs/manual/*.md` må finnes. `superpowers-gstack:<navn>` og `superpowers:<navn>` sjekkes ved å gjenbruke `check_refs` (E2) og `check_upstream_skills` (E10) uendret. Bare `/navn` i kodeformat må stå i `docs/manual/kommandoer.txt` (manualens egen, korte liste over gstack-kommandoer og Claude Code-kommandoer den nevner) eller være en av plugin-ens egne skills. Listen er med vilje liten: lint-filen avviser en full gstack-liste fordi gstack endres ukentlig. På maskiner med gstack installert gir en ny advarsel W5 beskjed hvis en listet kommando ikke finnes der.
 - **E15b:** hver skill i `skills/` må være nevnt minst én gang i manualen.
 - **E15c:** `docs/manual/manual.html` må være identisk med det `build-manual.py` lager nå.
 - Sjekken følger E10s mønster, slik at maskiner uten oppstrøms installasjon ikke feiler (gstack-listen er innsjekket, ikke lest fra `~/.claude/skills`).
@@ -96,6 +98,8 @@ Håndtegnede SVG, ingen Mermaid (brukerens preferanse). Liquid Glass-stil, lys o
 7. Swift-sporet kontra web-sporet side ved side (7, 8).
 
 Alle figurer måles med `explain-check` før manualen regnes som ferdig.
+
+**Hver figur står på ett sted.** Markør-id-ene i en SVG må være unike på hele siden, så en figur kan ikke limes inn to ganger. Der en figur hører til i to kapitler (3 i 4 og 6, 7 i 7 og 8), står den i det første kapittelet, og det andre lenker til den (`[se figuren](#k4)`). Byggeskriptet avviser to figurer med samme id.
 
 ## 7. Tone og skriveregler
 
@@ -123,5 +127,5 @@ Alle figurer måles med `explain-check` før manualen regnes som ferdig.
 
 ## 10. Åpne punkter
 
-- **Ingen blokkerende.** Under planfasen avgjøres: eksakt navn på gstack-listen som E15a bruker, og om `manual.css` kan arve tokens fra `explainer.css` direkte eller må kopiere dem.
+- **Ingen åpne.** Avgjort i planfasen 2026-10-12: gstack-listen heter `docs/manual/kommandoer.txt`, og `manual.css` er andre `<style>` ved siden av `explainer.css` uendret (se punkt 4).
 - Manualens tall om bruk regenereres ved neste større utgivelse; datoen står i teksten.
