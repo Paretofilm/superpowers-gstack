@@ -1,5 +1,42 @@
 # Changelog
 
+## [3.12.0] - 2026-10-12
+
+**GStack v1.91.93.0: CSO release gates, outside-review consent enforcement, Codex reasoning effort, Windows fixes, and post-compaction journal repair. Superpowers v7.0.0: brainstorming rebuilt from scratch, Antigravity plugin manifest, and several hook and skill fixes.**
+
+### GStack upstream changes (v1.91.88.0 – v1.91.93.0)
+
+- **`/cso` release gates** no longer block on report completeness. `matchedCompleteMatrix` and `mandatoryReports` now require every report to be `finished` (fully adjudicated matrix, not running/missing/failed) rather than `complete`. Completeness is still measured and reported; it no longer gates the release.
+- **Outside-review consent enforced in binaries.** `gstack-codex-probe run-with-timeout`, `gstack-claude-code`, `gstack-outside-voice run` and the unattended `/autoplan` runner now read `codex_reviews` before starting. When it is `disabled`, unset, or unreadable they refuse with exit 3 and print the fix command. `/ship` design-lite and `/design-review` no longer hard-code consent, so `codex_reviews=disabled` stops them too. `/codex` and `/claude-code` pass `--user-invoked`. Updated `/codex` Quick Reference entry to note the consent requirement.
+- **Codex reasoning effort is now configurable.** `run-with-timeout --effort <default>` reads `GSTACK_CODEX_EFFORT` first, then `gstack-config set codex_effort <level>`, then the gate's own default. An invalid level stops before any Codex call. `/codex ... --xhigh` sets the env for that dispatch. `/spec` keeps `medium` inside its 120 s budget. `gstack-models list` shows the effective effort.
+- **Outside-review severity parsing tightened.** `lib/outside-review-result.ts` now reads P0–P3 labels in label position across all gate types. A P0–P3 token in label position that no recognised form can parse yields `VERDICT: unverified` with reason `unparsed_severity` and a new troubleshooting anchor. A `not ready` verdict with no readable severity exits 3 as `FINDINGS: unspecified`.
+- **Post-compaction journal repair.** Claude Code 2.1.293 writes the kept conversation again after an auto-compaction boundary. The journal reader collapses such copies into their pre-boundary originals so the publication guard no longer denies phase entries, a copied `/autoplan` prompt no longer trips `init_own`, and a copied end turn no longer disarms the guard.
+- **Read-only `/plan-eng-review`** now follows Report-back outcome: returns the full report and ledger labelled not persisted, records telemetry `success`, ends `DONE` with `PERSISTED: no`, and prints a `PERSIST:` line for the caller to run. `/ship`'s readiness dashboard directs users to that line when no saved Eng Review exists.
+- **Windows checkout fixes.** `.gitattributes` now pins every tracked `#!` file to `eol=lf`. `./setup` repairs existing CRLF copies in-place (edited files are named and left alone). The timeline Stop hook reads the slug from an in-process cache on Windows, with a background resolver under a lock on a miss. `/setup-gbrain` smoke test writes to a temp file before piping into `gbrain put`.
+- **Windows Git Bash path fix (since 1.91.31).** `gstack-hook-check` now maps Bun's native `C:/…` paths back to Git Bash `/c/…` spelling, clearing the false-positive that blocked setup and held auto-updates. The auto-updater runs the incoming release's own `bin/gstack-hook-check` on the archive; a crash or unreadable report falls back to the installed checker. `/gstack-upgrade` and `/spec` use `git rev-parse --show-prefix` for checkout-root guards. `gstack-wtree` treats `C:/…` `--git-path` answers as absolute.
+- **Transcript ingest on gbrain 0.60.** Each transcript source is now bound to its own checkout under `<state root>/gbrain-transcript-sources/<source-id>/`. A path-less source registered by an earlier run is bound on the next run.
+- **`/retro global`** now reads each session's cwd from its own JSONL (whole lines up to 1 MiB) and resolves it through git to the worktree root, so hyphenated paths and subdirectory sessions count correctly.
+- **`/cso` producer** now allows `Bash,Write,Agent`. Subagent tokens are counted from `modelUsage`. Policy revision is `claude-2.1.263-cso-v2`; a recorded v2 baseline bound to `cso-v1` must be re-measured.
+- **Privacy & Telemetry README section updated upstream** to list telemetry fields, `skill-usage.jsonl` (repo and branch stripped before upload), update check (GitHub), outside-review egress and first-send notice, and session markers (local only).
+
+### Superpowers upstream changes (v7.0.0)
+
+- **Brainstorming rebuilt.** `/superpowers:brainstorming` now draws out what you want before proposing anything: one open question first, a menu only when you're stuck, playback of each understood part marked with guesses, and offers to look at prior art, the project, or the web. It sizes the work after understanding what you want (quick task, small change in chat, or full design document) and lets you override its call. A builder-check subagent reads the design as the person who'll build it and brings back only questions that change what gets built. It finds out which platform/language/library choices you want to own and picks sensible defaults for the rest. The visual companion is offered whenever seeing would help more than reading, without a token-cost warning. Updated Quick Reference description accordingly.
+- **Visual companion `$'`/`$&` sequence fix.** The server now inserts content literally instead of via `String.replace`, so screen content with those sequences displays intact.
+- **Antigravity Marketplace support.** `agy plugin install https://github.com/obra/superpowers` now installs Superpowers as a native Antigravity plugin via `.antigravity-plugin/plugin.json`. Superpowers bootstraps on Antigravity through skill discovery (`using-superpowers`' description prompts the model to load it).
+- **SessionStart hook** no longer looks up `dirname`, `cat`, or `bash` on `PATH`, fixing bootstrap failures when the harness launches with a broken `PATH`.
+- **Windows `run-hook.cmd`** now checks `%LOCALAPPDATA%\Programs\Git` for per-user Git for Windows installs, skips WSL `bash.exe` launchers, ignores `bash` and `where` in the current directory (repository planting prevention), and passes hook exit codes to the harness.
+- **`sdd-workspace`** no longer overwrites a repo's own `.superpowers/sdd/.gitignore`; it writes the default only when no file exists. Plan markers are now repo-relative on Windows (Git Bash path comparison fixed).
+- **`task-done`** now records tasks whose test command passes silently (was exiting 1 with no ledger line when output was empty).
+- **`/superpowers:requesting-code-review`** example base-SHA command uses `cut -d' ' -f1` instead of `awk '{print $1}'` to survive skill arguments.
+- **Systematic debugging** multi-layer diagnostic example no longer prints the secret it checks for.
+- **Hermes agent** skill list now shows each Superpowers skill's frontmatter description instead of blank.
+
+### Changed
+- Updated `/superpowers:brainstorming` Quick Reference description to reflect rebuilt behaviour.
+- Updated `/codex` Quick Reference entry to document `codex_reviews` consent requirement.
+- Updated `skills/adapt/roster.md` brainstorming row to reflect rebuilt behaviour.
+
 ## [3.11.0] - 2026-10-11
 
 **An empty folder gets its CLAUDE.md with no questions. The stack is filled in after the first spec, once.**
