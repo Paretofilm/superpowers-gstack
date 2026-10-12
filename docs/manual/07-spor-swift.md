@@ -32,10 +32,10 @@ Quality-review spør om det vil kjennes bra, pitfall-verification spør om det v
 
 ### Ende-til-ende-tester: hvem gjør hva
 
-En ende-til-ende-test (E2E) trykker seg gjennom appens brukergrensesnitt (UI) slik en bruker ville gjort. To skills deler jobben, og ingen av dem starter av seg selv.
+En ende-til-ende-test (E2E) trykker seg gjennom appens brukergrensesnitt (UI) slik en bruker ville gjort. To skills deler jobben.
 
 - `/superpowers-gstack:e2e-route` er en ren veiviser. Den leser plattform, hva du vil, og hvor testene skal kjøre, sier hvem som tar jobben, og overlater den. Den bygger, trykker og skriver ingenting selv.
-- `/superpowers-gstack:e2e-scaffold` lager grunnlaget for UI-tester (XCUITest, Apples verktøy for tester som trykker gjennom appen). Den endrer prosjektfiler, så du må be om den selv.
+- `/superpowers-gstack:e2e-scaffold` lager grunnlaget for UI-tester (XCUITest, Apples verktøy for tester som trykker gjennom appen). Den endrer prosjektfiler og kjøres bare når du ber om det.
 
 Hva du vil, avgjør hvor e2e-route sender deg:
 
@@ -59,6 +59,6 @@ To verktøy lar Claude se og slå opp SwiftUI mens den skriver. Begge er MCP-ver
 
 Beviset er at du har sett akkurat denne grenen kjøre ([se kapittel 4](#k4)). `/superpowers-gstack:verify-and-land` bygger grenen du står på, starter nøyaktig den bygde appen og melder hvilken gren, hvilken bygging og hvilken commit som kjører. På iOS skjer det i simulatoren (en iPhone som kjører som program på Macen), og skillen sjekker at installasjonen er fra denne kjøringen. Så spør den om rettelsen er der, én gang per endring du kan se. Svarer du ja på alle, lander grenen slik prosjektets `Landing mode:`-linje sier, uten et nytt spørsmål. Svarer du nei, lander ingenting, og skillen foreslår `/investigate`.
 
-For iOS bygger og starter skillen bare i simulatoren, ikke på en ekte telefon. Det du ikke kan se i en simulator, må du se på en ekte enhet. Sing-replay viser hvordan det ser ut. Filen `progress.md` oppgir testenheten som en iPhone 13 Pro Max med iOS 26.6, paret og i utviklermodus, men Meta-tabellen er ikke datert. Den nyeste datoen i filen er 16. august 2026. Der står også at lydverifiseringen på en ekte telefon (stille-bryter, skjermlås, hodetelefon trukket ut, innkommende samtale) ikke kan simuleres og var «blokkert på brukerens hender, ikke på kode». Med andre ord: appen er kjørt på telefonen, men lyden er ikke verifisert der ennå, ifølge filen. Prosjektets CLAUDE.md har også en felle fra 15. august 2026: en ny installasjon på telefonen dreper tilgangen til mappen med opptak, og appen viser velkomstskjermen igjen. Det ser ut som en feil, men er forventet.
+For iOS bygger og starter skillen i simulatoren, og den har ingen vei til en ekte telefon. Det du ikke kan se i en simulator, må du se på en ekte enhet. Sing-replay viser hvordan det ser ut. Filen `progress.md` oppgir testenheten som en iPhone 13 Pro Max med iOS 26.6, paret og i utviklermodus, men Meta-tabellen er ikke datert. Den nyeste datoen i filen er 16. august 2026. Der står også at lydverifiseringen på en ekte telefon (stille-bryter, skjermlås, hodetelefon trukket ut, innkommende samtale) ikke kan simuleres og var «blokkert på brukerens hender, ikke på kode». Med andre ord: filen lister en paret enhet (udatert), og lydverifiseringen på den er fortsatt åpen. At appen ble installert på telefonen 15. august 2026, står i prosjektets CLAUDE.md, som også beskriver en felle derfra: en ny installasjon på telefonen dreper tilgangen til mappen med opptak, og appen viser velkomstskjermen igjen. Det ser ut som en feil, men er forventet.
 
 > 💡 En Apple-app legger Apples regler (HIG og Liquid Glass) til kjernen, og beviset er å se akkurat denne grenen kjøre: i simulatoren for det du kan se, på en ekte telefon for lyd og maskinvare.

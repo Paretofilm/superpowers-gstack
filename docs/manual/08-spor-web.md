@@ -33,9 +33,9 @@ Når `/cso` passer, står i rutingtabellen til KvitteriAi: den kjøres før `/re
 
 Tre verktøy gjør at Claude kan se nettet. Alle er MCP-verktøy eller utvidelser (MCP, Model Context Protocol, er standarden som kobler verktøy til Claude).
 
-- Playwright styrer en nettleser fra Claude: åpne en side, klikke, skrive i skjemaer, ta skjermbilde (verktøyene heter blant annet `browser_navigate`, `browser_click` og `browser_take_screenshot`). De tre prosjektene under nevner det ikke i CLAUDE.md-filene sine (sjekket 12. oktober 2026), så det finnes ikke et eksempel derfra.
-- Claude in Chrome styrer din egen Chrome, med innloggingene dine. KvitteriAi (en Swift-kommandolinje som finner bilag til banktransaksjoner) bruker det i skillen `hent-fakturaer`: du logger inn selv, Claude leser fakturalistene på leverandørenes nettsider, laster ned og legger fakturaen inn. Koden avgjør om den blir et bilag. Før noe åpnes, sier skillen hvilke nettsteder du må være innlogget på, og at Claude leser beløp, datoer, firmanavn og fakturaadresse. Så venter den på at du skriver «klar».
-- firecrawl henter en side og gir innholdet som tekst, og søker på nettet. Heller ikke det står i de tre prosjektenes CLAUDE.md-filer (sjekket 12. oktober 2026).
+- Playwright styrer en nettleser fra Claude: åpne en side, klikke, skrive i skjemaer, ta skjermbilde (verktøyets egen beskrivelse; verktøyene heter blant annet `browser_navigate`, `browser_click` og `browser_take_screenshot`). De tre prosjektene under nevner det ikke i CLAUDE.md-filene sine (sjekket 12. oktober 2026), så det finnes ikke et eksempel derfra.
+- Claude in Chrome styrer din egen Chrome, med innloggingene dine (beskrivelsen av utvidelsen i Claude Code). KvitteriAi (en Swift-kommandolinje som finner bilag til banktransaksjoner) bruker det i skillen `hent-fakturaer` (`.claude/skills/hent-fakturaer/SKILL.md` i prosjektet): du logger inn selv, Claude leser fakturalistene på leverandørenes nettsider, laster ned og legger fakturaen inn. Koden avgjør om den blir et bilag. Før noe åpnes, sier skillen hvilke nettsteder du må være innlogget på, og at Claude leser beløp, datoer, firmanavn og fakturaadresse. Så venter den på at du skriver «klar».
+- firecrawl henter en side og gir innholdet som tekst, og søker på nettet (verktøyets egen beskrivelse). Heller ikke det står i de tre prosjektenes CLAUDE.md-filer (sjekket 12. oktober 2026).
 
 Ingen av de tre prosjektene er selv nettsteder. De bruker verktøyene utenfra, og to av dem går andre veier til samme mål:
 
