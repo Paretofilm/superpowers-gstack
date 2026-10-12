@@ -28,19 +28,19 @@ Kolonnene «Hva det fanger» og «Bruk det når» er hentet fra verktøyets egen
 | `/health` | Kodens tilstand. Kjører prosjektets egne verktøy for typesjekk, lint (verktøy som finner slurv i koden) og tester, og gir en samlet poengsum fra 0 til 10 som følges over tid | Du vil ha et tall på hvor sunn koden er | 0 |
 | `/document-release` | At dokumentasjonen ikke følger med det som ble sendt ut: leser dokumentene mot endringen, oppdaterer README og CLAUDE.md og pusser endringsloggen | Etter en utsending, og før en pull request slås sammen | 0 |
 | `/superpowers-gstack:e2e-scaffold` | Mangel på UI-tester i en Apple-app. Lager grunnlaget for dem og endrer prosjektfiler, så den kjører bare når du ber om det ([se kapittel 7](#k7)) | Appen har ingen UI-test, og du vil låse en test som skal vare | 0 |
-| `/superpowers-gstack:swiftui-design-consultation` | At utseendet i et SwiftUI-prosjekt ikke er skrevet ned. Lager `DESIGN.md` og en Swift-pakke ([se kapittel 7](#k7)) | Du starter eller friske opp designsystemet | 0 |
+| `/superpowers-gstack:swiftui-design-consultation` | At utseendet i et SwiftUI-prosjekt ikke er skrevet ned og sjekket. Du får et forslag som side, og først når du godkjenner, skrives `DESIGN.md` og en Swift-pakke `DesignSystem/`, som så sjekkes mot Apples HIG med en grense du velger for hvor mange funn som er greit ([se kapittel 7](#k7)) | Du starter eller friske opp designsystemet i et SwiftUI-prosjekt | 0 |
 
 Til sammenligning ble disse brukt mest i samme måling: `/superpowers-gstack:pitfall-verification` 39 ganger, `/superpowers-gstack:third-lens-review` 27, `/review` 27 og `superpowers:brainstorming` 23 (målt 10. oktober 2026).
 
 ### Hvor tallene peker
 
-Tallene viser et mønster. Kontrollene som leser koden og planen, brukes ofte: feller-sjekken, det tredje modellhuset og `/review`. Verktøyene som kjører programmet eller ser på resultatet, brukes lite eller aldri: `/qa`, `/ios-qa`, `/health` og `superpowers:verification-before-completion`. Det passer med [kapittel 4](#k4): tester sier at ingenting annet gikk i stykker, og bare en kjøring du har sett sier at rettelsen er rettet.
+Tallene viser et mønster. Kontrollene som leser koden og planen, brukes ofte: feller-sjekken, det tredje modellhuset og `/review`. Verktøyene som kjører programmet eller ser på resultatet, brukes lite eller aldri: `/qa` og `/ios-qa`. Det samme gjelder `superpowers:verification-before-completion`, som krever at beviset er kjørt før noe kalles ferdig. Det passer med [kapittel 4](#k4): tester sier at ingenting annet gikk i stykker, og bare en kjøring du har sett sier at rettelsen er rettet.
 
 Du trenger ikke ta alle. Velg ett som passer det du holder på med nå. Bygger du en nettside eller et Python-program ([se kapittel 8](#k8)), prøv `/qa` neste gang en funksjon er klar. Bygger du en Apple-app, prøv `/superpowers-gstack:e2e-scaffold`.
 
 ### Mål selv
 
-Vil du vite om det ble en vane, eller om tallene over fortsatt stemmer, skriv `/superpowers-gstack:workflow-metrics` i Claude Code. Du kan legge til et prosjektnavn og en dato for en endring, for eksempel `/superpowers-gstack:workflow-metrics sing-replay 2026-10-15`. Skillen kjører et skript som leser transkriptene på disken og teller én gang per kall til modellen. Den rapporterer disse målingene:
+Vil du vite om det ble en vane, eller om tallene over fortsatt stemmer, skriv `/superpowers-gstack:workflow-metrics` i Claude Code. Du kan legge til et prosjektnavn og en dato for en endring, for eksempel `/superpowers-gstack:workflow-metrics sing-replay 2026-10-01`. Skillen kjører et skript som leser transkriptene på disken og teller én gang per kall til modellen. Den rapporterer disse målingene:
 
 - `asks`: hvor mange strukturerte spørsmål Claude stilte, hvor mange du svarte på med det anbefalte alternativet, og hvor lenge Claude jobbet mellom meldingene dine.
 - `tokens`: antall kall til modellen i hovedsamtalen og hos underagenter, og hvor mye som ble skrevet ut, og hvor mye kontekst som ble gjenbrukt og skrevet.

@@ -25,11 +25,11 @@ Et modellhus er et selskap som lager språkmodeller, og hvert hus har sine egne 
 - Codex (OpenAI) kommer gjennom `/review`, som kjører Codex mot endringen din, og gjennom `/codex`. `/codex review` gir en uavhengig gjennomgang, `/codex challenge` prøver å knekke koden, og `/codex <spørsmål>` stiller Codex et spørsmål (sier `/codex`-skillen). Bruk dem når du vil ha en annen lesning enn Claudes.
 - Det tredje huset er `/superpowers-gstack:third-lens-review`. Pitfall-verification starter den av seg selv på endringer med høy innsats, og skillen sier selv at du bare starter den for hånd når du vil ha en frittstående lesning utenfor den vanlige kontrollen. Hvilke modeller som brukes, står i skriptet `scripts/third-lens-review.py` og endres, så manualen oppgir ingen navn. `python3 scripts/third-lens-review.py --help` viser alternativene.
 - `agy` gir Gemini-tekst, og ifølge oppsettet ditt uten kostnad. Skriv `agy -p "<spørsmål>"` for ett svar, eller `cat fil.md | agy -p "finn svakheter i argumentasjonen"` for å la den lese en fil. Bruk den til analyse, oppsummering og oversettelse, ikke til bilder.
-- `gemini-media` lager bilde, video, tale og musikk: `gemini-media image "en katt i romdrakt" -o katt.png`, og `video`, `tts` og `music` på samme måte (`gemini-media --help` viser dem). Hvert kall koster penger, og video er dyrest. Si fra til Claude hvis du vil ha mange bilder eller video, så anslår den prisen først. Manualen oppgir ingen priser.
+- `gemini-media` lager bilde, video, tale og musikk. Det er et skript som ligger i mappen `~/.claude/bin/`, og står ikke på stien din, så skriv hele stien: `~/.claude/bin/gemini-media image "en katt i romdrakt" -o katt.png`, og `video`, `tts` og `music` på samme måte (`~/.claude/bin/gemini-media --help` viser dem). Hvert kall koster penger, og video er dyrest. Si fra til Claude hvis du vil ha mange bilder eller video, så anslår den prisen først. Manualen oppgir ingen priser.
 
 Nøklene ligger i macOS-nøkkelringen (Keychain, Macens innebygde passordlager), og verktøyene henter dem selv derfra. Du skal aldri skrive eller lime en nøkkel inn i en samtale med Claude, og Claude skal aldri skrive den ut. Skal en nøkkel byttes, gjør du det selv i et terminalvindu.
 
-Sikkerhetsregelen fra [kapittel 4](#k4) gjelder fortsatt: kode og data som håndterer innlogging, nøkler, helse eller økonomi leses bare av Claude selv og Codex, og sendes aldri til det tredje huset, fordi de to modellene der kjører på ikke-vestlig infrastruktur.
+Sikkerhetsregelen fra [kapittel 4](#k4) gjelder fortsatt: kode og data som håndterer innlogging, nøkler, helse eller økonomi leses bare av Claude selv og Codex, og sendes aldri til det tredje huset, fordi Zhipu- og DeepSeek-modellene i det tredje huset kjører på ikke-vestlig infrastruktur.
 
 ### Swift-verktøy
 
@@ -49,4 +49,4 @@ For reserve-Macen skriver du `vm-run -- <kommando>`. Verktøyet låner en ledig 
 
 Bruk den, slik oppsettet ditt sier, når oppgaven automatiserer GUI, endrer systemtilstand (installerer, avinstallerer, skriver i `/Library`), skal se hvordan noe virker på en ren maskin, eller kjører lenge uten tilsyn. Bruk den ikke til å redigere filene i prosjektene dine, og ikke til noe som trenger din signeringsidentitet (bevis på hvem som har laget appen) eller innloggede kontoer. Skal Claude derimot styre appene på din egen maskin, og du ber om det, gjør den det og sier fra først.
 
-> 💡 Kommandoene du skriver selv, er få: `wt remove`, `agy` og `vm-run`. Resten tar Claude frem, og nøkler skal aldri inn i en samtale.
+> 💡 Du trenger sjelden å skrive `wt` selv, for Claude og `/superpowers-gstack:land` kjører det meste av det. Nøkler skal aldri inn i en samtale.
