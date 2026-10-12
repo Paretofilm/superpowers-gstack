@@ -1,0 +1,26 @@
+<svg viewBox="0 0 960 240" role="img" aria-label="Hovedsamtalen sender en oppgave og progress.md til en subagent som starter med tom kontekst. En lukket dør viser at subagenten ikke ser samtalen. Subagenten sender resultatet tilbake">
+  <defs>
+    <marker id="s-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+  </defs>
+  <rect x="20" y="50" width="290" height="120" rx="18" fill="var(--line)"/>
+  <text x="165" y="96" text-anchor="middle" font-size="17" font-weight="600">Hovedsamtalen</text>
+  <text x="165" y="122" text-anchor="middle" font-size="14" class="m">husker hele historien</text>
+  <text x="165" y="144" text-anchor="middle" font-size="14" class="m">og deler ut oppgaver</text>
+  <rect x="560" y="50" width="270" height="120" rx="18" fill="var(--magenta-s)" stroke="var(--magenta)" stroke-width="1.5"/>
+  <text x="695" y="96" text-anchor="middle" font-size="17" font-weight="600">Subagent</text>
+  <text x="695" y="122" text-anchor="middle" font-size="14" class="m">starter med tom kontekst</text>
+  <text x="695" y="144" text-anchor="middle" font-size="14" class="m">og får én oppgave</text>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M312,92 L558,92" marker-end="url(#s-ar)"/>
+    <path d="M558,134 L312,134" marker-end="url(#s-ar)"/>
+  </g>
+  <text x="435" y="80" text-anchor="middle" font-size="14" font-weight="600">oppgave + progress.md</text>
+  <text x="435" y="158" text-anchor="middle" font-size="14" class="m">resultat</text>
+  <g>
+    <rect x="868" y="62" width="44" height="76" rx="6" fill="var(--glass)" stroke="var(--magenta)" stroke-width="2"/>
+    <circle cx="900" cy="100" r="4" fill="var(--magenta)"/>
+    <path d="M832,100 L866,100" stroke="var(--muted)" stroke-width="2" stroke-dasharray="3 4" fill="none"/>
+  </g>
+  <text x="890" y="162" text-anchor="middle" font-size="14" class="m">ser ikke</text>
+  <text x="890" y="182" text-anchor="middle" font-size="14" class="m">samtalen</text>
+</svg>

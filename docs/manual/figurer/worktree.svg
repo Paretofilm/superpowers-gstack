@@ -1,0 +1,33 @@
+<svg viewBox="0 0 960 300" role="img" aria-label="Hovedmappen main til venstre og tre arbeidstrær til høyre, hvert med sin egen gren. Piler tilbake til main viser landing med fast-forward. Et overstrøket stash-ikon viser at git stash ikke brukes, fordi lageret deles av alle mappene">
+  <defs>
+    <marker id="w-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+  </defs>
+  <rect x="20" y="95" width="200" height="100" rx="18" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
+  <text x="120" y="138" text-anchor="middle" font-size="17" font-weight="600" class="mono">main</text>
+  <text x="120" y="162" text-anchor="middle" font-size="14" class="m">hovedmappen</text>
+  <g fill="var(--line)">
+    <rect x="620" y="20" width="320" height="70" rx="16"/>
+    <rect x="620" y="115" width="320" height="70" rx="16"/>
+    <rect x="620" y="210" width="320" height="70" rx="16"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="780" y="48" font-size="15" font-weight="600">arbeidstre 1</text>
+    <text x="780" y="70" font-size="14" class="m mono">feat/a</text>
+    <text x="780" y="143" font-size="15" font-weight="600">arbeidstre 2</text>
+    <text x="780" y="165" font-size="14" class="m mono">fix/b</text>
+    <text x="780" y="238" font-size="15" font-weight="600">arbeidstre 3</text>
+    <text x="780" y="260" font-size="14" class="m mono">docs/c</text>
+  </g>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M618,55 C420,55 420,115 222,115" marker-end="url(#w-ar)"/>
+    <path d="M618,150 L222,150" marker-end="url(#w-ar)"/>
+    <path d="M618,245 C420,245 420,185 222,185" marker-end="url(#w-ar)"/>
+  </g>
+  <text x="420" y="140" text-anchor="middle" font-size="14" font-weight="600">land (fast-forward)</text>
+  <g>
+    <rect x="30" y="232" width="46" height="36" rx="6" fill="var(--line)"/>
+    <path d="M24,226 L82,274 M82,226 L24,274" stroke="var(--red)" stroke-width="3" fill="none"/>
+  </g>
+  <text x="96" y="246" font-size="14" font-weight="600" class="mono">git stash</text>
+  <text x="96" y="266" font-size="13" class="m">delt av alle mappene</text>
+</svg>

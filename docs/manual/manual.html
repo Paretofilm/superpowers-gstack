@@ -144,7 +144,7 @@ ol.toc li{margin:6px 0}
 
 <section class="glass" id="innhold">
   <span class="tag t-violet">Innhold</span>
-  <ol class="toc"><li><a href="#k0"><b>0</b> Hele flyten på én side</a></li><li><a href="#k1"><b>1</b> Start fra en tom mappe</a></li><li><a href="#k2"><b>2</b> Hva kjører jeg nå?</a></li><li><a href="#k3"><b>3</b> Fra idé til kode, steg for steg</a></li><li><a href="#k4"><b>4</b> Når kan du stole på resultatet?</a></li></ol>
+  <ol class="toc"><li><a href="#k0"><b>0</b> Hele flyten på én side</a></li><li><a href="#k1"><b>1</b> Start fra en tom mappe</a></li><li><a href="#k2"><b>2</b> Hva kjører jeg nå?</a></li><li><a href="#k3"><b>3</b> Fra idé til kode, steg for steg</a></li><li><a href="#k4"><b>4</b> Når kan du stole på resultatet?</a></li><li><a href="#k5"><b>5</b> Ikke mist tråden</a></li><li><a href="#k6"><b>6</b> Hva skjer bak kulissene</a></li></ol>
 </section>
 
 <section class="glass" id="k0">
@@ -420,6 +420,158 @@ ol.toc li{margin:6px 0}
 <ul><li><code>solo</code>: <code>/superpowers-gstack:land</code> kjører prosjektets lokale sjekker, flytter main fremover (fast-forward, uten ny sammenslåings-commit) og sender til GitHub. Ingen pull request.</li><li><code>pr</code>: <code>/ship</code> kjører testene, kjører gjennomgang og lager en pull request (en forespørsel om gjennomgang på GitHub).</li></ul>
 <p>Sjekkene i <code>.config/wt.toml</code> (pre-merge-sperren) er det som erstatter gjennomgangen når ingen andre leser, så de hoppes aldri over. Land bruker ikke <code>--no-hooks</code> eller <code>--yes</code>. En rød sjekk rettes, og land kjøres på nytt. Mangler prosjektet sperren, lander ingenting før du har godkjent en. De vanligste stoppkodene fra land står i <a href="#k1">kapittel 1</a>.</p>
 <div class="key">💡 Du kan stole på resultatet når nivået er regnet ut, kontrollørene har lest det, og du selv har sett akkurat den bygde versjonen virke. Sjekkene før landing hoppes aldri over.</div>
+</section>
+
+<section class="glass" id="k5">
+  <span class="tag t-amber">Mellom økter</span>
+  <h2>5&nbsp; Ikke mist tråden</h2>
+  <div class="grid g2 bruk">
+    <div class="chip"><span class="ic">🎯</span><div><b>Bruk denne når</b><span>konteksten er lang, du skal skrive /clear, eller du kommer tilbake til et prosjekt etter en pause</span></div></div>
+    <div class="chip"><span class="ic">🏁</span><div><b>Du er ferdig når</b><span>neste økt åpner med et banner som sier hvor du slapp, og du vet hvilken fil som bærer tråden</span></div></div>
+  </div>
+<div class="scroll"><svg viewBox="0 0 960 240" role="img" aria-label="Tidslinje over to økter: økt 1, context-handoff skriver handoff.md, clear tømmer minnet, økt 2 starter med et banner som leser filene, og arbeidet fortsetter. Filene handoff.md og progress.md ligger på disk hele tiden">
+  <defs>
+    <marker id="t-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+  </defs>
+  <g>
+    <rect x="18" y="40" width="156" height="72" rx="16" fill="var(--line)"/>
+    <text x="96" y="70" text-anchor="middle" font-size="16" font-weight="600">Økt 1</text>
+    <text x="96" y="92" text-anchor="middle" font-size="14" class="m">du jobber</text>
+    <rect x="210" y="40" width="156" height="72" rx="16" fill="var(--amber-s)" stroke="var(--amber)" stroke-width="1.5"/>
+    <text x="288" y="70" text-anchor="middle" font-size="14" font-weight="600">context-handoff</text>
+    <text x="288" y="92" text-anchor="middle" font-size="14" class="m">skriver handoff.md</text>
+    <rect x="402" y="40" width="156" height="72" rx="16" fill="var(--line)"/>
+    <text x="480" y="70" text-anchor="middle" font-size="16" font-weight="600" class="mono">/clear</text>
+    <text x="480" y="92" text-anchor="middle" font-size="14" class="m">minnet tømmes</text>
+    <rect x="594" y="40" width="156" height="72" rx="16" fill="var(--amber-s)" stroke="var(--amber)" stroke-width="1.5"/>
+    <text x="672" y="70" text-anchor="middle" font-size="16" font-weight="600">Økt 2 starter</text>
+    <text x="672" y="92" text-anchor="middle" font-size="14" class="m">banneret leser</text>
+    <rect x="786" y="40" width="156" height="72" rx="16" fill="var(--line)"/>
+    <text x="864" y="70" text-anchor="middle" font-size="16" font-weight="600">Fortsetter</text>
+    <text x="864" y="92" text-anchor="middle" font-size="14" class="m">fra next_step</text>
+  </g>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M176,76 L208,76" marker-end="url(#t-ar)"/>
+    <path d="M368,76 L400,76" marker-end="url(#t-ar)"/>
+    <path d="M560,76 L592,76" marker-end="url(#t-ar)"/>
+    <path d="M752,76 L784,76" marker-end="url(#t-ar)"/>
+  </g>
+  <g stroke="var(--amber)" stroke-width="1.5" stroke-dasharray="4 4" fill="none">
+    <path d="M288,114 L288,160"/>
+    <path d="M672,114 L672,160"/>
+  </g>
+  <rect x="170" y="160" width="620" height="52" rx="14" fill="var(--amber-s)" stroke="var(--amber)" stroke-width="1.5"/>
+  <text x="480" y="183" text-anchor="middle" font-size="14" font-weight="600">På disk hele tiden: handoff.md og progress.md</text>
+  <text x="480" y="202" text-anchor="middle" font-size="13" class="m">filene overlever det /clear tømmer</text>
+</svg></div>
+<h3>Hva som går tapt</h3>
+<p>Claude husker bare det som står i konteksten (samtalen den har foran seg akkurat nå). <code>/clear</code> tømmer den helt. <code>/compact</code> presser den sammen til et kort sammendrag, og detaljer forsvinner. Begge er vanlige kommandoer i Claude Code, ikke deler av denne pluginen.</p>
+<p>Det som ligger i filer på disken, forsvinner ikke. Derfor bæres tråden av to filer i prosjektet:</p>
+<ul><li><code>docs/superpowers/handoff.md</code> er overleveringsfilen (handoff). Den sier hva du holdt på med og hva det neste steget er. Den er ment å leses én gang og så tømmes.</li><li><code>progress.md</code> i mappen <code>docs/superpowers/plans/</code> er den rullerende framdriftsfilen. Den blir stående og viser hva som er ferdig og hva som gjenstår.</li></ul>
+<p>Du skriver overleveringsfilen med <code>/superpowers-gstack:context-handoff</code> (skillen som skriver ned hvor du er) før du skriver <code>/clear</code>. Skillen lagrer tilstanden og stopper. Den svarer med at du kan skrive <code>/clear</code>, og at Claude plukker opp tråden selv. Filen ligger i hovedmappen til prosjektet og ikke i et arbeidstre (<a href="#k6">se kapittel 6</a>), fordi arbeidstreet slettes etter landing og tar filer som ikke ligger i git med seg.</p>
+<h3>De fire tilstandene til handoff.md</h3>
+<p>Når en økt begynner, eller etter <code>/compact</code>, ser Claude på <code>handoff.md</code> og avgjør hva slags fil det er før den rører den. Å bruke opp en overleveringsfil tømmer den, så en feil vurdering ødelegger det som lå der.</p>
+<div class="scroll"><table><thead><tr><th>Tilstand</th><th>Hva Claude gjør</th><th>Hva du gjør</th></tr></thead><tbody><tr><td>Tom, eller bare mellomrom</td><td>Sier ingenting. Dette er hvilestillingen etter at en overlevering er brukt</td><td>Ingenting</td></tr><tr><td>Stubb med <code>mode: continuous</code> og uten <code>next_step</code></td><td>Sier ingenting og lar filen stå urørt. Kontinuerlig overlevering regnes som påslått</td><td>Ingenting</td></tr><tr><td>Fullstendig overlevering: <code>type: handoff</code> og et brukbart <code>next_step</code></td><td>Kopierer filen til <code>docs/superpowers/.handoff-last.md</code>, sier i én linje hvor du slapp, siterer <code>next_step</code> ordrett og tømmer filen (unntaket står under). Så fortsetter den uten å spørre om du er klar</td><td>Ingenting. Sier fra hvis den peker feil vei</td></tr><tr><td>Alt annet: mangler <code>next_step</code>, er avkuttet midt i, eller har ingen frontmatter</td><td>Presenterer den ikke og tømmer den ikke. Sier i én linje at filen ikke kan brukes</td><td>Står det egne notater i den, flytt dem først. Så sletter du filen, eller overskriver den med <code>/superpowers-gstack:context-handoff</code></td></tr></tbody></table></div>
+<p>Frontmatter er blokken med felt øverst i filen, mellom to linjer med <code>---</code>. <code>next_step</code> er én setning med et konkret verb, helst med fil og linje, for eksempel <code>Read src/auth/session.ts:45-78, decide middleware vs hook</code>. Står det bare «fortsett med innloggingen», er den ikke god nok.</p>
+<p>En halvskrevet overlevering tømmes aldri. Noen prosjekter bruker stien til egne, varige notater, og en automatisk lesing som tømte dem, ødela notatene. Kopien i <code>.handoff-last.md</code> gjør en feilvurdering mulig å rette opp.</p>
+<p>Én unntaksregel: er det en stubb med <code>mode: continuous</code> som er brukt opp, tømmer Claude den ikke helt. Den skriver den om til bare <code>type: handoff</code> og <code>mode: continuous</code>, slik at valget overlever til neste <code>/compact</code>. Ellers ville Claude spurt om det samme igjen og igjen. Kontinuerlig overlevering betyr at Claude oppdaterer <code>handoff.md</code> etter hvert viktige delmål og foreslår <code>/clear</code> når konteksten blir tung. Etter en <code>/compact</code> spør Claude én gang om du vil ha det, og spør ikke igjen ved senere <code>/compact</code>. Kontinuerlig overlevering har ingenting med Claude Codes auto-modus for tillatelser å gjøre: den styrer bare hvor ofte filen skrives.</p>
+<h3>Banneret ved oppstart</h3>
+<p>Før du har skrevet noe, kan økten åpne med en blokk som heter «Where this project left off» (på engelsk, slik skriptet skriver den). Den skrives av en hook (et lite skript som Claude Code kjører av seg selv ved en bestemt hendelse) som heter <code>scripts/session-resume.sh</code>. Den kjører når en økt starter, og når den starter etter <code>/clear</code>. Den leser tre ting, og viser bare dem som finnes:</p>
+<ul><li><code>progress.md</code>: tittelen, hvor mange faser som er ferdige, hva som står først under «Gjenstår», og datoen filen sist ble endret.</li><li><code>handoff.md</code>: bare hvis det er en fullstendig overlevering, og da med <code>next_step</code>.</li><li>Siste-økt-opptaket (se under): de siste meldingene og hvilken gren du var på.</li></ul>
+<p>Banneret leser bare. Det tømmer ikke noe, og klassifiseringen i tabellen over er fortsatt Claudes jobb. Finnes ingen av de tre, sier banneret ingenting. Teksten går både til deg og inn i det Claude ser, så du får bevis på at tilstanden overlevde, og Claude vet hvilke filer den skal lese videre i.</p>
+<h3>Opptaket når en økt slutter</h3>
+<p>Skriver du <code>/clear</code> uten å ha skrevet en overlevering først, er det ingen modell igjen som kan oppsummere. Derfor finnes en hook som kjører når økten slutter: <code>scripts/capture-session-tail.sh</code>. Den bruker ikke Claude. Den leser de siste meldingene fra utskriften av økten på disken og tar vare på den siste fra deg og den siste fra Claude (hver kuttet til omtrent 700 tegn), grenen, siste commit og hvor mange filer som er endret og ikke lagret.</p>
+<p>Opptaket legges i git-mappen (<code>.git</code>) som <code>gstack-last-session.md</code>, ikke i selve prosjektet. Utskrifter kan inneholde hva som helst, og en fil utenfor prosjektmappen kan ikke bli committet ved en feil. Hooken gjør ingenting i prosjekter uten mappen <code>docs/superpowers/</code>. Banneret i neste økt viser opptaket.</p>
+<h3>Lange prosjekter</h3>
+<p>Er oppgaven for stor til én økt, holder du en rullerende <code>progress.md</code>. Den har fire deler: Meta (arbeidsmappe og hvordan testene kjøres), Ferdig (hver fase med commit og hva den ble verifisert med), Lærdom (fellene neste fase bør kjenne) og Gjenstår.</p>
+<p>Et ekte eksempel er <code>docs/superpowers/plans/progress.md</code> i prosjektet sing-replay, «Framdrift — mobilversjonen». Filen sier at grenen <code>ios-mobilversjon</code> har 13 commits, og at siste testkjøring ga 435 grønne tester på macOS og 417 på iOS, mot 387 og 369 i starten. Filen daterer ikke selve testkjøringen. Den nyeste datoen den nevner er 16. august 2026, da fase 3 ble levert i commiten <code>65774b4</code>. Fase 0 til 3 står som ferdige, og det som gjenstår krever en ekte telefon. Tabellen under «Ferdig» har én rad per levert del:</p>
+<div class="scroll"><table><thead><tr><th>Fase</th><th>Oppgave</th><th>Commit</th></tr></thead><tbody><tr><td>0</td><td>Oppstartsskjerm</td><td><code>4eb140f</code></td></tr><tr><td>2</td><td>Delt søyle-geometri, bølgeform og lyd i takt</td><td><code>c5268b2</code></td></tr><tr><td>3</td><td>Oppgave 8, 9, 10 og personvern-rettelsen</td><td><code>65774b4</code></td></tr></tbody></table></div>
+<p>Den som åpner prosjektet igjen, enten du, en ny økt eller en underagent (<a href="#k6">se kapittel 6</a>), slipper å lete opp hvor arbeidet står. Filen oppdateres og committes etter hver fase.</p>
+<div class="key">💡 Før <code>/clear</code> skriver du <code>/superpowers-gstack:context-handoff</code>, og neste økt åpner med et banner som sier hvor du slapp. Claude tømmer aldri en fil den ikke kjenner igjen som en fullstendig overlevering.</div>
+</section>
+
+<section class="glass" id="k6">
+  <span class="tag t-magenta">Under panseret</span>
+  <h2>6&nbsp; Hva skjer bak kulissene</h2>
+  <div class="grid g2 bruk">
+    <div class="chip"><span class="ic">🎯</span><div><b>Bruk denne når</b><span>du lurer på hvorfor en fil, en mappe eller en melding dukker opp uten at du ba om den</span></div></div>
+    <div class="chip"><span class="ic">🏁</span><div><b>Du er ferdig når</b><span>du vet hvem som ser hva, hvor arbeidet bor mens det pågår, og hvilke skript som kjører av seg selv</span></div></div>
+  </div>
+<div class="scroll"><svg viewBox="0 0 960 240" role="img" aria-label="Hovedsamtalen sender en oppgave og progress.md til en subagent som starter med tom kontekst. En lukket dør viser at subagenten ikke ser samtalen. Subagenten sender resultatet tilbake">
+  <defs>
+    <marker id="s-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+  </defs>
+  <rect x="20" y="50" width="290" height="120" rx="18" fill="var(--line)"/>
+  <text x="165" y="96" text-anchor="middle" font-size="17" font-weight="600">Hovedsamtalen</text>
+  <text x="165" y="122" text-anchor="middle" font-size="14" class="m">husker hele historien</text>
+  <text x="165" y="144" text-anchor="middle" font-size="14" class="m">og deler ut oppgaver</text>
+  <rect x="560" y="50" width="270" height="120" rx="18" fill="var(--magenta-s)" stroke="var(--magenta)" stroke-width="1.5"/>
+  <text x="695" y="96" text-anchor="middle" font-size="17" font-weight="600">Subagent</text>
+  <text x="695" y="122" text-anchor="middle" font-size="14" class="m">starter med tom kontekst</text>
+  <text x="695" y="144" text-anchor="middle" font-size="14" class="m">og får én oppgave</text>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M312,92 L558,92" marker-end="url(#s-ar)"/>
+    <path d="M558,134 L312,134" marker-end="url(#s-ar)"/>
+  </g>
+  <text x="435" y="80" text-anchor="middle" font-size="14" font-weight="600">oppgave + progress.md</text>
+  <text x="435" y="158" text-anchor="middle" font-size="14" class="m">resultat</text>
+  <g>
+    <rect x="868" y="62" width="44" height="76" rx="6" fill="var(--glass)" stroke="var(--magenta)" stroke-width="2"/>
+    <circle cx="900" cy="100" r="4" fill="var(--magenta)"/>
+    <path d="M832,100 L866,100" stroke="var(--muted)" stroke-width="2" stroke-dasharray="3 4" fill="none"/>
+  </g>
+  <text x="890" y="162" text-anchor="middle" font-size="14" class="m">ser ikke</text>
+  <text x="890" y="182" text-anchor="middle" font-size="14" class="m">samtalen</text>
+</svg></div>
+<h3>Subagenter ser ikke samtalen din</h3>
+<p>En subagent er en egen Claude-instans som får én oppgave. Den arver ikke samtalen din. <code>superpowers:subagent-driven-development</code> sier det rett ut: subagenter skal aldri arve økten din, og Claude bygger selv nøyaktig det de trenger. Det holder dem på sporet, og det sparer plassen i hovedsamtalen. Prisen er at det de trenger å vite fra før, må stå i oppgaveteksten eller i en fil på disken.</p>
+<p>Derfor finnes <code>progress.md</code> (<a href="#k5">se kapittel 5</a>). I et langt prosjekt er den filen det som forteller en ny instans hvor arbeidet står, uten at noen må gjenfortelle historien. Samtalen blir borte når konteksten tømmes. Filen blir.</p>
+<h3>Modellvalg: råd, ikke tvang</h3>
+<p>Når du kjører <code>/superpowers-gstack:adapt</code>, kan den skrive en seksjon som heter «Model Routing» inn i prosjektets <code>CLAUDE.md</code>. Seksjonen er en rådgivende tabell: for hver skill står det hvilket nivå av modell (fra den enkleste til den kraftigste) en subagent bør få. Nivået justeres etter hvor stille en liten feil kan vokse i prosjektet. I lyd i sanntid, innlogging og migrering av data veier risikoen tyngre enn prisen. Claude i hovedsamtalen leser tabellen når den deler ut oppgaver, så den er et råd til den, ikke en lås. Sier du nei til seksjonen når <code>adapt</code> spør, får du den ikke. Konkrete modellnavn og priser står ikke i manualen, for de endres.</p>
+<p><code>/model</code> er en egen kommando i Claude Code, og den bytter modell for hovedsamtalen din. Tabellen over styrer bare subagentene.</p>
+<h3>Ett arbeidstre per oppgave</h3>
+<div class="scroll"><svg viewBox="0 0 960 300" role="img" aria-label="Hovedmappen main til venstre og tre arbeidstrær til høyre, hvert med sin egen gren. Piler tilbake til main viser landing med fast-forward. Et overstrøket stash-ikon viser at git stash ikke brukes, fordi lageret deles av alle mappene">
+  <defs>
+    <marker id="w-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+  </defs>
+  <rect x="20" y="95" width="200" height="100" rx="18" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
+  <text x="120" y="138" text-anchor="middle" font-size="17" font-weight="600" class="mono">main</text>
+  <text x="120" y="162" text-anchor="middle" font-size="14" class="m">hovedmappen</text>
+  <g fill="var(--line)">
+    <rect x="620" y="20" width="320" height="70" rx="16"/>
+    <rect x="620" y="115" width="320" height="70" rx="16"/>
+    <rect x="620" y="210" width="320" height="70" rx="16"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="780" y="48" font-size="15" font-weight="600">arbeidstre 1</text>
+    <text x="780" y="70" font-size="14" class="m mono">feat/a</text>
+    <text x="780" y="143" font-size="15" font-weight="600">arbeidstre 2</text>
+    <text x="780" y="165" font-size="14" class="m mono">fix/b</text>
+    <text x="780" y="238" font-size="15" font-weight="600">arbeidstre 3</text>
+    <text x="780" y="260" font-size="14" class="m mono">docs/c</text>
+  </g>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M618,55 C420,55 420,115 222,115" marker-end="url(#w-ar)"/>
+    <path d="M618,150 L222,150" marker-end="url(#w-ar)"/>
+    <path d="M618,245 C420,245 420,185 222,185" marker-end="url(#w-ar)"/>
+  </g>
+  <text x="420" y="140" text-anchor="middle" font-size="14" font-weight="600">land (fast-forward)</text>
+  <g>
+    <rect x="30" y="232" width="46" height="36" rx="6" fill="var(--line)"/>
+    <path d="M24,226 L82,274 M82,226 L24,274" stroke="var(--red)" stroke-width="3" fill="none"/>
+  </g>
+  <text x="96" y="246" font-size="14" font-weight="600" class="mono">git stash</text>
+  <text x="96" y="266" font-size="13" class="m">delt av alle mappene</text>
+</svg></div>
+<p>Et arbeidstre (worktree) er en ekstra mappe med sin egen gren, hentet fra samme git-prosjekt. Slik brukes de her:</p>
+<ul><li>Hver oppgave får sitt eget arbeidstre, så du kan ha flere i gang uten å bytte gren i en mappe.</li><li>En gren kan bare stå i ett arbeidstre om gangen. Prøver du å sjekke den ut et annet sted, nekter git.</li><li>Alle mappene deler ett stash (et gjemmested for halvferdige endringer). En parallell økt som tømmer det, tar med seg dine endringer, og det blir aldri sendt til GitHub. Bruk derfor aldri <code>git stash</code>. Skal du bytte oppgave, la det halvferdige ligge der det er og åpne et nytt arbeidstre.</li><li>Landing er en fast-forward: <code>main</code> flyttes fremover langs grenens commits, uten en ny sammenslåings-commit. Det gjør <code>/superpowers-gstack:land</code>, som først kjører prosjektets sjekker (<a href="#k4">se kapittel 4</a>).</li><li>Etterpå fjerner du arbeidstreet, så grenen. Rekkefølgen er <code>git worktree remove &lt;sti&gt;</code>, så <code>git branch -d &lt;gren&gt;</code>. Snur du den, nekter git. Bruk aldri <code>git branch -D</code> for å komme rundt en nektelse: den nektelsen er sikringen mot å miste commits som ikke er landet.</li></ul>
+<h3>Skript som kjører av seg selv</h3>
+<p>En hook er et skript som Claude Code kjører ved en bestemt hendelse, uten at du eller Claude ber om det. Pluginen leverer disse, definert i <code>hooks/hooks.json</code>:</p>
+<div class="scroll"><table><thead><tr><th>Når</th><th>Hva skjer</th><th>Skjer hvor</th></tr></thead><tbody><tr><td>Økten starter</td><td>Sammenligner versjonen reglene i <code>CLAUDE.md</code> ble laget med, mot pluginen du har. Er de ulike, ber den Claude tilby <code>/superpowers-gstack:adapt</code></td><td>Prosjekter hvis <code>CLAUDE.md</code> bruker superpowers-gstack, ikke pluginens eget repo</td></tr><tr><td>Økten starter</td><td>Viser grener med ulandet arbeid som har stått urørt i sju dager</td><td>Alle git-prosjekter</td></tr><tr><td>Økten starter, også etter <code>/clear</code></td><td>Skriver banneret «Where this project left off» fra <code>progress.md</code>, <code>handoff.md</code> og opptaket</td><td>Prosjekter der minst én av filene finnes</td></tr><tr><td>Økten slutter</td><td>Tar vare på de siste meldingene og en git-oversikt i <code>gstack-last-session.md</code></td><td>Prosjekter med mappen <code>docs/superpowers/</code></td></tr><tr><td>En spec eller plan skrives</td><td>Minner Claude på å lage forklaringssiden med <code>/superpowers-gstack:htmlify explain</code></td><td>Filer under <code>docs/superpowers/specs/</code> og <code>docs/superpowers/plans/</code>, ikke <code>progress.md</code></td></tr></tbody></table></div>
+<p>Ingen av dem blokkerer deg. De skriver ut en melding eller tar vare på en fil, og går videre. Det siste skriptet gir bare Claude en påminnelse, og lager ikke selve siden.</p>
+<h3>Tre modellhus</h3>
+<p>Kontrollen av ferdig arbeid bruker modeller fra flere selskaper, fordi hvert selskap har sine egne blindsoner. Claude leser først, Codex fra OpenAI leser neste gang, og for de farligste endringene leser et tredje hus utenfor Anthropic og OpenAI til slutt (<a href="#k4">se figuren i kapittel 4</a>). Hvilke modeller det er, hvor nøklene ligger og hva det koster, står i <a href="#k10">kapittel 10</a>.</p>
+<div class="key">💡 Subagenter ser bare det de får, så alt som må overleve står i en fil. Arbeidstrærne gir hver oppgave sin egen mappe, og hookene passer på trådene i bakgrunnen.</div>
 </section>
 
 <footer>Bygget fra <code>docs/manual/</code> med <code>python3 scripts/build-manual.py</code></footer>

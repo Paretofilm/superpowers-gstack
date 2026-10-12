@@ -1,0 +1,35 @@
+<svg viewBox="0 0 960 240" role="img" aria-label="Tidslinje over to økter: økt 1, context-handoff skriver handoff.md, clear tømmer minnet, økt 2 starter med et banner som leser filene, og arbeidet fortsetter. Filene handoff.md og progress.md ligger på disk hele tiden">
+  <defs>
+    <marker id="t-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+  </defs>
+  <g>
+    <rect x="18" y="40" width="156" height="72" rx="16" fill="var(--line)"/>
+    <text x="96" y="70" text-anchor="middle" font-size="16" font-weight="600">Økt 1</text>
+    <text x="96" y="92" text-anchor="middle" font-size="14" class="m">du jobber</text>
+    <rect x="210" y="40" width="156" height="72" rx="16" fill="var(--amber-s)" stroke="var(--amber)" stroke-width="1.5"/>
+    <text x="288" y="70" text-anchor="middle" font-size="14" font-weight="600">context-handoff</text>
+    <text x="288" y="92" text-anchor="middle" font-size="14" class="m">skriver handoff.md</text>
+    <rect x="402" y="40" width="156" height="72" rx="16" fill="var(--line)"/>
+    <text x="480" y="70" text-anchor="middle" font-size="16" font-weight="600" class="mono">/clear</text>
+    <text x="480" y="92" text-anchor="middle" font-size="14" class="m">minnet tømmes</text>
+    <rect x="594" y="40" width="156" height="72" rx="16" fill="var(--amber-s)" stroke="var(--amber)" stroke-width="1.5"/>
+    <text x="672" y="70" text-anchor="middle" font-size="16" font-weight="600">Økt 2 starter</text>
+    <text x="672" y="92" text-anchor="middle" font-size="14" class="m">banneret leser</text>
+    <rect x="786" y="40" width="156" height="72" rx="16" fill="var(--line)"/>
+    <text x="864" y="70" text-anchor="middle" font-size="16" font-weight="600">Fortsetter</text>
+    <text x="864" y="92" text-anchor="middle" font-size="14" class="m">fra next_step</text>
+  </g>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M176,76 L208,76" marker-end="url(#t-ar)"/>
+    <path d="M368,76 L400,76" marker-end="url(#t-ar)"/>
+    <path d="M560,76 L592,76" marker-end="url(#t-ar)"/>
+    <path d="M752,76 L784,76" marker-end="url(#t-ar)"/>
+  </g>
+  <g stroke="var(--amber)" stroke-width="1.5" stroke-dasharray="4 4" fill="none">
+    <path d="M288,114 L288,160"/>
+    <path d="M672,114 L672,160"/>
+  </g>
+  <rect x="170" y="160" width="620" height="52" rx="14" fill="var(--amber-s)" stroke="var(--amber)" stroke-width="1.5"/>
+  <text x="480" y="183" text-anchor="middle" font-size="14" font-weight="600">På disk hele tiden: handoff.md og progress.md</text>
+  <text x="480" y="202" text-anchor="middle" font-size="13" class="m">filene overlever det /clear tømmer</text>
+</svg>
