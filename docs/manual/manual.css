@@ -1,0 +1,16 @@
+/* manual.css: the manual's own rules, the second <style> after explainer.css.
+   Prose, table of contents, tables and code blocks. Tokens only, never hex. */
+.glass h2{margin:4px 0 14px}
+.glass h3{font-size:18px;margin:22px 0 8px}
+.glass p{margin:10px 0}
+.glass ul,.glass ol{margin:10px 0;padding-left:22px}
+.glass li{margin:4px 0}
+.glass a{color:var(--cyan)}
+.glass pre{margin:12px 0;padding:14px 16px;border-radius:14px;background:var(--line);overflow-x:auto;font-size:14px;line-height:1.45}
+.glass pre code{padding:0;background:none}
+.glass table{width:100%;border-collapse:collapse;font-size:14px}
+.glass th,.glass td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.glass th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.bruk{margin:0 0 8px}
+ol.toc{columns:2 280px;column-gap:28px;padding-left:22px;margin:8px 0 0}
+ol.toc li{margin:6px 0}

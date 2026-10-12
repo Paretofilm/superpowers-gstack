@@ -201,3 +201,83 @@ def test_no_frontmatter_is_an_error(tmp_path):
     p.write_text("bare tekst\n")
     with pytest.raises(bm.ManualError, match="no frontmatter"):
         bm.parse_chapter(p)
+
+
+# ── page and build ───────────────────────────────────────────────────────────
+
+def test_build_is_deterministic_and_ordered(tmp_path):
+    d = make(tmp_path, {"01-start.md": chapter(1, tag="Start", tittel="Start her"),
+                        "00-kartet.md": chapter(0)})
+    a, b = bm.build(d), bm.build(d)
+    assert a == b
+    assert a.index('id="k0"') < a.index('id="k1"')
+    assert '<a href="#k1"><b>1</b> Start her</a>' in a
+    assert "oppdatert 2026-10-12" in a
+
+
+def test_crlf_sources_build_the_same_page(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    lf = make(tmp_path / "a", {"00-k.md": chapter(0, body="### X\n\nlinje en\nlinje to\n")})
+    crlf = make(tmp_path / "b", {"00-k.md": chapter(0, body="### X\n\nlinje en\nlinje to\n").replace("\n", "\r\n")})
+    assert bm.build(lf) == bm.build(crlf)
+
+
+def test_chapter_numbers_must_run_without_gaps(tmp_path):
+    d = make(tmp_path, {"00-a.md": chapter(0), "02-c.md": chapter(2)})
+    with pytest.raises(bm.ManualError, match=r"0\.\.1"):
+        bm.build(d)
+
+
+def test_two_figures_may_not_share_a_marker_id(tmp_path):
+    d = make(tmp_path, {"00-a.md": chapter(0, body="![[a.svg]]\n\n![[b.svg]]")},
+             {"a.svg": FIG.format(id="m"), "b.svg": FIG.format(id="m")})
+    with pytest.raises(bm.ManualError, match="duplicate id"):
+        bm.build(d)
+
+
+def test_missing_manual_css_is_a_manual_error(tmp_path):
+    d = make(tmp_path, {"00-a.md": chapter(0)})
+    (d / "manual.css").unlink()
+    with pytest.raises(bm.ManualError, match="manual.css"):
+        bm.build(d)
+
+
+def test_the_built_page_passes_the_explain_check_rules(tmp_path):
+    d = make(tmp_path,
+             {"00-a.md": chapter(0, body="### X\n\ntekst `kode`\n\n![[a.svg]]\n\n> 💡 Poeng.\n"),
+              "01-b.md": chapter(1, tag="B", tittel="B", aksent="violet")},
+             {"a.svg": FIG.format(id="m1")})
+    findings, _ = check.rule_findings(bm.build(d))
+    assert findings == [], findings
+
+
+def test_every_chapter_card_starts_with_its_badge_and_carries_its_two_lines(tmp_path):
+    d = make(tmp_path, {"00-a.md": chapter(0, tag="Kartet", aksent="amber")})
+    page = bm.build(d)
+    card = page[page.index('id="k0"'):]
+    assert card.index('class="tag t-amber"') < card.index("<h2>")
+    assert "Bruk denne når" in card and "Du er ferdig når" in card
+
+
+# ── command line ─────────────────────────────────────────────────────────────
+
+def test_main_writes_and_check_flags_a_stale_page(tmp_path, capsys):
+    d = make(tmp_path, {"00-a.md": chapter(0)})
+    assert bm.main(["--dir", str(d)]) == 0
+    assert (d / "manual.html").is_file()
+    assert bm.main(["--dir", str(d), "--check"]) == 0
+    (d / "00-a.md").write_text(chapter(0, body="Endret."))
+    assert bm.main(["--dir", str(d), "--check"]) == 1
+    assert "not what a build gives" in capsys.readouterr().err
+
+
+def test_check_without_a_page_fails(tmp_path):
+    d = make(tmp_path, {"00-a.md": chapter(0)})
+    assert bm.main(["--dir", str(d), "--check"]) == 1
+
+
+def test_a_source_error_exits_1_and_names_the_file(tmp_path, capsys):
+    d = make(tmp_path, {"00-a.md": chapter(0, aksent="rosa")})
+    assert bm.main(["--dir", str(d)]) == 1
+    assert "00-a.md" in capsys.readouterr().err

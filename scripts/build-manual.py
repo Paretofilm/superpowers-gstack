@@ -198,3 +198,120 @@ def render_body(body: str, figures: Path, where: str) -> tuple[str, int]:
     if keys > 1:
         raise ManualError(f"{where}: {keys} blockquotes; a card has at most one .key (one insight)")
     return "\n".join(out), keys
+
+
+THEME_SCRIPT = """<script>
+(function(){
+  var root=document.documentElement,btn=document.getElementById('tg');
+  try{var s=localStorage.getItem('manual-tema');if(s)root.setAttribute('data-theme',s);}catch(e){}
+  btn.addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    var next=cur==='dark'?'light':'dark';root.setAttribute('data-theme',next);
+    try{localStorage.setItem('manual-tema',next);}catch(e){}
+  });
+})();
+</script>"""
+
+
+def render_chapter(ch: Chapter, figures: Path) -> str:
+    body_html, _ = render_body(ch.body, figures, f"{ch.slug}.md")
+    return f"""<section class="glass" id="k{ch.nummer}">
+  <span class="tag t-{ch.aksent}">{html.escape(ch.tag)}</span>
+  <h2>{ch.nummer}&nbsp; {html.escape(ch.tittel)}</h2>
+  <div class="grid g2 bruk">
+    <div class="chip"><span class="ic">🎯</span><div><b>Bruk denne når</b><span>{inline(ch.bruk)}</span></div></div>
+    <div class="chip"><span class="ic">🏁</span><div><b>Du er ferdig når</b><span>{inline(ch.ferdig)}</span></div></div>
+  </div>
+{body_html}
+</section>"""
+
+
+def render_page(chapters: list[Chapter], figures: Path, css: str, manual_css: str) -> str:
+    cards = "\n\n".join(render_chapter(c, figures) for c in chapters)
+    toc = "".join(f'<li><a href="#k{c.nummer}"><b>{c.nummer}</b> {html.escape(c.tittel)}</a></li>' for c in chapters)
+    updated = chapters[0].meta.get("oppdatert", "")
+    stamp = f" · oppdatert {html.escape(updated)}" if updated else ""
+    return f"""<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual for superpowers-gstack</title>
+<style>
+{css.rstrip(chr(10))}
+</style>
+<style>
+{manual_css.rstrip(chr(10))}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="top">
+  <div>
+    <span class="tag t-violet">Manual{stamp}</span>
+    <h1>Superpowers + gstack</h1>
+    <p class="sub">Slik bygger du apper med Claude Code uten å miste tråden.</p>
+  </div>
+  <button class="toggle" id="tg" aria-label="Bytt mellom lyst og mørkt">◐ Tema</button>
+</div>
+
+<section class="glass" id="innhold">
+  <span class="tag t-violet">Innhold</span>
+  <ol class="toc">{toc}</ol>
+</section>
+
+{cards}
+
+<footer>Bygget fra <code>docs/manual/</code> med <code>python3 scripts/build-manual.py</code></footer>
+</div>
+{THEME_SCRIPT}
+</body>
+</html>
+"""
+
+
+def build(manual_dir: Path = MANUAL_DIR, css_path: Path = EXPLAINER_CSS) -> str:
+    files = sorted(manual_dir.glob("[0-9][0-9]-*.md"))
+    if not files:
+        raise ManualError(f"{manual_dir}: no chapters (NN-name.md)")
+    chapters = [parse_chapter(f) for f in files]
+    numbers = [c.nummer for c in chapters]
+    if numbers != list(range(len(numbers))):
+        raise ManualError(f"chapter numbers must run 0..{len(numbers) - 1} with no gaps or repeats, got {numbers}")
+    css_file = manual_dir / "manual.css"
+    if not css_file.is_file():
+        raise ManualError(f"{manual_dir.name}/manual.css is missing")
+    page = render_page(chapters, manual_dir / "figurer", css_path.read_text(encoding="utf-8"),
+                       css_file.read_text(encoding="utf-8"))
+    dup = sorted(k for k, n in Counter(SVG_ID.findall(page)).items() if n > 1)
+    if dup:
+        raise ManualError(f"duplicate id {', '.join(dup)} in the page; marker ids must be unique across figures")
+    return page
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Build docs/manual/manual.html from the chapters and figures.")
+    ap.add_argument("--check", action="store_true", help="exit 1 if manual.html is not what a build gives now")
+    ap.add_argument("--dir", type=Path, default=MANUAL_DIR, help="the manual directory (default docs/manual)")
+    args = ap.parse_args(argv)
+    try:
+        page = build(args.dir)
+    except ManualError as exc:
+        print(f"build-manual: {exc}", file=sys.stderr)
+        return 1
+    target = args.dir / "manual.html"
+    if args.check:
+        if not target.is_file() or target.read_text(encoding="utf-8") != page:
+            print("build-manual: manual.html is not what a build gives now; run `python3 scripts/build-manual.py`",
+                  file=sys.stderr)
+            return 1
+        print("manual.html is current")
+        return 0
+    target.write_text(page, encoding="utf-8")
+    print(target)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
