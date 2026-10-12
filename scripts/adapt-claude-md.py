@@ -149,9 +149,10 @@ MODEL_ROUTING_FILE = "model-routing-section.md"
 ROUTING_DEFAULT_FILE = "routing-default.md"
 PENDING_MARKER = "<!-- gstack-project-pending -->"
 # A fresh project: none of these at the root (the stack could be read off one) …
-PACKAGE_FILES = ("package.json", "Package.swift", "Cargo.toml", "pyproject.toml", "go.mod", "Gemfile",
-                 ".claude-plugin/plugin.json")
-PACKAGE_GLOBS = ("*.xcodeproj", "*.xcworkspace")
+PACKAGE_FILES = ("package.json", "Package.swift", "Cargo.toml", "pyproject.toml", "requirements.txt", "setup.py",
+                 "go.mod", "Gemfile", "pom.xml", "build.gradle", "build.gradle.kts", "deno.json", "composer.json",
+                 "pubspec.yaml", "project.yml", ".claude-plugin/plugin.json")
+PACKAGE_GLOBS = ("*.xcodeproj", "*.xcworkspace", "*.csproj", "*.sln")
 # … and fewer than this many files, not counting the plugin's and git's own folders.
 FRESH_MAX_FILES = 5
 FRESH_SKIP_DIRS = frozenset({".git", ".gstack", ".claude"})
@@ -362,6 +363,9 @@ def slug(name: str) -> str:
 def main_checkout_name(project: Path) -> str:
     """The main checkout's directory name, so a worktree (`wt-feature`) names the
     context skill after the project, not after the branch."""
+    prefix = subprocess.run(["git", "rev-parse", "--show-prefix"], cwd=project, capture_output=True, text=True)
+    if prefix.returncode != 0 or prefix.stdout.strip():
+        return project.name   # not a repository, or a folder inside one: its own name
     p = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
                        cwd=project, capture_output=True, text=True)
     common = Path(p.stdout.strip()) if p.returncode == 0 and p.stdout.strip() else None
@@ -389,6 +393,8 @@ def detect_fresh(project: Path) -> tuple[bool, str]:
     skill can quote it when it does NOT take the short path."""
     if (project / "CLAUDE.md").is_file():
         return False, "CLAUDE.md exists"
+    if (project / ".claude" / "CLAUDE.md").is_file():
+        return False, ".claude/CLAUDE.md exists — the project already has its memory file there"
     for name in PACKAGE_FILES:
         if (project / name).exists():
             return False, f"{name} exists — the stack can be read off it"
@@ -426,10 +432,11 @@ def write_pin(project: Path, name: str, value: str, report: "Report") -> None:
             return
         if git("check-ignore", "-q", rel).returncode == 0:
             gi = project / ".gitignore"
-            current = gi.read_text(encoding="utf-8") if gi.is_file() else ""
+            current = gi.read_bytes().decode("utf-8") if gi.is_file() else ""
             if f"!{rel}" not in current.splitlines():
-                gi.write_text(current + ("" if not current or current.endswith("\n") else "\n") + f"!{rel}\n",
-                              encoding="utf-8")
+                nl = "\r\n" if "\r\n" in current else "\n"
+                gi.write_bytes((current + ("" if not current or current.endswith("\n") else nl) + f"!{rel}{nl}")
+                               .encode("utf-8"))
             git("add", ".gitignore", check=True)
             git("add", "-f", rel, check=True)
         else:
@@ -966,6 +973,11 @@ def validate_project_section(text: str) -> str:
     if len(h2) != 1:
         raise Refusal("BLOCKED — the --project-section file must hold one H2 section (`## Project` and its "
                       "H3 subsections); a second H1/H2 would land as a section of its own")
+    open_at = unclosed_fence(lines)
+    if open_at is not None:
+        kind, at = open_at
+        raise Refusal(f"BLOCKED — the --project-section file has {'a code fence' if kind == 'fence' else 'an HTML comment'} "
+                      f"opened at line {at} that never closes; spliced in, it would swallow every section below it")
     return "\n".join(lines)
 
 
@@ -1127,6 +1139,12 @@ def merge(text: str | None, ctx: Context) -> tuple[str, Report]:
         lines = apply_block(lines, blk, ctx, report)
     lines = apply_model_routing(lines, ctx, report)
     lines = apply_local_state(lines, ctx, report)
+    open_at = unclosed_fence(lines)
+    if open_at is not None:
+        kind, at = open_at
+        raise Refusal(f"INTERNAL: the merged CLAUDE.md would have {'a code fence' if kind == 'fence' else 'an HTML comment'} "
+                      f"opened at line {at} that never closes — an input (--routing-file or --project-section) "
+                      f"is unbalanced; nothing was written")
     return "\n".join(lines).rstrip("\n") + "\n", report
 
 
@@ -1402,7 +1420,10 @@ def main(argv=None) -> int:
             if (project / ".gstack").exists() and not (project / ".gstack").is_dir():
                 raise Refusal("BLOCKED — .gstack is a file; the pins need that directory")
             for name, default in FRESH_DEFAULTS.items():
-                if not (project / ".gstack" / name).is_file():
+                pin = project / ".gstack" / name
+                if pin.exists() and not pin.is_file():
+                    raise Refusal(f"BLOCKED — .gstack/{name} exists and is not a file; the pin needs that path")
+                if not pin.is_file():
                     pending_pins[name] = default
                     if a.dry_run:
                         pre_notes.notes.append(f"would write .gstack/{name} = {default}")

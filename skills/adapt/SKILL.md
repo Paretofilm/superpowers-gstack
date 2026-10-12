@@ -178,10 +178,15 @@ then the base tiers for the selected skills and the inferred sensitivity, and as
 ### Step 4: Resolve the script's inputs
 
 **A pending `## Project` first.** If CLAUDE.md carries `<!-- gstack-project-pending -->`
-on its `## Project` heading, this run is the fill-in after a Step 0 setup, and the
-stack is now readable off the files and the first spec. The pins exist (the script reads
-them), so items 2, 4, 6 and 7 below are not asked again, and Steps 2–3 collapse into
-one confirmation with the answer in it:
+on its `## Project` heading, the project was set up by Step 0. Is the stack decided
+yet? It is when a spec exists (`docs/superpowers/specs/`, `docs/superpowers/vibe/`) or
+a package file does. **If neither does** (the session-start hook nudged `/adapt` after
+a plugin upgrade, say), this is a plain upgrade: run Steps 5–6 as usual, without
+`--project-section`; the script leaves the pending section exactly as it is, and the
+marker waits for the spec. **If the stack is decided**, this run is the fill-in: the
+pins exist (the script reads them), so items 4, 6 and 7 below are not asked again
+(item 2, the macOS test executor, is asked now if the platform turned out to be macOS),
+and Steps 2–3 collapse into one confirmation with the answer in it:
 
 > I read this as a **[type]** on **[stack]**, tests via `[command]`, [deployed to X /
 > not deployed], [browser UI at X / none], sensitivity **[level]** because [reason].

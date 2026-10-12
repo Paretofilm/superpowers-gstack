@@ -70,8 +70,12 @@ python3 "$ADAPT" --project-section .gstack/adapt-project.md --set 'DOMAIN_SENSIT
   [--set 'IOS_SIMULATOR=…' --set 'DEVELOPMENT_TEAM=…']
 ```
 
-The script replaces the pending section once and drops the marker; exit 2 means the
-section is already the project's own — leave it and say so. Delete
+The script replaces the pending section once and drops the marker. Exit 2 is a refusal
+with the reason on stderr: fix the input it names and run it again (an unresolved
+native placeholder, a second H2 in the section file, an unclosed code fence, an
+invalid pin). Only `no \`## Project\` section carries` means the section is already
+the project's own: leave it and say so. Relay the report's Removed list if it has one
+(lines someone wrote under the pending heading; the snapshot keeps them). Delete
 `.gstack/adapt-project.md`, commit CLAUDE.md with the spec, and write one line in the log: `Filled in ## Project: <stack>, tests via
 <command>, sensitivity <level>.`
 

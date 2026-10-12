@@ -1581,3 +1581,69 @@ def test_a_refused_fresh_run_writes_no_pin_either(tmp_path):
     assert marker("xcode-tools.md") in (proj / "CLAUDE.md").read_text()
     assert last_json(p)["assumed"].startswith("Assumed: ios track, vibe workflow")
 
+
+
+# --- outside read on 3.11.0: unbalanced input, a folder inside a repository ---------------
+
+@pytest.mark.parametrize("content", [
+    "## Project\n\n### Tech Stack\nNext.js\n\n```bash\nnpm run dev\n",
+    "## Project\n\nStack: Next.js <!-- todo: confirm\n",
+])
+def test_an_unclosed_fence_or_comment_in_the_section_file_is_refused(tmp_path, content):
+    """Spliced in, an open fence swallows every block heading below it: the blocks are
+    then appended a second time and the run exits 0. Refused at the input instead."""
+    proj = fresh_project(tmp_path)
+    run(proj, "--fresh")
+    once = (proj / "CLAUDE.md").read_bytes()
+    f = tmp_path / "section.md"
+    f.write_text(content)
+    p = run(proj, "--project-section", str(f), "--set", "DOMAIN_SENSITIVITY=medium", expect=2)
+    assert "never closes" in p.stderr
+    assert (proj / "CLAUDE.md").read_bytes() == once
+
+
+def test_an_unbalanced_routing_file_is_refused_before_any_write(tmp_path):
+    proj = project(tmp_path, claude_md="# P\n\nkeep me\n")
+    routing = tmp_path / "routing.md"
+    routing.write_text("## Skill routing\n\n```\nopen fence\n")
+    p = run(proj, "--routing-file", str(routing), *WEB_SETS, expect=2)
+    assert "never closes" in p.stderr
+    assert (proj / "CLAUDE.md").read_text() == "# P\n\nkeep me\n"
+
+
+def test_a_folder_inside_a_repository_keeps_its_own_name(tmp_path):
+    mono = tmp_path / "mono"
+    (mono / "apps" / "newapp").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=mono, check=True)
+    sub = mono / "apps" / "newapp"
+    p = run(sub, "--fresh")
+    text = (sub / "CLAUDE.md").read_text()
+    assert text.splitlines()[2] == "# newapp"
+    assert "## newapp local state" in text
+    assert (sub / ".claude" / "skills" / "newapp-context" / "SKILL.md").is_file()
+    assert last_json(p)["fresh"] is True
+
+
+def test_claude_codes_other_memory_file_and_more_package_files_are_not_fresh(tmp_path):
+    proj = fresh_project(tmp_path, ".claude/CLAUDE.md")
+    assert detect(proj) == (False, ".claude/CLAUDE.md exists — the project already has its memory file there")
+    for name in ("requirements.txt", "project.yml", "pom.xml", "App.csproj"):
+        proj = fresh_project(tmp_path / name.replace(".", "_"), name)
+        fresh, why = detect(proj)
+        assert not fresh and name in why
+
+
+def test_a_pin_path_that_is_a_directory_refuses_before_any_write(tmp_path):
+    proj = fresh_project(tmp_path)
+    (proj / ".gstack" / "explainer").mkdir(parents=True)
+    p = run(proj, "--fresh", "--mkdirs", expect=2)
+    assert "BLOCKED" in p.stderr and ".gstack/explainer exists and is not a file" in p.stderr
+    assert not (proj / ".gstack" / "workflow").exists() and not (proj / "CLAUDE.md").exists()
+
+
+def test_write_pin_keeps_a_crlf_gitignore(tmp_path):
+    proj = fresh_project(tmp_path, ".gitignore")
+    (proj / ".gitignore").write_bytes(b"build/\r\n.gstack/\r\n")
+    run(proj, "--fresh")
+    raw = (proj / ".gitignore").read_bytes()
+    assert raw == b"build/\r\n.gstack/\r\n!.gstack/workflow\r\n!.gstack/explainer\r\n"
