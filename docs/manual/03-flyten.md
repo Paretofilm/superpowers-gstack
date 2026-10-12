@@ -54,4 +54,4 @@ Navnet er `<type>/<tema>`: typen er for eksempel `feat`, `fix` eller `docs`, og 
 
 Når alt er bygget, venter beviset. Det handler [kapittel 4](#k4) om.
 
-> 💡 Du sier ja til designet, til planen og til hvordan den kjøres. Underveis stopper Claude bare når den må, og alt den bygger, er testet og lagret før neste steg.
+> 💡 Du sier ja tre steder: designet og spec-en, planen og hvordan den kjøres, og når du har sett at det virker ([se kapittel 4](#k4)). Underveis committer og sender Claude ved hvert delmål, og samlet tilstand testes senest etter fem commits.

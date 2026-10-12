@@ -326,7 +326,7 @@ ol.toc li{margin:6px 0}
 <pre><code>wt switch --create feat/min-funksjon --no-cd --format=json</code></pre>
 <p>Navnet er <code>&lt;type&gt;/&lt;tema&gt;</code>: typen er for eksempel <code>feat</code>, <code>fix</code> eller <code>docs</code>, og temaet er det oppgaven handler om. Gjør Claude mer enn fem commits på rad uten å teste den samlede tilstanden, skal den stoppe og bygge og kjøre testene før den fortsetter.</p>
 <p>Når alt er bygget, venter beviset. Det handler <a href="#k4">kapittel 4</a> om.</p>
-<div class="key">💡 Du sier ja til designet, til planen og til hvordan den kjøres. Underveis stopper Claude bare når den må, og alt den bygger, er testet og lagret før neste steg.</div>
+<div class="key">💡 Du sier ja tre steder: designet og spec-en, planen og hvordan den kjøres, og når du har sett at det virker (<a href="#k4">se kapittel 4</a>). Underveis committer og sender Claude ved hvert delmål, og samlet tilstand testes senest etter fem commits.</div>
 </section>
 
 <section class="glass" id="k4">
@@ -336,7 +336,7 @@ ol.toc li{margin:6px 0}
     <div class="chip"><span class="ic">🎯</span><div><b>Bruk denne når</b><span>noe er bygget, og du vil vite om du kan stole på det før det lander</span></div></div>
     <div class="chip"><span class="ic">🏁</span><div><b>Du er ferdig når</b><span>du vet hvilke kontroller som har kjørt, og du har sett det virke selv</span></div></div>
   </div>
-<div class="scroll"><svg viewBox="0 0 960 330" role="img" aria-label="Verifiseringskjeden i tre nivåer som lag over hverandre. Trivielt: bare selvsjekk. Ship-worthy: selvsjekk og Codex via review. Høy innsats: selvsjekk, Codex og et tredje modellhus. Alle tre ender i en adversariell syntese der et funn er reelt til det er motbevist. Et merke sier at nivået regnes ut og ikke gjettes">
+<div class="scroll"><svg viewBox="0 0 960 330" role="img" aria-label="Verifiseringskjeden i tre nivåer som lag over hverandre. Trivielt: bare selvsjekk. Ship-worthy: selvsjekk og Codex via review. Høy innsats: selvsjekk, Codex og et tredje modellhus. Trivielt stopper etter selvsjekken. Ship-worthy og høy innsats ender i en adversariell syntese der et funn er reelt til det er motbevist, og syntesen kommer bare når Codex eller det tredje huset har kjørt. Et merke sier at nivået regnes ut og ikke gjettes">
   <defs>
     <marker id="v-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
   </defs>
@@ -376,19 +376,23 @@ ol.toc li{margin:6px 0}
     <text x="639" y="222" font-size="12" class="m">annen opplæring</text>
   </g>
   <g stroke="var(--muted)" stroke-width="2" fill="none">
-    <path d="M376,46 L786,46" marker-end="url(#v-ar)"/>
+    <path d="M376,46 L420,46" stroke-dasharray="none"/>
+    <path d="M420,34 L420,58"/>
     <path d="M546,126 L786,126" marker-end="url(#v-ar)"/>
     <path d="M716,206 L786,206" marker-end="url(#v-ar)"/>
     <path d="M376,126 L392,126" marker-end="url(#v-ar)"/>
     <path d="M376,206 L392,206" marker-end="url(#v-ar)"/>
     <path d="M546,206 L562,206" marker-end="url(#v-ar)"/>
   </g>
+  <text x="436" y="51" font-size="13" class="m">stopper her, ingen syntese</text>
   <rect x="790" y="14" width="156" height="224" rx="16" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
   <g text-anchor="middle">
-    <text x="868" y="96" font-size="14" font-weight="600">Adversariell</text>
-    <text x="868" y="116" font-size="14" font-weight="600">syntese</text>
-    <text x="868" y="148" font-size="12" class="m">et funn er reelt</text>
-    <text x="868" y="166" font-size="12" class="m">til det er motbevist</text>
+    <text x="868" y="80" font-size="14" font-weight="600">Adversariell</text>
+    <text x="868" y="100" font-size="14" font-weight="600">syntese</text>
+    <text x="868" y="130" font-size="12" class="m">et funn er reelt</text>
+    <text x="868" y="148" font-size="12" class="m">til det er motbevist</text>
+    <text x="868" y="178" font-size="12" class="m">bare når Codex eller</text>
+    <text x="868" y="196" font-size="12" class="m">tredje hus har kjørt</text>
   </g>
   <rect x="224" y="268" width="490" height="48" rx="14" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
   <g text-anchor="middle">
@@ -400,12 +404,12 @@ ol.toc li{margin:6px 0}
 <h3>Tre nivåer, regnet ut av en maskin</h3>
 <p><code>/superpowers-gstack:pitfall-verification</code> (skillen som leter etter feller) er ikke én gjennomgang. Hvor mange kontrollører som leser koden, avhenger av hvor mye som står på spill. Jo høyere nivå, jo flere modellhus (selskaper med hver sin opplæring, og dermed hver sine blindsoner) leser den.</p>
 <div class="scroll"><table><thead><tr><th>Nivå</th><th>Hva det gjelder</th><th>Hvem leser</th></tr></thead><tbody><tr><td>Trivielt</td><td>Dokumentasjon, skrivefeil, kommentarer, kun nye tester, midlertidige lagringspunkter</td><td>Claude selv, i opptil to runder</td></tr><tr><td>Ship-worthy (verdt å sende ut)</td><td>Nytt versjonsnummer, ny linje i endringsloggen, <code>feat</code> (ny funksjon), <code>fix</code> (rettelse) eller <code>refactor</code> (omskriving) som endrer hva programmet gjør, eller endringer i det andre er avhengige av, som API-er og filformater</td><td>Claude selv, så Codex (OpenAIs modell) gjennom <code>/review</code></td></tr><tr><td>High-stakes (høy innsats)</td><td>En ship-worthy endring som i tillegg rører arkitektur, sanntid, sikkerhet, kontrakter eller migrering av data</td><td>Alle over, så et tredje modellhus</td></tr></tbody></table></div>
-<p>Alle tre nivåene ender i en adversariell syntese (en sammenslåing som er bygget for å være uenig). Reglen er at et funn regnes som reelt helt til noen har motbevist det med en begrunnelse. Uenighet mellom modellene er selve signalet, så den glattes ikke ut.</p>
+<p>Trivielt stopper etter Claudes egen sjekk. Når Codex eller det tredje huset har kjørt, kommer en adversariell syntese (en sammenslåing som er bygget for å være uenig). Reglen er at et funn regnes som reelt helt til noen har motbevist det med en begrunnelse. Uenighet mellom modellene er selve signalet, så den glattes ikke ut.</p>
 <p>Nivået regnes ut, ikke gjettes. Skriptet <code>scripts/classify-change.py</code> leser endringen (filstier, nye linjer, størrelse) og skriver ut et gulv: det laveste nivået endringen kan få. Claude kan gå høyere hvis den mener endringen er farligere enn skriptet kan se. Den kan aldri gå lavere. Med <code>--assert-tier</code> får den et nei (utgangskode 1) hvis den prøver, og skriptet sier hvilke signaler den hoppet over. Mangler skriptet eller feiler det, regnes endringen som ship-worthy som minimum. Dette skjer uten at du blir spurt, og prisen rapporteres etter hvert kall.</p>
 <p>Kjører ikke Codex av en eller annen grunn, for eksempel fordi den ikke er logget inn, bytter <code>/review</code> stille til en Claude-underagent. Det er samme modellfamilie. Skillen leser derfor en statuslinje og skriver <code>lens 2 absent</code> i dommen, i stedet for å late som Codex var med.</p>
 <h3>Et tredje modellhus kan ikke se alt</h3>
 <p>Det tredje modellhuset kjøres av <code>/superpowers-gstack:third-lens-review</code>, som du vanligvis ikke starter selv. Pitfall-verification kaller den automatisk på høy innsats. Hvilken modell den bruker, avhenger av rollen: Zhipu for arkitektur og DeepSeek for logikk, begge gjennom OpenRouter (en tjeneste som videreformidler til flere modellselskaper), og OpenAI gjennom <code>codex</code>-programmet for å motbevise Claudes egne avgjørelser.</p>
-<p>Advarsel: modellene i det tredje huset kjører på ikke-vestlig infrastruktur. Material om innlogging, nøkler, helse og økonomi skal derfor bare leses av Claude selv og Codex. Et eksempel er Kvitteria, som håndterer fakturaer: koden kan få vanlig gjennomgang, men fakturadata og alt som berører nøkler skal aldri bli med til det tredje huset. Hører koden hjemme i slik materiale, si til Claude at det tredje huset ikke skal brukes på den, og la de to første nivåene gjøre jobben.</p>
+<p>Advarsel: Zhipu- og DeepSeek-modellene i det tredje huset kjører på ikke-vestlig infrastruktur. Koden og dataene som håndterer innlogging, nøkler, helse eller økonomi skal derfor bare leses av Claude selv og Codex, og aldri sendes til det tredje huset. Et eksempel er Kvitteria, som håndterer fakturaer: selve fakturahåndteringen er økonomimateriale og hører til de to første lensene. Kildene sier at det tredje huset starter av seg selv på høy innsats, og at slikt materiale skal holdes til Claude og Codex. De sier ingenting om en bryter for dette. Ber du Claude holde seg til de to lensene for slikt materiale før du starter kontrollen, har du sagt det klart.</p>
 <h3>Se at det virker</h3>
 <p>Tester svarer på om noe annet gikk i stykker. De svarer ikke på om det du rettet faktisk er rettet. Det må noen se.</p>
 <p><code>/superpowers-gstack:verify-and-land</code> bygger grenen du står på, starter akkurat den appen og viser på skjermen hvilken bygging som kjører. Så spør den om rettelsen er der. Grunnen er en vanlig felle: åpner du appen ved navn, starter macOS kopien i <code>/Applications</code>, som er forrige utgivelse, ikke grenen din. Mange konkluderer da at rettelsen ikke virket, når de egentlig så en gammel bygging. Skillen er laget for macOS-apper og iOS-simulator, og har en kortere vei for utviklingsservere på nett. Er det ikke en app (et bibliotek eller et kommandolinjeverktøy), nekter den og sier at du bør kjøre testene.</p>

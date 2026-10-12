@@ -1,4 +1,4 @@
-<svg viewBox="0 0 960 330" role="img" aria-label="Verifiseringskjeden i tre nivåer som lag over hverandre. Trivielt: bare selvsjekk. Ship-worthy: selvsjekk og Codex via review. Høy innsats: selvsjekk, Codex og et tredje modellhus. Alle tre ender i en adversariell syntese der et funn er reelt til det er motbevist. Et merke sier at nivået regnes ut og ikke gjettes">
+<svg viewBox="0 0 960 330" role="img" aria-label="Verifiseringskjeden i tre nivåer som lag over hverandre. Trivielt: bare selvsjekk. Ship-worthy: selvsjekk og Codex via review. Høy innsats: selvsjekk, Codex og et tredje modellhus. Trivielt stopper etter selvsjekken. Ship-worthy og høy innsats ender i en adversariell syntese der et funn er reelt til det er motbevist, og syntesen kommer bare når Codex eller det tredje huset har kjørt. Et merke sier at nivået regnes ut og ikke gjettes">
   <defs>
     <marker id="v-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
   </defs>
@@ -38,19 +38,23 @@
     <text x="639" y="222" font-size="12" class="m">annen opplæring</text>
   </g>
   <g stroke="var(--muted)" stroke-width="2" fill="none">
-    <path d="M376,46 L786,46" marker-end="url(#v-ar)"/>
+    <path d="M376,46 L420,46" stroke-dasharray="none"/>
+    <path d="M420,34 L420,58"/>
     <path d="M546,126 L786,126" marker-end="url(#v-ar)"/>
     <path d="M716,206 L786,206" marker-end="url(#v-ar)"/>
     <path d="M376,126 L392,126" marker-end="url(#v-ar)"/>
     <path d="M376,206 L392,206" marker-end="url(#v-ar)"/>
     <path d="M546,206 L562,206" marker-end="url(#v-ar)"/>
   </g>
+  <text x="436" y="51" font-size="13" class="m">stopper her, ingen syntese</text>
   <rect x="790" y="14" width="156" height="224" rx="16" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
   <g text-anchor="middle">
-    <text x="868" y="96" font-size="14" font-weight="600">Adversariell</text>
-    <text x="868" y="116" font-size="14" font-weight="600">syntese</text>
-    <text x="868" y="148" font-size="12" class="m">et funn er reelt</text>
-    <text x="868" y="166" font-size="12" class="m">til det er motbevist</text>
+    <text x="868" y="80" font-size="14" font-weight="600">Adversariell</text>
+    <text x="868" y="100" font-size="14" font-weight="600">syntese</text>
+    <text x="868" y="130" font-size="12" class="m">et funn er reelt</text>
+    <text x="868" y="148" font-size="12" class="m">til det er motbevist</text>
+    <text x="868" y="178" font-size="12" class="m">bare når Codex eller</text>
+    <text x="868" y="196" font-size="12" class="m">tredje hus har kjørt</text>
   </g>
   <rect x="224" y="268" width="490" height="48" rx="14" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
   <g text-anchor="middle">
