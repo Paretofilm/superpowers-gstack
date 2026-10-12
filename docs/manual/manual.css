@@ -19,6 +19,7 @@ ol.toc a:hover{background:var(--line)}
 .layout{display:grid;grid-template-columns:minmax(0,1fr);gap:0 24px;margin-top:22px}
 .layout .glass{margin-top:0;margin-bottom:22px}
 main{min-width:0}
+main section[id]{scroll-margin-top:16px}
 @media (min-width:1000px){
   .wrap{max-width:1320px}
   .layout{grid-template-columns:260px minmax(0,1fr);gap:24px;align-items:start}
