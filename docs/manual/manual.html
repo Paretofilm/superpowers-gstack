@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual for superpowers-gstack</title>
+<style>
+/* explainer.css: the style of an htmlify explainer page (explain mode).
+   Copy this file unchanged into the page's first <style>; page-specific rules go in a
+   second <style>. explain-check compares the two and refuses a drifted copy.
+
+   Tokens: one accent per card, cyan, violet, magenta, amber or emerald (red only for a
+   failure path), each with a soft fill (--<accent>-s). Light theme on :root, dark under
+   prefers-color-scheme and [data-theme="dark"]; the theme button sets data-theme.
+
+   Parts: .wrap page · .top header with .toggle · section.glass card · .tag badge
+   (.t-cyan .t-violet .t-magenta .t-amber .t-emerald) · .key the card's one insight ·
+   .chip tile (.ic icon, <b> title, <span> one line) · .grid with .g2/.g3 tile grids ·
+   .scroll around a wide <svg> · .big headline number · .bars/.bar dot rows ·
+   .who three columns · ol.done numbered checklist · footer. */
+:root{
+  --bg:#f4f5fa;--bg2:#e9ecf6;--fg:#141826;--muted:#5c6378;--line:rgba(20,24,38,.10);
+  --glass:rgba(255,255,255,.62);--glass-edge:rgba(255,255,255,.95);
+  --cyan:#0891b2;--magenta:#c026d3;--violet:#7c3aed;--amber:#d97706;--emerald:#059669;--red:#dc2626;
+  --cyan-s:rgba(8,145,178,.12);--magenta-s:rgba(192,38,211,.10);--violet-s:rgba(124,58,237,.11);
+  --amber-s:rgba(217,119,6,.12);--emerald-s:rgba(5,150,105,.12);--red-s:rgba(220,38,38,.10);
+  --shadow:0 10px 40px -12px rgba(30,40,80,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#07080f;--bg2:#0e1020;--fg:#eef0fb;--muted:#9aa1bb;--line:rgba(255,255,255,.09);
+  --glass:rgba(22,25,44,.55);--glass-edge:rgba(255,255,255,.22);
+  --cyan:#22d3ee;--magenta:#f0abfc;--violet:#a78bfa;--amber:#fbbf24;--emerald:#34d399;--red:#f87171;
+  --cyan-s:rgba(34,211,238,.13);--magenta-s:rgba(240,171,252,.12);--violet-s:rgba(167,139,250,.14);
+  --amber-s:rgba(251,191,36,.12);--emerald-s:rgba(52,211,153,.12);--red-s:rgba(248,113,113,.13);
+  --shadow:0 10px 40px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#07080f;--bg2:#0e1020;--fg:#eef0fb;--muted:#9aa1bb;--line:rgba(255,255,255,.09);
+  --glass:rgba(22,25,44,.55);--glass-edge:rgba(255,255,255,.22);
+  --cyan:#22d3ee;--magenta:#f0abfc;--violet:#a78bfa;--amber:#fbbf24;--emerald:#34d399;--red:#f87171;
+  --cyan-s:rgba(34,211,238,.13);--magenta-s:rgba(240,171,252,.12);--violet-s:rgba(167,139,250,.14);
+  --amber-s:rgba(251,191,36,.12);--emerald-s:rgba(52,211,153,.12);--red-s:rgba(248,113,113,.13);
+  --shadow:0 10px 40px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;color:var(--fg);background:var(--bg);
+  font:16px/1.5 -apple-system,"SF Pro Text",system-ui,sans-serif;
+  background-image:
+    radial-gradient(900px 600px at 8% -5%,var(--violet-s),transparent 60%),
+    radial-gradient(800px 500px at 100% 10%,var(--cyan-s),transparent 60%),
+    radial-gradient(700px 600px at 50% 110%,var(--magenta-s),transparent 60%);
+  background-attachment:fixed;
+}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 16px 80px}
+h1,h2{font-family:-apple-system,"SF Pro Display",system-ui,sans-serif;letter-spacing:-.02em;margin:0}
+h1{font-size:clamp(30px,6vw,52px);line-height:1.05}
+h2{font-size:clamp(22px,3.6vw,30px);margin-bottom:6px}
+.sub{color:var(--muted);margin:6px 0 0}
+.mono,code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-variant-numeric:tabular-nums}
+code{font-size:.88em;padding:1px 6px;border-radius:6px;background:var(--line)}
+.glass{
+  position:relative;background:var(--glass);border-radius:22px;padding:24px;
+  backdrop-filter:blur(22px) saturate(170%);-webkit-backdrop-filter:blur(22px) saturate(170%);
+  box-shadow:var(--shadow);margin-top:22px;
+}
+.glass::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(140deg,var(--glass-edge),transparent 40%,transparent 70%,var(--glass-edge));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.toggle{border:0;cursor:pointer;border-radius:999px;padding:8px 14px;font:inherit;font-size:14px;
+  color:var(--fg);background:var(--glass);box-shadow:var(--shadow)}
+.tag{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 10px;border-radius:999px;margin-bottom:10px}
+.t-cyan{color:var(--cyan);background:var(--cyan-s)}.t-violet{color:var(--violet);background:var(--violet-s)}
+.t-magenta{color:var(--magenta);background:var(--magenta-s)}.t-amber{color:var(--amber);background:var(--amber-s)}
+.t-emerald{color:var(--emerald);background:var(--emerald-s)}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;fill:var(--fg)}
+svg .m{fill:var(--muted)} svg .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.chip{border-radius:16px;padding:14px 16px;background:var(--line);display:flex;gap:12px;align-items:flex-start}
+.chip .ic{font-size:24px;line-height:1}
+.chip b{display:block}
+.chip span{color:var(--muted);font-size:14px}
+.bars{display:grid;gap:8px;margin-top:16px}
+.bar{display:grid;grid-template-columns:150px 1fr 120px;gap:10px;align-items:center;font-size:14px}
+.bar .track{display:flex;gap:4px}
+.bar .dot{height:22px;flex:0 0 22px;border-radius:7px}
+.bar .how{font-size:12px;font-weight:600;text-align:right}
+@media (max-width:560px){.bar{grid-template-columns:96px 1fr;}.bar .how{grid-column:2;text-align:left}}
+.who{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:700px){.who{grid-template-columns:1fr}}
+.who > div{border-radius:18px;padding:16px;background:var(--line)}
+.who h3{margin:0 0 8px;font-size:17px}
+.who ul{margin:0;padding-left:18px;font-size:14px;color:var(--muted)}
+.who li{margin:3px 0}
+.done{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:8px}
+.done li{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:14px;background:var(--line)}
+.done .n{flex:0 0 28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:14px;
+  color:var(--emerald);background:var(--emerald-s)}
+.big{font-size:clamp(40px,8vw,64px);font-weight:700;letter-spacing:-.03em;line-height:1}
+.key{margin-top:14px;padding:14px 16px;border-radius:14px;border-left:3px solid var(--violet);background:var(--violet-s);font-size:15px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll svg{min-width:640px}
+footer{color:var(--muted);font-size:13px;margin-top:28px;text-align:center}
+</style>
+<style>
+/* manual.css: the manual's own rules, the second <style> after explainer.css.
+   Prose, table of contents, tables and code blocks. Tokens only, never hex. */
+.glass h2{margin:4px 0 14px}
+.glass h3{font-size:18px;margin:22px 0 8px}
+.glass p{margin:10px 0}
+.glass ul,.glass ol{margin:10px 0;padding-left:22px}
+.glass li{margin:4px 0}
+.glass a{color:var(--cyan)}
+.glass pre{margin:12px 0;padding:14px 16px;border-radius:14px;background:var(--line);overflow-x:auto;font-size:14px;line-height:1.45}
+.glass pre code{padding:0;background:none}
+.glass table{width:100%;border-collapse:collapse;font-size:14px}
+.glass th,.glass td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.glass th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.bruk{margin:0 0 8px}
+ol.toc{columns:2 280px;column-gap:28px;padding-left:22px;margin:8px 0 0}
+ol.toc li{margin:6px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="top">
+  <div>
+    <span class="tag t-violet">Manual · oppdatert 2026-10-12</span>
+    <h1>Superpowers + gstack</h1>
+    <p class="sub">Slik bygger du apper med Claude Code uten å miste tråden.</p>
+  </div>
+  <button class="toggle" id="tg" aria-label="Bytt mellom lyst og mørkt">◐ Tema</button>
+</div>
+
+<section class="glass" id="innhold">
+  <span class="tag t-violet">Innhold</span>
+  <ol class="toc"><li><a href="#k0"><b>0</b> Hele flyten på én side</a></li></ol>
+</section>
+
+<section class="glass" id="k0">
+  <span class="tag t-cyan">Kartet</span>
+  <h2>0&nbsp; Hele flyten på én side</h2>
+  <div class="grid g2 bruk">
+    <div class="chip"><span class="ic">🎯</span><div><b>Bruk denne når</b><span>Bruk denne når du har glemt hvor i flyten du er.</span></div></div>
+    <div class="chip"><span class="ic">🏁</span><div><b>Du er ferdig når</b><span>Du er ferdig når du vet hva som er neste stopp.</span></div></div>
+  </div>
+<div class="scroll"><svg viewBox="0 0 960 330" role="img" aria-label="Kart over flyten: Idé, Spec, Plan, Bygg, Bevis og Landing, med fire stopp der du bestemmer, og en pil tilbake som viser overlevering mellom økter">
+  <defs>
+    <marker id="k-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+  </defs>
+  <g>
+    <rect x="14" y="96" width="132" height="64" rx="16" fill="var(--line)"/>
+    <text x="80" y="134" text-anchor="middle" font-size="17" font-weight="600">💡 Idé</text>
+    <text x="80" y="186" text-anchor="middle" font-size="12" class="m mono">brainstorming</text>
+    <rect x="174" y="96" width="132" height="64" rx="16" fill="var(--line)"/>
+    <text x="240" y="134" text-anchor="middle" font-size="17" font-weight="600">📝 Spec</text>
+    <text x="240" y="186" text-anchor="middle" font-size="12" class="m mono">brainstorming</text>
+    <rect x="334" y="96" width="132" height="64" rx="16" fill="var(--line)"/>
+    <text x="400" y="134" text-anchor="middle" font-size="17" font-weight="600">🗺️ Plan</text>
+    <text x="400" y="186" text-anchor="middle" font-size="12" class="m mono">writing-plans</text>
+    <rect x="494" y="96" width="132" height="64" rx="16" fill="var(--line)"/>
+    <text x="560" y="134" text-anchor="middle" font-size="17" font-weight="600">🔨 Bygg</text>
+    <text x="560" y="186" text-anchor="middle" font-size="12" class="m mono">subagent-driven-</text>
+    <text x="560" y="202" text-anchor="middle" font-size="12" class="m mono">development</text>
+    <rect x="654" y="96" width="132" height="64" rx="16" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/>
+    <text x="720" y="134" text-anchor="middle" font-size="17" font-weight="600">🔍 Bevis</text>
+    <text x="720" y="186" text-anchor="middle" font-size="12" class="m mono">pitfall-verification</text>
+    <rect x="814" y="96" width="132" height="64" rx="16" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/>
+    <text x="880" y="134" text-anchor="middle" font-size="17" font-weight="600">🚀 Landing</text>
+    <text x="880" y="186" text-anchor="middle" font-size="12" class="m mono">land</text>
+  </g>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M148,128 L172,128" marker-end="url(#k-ar)"/>
+    <path d="M308,128 L332,128" marker-end="url(#k-ar)"/>
+    <path d="M468,128 L492,128" marker-end="url(#k-ar)"/>
+    <path d="M628,128 L652,128" marker-end="url(#k-ar)"/>
+    <path d="M788,128 L812,128" marker-end="url(#k-ar)"/>
+  </g>
+  <g fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5">
+    <rect x="86" y="14" width="148" height="48" rx="14"/>
+    <rect x="406" y="14" width="148" height="48" rx="14"/>
+    <rect x="646" y="14" width="148" height="48" rx="14"/>
+    <rect x="806" y="14" width="148" height="48" rx="14"/>
+  </g>
+  <g stroke="var(--cyan)" stroke-width="1.5" stroke-dasharray="4 4" fill="none">
+    <path d="M160,62 L160,118"/>
+    <path d="M480,62 L480,118"/>
+    <path d="M720,62 L720,92"/>
+    <path d="M880,62 L880,92"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="160" y="34" font-size="13" font-weight="600">✋ du stopper her</text>
+    <text x="160" y="52" font-size="12" class="m">godkjenn designet</text>
+    <text x="480" y="34" font-size="13" font-weight="600">✋ du stopper her</text>
+    <text x="480" y="52" font-size="12" class="m">les planen, velg metode</text>
+    <text x="720" y="34" font-size="13" font-weight="600">✋ du stopper her</text>
+    <text x="720" y="52" font-size="12" class="m">se at det virker</text>
+    <text x="880" y="34" font-size="13" font-weight="600">✋ du stopper her</text>
+    <text x="880" y="52" font-size="12" class="m">la den lande</text>
+  </g>
+  <path d="M880,216 C880,276 800,282 480,282 C160,282 80,276 80,214" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 5" marker-end="url(#k-ar)"/>
+  <text x="480" y="312" text-anchor="middle" font-size="13" class="m">↩ mellom økter: handoff (kapittel 5)</text>
+</svg></div>
+<h3>Slik leser du kartet</h3>
+<p>Flyten går fra venstre mot høyre, fra en idé til ferdig arbeid på hovedgrenen (main, grenen alt det ferdige samles på). Under hver stasjon står skillen (en ferdig arbeidsmåte Claude laster inn) som driver den. De fire merkene med hånd er stoppene: der går ikke Claude videre før du har svart. Mellom stoppene arbeider Claude selv.</p>
+<p>Pilen under kartet viser at flyten kan deles over flere økter. Da skriver Claude en overleveringsfil (handoff) som neste økt leser først. Mer om den i kapittel 5.</p>
+<h3>Stasjonene</h3>
+<div class="scroll"><table><thead><tr><th>Stasjon</th><th>Hva skjer</th><th>Skill</th><th>Du må</th></tr></thead><tbody><tr><td>Idé</td><td>Claude stiller spørsmål og foreslår et design</td><td>brainstorming</td><td>Godkjenne designet</td></tr><tr><td>Spec</td><td>Designet skrives ned som en spesifikasjon (spec)</td><td>brainstorming</td><td>Lese den hvis den er stor</td></tr><tr><td>Plan</td><td>Spesifikasjonen blir en plan med små oppgaver</td><td>writing-plans</td><td>Lese planen og velge hvordan den skal kjøres</td></tr><tr><td>Bygg</td><td>En ny underagent (subagent) bygger hver oppgave</td><td>subagent-driven-development</td><td>Ingenting, Claude kjører selv</td></tr><tr><td>Bevis</td><td>Claude sjekker at det virker og leter etter feller</td><td>pitfall-verification</td><td>Se at det virker når appen kan kjøres</td></tr><tr><td>Landing</td><td>Det ferdige samles på hovedgrenen</td><td>land</td><td>Si ja til landingen</td></tr></tbody></table></div>
+<h3>Snarveier</h3>
+<ul><li><code>/superpowers-gstack:vibe</code> bygger én funksjon fra start til landing med én runde spørsmål, låste akseptansetester som eneste sjekkpunkt og en ny underagent per fase.</li><li><code>/superpowers-gstack:autoimplement</code> kjører en ferdig plan med flere faser: én underagent per fase, gjennomgang og feller-sjekk mellom hver fase, og stopp når den finner noe du må ta stilling til.</li></ul>
+<div class="key">💡 Du stopper fire steder: godkjenne designet, lese planen, se at det virker og la den lande. Alt annet gjør Claude.</div>
+</section>
+
+<footer>Bygget fra <code>docs/manual/</code> med <code>python3 scripts/build-manual.py</code></footer>
+</div>
+<script>
+(function(){
+  var root=document.documentElement,btn=document.getElementById('tg');
+  try{var s=localStorage.getItem('manual-tema');if(s)root.setAttribute('data-theme',s);}catch(e){}
+  btn.addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    var next=cur==='dark'?'light':'dark';root.setAttribute('data-theme',next);
+    try{localStorage.setItem('manual-tema',next);}catch(e){}
+  });
+})();
+</script>
+</body>
+</html>
