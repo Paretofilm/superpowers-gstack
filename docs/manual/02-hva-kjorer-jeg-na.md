@@ -20,8 +20,8 @@ Finn raden som ligner mest på situasjonen din, og skriv kommandoen i midtkolonn
 | Ny idé du vil bygge, i et prosjekt med arbeidsmåten classic | `superpowers:brainstorming` | Claude stiller spørsmål og lager et design før noe bygges |
 | Ny funksjon i et prosjekt med arbeidsmåten vibe | `/superpowers-gstack:vibe` | Én spørsmålsrunde, så bygger Claude ferdig og lander |
 | Du lurer på om ideen er verdt å bygge | `/superpowers-gstack:office-hours-track-aware` | Pakker inn GStacks `/office-hours` og legger designdokumentet i `docs/` |
-| En spec (spesifikasjon) er nettopp skrevet | `/superpowers-gstack:pitfall-verification` | Leter etter feller i spesifikasjonen |
-| En plan er nettopp skrevet | `/superpowers-gstack:quality-review` | Spør om resultatet vil føles bra, i tillegg til om det virker |
+| En spec (spesifikasjon) eller plan er nettopp skrevet | `/superpowers-gstack:pitfall-verification` | Leter etter feller i spec eller plan: virker det? |
+| En spec eller plan er nettopp skrevet | `/superpowers-gstack:quality-review` | Spør om resultatet vil føles bra, i tillegg til om det virker |
 | Spec eller plan for en Apple-app | `/superpowers-gstack:apple-native-review` | Sjekker mot Apples designretningslinjer (HIG) før noe bygges |
 | Du vil se en spec eller plan som figurer | `/superpowers-gstack:htmlify` | Lager en forklaringsside med så lite tekst som mulig |
 | Planen er ferdig og skal bygges uten at du følger med | `/superpowers-gstack:autoimplement` | Én underagent per fase, med gjennomgang mellom fasene |

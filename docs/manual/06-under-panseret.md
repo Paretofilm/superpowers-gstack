@@ -32,7 +32,7 @@ Et arbeidstre (worktree) er en ekstra mappe med sin egen gren, hentet fra samme 
 - En gren kan bare stå i ett arbeidstre om gangen. Prøver du å sjekke den ut et annet sted, nekter git.
 - Alle mappene deler ett stash (et gjemmested for halvferdige endringer). En parallell økt som tømmer det, tar med seg dine endringer, og det blir aldri sendt til GitHub. Bruk derfor aldri `git stash`. Skal du bytte oppgave, la det halvferdige ligge der det er og åpne et nytt arbeidstre.
 - I prosjekter med `Landing mode: solo` er landing en fast-forward (med `pr` brukes `/ship`): `main` flyttes fremover langs grenens commits, uten en ny sammenslåings-commit. Det gjør `/superpowers-gstack:land`, som først kjører prosjektets sjekker ([se kapittel 4](#k4)).
-- Etterpå fjerner du arbeidstreet, så grenen. Rekkefølgen er `git worktree remove <sti>`, så `git branch -d <gren>`. Snur du den, nekter git. Bruk aldri `git branch -D` for å komme rundt en nektelse: den nektelsen er sikringen mot å miste commits som ikke er landet.
+- Landet du med `/superpowers-gstack:land`, rydder Claude opp selv: den forlater arbeidstreet og kjører `wt remove <gren>` ([se kapittel 10](#k10)). Landet du på annen måte, fjerner du arbeidstreet selv, så grenen. Rekkefølgen er `git worktree remove <sti>`, så `git branch -d <gren>`. Snur du den, nekter git. Bruk aldri `git branch -D` for å komme rundt en nektelse: den nektelsen er sikringen mot å miste commits som ikke er landet.
 
 ### Skript som kjører av seg selv
 
