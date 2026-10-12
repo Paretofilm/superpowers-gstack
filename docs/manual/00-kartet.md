@@ -4,8 +4,8 @@ tag: Kartet
 tittel: Hele flyten på én side
 aksent: cyan
 oppdatert: 2026-10-12
-bruk: Bruk denne når du har glemt hvor i flyten du er.
-ferdig: Du er ferdig når du vet hva som er neste stopp.
+bruk: du har glemt hvor i flyten du er
+ferdig: du vet hva som er neste stopp
 ---
 
 ![[kartet.svg]]
@@ -24,7 +24,7 @@ Pilen under kartet viser at flyten kan deles over flere økter. Da skriver Claud
 | Spec | Designet skrives ned som en spesifikasjon (spec) | brainstorming | Lese den hvis den er stor |
 | Plan | Spesifikasjonen blir en plan med små oppgaver | writing-plans | Lese planen og velge hvordan den skal kjøres |
 | Bygg | En ny underagent (subagent) bygger hver oppgave | subagent-driven-development | Ingenting, Claude kjører selv |
-| Bevis | Claude sjekker at det virker og leter etter feller | pitfall-verification | Se at det virker når appen kan kjøres |
+| Bevis | Claude sjekker at det virker og leter etter feller | pitfall-verification, verify-and-land | Se at det virker: verify-and-land bygger og starter grenen, og du bekrefter at rettelsen er der |
 | Landing | Det ferdige samles på hovedgrenen | land | Si ja til landingen |
 
 ### Snarveier
