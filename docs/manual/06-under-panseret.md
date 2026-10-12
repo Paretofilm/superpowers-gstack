@@ -36,7 +36,7 @@ Et arbeidstre (worktree) er en ekstra mappe med sin egen gren, hentet fra samme 
 
 ### Skript som kjører av seg selv
 
-En hook er et skript som Claude Code kjører ved en bestemt hendelse, uten at du eller Claude ber om det. Pluginen leverer disse, definert i `hooks/hooks.json`:
+En hook er et skript som Claude Code kjører ved en bestemt hendelse, uten at du eller Claude ber om det. Pluginen leverer blant annet disse, definert i `hooks/hooks.json`:
 
 | Når | Hva skjer | Skjer hvor |
 |---|---|---|

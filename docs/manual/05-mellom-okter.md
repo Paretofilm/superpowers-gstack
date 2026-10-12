@@ -40,19 +40,19 @@ En halvskrevet overlevering tømmes aldri. Noen prosjekter bruker stien til egne
 
 ### Banneret ved oppstart
 
-Før du har skrevet noe, kan økten åpne med en blokk som heter «Where this project left off» (på engelsk, slik skriptet skriver den). Den skrives av en hook (et lite skript som Claude Code kjører av seg selv ved en bestemt hendelse) som heter `scripts/session-resume.sh`. Den kjører når en økt starter, og når den starter etter `/clear`. Den leser tre ting, og viser bare dem som finnes:
+Før du har skrevet noe, kan økten åpne med en blokk som heter «Where this project left off» (på engelsk, slik skriptet skriver den). Den skrives av en hook (et lite skript som Claude Code kjører av seg selv ved en bestemt hendelse) som heter `scripts/session-resume.sh`. Den kjører når en økt starter, og når den starter etter `/clear`. Den leser tre kilder, og viser bare det som finnes:
 
 - `progress.md`: tittelen, hvor mange faser som er ferdige, hva som står først under «Gjenstår», og datoen filen sist ble endret.
 - `handoff.md`: bare hvis det er en fullstendig overlevering, og da med `next_step`.
-- Siste-økt-opptaket (se under): de siste meldingene og hvilken gren du var på.
+- Siste-økt-opptaket (se under): de første 200 tegnene av Claudes siste melding, hvorfor og når forrige økt sluttet, og hvilken gren du var på. Din egen siste melding vises ikke i banneret.
 
-Banneret leser bare. Det tømmer ikke noe, og klassifiseringen i tabellen over er fortsatt Claudes jobb. Finnes ingen av de tre, sier banneret ingenting. Teksten går både til deg og inn i det Claude ser, så du får bevis på at tilstanden overlevde, og Claude vet hvilke filer den skal lese videre i.
+Banneret leser bare. Det tømmer ikke noe, og klassifiseringen i tabellen over er fortsatt Claudes jobb. Finnes ingen av de tre kildene, sier banneret ingenting. Teksten går både til deg og inn i det Claude ser, så du får bevis på at tilstanden overlevde, og Claude vet hvilke filer den skal lese videre i.
 
 ### Opptaket når en økt slutter
 
-Skriver du `/clear` uten å ha skrevet en overlevering først, er det ingen modell igjen som kan oppsummere. Derfor finnes en hook som kjører når økten slutter: `scripts/capture-session-tail.sh`. Den bruker ikke Claude. Den leser de siste meldingene fra utskriften av økten på disken og tar vare på den siste fra deg og den siste fra Claude (hver kuttet til omtrent 700 tegn), grenen, siste commit og hvor mange filer som er endret og ikke lagret.
+Skriver du `/clear` uten å ha skrevet en overlevering først, er det ingen modell igjen som kan oppsummere. Derfor finnes en hook som kjører når økten slutter: `scripts/capture-session-tail.sh`. Den bruker ikke Claude. Den leser de siste meldingene fra utskriften av økten på disken og tar vare på den siste fra deg og den siste fra Claude (hver kuttet til omtrent 700 tegn), grenen, siste commit og hvor mange filer som ikke er committet.
 
-Opptaket legges i git-mappen (`.git`) som `gstack-last-session.md`, ikke i selve prosjektet. Utskrifter kan inneholde hva som helst, og en fil utenfor prosjektmappen kan ikke bli committet ved en feil. Hooken gjør ingenting i prosjekter uten mappen `docs/superpowers/`. Banneret i neste økt viser opptaket.
+Opptaket legges i git-mappen (`.git`) som `gstack-last-session.md`, ikke i selve prosjektet. Utskrifter kan inneholde hva som helst, og en fil utenfor prosjektmappen kan ikke bli committet ved en feil. Hooken gjør ingenting i prosjekter uten mappen `docs/superpowers/`. Opptaket inneholder begge meldingene, men banneret i neste økt viser bare begynnelsen av Claudes.
 
 ### Lange prosjekter
 
