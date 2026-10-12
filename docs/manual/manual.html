@@ -144,7 +144,7 @@ ol.toc li{margin:6px 0}
 
 <section class="glass" id="innhold">
   <span class="tag t-violet">Innhold</span>
-  <ol class="toc"><li><a href="#k0"><b>0</b> Hele flyten på én side</a></li><li><a href="#k1"><b>1</b> Start fra en tom mappe</a></li><li><a href="#k2"><b>2</b> Hva kjører jeg nå?</a></li><li><a href="#k3"><b>3</b> Fra idé til kode, steg for steg</a></li><li><a href="#k4"><b>4</b> Når kan du stole på resultatet?</a></li><li><a href="#k5"><b>5</b> Ikke mist tråden</a></li><li><a href="#k6"><b>6</b> Hva skjer bak kulissene</a></li></ol>
+  <ol class="toc"><li><a href="#k0"><b>0</b> Hele flyten på én side</a></li><li><a href="#k1"><b>1</b> Start fra en tom mappe</a></li><li><a href="#k2"><b>2</b> Hva kjører jeg nå?</a></li><li><a href="#k3"><b>3</b> Fra idé til kode, steg for steg</a></li><li><a href="#k4"><b>4</b> Når kan du stole på resultatet?</a></li><li><a href="#k5"><b>5</b> Ikke mist tråden</a></li><li><a href="#k6"><b>6</b> Hva skjer bak kulissene</a></li><li><a href="#k7"><b>7</b> Native apper (macOS og iOS 26)</a></li><li><a href="#k8"><b>8</b> Web, Python og pipelines</a></li></ol>
 </section>
 
 <section class="glass" id="k0">
@@ -572,6 +572,131 @@ ol.toc li{margin:6px 0}
 <h3>Tre modellhus</h3>
 <p>Kontrollen av ferdig arbeid bruker modeller fra flere selskaper, fordi hvert selskap har sine egne blindsoner. Claude leser først, Codex fra OpenAI leser neste gang, og for de farligste endringene leser et tredje hus utenfor Anthropic og OpenAI til slutt (<a href="#k4">se figuren i kapittel 4</a>). Hvilke modeller det er, hvor nøklene ligger og hva det koster, står i <a href="#k10">kapittel 10</a>.</p>
 <div class="key">💡 Subagenter ser bare det de får, så alt som må overleve står i en fil. Arbeidstrærne gir hver oppgave sin egen mappe, og hookene passer på trådene i bakgrunnen.</div>
+</section>
+
+<section class="glass" id="k7">
+  <span class="tag t-violet">Spor: Swift</span>
+  <h2>7&nbsp; Native apper (macOS og iOS 26)</h2>
+  <div class="grid g2 bruk">
+    <div class="chip"><span class="ic">🎯</span><div><b>Bruk denne når</b><span>prosjektet er en Mac- eller iPhone-app skrevet i Swift</span></div></div>
+    <div class="chip"><span class="ic">🏁</span><div><b>Du er ferdig når</b><span>du vet hvilke ekstra skills en Apple-app trekker inn, og du har sett akkurat denne grenen kjøre</span></div></div>
+  </div>
+<div class="scroll"><svg viewBox="0 0 960 330" role="img" aria-label="To spor som deler samme kjerne. Øverst en felles rad: brainstorming, plan, bygg, bevis, landing. Under til venstre sporet for Swift-apper med fire ekstra deler: swiftui-design-consultation som skriver designsystemet, apple-native-review som sjekker spec og plan mot Apples designretningslinjer, live-swiftui og swiftui-rag som lar Claude se og slå opp SwiftUI uten hele appen, og e2e-route og verify-and-land som tester og viser akkurat denne grenen. Under til høyre sporet for web og Python med fire ekstra deler: qa og qa-only for testing, browse og design-review for å se siden, cso for sikkerhetsrevisjon og investigate for å finne årsaken først">
+  <defs>
+    <marker id="p-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+  </defs>
+  <rect x="14" y="10" width="932" height="56" rx="16" fill="var(--glass)" stroke="var(--line)" stroke-width="1.5"/>
+  <text x="30" y="35" font-size="14" font-weight="600">Felles kjerne</text>
+  <text x="30" y="53" font-size="12" class="m">kapittel 0</text>
+  <g fill="var(--line)">
+    <rect x="170" y="20" width="130" height="36" rx="12"/>
+    <rect x="324" y="20" width="130" height="36" rx="12"/>
+    <rect x="478" y="20" width="130" height="36" rx="12"/>
+    <rect x="632" y="20" width="130" height="36" rx="12"/>
+    <rect x="786" y="20" width="130" height="36" rx="12"/>
+  </g>
+  <g text-anchor="middle" font-size="14" font-weight="600">
+    <text x="235" y="43">brainstorming</text>
+    <text x="389" y="43">plan</text>
+    <text x="543" y="43">bygg</text>
+    <text x="697" y="43">bevis</text>
+    <text x="851" y="43">landing</text>
+  </g>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M302,38 L322,38" marker-end="url(#p-ar)"/>
+    <path d="M456,38 L476,38" marker-end="url(#p-ar)"/>
+    <path d="M610,38 L630,38" marker-end="url(#p-ar)"/>
+    <path d="M764,38 L784,38" marker-end="url(#p-ar)"/>
+  </g>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M243,68 L243,80" marker-end="url(#p-ar)"/>
+    <path d="M717,68 L717,80" marker-end="url(#p-ar)"/>
+  </g>
+
+  <rect x="14" y="82" width="458" height="236" rx="16" fill="var(--violet-s)" stroke="var(--violet)" stroke-width="1.5"/>
+  <text x="30" y="106" font-size="16" font-weight="600">Spor: Swift</text>
+  <text x="150" y="106" font-size="12" class="m">iOS 26 og macOS 26</text>
+  <g fill="var(--glass)" stroke="var(--line)" stroke-width="1.5">
+    <rect x="28" y="116" width="430" height="44" rx="12"/>
+    <rect x="28" y="164" width="430" height="44" rx="12"/>
+    <rect x="28" y="212" width="430" height="44" rx="12"/>
+    <rect x="28" y="260" width="430" height="44" rx="12"/>
+  </g>
+  <text x="42" y="135" font-size="14" font-weight="600" class="mono">swiftui-design-consultation</text>
+  <text x="42" y="152" font-size="12" class="m">DESIGN.md og en Swift-pakke med designsystemet</text>
+  <text x="42" y="183" font-size="14" font-weight="600" class="mono">apple-native-review</text>
+  <text x="42" y="200" font-size="12" class="m">sjekker spec og plan mot Apples HIG, med sitater</text>
+  <text x="42" y="231" font-size="14" font-weight="600" class="mono">live-swiftui · swiftui-rag</text>
+  <text x="42" y="248" font-size="12" class="m">se visningen uten hele appen, slå opp og sjekk mot HIG</text>
+  <text x="42" y="279" font-size="14" font-weight="600" class="mono">e2e-route · verify-and-land</text>
+  <text x="42" y="296" font-size="12" class="m">UI-tester, og bygg og start akkurat denne grenen</text>
+
+  <rect x="488" y="82" width="458" height="236" rx="16" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/>
+  <text x="504" y="106" font-size="16" font-weight="600">Spor: Web og Python</text>
+  <text x="684" y="106" font-size="12" class="m">nett, Python, pipelines</text>
+  <g fill="var(--glass)" stroke="var(--line)" stroke-width="1.5">
+    <rect x="502" y="116" width="430" height="44" rx="12"/>
+    <rect x="502" y="164" width="430" height="44" rx="12"/>
+    <rect x="502" y="212" width="430" height="44" rx="12"/>
+    <rect x="502" y="260" width="430" height="44" rx="12"/>
+  </g>
+  <text x="516" y="135" font-size="14" font-weight="600" class="mono">qa · qa-only</text>
+  <text x="516" y="152" font-size="12" class="m">test og finn feil, qa retter og qa-only rapporterer</text>
+  <text x="516" y="183" font-size="14" font-weight="600" class="mono">browse · design-review</text>
+  <text x="516" y="200" font-size="12" class="m">se siden i nettleseren, og vurder utseendet</text>
+  <text x="516" y="231" font-size="14" font-weight="600" class="mono">cso</text>
+  <text x="516" y="248" font-size="12" class="m">sikkerhetsrevisjon av koden</text>
+  <text x="516" y="279" font-size="14" font-weight="600" class="mono">investigate</text>
+  <text x="516" y="296" font-size="12" class="m">finn årsaken først, så rettelsen</text>
+</svg></div>
+<h3>Det som er felles, og det som er ekstra</h3>
+<p>Kjernen er den samme i alle prosjekter: idé, plan, bygg, bevis og landing (<a href="#k0">se kapittel 0</a>). Et spor legger verktøy til på sidene. Figuren viser to spor. Dette kapittelet tar Swift, <a href="#k8">kapittel 8</a> tar web og Python.</p>
+<p>Hvilket spor prosjektet har, står i filen <code>.gstack/track</code>. For en Apple-app står det <code>ios</code>, <code>macos</code> eller <code>both</code> der, og mangler filen, regnes prosjektet som web. <code>/superpowers-gstack:office-hours-track-aware</code> spør om plattformen og skriver filen når en idé handler om en Apple-app, og <code>/superpowers-gstack:adapt</code> skriver den når den setter opp prosjektet. Skillene under leser filen for å vite hvilken plattform de skal sjekke mot.</p>
+<h3>Hva en Swift-app legger til</h3>
+<p>Målet er iOS 26 og macOS 26 med Liquid Glass, Apples designspråk fra og med de versjonene (bygget på glassaktige materialer i kontrollene).</p>
+<div class="scroll"><table><thead><tr><th>Skill</th><th>Hva den gjør</th><th>Bruk den når</th></tr></thead><tbody><tr><td><code>/superpowers-gstack:swiftui-design-consultation</code></td><td>Spør om produktet og hvor streng sjekken mot Apples regler skal være, viser et forslag som side, og skriver <code>DESIGN.md</code> og en Swift-pakke <code>DesignSystem/</code> først når du godkjenner</td><td>Du starter eller friske opp designsystemet i et SwiftUI-prosjekt</td></tr><tr><td><code>/superpowers-gstack:apple-native-review</code></td><td>Sjekker en spec eller plan mot Apples HIG (Human Interface Guidelines, Apples offisielle designretningslinjer)</td><td>Spec eller plan med skjermbilder er ferdig, og før noe bygges</td></tr><tr><td><code>/superpowers-gstack:quality-review</code></td><td>Leter etter det som får et produkt til å kjennes billig: stille feil, manglende lasting, tomme tilstander, dårlig feilhåndtering</td><td>Spec eller plan er ferdig, før noe bygges. Den gjelder også web</td></tr></tbody></table></div>
+<p>Apple-native-review stiller ett spørsmål: leses appen som en Apple-app, eller som en port fra en annen plattform? Hvert funn skal sitere en HIG-side som er hentet under kjøringen. Kan siden ikke hentes, merkes funnet <code>(uncited)</code> (uten kilde), og dommen blir <code>PROVISIONAL</code> (foreløpig). Anbefalt rekkefølge på en ny spec er <code>/superpowers-gstack:pitfall-verification</code>, så quality-review, så apple-native-review, og så plan (<a href="#k3">se kapittel 3</a>).</p>
+<p>Quality-review spør om det vil kjennes bra, pitfall-verification spør om det vil virke (<a href="#k4">se kapittel 4</a>). I loggene fra seks prosjekter ble <code>/superpowers-gstack:quality-review</code> brukt 1 gang, og <code>/superpowers-gstack:swiftui-design-consultation</code> og <code>/superpowers-gstack:e2e-scaffold</code> brukt 0 ganger (målt 10. oktober 2026, 61 hovedøkter). Tallene er et øyeblikksbilde, ikke en egenskap ved verktøyene.</p>
+<h3>Ende-til-ende-tester: hvem gjør hva</h3>
+<p>En ende-til-ende-test (E2E) trykker seg gjennom appens brukergrensesnitt (UI) slik en bruker ville gjort. To skills deler jobben, og ingen av dem starter av seg selv.</p>
+<ul><li><code>/superpowers-gstack:e2e-route</code> er en ren veiviser. Den leser plattform, hva du vil, og hvor testene skal kjøre, sier hvem som tar jobben, og overlater den. Den bygger, trykker og skriver ingenting selv.</li><li><code>/superpowers-gstack:e2e-scaffold</code> lager grunnlaget for UI-tester (XCUITest, Apples verktøy for tester som trykker gjennom appen). Den endrer prosjektfiler, så du må be om den selv.</li></ul>
+<p>Hva du vil, avgjør hvor e2e-route sender deg:</p>
+<div class="scroll"><table><thead><tr><th>Du vil</th><th>Veivisern sender deg til</th></tr></thead><tbody><tr><td>Låse en test som skal vare, for eksempel mot regresjon (at noe som virket slutter å virke)</td><td>Prosjektets egen E2E-test hvis den finnes, ellers <code>/superpowers-gstack:e2e-scaffold</code></td></tr><tr><td>Trykke gjennom nå og se hva som skjer</td><td>XcodeBuildMCP på macOS og ios-simulator-MCP på iOS (MCP forklares under)</td></tr><tr><td>Se om det ser riktig ut</td><td>Sammenligning av skjermbilder, og på macOS <code>/design-review</code></td></tr></tbody></table></div>
+<p>E2e-scaffold finner de viktigste visningene, foreslår <code>accessibilityIdentifier</code> på knappene (et navn Claude og testene finner kontrollen på) og bruker dem først når du har godkjent. Så lager den tomme prøver som feiler med <code>XCTFail(&quot;not implemented&quot;)</code> til noen fyller dem inn, <code>scripts/run-uitests.sh</code> og <code>docs/accessibility-identifiers.md</code>. Finnes det allerede en UI-test, nekter den og ber deg utvide den for hånd. For låste macOS-tester kan filen <code>.gstack/e2e-executor</code> si <code>host</code> (din egen Mac) eller <code>vm</code> (en virtuell maskin). E2e-route leser den, og <code>/superpowers-gstack:adapt</code> skriver den.</p>
+<h3>Se grensesnittet uten å starte hele appen</h3>
+<p>To verktøy lar Claude se og slå opp SwiftUI mens den skriver. Begge er MCP-verktøy (MCP, Model Context Protocol, er standarden som kobler verktøy til Claude).</p>
+<p><code>live-swiftui</code> er en egen macOS-app som tegner en <code>#Preview</code> (en kodeblokk i Swift-filen som beskriver hvordan én visning skal tegnes for forhåndsvisning, som i Xcode). Claude kan så ta skjermbilde, trykke, skrive og måle, uten å starte hele appen. Verktøyets egen beskrivelse nevner utseende, treffområder, interaksjon og bevegelse. Du må skrive <code>#Preview</code> selv med falske data, og iOS-mål støttes ikke ennå (sier verktøyets egen beskrivelse). Eksempel fra sing-replay (en Swift-app for iOS 26 og macOS 26 som spiller av innspilte sangøkter): Claude forsøkte å bruke det på take-velgeren, og prosjektets CLAUDE.md skriver ned utfallet. Per 27. august 2026 bygde den utskilte pakken, men verktøyet fant ikke forhåndsvisningen (<code>previewNotFound</code>), og årsaken var ikke klarlagt. Per 23. august 2026 vises heller ikke <code>.popover</code> og <code>.sheet</code> i skjermbildene, så høyden på dem måles med en test i stedet. Verktøyet har altså grenser, og prosjektet skriver dem ned.</p>
+<p><code>swiftui-rag</code> slår opp i en samling SwiftUI-eksempler som er typesjekket mot SDK-en (utviklerpakken fra Apple), sammen med HIG-veiledning. Det kan også typesjekke Swift-kode i isolasjon og lint-sjekke den mot HIG, inkludert Liquid Glass og tilgjengelighet (verktøyets egen beskrivelse). Oppsettet ditt i <code>~/.claude/CLAUDE.md</code> slår opp i samlingen før SwiftUI skrives, og kjører HIG-sjekken etterpå. Eksempel fra sing-replay: prosjektets CLAUDE.md sier at en Swift-fil typesjekkes alene med <code>swift_typecheck</code>. Design-consultation bruker de samme verktøyene, men hopper over macOS-sjekken på en iOS-app, fordi menylinje-funn ville styrt forslaget mot feil plattform.</p>
+<h3>Bevis for Swift-apper</h3>
+<p>Beviset er at du har sett akkurat denne grenen kjøre (<a href="#k4">se kapittel 4</a>). <code>/superpowers-gstack:verify-and-land</code> bygger grenen du står på, starter nøyaktig den bygde appen og melder hvilken gren, hvilken bygging og hvilken commit som kjører. På iOS skjer det i simulatoren (en iPhone som kjører som program på Macen), og skillen sjekker at installasjonen er fra denne kjøringen. Så spør den om rettelsen er der, én gang per endring du kan se. Svarer du ja på alle, lander grenen slik prosjektets <code>Landing mode:</code>-linje sier, uten et nytt spørsmål. Svarer du nei, lander ingenting, og skillen foreslår <code>/investigate</code>.</p>
+<p>For iOS bygger og starter skillen bare i simulatoren, ikke på en ekte telefon. Det du ikke kan se i en simulator, må du se på en ekte enhet. Sing-replay viser hvordan det ser ut. Filen <code>progress.md</code> oppgir testenheten som en iPhone 13 Pro Max med iOS 26.6, paret og i utviklermodus, men Meta-tabellen er ikke datert. Den nyeste datoen i filen er 16. august 2026. Der står også at lydverifiseringen på en ekte telefon (stille-bryter, skjermlås, hodetelefon trukket ut, innkommende samtale) ikke kan simuleres og var «blokkert på brukerens hender, ikke på kode». Med andre ord: appen er kjørt på telefonen, men lyden er ikke verifisert der ennå, ifølge filen. Prosjektets CLAUDE.md har også en felle fra 15. august 2026: en ny installasjon på telefonen dreper tilgangen til mappen med opptak, og appen viser velkomstskjermen igjen. Det ser ut som en feil, men er forventet.</p>
+<div class="key">💡 En Apple-app legger Apples regler (HIG og Liquid Glass) til kjernen, og beviset er å se akkurat denne grenen kjøre: i simulatoren for det du kan se, på en ekte telefon for lyd og maskinvare.</div>
+</section>
+
+<section class="glass" id="k8">
+  <span class="tag t-cyan">Spor: Web og Python</span>
+  <h2>8&nbsp; Web, Python og pipelines</h2>
+  <div class="grid g2 bruk">
+    <div class="chip"><span class="ic">🎯</span><div><b>Bruk denne når</b><span>prosjektet er en nettside, et Python-program eller en pipeline (en kjede av trinn som tar en fil inn og gir en fil ut)</span></div></div>
+    <div class="chip"><span class="ic">🏁</span><div><b>Du er ferdig når</b><span>du vet hvilke ekstra skills som passer, og du har sett en ekte kjøring mot ekte inndata</span></div></div>
+  </div>
+<h3>Samme kjerne, andre verktøy</h3>
+<p>Kjernen er den samme som i Swift-sporet (<a href="#k7">se figuren i kapittel 7</a>). Det som skiller, er verktøyene på sidene. Et prosjekt uten filen <code>.gstack/track</code> regnes som web, så et Python-prosjekt havner her uten at du gjør noe.</p>
+<h3>Hva et web- eller pipelineprosjekt legger til</h3>
+<p>Alle skillene under er GStacks egne, ikke pluginens. Beskrivelsene er hentet fra skillenes egne filer.</p>
+<div class="scroll"><table><thead><tr><th>Skill</th><th>Hva den gjør</th><th>Bruk den når</th></tr></thead><tbody><tr><td><code>/qa</code></td><td>Tester og retter feil i nettleser, API, kommandolinje, jobber og webhooks (anrop andre tjenester sender til programmet ditt), og lagrer hver bekreftede rettelse som egen commit</td><td>Du vil ha «test og rett», eller en funksjon er klar til å testes</td></tr><tr><td><code>/qa-only</code></td><td>Samme testing, men skriver bare en rapport med steg for å gjenta feilen. Den retter ingenting</td><td>Du vil ha en feilrapport uten kodeendringer</td></tr><tr><td><code>/browse</code></td><td>Styrer en ekte nettleser: åpner en side, leser den, klikker gjennom et forløp, tar skjermbilder og leser feilmeldinger fra konsollen</td><td>Du vil at Claude skal se en side slik du ser den</td></tr><tr><td><code>/design-review</code></td><td>Ser etter ujevnt utseende, avstander og visuelt hierarki med en designers øye, og retter i koden med skjermbilder før og etter</td><td>Siden fungerer, men ser ikke riktig ut</td></tr><tr><td><code>/cso</code></td><td>Sikkerhetsrevisjon. Uten flagg er den statisk: den leser koden og kjører ikke programmet</td><td>Koden rører nøkler, eksterne tjenester eller tekst du ikke stoler på</td></tr><tr><td><code>/investigate</code></td><td>Feilsøking i fire faser: undersøk, analyser, still en hypotese, rett. Regelen er at ingenting rettes før årsaken er funnet</td><td>Noe feiler i en ekte kjøring og du vet ikke hvorfor</td></tr></tbody></table></div>
+<p>Når <code>/cso</code> passer, står i rutingtabellen til KvitteriAi: den kjøres før <code>/review</code> når koden rører nøkler, eksterne tjenester eller upålitelig tekst. I loggene fra seks prosjekter ble <code>/qa</code> brukt 0 ganger (målt 10. oktober 2026), så den er et forslag, ikke en vane. Tallet er et øyeblikksbilde, ikke en egenskap ved verktøyet.</p>
+<p><code>/browse</code> bruker først Aside, nettleseren din med innloggingene dine, så Claude ser det du ser i en fane. Mangler Aside, bruker den gstacks egen nettleser uten skjerm. Claude får altså se det du er logget inn på.</p>
+<h3>Verktøy som lar Claude se nettet</h3>
+<p>Tre verktøy gjør at Claude kan se nettet. Alle er MCP-verktøy eller utvidelser (MCP, Model Context Protocol, er standarden som kobler verktøy til Claude).</p>
+<ul><li>Playwright styrer en nettleser fra Claude: åpne en side, klikke, skrive i skjemaer, ta skjermbilde (verktøyene heter blant annet <code>browser_navigate</code>, <code>browser_click</code> og <code>browser_take_screenshot</code>). De tre prosjektene under nevner det ikke i CLAUDE.md-filene sine (sjekket 12. oktober 2026), så det finnes ikke et eksempel derfra.</li><li>Claude in Chrome styrer din egen Chrome, med innloggingene dine. KvitteriAi (en Swift-kommandolinje som finner bilag til banktransaksjoner) bruker det i skillen <code>hent-fakturaer</code>: du logger inn selv, Claude leser fakturalistene på leverandørenes nettsider, laster ned og legger fakturaen inn. Koden avgjør om den blir et bilag. Før noe åpnes, sier skillen hvilke nettsteder du må være innlogget på, og at Claude leser beløp, datoer, firmanavn og fakturaadresse. Så venter den på at du skriver «klar».</li><li>firecrawl henter en side og gir innholdet som tekst, og søker på nettet. Heller ikke det står i de tre prosjektenes CLAUDE.md-filer (sjekket 12. oktober 2026).</li></ul>
+<p>Ingen av de tre prosjektene er selv nettsteder. De bruker verktøyene utenfra, og to av dem går andre veier til samme mål:</p>
+<ul><li>Resolve-ai-worker styrer DaVinci Resolve (videoredigeringsprogrammet) gjennom Resolves innebygde MCP-server: <code>run_script</code> kjører skript skjermet (sandboxed, avskåret fra resten av maskinen), <code>run_script_unsafe</code> kjører skript som rører filsystemet og ffmpeg (programmet som behandler video). Prosjektet måler farger med Python og skriver til Resolve-prosjekter.</li><li>fagfilm-pipeline er en Mac-app som tar en mastervideo gjennom ffmpeg, sender den til AWS (Amazons skytjeneste) og publiserer den. Prosjektet bruker <code>/browse</code> til å sjekke den publiserte videoen på <code>staging.fagfilm.no</code> (testutgaven av nettstedet).</li></ul>
+<h3>Bevis for web og pipelines</h3>
+<p>Beviset er at noen har sett det virke: en ekte kjøring mot ekte inndata, et skjermbilde, eller filen som kom ut. Tester sier at ingenting annet gikk i stykker, ikke at det du rettet er rettet (<a href="#k4">se kapittel 4</a>).</p>
+<ul><li><b>Nettsider.</b> <code>/superpowers-gstack:verify-and-land</code> har en kortere vei for utviklingsservere. Den starter prosjektets utviklingsserver (en lokal webserver du bruker mens du bygger) med prosjektets dev-skript, husker prosessen og sjekker at den fortsatt lever før den stoler på porten, fordi en gammel server fra en annen gren kan holde porten og svare med utdatert kode. Så kommer samme spørsmål som i kapittel 4, og et ja lander grenen slik prosjektets <code>Landing mode:</code>-linje sier.</li><li><b>Pipelines.</b> Et kommandolinjeverktøy har ingen app å se på, og da sier verify-and-land at du bør kjøre testene. Beviset blir en kjøring du selv leser. Fagfilm-pipeline skiller mellom <code>scripts/live-smoke.sh</code> (tørrkjøring som ikke skriver noe) og den samme med <code>--force</code>, som oppretter, verifiserer og rydder bort én testvideo (prosjektets CLAUDE.md).</li><li><b>Mot ekte tjenester.</b> Resolve-ai-worker kjører Resolve-tester via MCP mot et lokalt testprosjekt, aldri mot det delte Blackmagic Cloud-biblioteket. KvitteriAi bruker ingen ekte tjenester i testene sine.</li></ul>
+<p>KvitteriAi håndterer fakturaer og nøkler (de hentes fra nøkkelringen på Macen), så koden og dataene som berører dem skal bare leses av Claude selv og Codex, og aldri sendes til det tredje modellhuset (<a href="#k4">se kapittel 4</a>).</p>
+<div class="key">💡 I et web- eller pipelineprosjekt er beviset en ekte kjøring du har sett: skjermbildet eller filen som kom ut. Sikkerhets- og økonomimateriale holdes unna det tredje modellhuset.</div>
 </section>
 
 <footer>Bygget fra <code>docs/manual/</code> med <code>python3 scripts/build-manual.py</code></footer>

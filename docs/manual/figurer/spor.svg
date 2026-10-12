@@ -1,0 +1,68 @@
+<svg viewBox="0 0 960 330" role="img" aria-label="To spor som deler samme kjerne. Øverst en felles rad: brainstorming, plan, bygg, bevis, landing. Under til venstre sporet for Swift-apper med fire ekstra deler: swiftui-design-consultation som skriver designsystemet, apple-native-review som sjekker spec og plan mot Apples designretningslinjer, live-swiftui og swiftui-rag som lar Claude se og slå opp SwiftUI uten hele appen, og e2e-route og verify-and-land som tester og viser akkurat denne grenen. Under til høyre sporet for web og Python med fire ekstra deler: qa og qa-only for testing, browse og design-review for å se siden, cso for sikkerhetsrevisjon og investigate for å finne årsaken først">
+  <defs>
+    <marker id="p-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+  </defs>
+  <rect x="14" y="10" width="932" height="56" rx="16" fill="var(--glass)" stroke="var(--line)" stroke-width="1.5"/>
+  <text x="30" y="35" font-size="14" font-weight="600">Felles kjerne</text>
+  <text x="30" y="53" font-size="12" class="m">kapittel 0</text>
+  <g fill="var(--line)">
+    <rect x="170" y="20" width="130" height="36" rx="12"/>
+    <rect x="324" y="20" width="130" height="36" rx="12"/>
+    <rect x="478" y="20" width="130" height="36" rx="12"/>
+    <rect x="632" y="20" width="130" height="36" rx="12"/>
+    <rect x="786" y="20" width="130" height="36" rx="12"/>
+  </g>
+  <g text-anchor="middle" font-size="14" font-weight="600">
+    <text x="235" y="43">brainstorming</text>
+    <text x="389" y="43">plan</text>
+    <text x="543" y="43">bygg</text>
+    <text x="697" y="43">bevis</text>
+    <text x="851" y="43">landing</text>
+  </g>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M302,38 L322,38" marker-end="url(#p-ar)"/>
+    <path d="M456,38 L476,38" marker-end="url(#p-ar)"/>
+    <path d="M610,38 L630,38" marker-end="url(#p-ar)"/>
+    <path d="M764,38 L784,38" marker-end="url(#p-ar)"/>
+  </g>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M243,68 L243,80" marker-end="url(#p-ar)"/>
+    <path d="M717,68 L717,80" marker-end="url(#p-ar)"/>
+  </g>
+
+  <rect x="14" y="82" width="458" height="236" rx="16" fill="var(--violet-s)" stroke="var(--violet)" stroke-width="1.5"/>
+  <text x="30" y="106" font-size="16" font-weight="600">Spor: Swift</text>
+  <text x="150" y="106" font-size="12" class="m">iOS 26 og macOS 26</text>
+  <g fill="var(--glass)" stroke="var(--line)" stroke-width="1.5">
+    <rect x="28" y="116" width="430" height="44" rx="12"/>
+    <rect x="28" y="164" width="430" height="44" rx="12"/>
+    <rect x="28" y="212" width="430" height="44" rx="12"/>
+    <rect x="28" y="260" width="430" height="44" rx="12"/>
+  </g>
+  <text x="42" y="135" font-size="14" font-weight="600" class="mono">swiftui-design-consultation</text>
+  <text x="42" y="152" font-size="12" class="m">DESIGN.md og en Swift-pakke med designsystemet</text>
+  <text x="42" y="183" font-size="14" font-weight="600" class="mono">apple-native-review</text>
+  <text x="42" y="200" font-size="12" class="m">sjekker spec og plan mot Apples HIG, med sitater</text>
+  <text x="42" y="231" font-size="14" font-weight="600" class="mono">live-swiftui · swiftui-rag</text>
+  <text x="42" y="248" font-size="12" class="m">se visningen uten hele appen, slå opp og sjekk mot HIG</text>
+  <text x="42" y="279" font-size="14" font-weight="600" class="mono">e2e-route · verify-and-land</text>
+  <text x="42" y="296" font-size="12" class="m">UI-tester, og bygg og start akkurat denne grenen</text>
+
+  <rect x="488" y="82" width="458" height="236" rx="16" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/>
+  <text x="504" y="106" font-size="16" font-weight="600">Spor: Web og Python</text>
+  <text x="684" y="106" font-size="12" class="m">nett, Python, pipelines</text>
+  <g fill="var(--glass)" stroke="var(--line)" stroke-width="1.5">
+    <rect x="502" y="116" width="430" height="44" rx="12"/>
+    <rect x="502" y="164" width="430" height="44" rx="12"/>
+    <rect x="502" y="212" width="430" height="44" rx="12"/>
+    <rect x="502" y="260" width="430" height="44" rx="12"/>
+  </g>
+  <text x="516" y="135" font-size="14" font-weight="600" class="mono">qa · qa-only</text>
+  <text x="516" y="152" font-size="12" class="m">test og finn feil, qa retter og qa-only rapporterer</text>
+  <text x="516" y="183" font-size="14" font-weight="600" class="mono">browse · design-review</text>
+  <text x="516" y="200" font-size="12" class="m">se siden i nettleseren, og vurder utseendet</text>
+  <text x="516" y="231" font-size="14" font-weight="600" class="mono">cso</text>
+  <text x="516" y="248" font-size="12" class="m">sikkerhetsrevisjon av koden</text>
+  <text x="516" y="279" font-size="14" font-weight="600" class="mono">investigate</text>
+  <text x="516" y="296" font-size="12" class="m">finn årsaken først, så rettelsen</text>
+</svg>
