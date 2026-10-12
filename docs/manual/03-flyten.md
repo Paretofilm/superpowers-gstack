@@ -32,7 +32,7 @@ Når spec-en er ferdig og Claude har lest den selv, lager `/superpowers-gstack:h
 
 Så ber Claude deg lese planen og velge hvordan den skal kjøres. Du har to valg:
 
-- Subagent-driven: en ny underagent bygger hver oppgave, og en ny gjennomleser sjekker den før neste oppgave starter. Til slutt leser en gjennomleser hele grenen. Grundigst, men koster en ny kontekst per oppgave og per gjennomlesing.
+- Subagent-driven: en ny underagent bygger hver oppgave, og en ny gjennomleser sjekker den før neste oppgave starter. Til slutt leser en gjennomleser hele grenen. Grundigst, men koster en ny kontekst (samtalen modellen har foran seg) per oppgave og per gjennomlesing.
 - Native: Claude bygger alle oppgavene selv i denne økten. Til slutt leser én ny gjennomleser på den sterkeste modellen hele grenen. Billigst og raskest, men ingen uavhengig gjennomlesing før til slutt.
 
 Claude anbefaler ett av dem for akkurat denne planen, med en setning som begrunner det: hvor mye oppgavene avhenger av hverandres grensesnitt, hvor mange de er, og hva en feil i produksjon ville koste. Du kan følge anbefalingen eller velge det andre. Har du allerede sagt hvordan du vil ha det kjørt, spør Claude bare om planen er riktig. Valget bestemmer hvilken skill som tar over: `superpowers:subagent-driven-development` eller `superpowers:executing-plans`.

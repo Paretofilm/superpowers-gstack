@@ -19,7 +19,7 @@ Det som ligger i filer på disken, forsvinner ikke. Derfor bæres tråden av to 
 - `docs/superpowers/handoff.md` er overleveringsfilen (handoff). Den sier hva du holdt på med og hva det neste steget er. Den er ment å leses én gang og så tømmes.
 - `progress.md` i mappen `docs/superpowers/plans/` er den rullerende framdriftsfilen. Den blir stående og viser hva som er ferdig og hva som gjenstår.
 
-Du skriver overleveringsfilen med `/superpowers-gstack:context-handoff` (skillen som skriver ned hvor du er) før du skriver `/clear`. Skillen lagrer tilstanden og stopper. Den svarer med at du kan skrive `/clear`, og at Claude plukker opp tråden selv. Filen ligger i hovedmappen til prosjektet og ikke i et arbeidstre ([se kapittel 6](#k6)), fordi arbeidstreet slettes etter landing og tar filer som ikke ligger i git med seg.
+Du skriver overleveringsfilen med `/superpowers-gstack:context-handoff` (skillen som skriver ned hvor du er) før du skriver `/clear`. Skillen lagrer tilstanden og stopper. Den svarer med at du kan skrive `/clear`, og at Claude plukker opp tråden selv. Filen skal ligge i hovedmappen til prosjektet og ikke i et arbeidstre ([se kapittel 6](#k6)), fordi arbeidstreet slettes etter landing og tar filer som ikke ligger i git med seg.
 
 ### De fire tilstandene til handoff.md
 
@@ -34,7 +34,7 @@ Når en økt begynner, eller etter `/compact`, ser Claude på `handoff.md` og av
 
 Frontmatter er blokken med felt øverst i filen, mellom to linjer med `---`. `next_step` er én setning med et konkret verb, helst med fil og linje, for eksempel `Read src/auth/session.ts:45-78, decide middleware vs hook`. Står det bare «fortsett med innloggingen», er den ikke god nok.
 
-En halvskrevet overlevering tømmes aldri. Noen prosjekter bruker stien til egne, varige notater, og en automatisk lesing som tømte dem, ødela notatene. Kopien i `.handoff-last.md` gjør en feilvurdering mulig å rette opp.
+En halvskrevet overlevering tømmes aldri. Minst ett prosjekt har brukt stien til egne, varige notater, og en automatisk lesing som tømte dem, ødela notatene. Kopien i `.handoff-last.md` gjør en feilvurdering mulig å rette opp.
 
 Én unntaksregel: er det en stubb med `mode: continuous` som er brukt opp, tømmer Claude den ikke helt. Den skriver den om til bare `type: handoff` og `mode: continuous`, slik at valget overlever til neste `/compact`. Ellers ville Claude spurt om det samme igjen og igjen. Kontinuerlig overlevering betyr at Claude oppdaterer `handoff.md` etter hvert viktige delmål og foreslår `/clear` når konteksten blir tung. Etter en `/compact` spør Claude én gang om du vil ha det, og spør ikke igjen ved senere `/compact`. Kontinuerlig overlevering har ingenting med Claude Codes auto-modus for tillatelser å gjøre: den styrer bare hvor ofte filen skrives.
 
@@ -58,7 +58,7 @@ Opptaket legges i git-mappen (`.git`) som `gstack-last-session.md`, ikke i selve
 
 Er oppgaven for stor til én økt, holder du en rullerende `progress.md`. Den har fire deler: Meta (arbeidsmappe og hvordan testene kjøres), Ferdig (hver fase med commit og hva den ble verifisert med), Lærdom (fellene neste fase bør kjenne) og Gjenstår.
 
-Et ekte eksempel er `docs/superpowers/plans/progress.md` i prosjektet sing-replay, «Framdrift — mobilversjonen». Filen sier at grenen `ios-mobilversjon` har 13 commits, og at siste testkjøring ga 435 grønne tester på macOS og 417 på iOS, mot 387 og 369 i starten. Filen daterer ikke selve testkjøringen. Den nyeste datoen den nevner er 16. august 2026, da fase 3 ble levert i commiten `65774b4`. Fase 0 til 3 står som ferdige, og det som gjenstår krever en ekte telefon. Tabellen under «Ferdig» har én rad per levert del:
+Et ekte eksempel er `docs/superpowers/plans/progress.md` i prosjektet sing-replay, «Framdrift — mobilversjonen». Filen sier at grenen `ios-mobilversjon` har 13 commits, og at siste testkjøring ga 435 grønne tester på macOS og 417 på iOS, mot 387 og 369 i starten. Filen daterer ikke selve testkjøringen. Den nyeste datoen den nevner er 16. august 2026, da fase 3 ble levert i commiten `65774b4`. Fase 0 til 3 står som ferdige, og det som gjenstår krever en ekte telefon. Tabellen under «Ferdig» har én rad per levert del. Her er et utdrag på tre av radene:
 
 | Fase | Oppgave | Commit |
 |---|---|---|

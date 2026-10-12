@@ -18,7 +18,7 @@ Alle skillene under er GStacks egne, ikke pluginens. Beskrivelsene er hentet fra
 
 | Skill | Hva den gjør | Bruk den når |
 |---|---|---|
-| `/qa` | Tester og retter feil i nettleser, API, kommandolinje, jobber og webhooks (anrop andre tjenester sender til programmet ditt), og lagrer hver bekreftede rettelse som egen commit | Du vil ha «test og rett», eller en funksjon er klar til å testes |
+| `/qa` | Tester og retter feil i nettleser, API (grensesnittet programmer snakker med hverandre gjennom), kommandolinje, jobber og webhooks (anrop andre tjenester sender til programmet ditt), og lagrer hver bekreftede rettelse som egen commit | Du vil ha «test og rett», eller en funksjon er klar til å testes |
 | `/qa-only` | Samme testing, men skriver bare en rapport med steg for å gjenta feilen. Den retter ingenting | Du vil ha en feilrapport uten kodeendringer |
 | `/browse` | Styrer en ekte nettleser: åpner en side, leser den, klikker gjennom et forløp, tar skjermbilder og leser feilmeldinger fra konsollen | Du vil at Claude skal se en side slik du ser den |
 | `/design-review` | Ser etter ujevnt utseende, avstander og visuelt hierarki med en designers øye, og retter i koden med skjermbilder før og etter | Siden fungerer, men ser ikke riktig ut |

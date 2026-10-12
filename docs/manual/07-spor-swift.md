@@ -23,7 +23,7 @@ Målet er iOS 26 og macOS 26 med Liquid Glass, Apples designspråk fra og med de
 | Skill | Hva den gjør | Bruk den når |
 |---|---|---|
 | `/superpowers-gstack:swiftui-design-consultation` | Spør om produktet og hvor streng sjekken mot Apples regler skal være, viser et forslag som side, og skriver `DESIGN.md` og en Swift-pakke `DesignSystem/` først når du godkjenner | Du starter eller friske opp designsystemet i et SwiftUI-prosjekt |
-| `/superpowers-gstack:apple-native-review` | Sjekker en spec eller plan mot Apples HIG (Human Interface Guidelines, Apples offisielle designretningslinjer) | Spec eller plan med skjermbilder er ferdig, og før noe bygges |
+| `/superpowers-gstack:apple-native-review` | Sjekker en spec eller plan mot Apples HIG (Human Interface Guidelines, Apples offisielle designretningslinjer) | Spec eller plan med brukergrensesnitt er ferdig, og før noe bygges |
 | `/superpowers-gstack:quality-review` | Leter etter det som får et produkt til å kjennes billig: stille feil, manglende lasting, tomme tilstander, dårlig feilhåndtering | Spec eller plan er ferdig, før noe bygges. Den gjelder også web |
 
 Apple-native-review stiller ett spørsmål: leses appen som en Apple-app, eller som en port fra en annen plattform? Hvert funn skal sitere en HIG-side som er hentet under kjøringen. Kan siden ikke hentes, merkes funnet `(uncited)` (uten kilde), og dommen blir `PROVISIONAL` (foreløpig). Anbefalt rekkefølge på en ny spec er `/superpowers-gstack:pitfall-verification`, så quality-review, så apple-native-review, og så plan ([se kapittel 3](#k3)).

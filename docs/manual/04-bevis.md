@@ -17,20 +17,20 @@ ferdig: du vet hvilke kontroller som har kjørt, og du har sett det virke selv
 | Nivå | Hva det gjelder | Hvem leser |
 |---|---|---|
 | Trivielt | Dokumentasjon, skrivefeil, kommentarer, kun nye tester, midlertidige lagringspunkter | Claude selv, i opptil to runder |
-| Ship-worthy (verdt å sende ut) | Nytt versjonsnummer, ny linje i endringsloggen, `feat` (ny funksjon), `fix` (rettelse) eller `refactor` (omskriving) som endrer hva programmet gjør, eller endringer i det andre er avhengige av, som API-er og filformater | Claude selv, så Codex (OpenAIs modell) gjennom `/review` |
+| Ship-worthy (verdt å sende ut) | Nytt versjonsnummer, ny linje i endringsloggen, `feat` (ny funksjon), `fix` (rettelse) eller `refactor` (omskriving) som endrer hva programmet gjør, eller endringer i det andre er avhengige av, som API-er (grensesnitt programmer snakker med hverandre gjennom) og filformater | Claude selv, så Codex (OpenAIs modell) gjennom `/review` |
 | High-stakes (høy innsats) | En ship-worthy endring som i tillegg rører arkitektur, sanntid, sikkerhet, kontrakter eller migrering av data | Alle over, så et tredje modellhus |
 
 Trivielt stopper etter Claudes egen sjekk. Når Codex eller det tredje huset har kjørt, kommer en adversariell syntese (en sammenslåing som er bygget for å være uenig). Reglen er at et funn regnes som reelt helt til noen har motbevist det med en begrunnelse. Uenighet mellom modellene er selve signalet, så den glattes ikke ut.
 
 Nivået regnes ut, ikke gjettes. Skriptet `scripts/classify-change.py` leser endringen (filstier, nye linjer, størrelse) og skriver ut et gulv: det laveste nivået endringen kan få. Claude kan gå høyere hvis den mener endringen er farligere enn skriptet kan se. Den kan aldri gå lavere. Med `--assert-tier` får den et nei (utgangskode 1) hvis den prøver, og skriptet sier hvilke signaler den hoppet over. Mangler skriptet eller feiler det, regnes endringen som ship-worthy som minimum. Dette skjer uten at du blir spurt, og prisen rapporteres etter hvert kall.
 
-Kjører ikke Codex av en eller annen grunn, for eksempel fordi den ikke er logget inn, bytter `/review` stille til en Claude-underagent. Det er samme modellfamilie. Skillen leser derfor en statuslinje og skriver `lens 2 absent` i dommen, i stedet for å late som Codex var med.
+Kjører ikke Codex av en eller annen grunn, for eksempel fordi den ikke er logget inn, bytter `/review` stille til en Claude-underagent. Det er samme modellfamilie. Skillen leser derfor en statuslinje og skriver `lens 2 absent` (kontroll nummer to mangler) i dommen, i stedet for å late som Codex var med.
 
 ### Et tredje modellhus kan ikke se alt
 
 Det tredje modellhuset kjøres av `/superpowers-gstack:third-lens-review`, som du vanligvis ikke starter selv. Pitfall-verification kaller den automatisk på høy innsats. Hvilken modell den bruker, avhenger av rollen: Zhipu for arkitektur og DeepSeek for logikk, begge gjennom OpenRouter (en tjeneste som videreformidler til flere modellselskaper), og OpenAI gjennom `codex`-programmet for å motbevise Claudes egne avgjørelser.
 
-Advarsel: Zhipu- og DeepSeek-modellene i det tredje huset kjører på ikke-vestlig infrastruktur. Koden og dataene som håndterer innlogging, nøkler, helse eller økonomi skal derfor bare leses av Claude selv og Codex, og aldri sendes til det tredje huset. Et eksempel er Kvitteria, som håndterer fakturaer: selve fakturahåndteringen er økonomimateriale og hører til de to første lensene. Kildene sier at det tredje huset starter av seg selv på høy innsats, og at slikt materiale skal holdes til Claude og Codex. De sier ingenting om en bryter for dette. Ber du Claude holde seg til de to lensene for slikt materiale før du starter kontrollen, har du sagt det klart.
+Advarsel: Zhipu- og DeepSeek-modellene i det tredje huset kjører på ikke-vestlig infrastruktur. Koden og dataene som håndterer innlogging, nøkler, helse eller økonomi skal derfor bare leses av Claude selv og Codex, og aldri sendes til det tredje huset. Et eksempel er Kvitteria, som håndterer fakturaer: selve fakturahåndteringen er økonomimateriale og hører til de to første kontrollene, Claude og Codex. Kildene sier at det tredje huset starter av seg selv på høy innsats, og at slikt materiale skal holdes til Claude og Codex. De sier ingenting om en bryter for dette. Ber du Claude holde seg til de to første kontrollene for slikt materiale før du starter kontrollen, har du sagt det klart.
 
 ### Se at det virker
 

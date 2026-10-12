@@ -12,7 +12,7 @@ ferdig: du har én kommando å skrive
 
 ### Slik bruker du tabellen
 
-Finn raden som ligner mest på situasjonen din, og skriv kommandoen i midtkolonnen. Radene følger rutingreglene i `CLAUDE.md` i dette prosjektet (rutingreglene er tabellen Claude leser for å velge skill). Der en kommando starter med `/superpowers-gstack:` er den en skill fra denne pluginen. `superpowers:` er en skill fra Superpowers, og de andre er fra GStack. Vil du se hele flyten først, finnes den i [kartet](#k0).
+Finn raden som ligner mest på situasjonen din, og skriv kommandoen i midtkolonnen. De fleste radene følger rutingreglene i `CLAUDE.md` i dette prosjektet (rutingreglene er tabellen Claude leser for å velge skill). Der en kommando starter med `/superpowers-gstack:` er den en skill fra denne pluginen. `superpowers:` er en skill fra Superpowers, og de andre er fra GStack. Vil du se hele flyten først, finnes den i [kartet](#k0).
 
 | Situasjon | Kjør | Hvorfor |
 |---|---|---|

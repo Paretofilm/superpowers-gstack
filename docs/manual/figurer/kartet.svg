@@ -16,7 +16,7 @@
     <text x="560" y="134" text-anchor="middle" font-size="17" font-weight="600">🔨 Bygg</text>
     <text x="560" y="186" text-anchor="middle" font-size="12" class="m mono">subagent-driven-</text>
     <text x="560" y="202" text-anchor="middle" font-size="12" class="m mono">development</text>
-    <rect x="654" y="96" width="132" height="64" rx="16" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/>
+    <rect x="654" y="96" width="132" height="64" rx="16" fill="var(--line)"/>
     <text x="720" y="134" text-anchor="middle" font-size="17" font-weight="600">🔍 Bevis</text>
     <text x="720" y="186" text-anchor="middle" font-size="12" class="m mono">pitfall-verification</text>
     <rect x="814" y="96" width="132" height="64" rx="16" fill="var(--line)"/>

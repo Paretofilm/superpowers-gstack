@@ -14,7 +14,7 @@ ferdig: du vet hvem som ser hva, hvor arbeidet bor mens det pågår, og hvilke s
 
 En subagent er en egen Claude-instans som får én oppgave. Den arver ikke samtalen din. `superpowers:subagent-driven-development` sier det rett ut: subagenter skal aldri arve økten din, og Claude bygger selv nøyaktig det de trenger. Det holder dem på sporet, og det sparer plassen i hovedsamtalen. Prisen er at det de trenger å vite fra før, må stå i oppgaveteksten eller i en fil på disken.
 
-Derfor finnes `progress.md` ([se kapittel 5](#k5)). I et langt prosjekt er den filen det som forteller en ny instans hvor arbeidet står, uten at noen må gjenfortelle historien. Samtalen blir borte når konteksten tømmes. Filen blir.
+Derfor går kunnskapen via `progress.md` ([se kapittel 5](#k5)): hovedsamtalen holder seg slank fordi det en ny instans trenger å vite, står i filen og ikke i samtalen. Samtalen blir borte når konteksten tømmes. Filen blir.
 
 ### Modellvalg: råd, ikke tvang
 
@@ -31,7 +31,7 @@ Et arbeidstre (worktree) er en ekstra mappe med sin egen gren, hentet fra samme 
 - Hver oppgave får sitt eget arbeidstre, så du kan ha flere i gang uten å bytte gren i en mappe.
 - En gren kan bare stå i ett arbeidstre om gangen. Prøver du å sjekke den ut et annet sted, nekter git.
 - Alle mappene deler ett stash (et gjemmested for halvferdige endringer). En parallell økt som tømmer det, tar med seg dine endringer, og det blir aldri sendt til GitHub. Bruk derfor aldri `git stash`. Skal du bytte oppgave, la det halvferdige ligge der det er og åpne et nytt arbeidstre.
-- Landing er en fast-forward: `main` flyttes fremover langs grenens commits, uten en ny sammenslåings-commit. Det gjør `/superpowers-gstack:land`, som først kjører prosjektets sjekker ([se kapittel 4](#k4)).
+- I prosjekter med `Landing mode: solo` er landing en fast-forward (med `pr` brukes `/ship`): `main` flyttes fremover langs grenens commits, uten en ny sammenslåings-commit. Det gjør `/superpowers-gstack:land`, som først kjører prosjektets sjekker ([se kapittel 4](#k4)).
 - Etterpå fjerner du arbeidstreet, så grenen. Rekkefølgen er `git worktree remove <sti>`, så `git branch -d <gren>`. Snur du den, nekter git. Bruk aldri `git branch -D` for å komme rundt en nektelse: den nektelsen er sikringen mot å miste commits som ikke er landet.
 
 ### Skript som kjører av seg selv

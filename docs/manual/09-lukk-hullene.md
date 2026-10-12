@@ -23,7 +23,7 @@ Kolonnene «Hva det fanger» og «Bruk det når» er hentet fra verktøyets egen
 | `/ios-qa` | Feil i en iPhone- eller iPad-app, funnet ved at Claude trykker gjennom appen på en ekte enhet koblet til med USB | Du vil teste SwiftUI-appen på en ekte telefon eller et ekte nettbrett | 0 |
 | `/investigate` | Gjetting. Fire faser: undersøk, analyser, still en hypotese, rett. Regelen er at ingenting rettes før årsaken er funnet | Noe feiler, du får en feilmelding eller en stakk-trace (utskriften som viser hvor i koden det gikk galt), eller noe som virket i går ikke virker nå | 3 |
 | `/superpowers-gstack:quality-review` | Det som får et produkt til å kjennes billig: stille feil, manglende lasting og tomme tilstander, dårlig feilhåndtering | En spec eller plan er ferdig, før noe bygges ([se kapittel 7](#k7)) | 1 |
-| `/superpowers-gstack:spec-drift` | At en plan ikke lenger stemmer med koden. Gir en rapport, et tall-sammendrag og en utgangskode, og endrer aldri kode | Du vil vite om en plan fortsatt stemmer på en gren som ikke sendes ut med `/ship` | 0 |
+| `/superpowers-gstack:spec-drift` | At en plan ikke lenger stemmer med koden. Gir en rapport, en JSON-linje (maskinlesbart sammendrag) og en utgangskode, og endrer aldri kode | Du vil vite om en plan fortsatt stemmer på en gren som ikke sendes ut med `/ship` | 0 |
 | `/retro` | Hva som ble levert i uka, regnet ut fra commit-historikken, med trend over tid | Slutten av en uke eller en periode | 0 |
 | `/health` | Kodens tilstand. Kjører prosjektets egne verktøy for typesjekk, lint (verktøy som finner slurv i koden) og tester, og gir en samlet poengsum fra 0 til 10 som følges over tid | Du vil ha et tall på hvor sunn koden er | 0 |
 | `/document-release` | At dokumentasjonen ikke følger med det som ble sendt ut: leser dokumentene mot endringen, oppdaterer README og CLAUDE.md og pusser endringsloggen | Etter en utsending, og før en pull request slås sammen | 0 |
@@ -43,7 +43,7 @@ Du trenger ikke ta alle. Velg ett som passer det du holder på med nå. Bygger d
 Vil du vite om det ble en vane, eller om tallene over fortsatt stemmer, skriv `/superpowers-gstack:workflow-metrics` i Claude Code. Du kan legge til et prosjektnavn og en dato for en endring, for eksempel `/superpowers-gstack:workflow-metrics sing-replay 2026-10-01`. Skillen kjører et skript som leser transkriptene på disken og teller én gang per kall til modellen. Den rapporterer disse målingene:
 
 - `asks`: hvor mange strukturerte spørsmål Claude stilte, hvor mange du svarte på med det anbefalte alternativet, og hvor lenge Claude jobbet mellom meldingene dine.
-- `tokens`: antall kall til modellen i hovedsamtalen og hos underagenter, og hvor mye som ble skrevet ut, og hvor mye kontekst som ble gjenbrukt og skrevet.
+- `tokens` (små tekstbiter som modellen regner i): antall kall til modellen i hovedsamtalen og hos underagenter, og hvor mye som ble skrevet ut, og hvor mye kontekst som ble gjenbrukt og skrevet.
 - `overhead`: hvor mye av konteksten som er grunnlast, og hvor mye som brukes over 150 000, 200 000, 300 000 og 500 000 tokens.
 - `triggers`: hvilke bygg og testkjøringer som skjedde, hvor lenge de tok og hvem som ba om dem.
 - `skills`: hvilke skills som er listet hver runde, og hvilke som aldri ble brukt. Det er denne som viser om et verktøy fra tabellen er blitt tatt i bruk.
