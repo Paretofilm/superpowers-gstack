@@ -145,6 +145,21 @@ def test_figure_is_inlined_and_validated(tmp_path):
         body("![[e.svg]]\n", tmp_path)
 
 
+def test_hex_colour_guard_covers_every_attribute_form(tmp_path):
+    (tmp_path / "f.svg").write_text(FIG.format(id="m").replace('fill="var(--cyan-s)"', "fill='#22d3ee'"))
+    with pytest.raises(bm.ManualError, match="hex colour"):
+        body("![[f.svg]]\n", tmp_path)
+    (tmp_path / "g.svg").write_text(FIG.format(id="m").replace('fill="var(--cyan-s)"', 'style="background:#fff"'))
+    with pytest.raises(bm.ManualError, match="hex colour"):
+        body("![[g.svg]]\n", tmp_path)
+
+
+def test_a_marker_reference_is_not_a_hex_colour(tmp_path):
+    (tmp_path / "h.svg").write_text(FIG.format(id="abc").replace('rx="8"', 'rx="8" marker-end="url(#abc)"'))
+    html, _ = body("![[h.svg]]\n", tmp_path)
+    assert 'id="abc"' in html and 'url(#abc)' in html
+
+
 # ── chapters ─────────────────────────────────────────────────────────────────
 
 def test_parse_chapter(tmp_path):

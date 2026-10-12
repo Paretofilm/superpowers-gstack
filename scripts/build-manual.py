@@ -29,7 +29,7 @@ EXPLAINER_CSS = REPO / "skills" / "htmlify" / "styles" / "explainer.css"
 ACCENTS = ("cyan", "violet", "magenta", "amber", "emerald")
 REQUIRED = ("nummer", "tag", "tittel", "aksent", "bruk", "ferdig")
 FIGURE_LINE = re.compile(r"^!\[\[([A-Za-z0-9_.-]+\.svg)\]\]\s*$")
-HEX_COLOUR = re.compile(r'(?:fill|stroke|stop-color|color)\s*[=:]\s*"?#[0-9a-fA-F]{3,8}')
+HEX_COLOUR = re.compile(r"(?<!url\()(?<![\w&])#[0-9a-fA-F]{3,8}\b")
 SVG_ID = re.compile(r'\bid="([^"]+)"')
 
 
