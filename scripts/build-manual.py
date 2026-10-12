@@ -104,6 +104,9 @@ def load_figure(figures: Path, name: str, where: str) -> str:
         raise ManualError(f'{name}: the <svg> needs role="img" and an aria-label')
     if "viewBox=" not in opening:
         raise ManualError(f"{name}: the <svg> needs a viewBox")
+    for element in ("style", "script"):
+        if re.search(rf"<{element}\b", svg, re.I):
+            raise ManualError(f"{name}: a <{element}> element in a figure; it would act on the whole page. Use the tokens in attributes")
     if HEX_COLOUR.search(svg):
         raise ManualError(f"{name}: a hex colour in the drawing; use the tokens (var(--cyan), …) so the dark theme works")
     return svg
@@ -178,16 +181,20 @@ def render_body(body: str, figures: Path, where: str) -> tuple[str, int]:
             keys += 1
             out.append(f'<div class="key">{inline(" ".join(quote))}</div>')
             continue
-        elif line.startswith("- ") or re.match(r"\d+\. ", line):
+        elif line.startswith("- ") or re.match(r"\d+\. ", line) and (not para or line.startswith("1. ")):
             flush()
             ordered = not line.startswith("- ")
             pat = r"\d+\. " if ordered else r"- "
+            start = int(line.split(".", 1)[0]) if ordered else 1
             items: list[str] = []
             while i < len(lines) and re.match(pat, lines[i]):
                 items.append(re.sub(pat, "", lines[i], count=1))
                 i += 1
+            if i < len(lines) and lines[i][:1] in (" ", "\t") and lines[i].strip():
+                raise ManualError(f"{where}: list items are one line each; {lines[i].strip()[:40]!r} continues the item above")
             tag = "ol" if ordered else "ul"
-            out.append(f"<{tag}>" + "".join(f"<li>{inline(x)}</li>" for x in items) + f"</{tag}>")
+            attr = f' start="{start}"' if start != 1 else ""
+            out.append(f"<{tag}{attr}>" + "".join(f"<li>{inline(x)}</li>" for x in items) + f"</{tag}>")
             continue
         elif not line.strip():
             flush()

@@ -96,6 +96,41 @@ def test_paragraphs_lists_and_headings():
     assert keys == 0
 
 
+def test_a_wrapped_date_does_not_become_a_list():
+    html, _ = body("Tallet ble målt\n10. oktober 2026 på seks prosjekter.\n")
+    assert "<ol" not in html
+    assert "<p>Tallet ble målt 10. oktober 2026 på seks prosjekter.</p>" in html
+    # a bullet may still interrupt a paragraph, and 1. may start a list after a blank line
+    html, _ = body("Tekst\n- punkt\n")
+    assert "<p>Tekst</p>\n<ul><li>punkt</li></ul>" in html
+
+
+def test_an_ordered_list_that_starts_above_one_keeps_its_number():
+    html, _ = body("3. tre\n4. fire\n")
+    assert '<ol start="3"><li>tre</li><li>fire</li></ol>' in html
+    html, _ = body("1. en\n2. to\n")
+    assert "<ol><li>en</li><li>to</li></ol>" in html
+
+
+def test_an_indented_continuation_after_a_list_item_is_an_error():
+    with pytest.raises(bm.ManualError, match="one line"):
+        body("- ett\n  fortsetter her\n- to\n")
+    with pytest.raises(bm.ManualError, match="test.md"):
+        body("1. ett\n   fortsetter her\n")
+
+
+def test_a_style_or_script_element_in_a_figure_is_refused(tmp_path):
+    (tmp_path / "s.svg").write_text(FIG.format(id="m").replace("<defs>", "<style>text{fill:red}</style><defs>"))
+    with pytest.raises(bm.ManualError, match="<style"):
+        body("![[s.svg]]\n", tmp_path)
+
+
+def test_a_script_element_in_a_figure_is_refused(tmp_path):
+    (tmp_path / "j.svg").write_text(FIG.format(id="m").replace("<defs>", "<script>alert(1)</script><defs>"))
+    with pytest.raises(bm.ManualError, match="<script"):
+        body("![[j.svg]]\n", tmp_path)
+
+
 def test_code_fence_is_escaped_and_kept_verbatim():
     html, _ = body("```\nwt switch --create feat/x <ikke html>\n```")
     assert "<pre><code>wt switch --create feat/x &lt;ikke html&gt;</code></pre>" in html
