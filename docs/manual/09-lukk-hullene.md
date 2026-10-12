@@ -14,14 +14,14 @@ Dette kapittelet er et råd, ikke en beskrivelse av hvordan du jobber. Verktøye
 
 ### Verktøyene
 
-Kolonnene «Hva det fanger» og «Bruk det når» er hentet fra verktøyets egen skill-fil (skill er en ferdig arbeidsmåte Claude laster inn). Hvor et verktøy ikke var med i målingen, står det.
+Kolonnene «Hva det fanger» og «Bruk det når» er hentet fra verktøyets egen skill-fil (skill er en ferdig arbeidsmåte Claude laster inn). Tallene er antall kall i målingen: Skill-verktøyet og slash-kommandoer du skrev selv.
 
 | Verktøy | Hva det fanger | Bruk det når | Brukt (målt 10. okt) |
 |---|---|---|---|
 | `superpowers:verification-before-completion` | At Claude sier «ferdig», «rettet» eller «består» uten at kommandoen som beviser det er kjørt og utskriften lest | Rett før noe kalles ferdig, rettet eller bestått, og før commit eller pull request | 0 |
 | `/qa` | Feil i nettleser, API, kommandolinje, jobber og webhooks (anrop andre tjenester sender til programmet). Hver bekreftede rettelse blir en egen commit | Du sier at en funksjon er klar til å testes, eller vil ha «test og rett» | 0 |
-| `/ios-qa` | Feil i en iPhone- eller iPad-app, funnet ved at Claude trykker gjennom appen på en ekte enhet koblet til med USB | Du vil teste SwiftUI-appen på en ekte telefon eller et ekte nettbrett | ikke med i målingen |
-| `/investigate` | Gjetting. Fire faser: undersøk, analyser, still en hypotese, rett. Regelen er at ingenting rettes før årsaken er funnet | Noe feiler, du får en feilmelding eller en stakk-trace (utskriften som viser hvor i koden det gikk galt), eller noe som virket i går ikke virker nå | ikke med i målingen |
+| `/ios-qa` | Feil i en iPhone- eller iPad-app, funnet ved at Claude trykker gjennom appen på en ekte enhet koblet til med USB | Du vil teste SwiftUI-appen på en ekte telefon eller et ekte nettbrett | 0 |
+| `/investigate` | Gjetting. Fire faser: undersøk, analyser, still en hypotese, rett. Regelen er at ingenting rettes før årsaken er funnet | Noe feiler, du får en feilmelding eller en stakk-trace (utskriften som viser hvor i koden det gikk galt), eller noe som virket i går ikke virker nå | 3 |
 | `/superpowers-gstack:quality-review` | Det som får et produkt til å kjennes billig: stille feil, manglende lasting og tomme tilstander, dårlig feilhåndtering | En spec eller plan er ferdig, før noe bygges ([se kapittel 7](#k7)) | 1 |
 | `/superpowers-gstack:spec-drift` | At en plan ikke lenger stemmer med koden. Gir en rapport, et tall-sammendrag og en utgangskode, og endrer aldri kode | Du vil vite om en plan fortsatt stemmer på en gren som ikke sendes ut med `/ship` | 0 |
 | `/retro` | Hva som ble levert i uka, regnet ut fra commit-historikken, med trend over tid | Slutten av en uke eller en periode | 0 |
@@ -34,7 +34,7 @@ Til sammenligning ble disse brukt mest i samme måling: `/superpowers-gstack:pit
 
 ### Hvor tallene peker
 
-Tallene viser et mønster. Kontrollene som leser koden og planen, brukes ofte: feller-sjekken, det tredje modellhuset og `/review`. Verktøyene som kjører programmet eller ser på resultatet, brukes lite eller aldri: `/qa`, `/ios-qa` (som ikke var med i målingen, men som er det samme slaget), `/health` og `superpowers:verification-before-completion`. Det passer med [kapittel 4](#k4): tester sier at ingenting annet gikk i stykker, og bare en kjøring du har sett sier at rettelsen er rettet.
+Tallene viser et mønster. Kontrollene som leser koden og planen, brukes ofte: feller-sjekken, det tredje modellhuset og `/review`. Verktøyene som kjører programmet eller ser på resultatet, brukes lite eller aldri: `/qa`, `/ios-qa`, `/health` og `superpowers:verification-before-completion`. Det passer med [kapittel 4](#k4): tester sier at ingenting annet gikk i stykker, og bare en kjøring du har sett sier at rettelsen er rettet.
 
 Du trenger ikke ta alle. Velg ett som passer det du holder på med nå. Bygger du en nettside eller et Python-program ([se kapittel 8](#k8)), prøv `/qa` neste gang en funksjon er klar. Bygger du en Apple-app, prøv `/superpowers-gstack:e2e-scaffold`.
 
