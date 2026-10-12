@@ -320,13 +320,13 @@ Something went wrong?  → /superpowers:diagnosing-superpowers
 | `/make-pdf` | Markdown to publication-quality PDFs |
 | `/learn` | Save cross-session learnings |
 | `/setup-gbrain` | Onboard cross-session memory (gbrain) |
-| `/codex` | OpenAI Codex CLI second opinion; defaults to GPT-6 Astra (override with `GSTACK_CODEX_MODEL`) |
+| `/codex` | OpenAI Codex CLI second opinion; defaults to GPT-6 Astra (override with `GSTACK_CODEX_MODEL`); requires `codex_reviews` consent — set once with `gstack-config set codex_reviews enabled` |
 
 ### Superpowers Commands
 
 | Command | When to Use |
 |---------|------------|
-| `/superpowers:brainstorming` | Refining technical approach; finds out why you want the thing before proposing features |
+| `/superpowers:brainstorming` | Refining technical approach; draws out what you want with open questions before proposing anything — sizes the work after understanding what you want |
 | `/superpowers:writing-plans` | Creating TDD task breakdown; saved plan shown for review before anything runs |
 | `/superpowers:subagent-driven-development` | Executing with subagents + TDD |
 | `/superpowers:executing-plans` | Inline execution (small projects); runs the whole plan, then one review at the end |
