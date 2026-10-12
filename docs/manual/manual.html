@@ -144,7 +144,7 @@ ol.toc li{margin:6px 0}
 
 <section class="glass" id="innhold">
   <span class="tag t-violet">Innhold</span>
-  <ol class="toc"><li><a href="#k0"><b>0</b> Hele flyten på én side</a></li></ol>
+  <ol class="toc"><li><a href="#k0"><b>0</b> Hele flyten på én side</a></li><li><a href="#k1"><b>1</b> Start fra en tom mappe</a></li><li><a href="#k2"><b>2</b> Hva kjører jeg nå?</a></li></ol>
 </section>
 
 <section class="glass" id="k0">
@@ -216,6 +216,89 @@ ol.toc li{margin:6px 0}
 <h3>Snarveier</h3>
 <ul><li><code>/superpowers-gstack:vibe</code> bygger én funksjon fra start til landing med én runde spørsmål, låste akseptansetester som eneste sjekkpunkt og en ny underagent per fase.</li><li><code>/superpowers-gstack:autoimplement</code> kjører en ferdig plan med flere faser: én underagent per fase, gjennomgang og feller-sjekk mellom hver fase, og stopp når den finner noe du må ta stilling til.</li></ul>
 <div class="key">💡 Du sier ja tre steder: designet, planen og når du har sett at det virker. Alt annet gjør Claude.</div>
+</section>
+
+<section class="glass" id="k1">
+  <span class="tag t-cyan">Kom i gang</span>
+  <h2>1&nbsp; Start fra en tom mappe</h2>
+  <div class="grid g2 bruk">
+    <div class="chip"><span class="ic">🎯</span><div><b>Bruk denne når</b><span>du har en tom mappe og vil til første endring på hovedgrenen</span></div></div>
+    <div class="chip"><span class="ic">🏁</span><div><b>Du er ferdig når</b><span>den første endringen ligger på main og er sendt til GitHub</span></div></div>
+  </div>
+<h3>Før du begynner</h3>
+<p>Du trenger Claude Code, de to rammeverkene Superpowers og GStack og denne pluginen. Installasjonen står i README.md under «Kickstart». Du trenger også <code>gh</code> (GitHubs kommandolinjeverktøy, logget inn med <code>gh auth login</code>) og <code>wt</code> (worktrunk, verktøyet som lager og rydder arbeidstrær). Sjekk begge med <code>gh auth status</code> og <code>wt --version</code>.</p>
+<h3>Fra tom mappe til første landing</h3>
+<p>Hver kommando under er komplett og kan limes inn. Navnet <code>min-app</code> kan du bytte ut.</p>
+<ol><li>Lag mappen med <code>mkdir min-app</code>.</li><li>Gå inn i den med <code>cd min-app</code>.</li><li>Gjør den til et git-prosjekt med <code>git init -b main</code>. Grenen heter main (grenen alt det ferdige samles på).</li><li>Start Claude Code i mappen med <code>claude</code>.</li><li>Skriv <code>/superpowers-gstack:adapt</code> i Claude Code. Skillen (en ferdig arbeidsmåte Claude laster inn) setter opp prosjektet og stopper tre ganger for å spørre deg.</li><li>Første stopp: i en tom mappe spør adapt om prosjekttype, testverktøy, hvor det skal kjøre ut, om det har nettleser-grensesnitt, sikkerhetshensyn og plattform for en Apple-app. Den oppsummerer og spør «Is this correct?»</li><li>Andre stopp: adapt viser hvilke skills den velger og en følsomhetsgrad for prosjektet, og spør «Does this look right?» Svar ja, eller si hva som skal endres.</li><li>Underveis spør adapt om arbeidsmåte: vibe (én spørsmålsrunde, så bygger Claude ferdig) eller classic (godkjenning ved hver port). Kapittelet følger classic.</li><li>Adapt spør også om filer utenfor git, og hvor forklaringssiden etter hver spec og plan skal ligge: lokal fil eller Artifact-side på claude.ai.</li><li>Tredje stopp: adapt viser hva den vil endre og spør «Shall I proceed with these changes?» Svar ja. Den skriver CLAUDE.md og lager mappene <code>docs/superpowers/specs/</code> og <code>plans/</code>.</li><li>La Claude Code stå, og åpne et vanlig terminalvindu i samme mappe (<code>min-app</code>) for de neste fire kommandoene.</li><li>Legg til landingsvalget med <code>printf &#x27;\n## Prosjektvalg\n\nLanding mode: solo\n&#x27; &gt;&gt; CLAUDE.md</code>. Solo betyr at ferdig arbeid lander rett på main etter lokale sjekker, uten pull request (en forespørsel om gjennomgang på GitHub). Velger du gjennomgang, bruk <code>pr</code> og senere <code>/ship</code>.</li><li>Lagre oppsettet med <code>git add CLAUDE.md docs .gstack</code>.</li><li>Lag det første commit-et (et lagret punkt i historikken) med <code>git commit -m &quot;chore: adapt&quot;</code>.</li><li>Lag fjernlageret på GitHub og send det opp med <code>gh repo create min-app --private --source=. --push</code>. Flaggene betyr: privat, bruk denne mappen, send commit-ene.</li><li>Gå tilbake til Claude Code-vinduet.</li><li>Beskriv den første funksjonen i én setning, for eksempel «lag en side som viser dagens dato».</li><li>Claude starter <code>superpowers:brainstorming</code>. En tom mappe har ingen eksisterende flyt, så Claude behandler det som stor oppgave: spørsmål ett om gangen, to eller tre tilnærminger, design i deler.</li><li>Ja nummer 1: du godkjenner designet. Claude skriver en spesifikasjon (spec) i <code>docs/superpowers/specs/</code>, og du leser og godkjenner den.</li><li>Ja nummer 2: Claude skriver en plan med små oppgaver. Du leser den og velger hvordan den kjøres.</li><li>Claude bygger i et eget arbeidstre (worktree, en ekstra mappe med sin egen gren) og committer underveis. Du gjør ingenting.</li><li>Ja nummer 3: du ser at det virker. Er det en app, bygger og starter <code>/superpowers-gstack:verify-and-land</code> akkurat denne grenen, og ditt ja lander den.</li><li>Vil du lande direkte, skriv <code>/superpowers-gstack:land</code> i arbeidstreet. Skillen kjører prosjektets sjekker, flytter main fremover og sender til GitHub.</li><li>Første gang mangler prosjektet en <code>pre-merge</code>-sperre (sjekkene som må være grønne før noe lander, i <code>.config/wt.toml</code>). Land stopper da, og Claude foreslår en som kjører de samme kommandoene som testene dine. Du godkjenner forslaget.</li><li>Så må kontrollene godkjennes en gang: <code>wt config approvals add</code> må kjøres i et ekte terminalvindu, for den spør deg om å si ja. Land skriver ut den nøyaktige kommandoen med riktig sti. Har du Calyx (terminalprogrammet Claude kan åpne faner i), kan Claude åpne en fane der du svarer selv.</li></ol>
+<h3>Hva CLAUDE.md inneholder etter adapt</h3>
+<p>CLAUDE.md er prosjektets husregler til Claude. Adapt legger inn rutingstabellen (hvilken skill som kjøres når), regler for commit og push, flerlinse-gjennomgang (flere modeller leser det ferdige), gjenbruk av kode, at planen skal følge koden, overlevering mellom økter og arbeidstrær med solo-landing. Har du valgt vibe, kommer en egen vibe-kontrakt. Alt står i seksjoner med en merkelapp som adapt eier. Dine egne valg skriver du i egne seksjoner, som <code>## Prosjektvalg</code> over, så skriver ikke neste adapt over dem.</p>
+<h3>Hvis noe stopper</h3>
+<p>Land forklarer hvert stopp med en kode. De tre du oftest treffer første gang:</p>
+<div class="scroll"><table><thead><tr><th>Kode</th><th>Hva det betyr</th><th>Hva du gjør</th></tr></thead><tbody><tr><td>2</td><td>Linjen <code>Landing mode:</code> mangler, eller sier <code>pr</code></td><td>Mangler den, spør Claude deg og skriver den på main, som i trinn 12. Sier den <code>pr</code>, bruk <code>/ship</code></td></tr><tr><td>9</td><td>Prosjektet har ingen <code>pre-merge</code>-sperre i <code>.config/wt.toml</code></td><td>La Claude foreslå en som kjører de samme kommandoene som CI (automatiske tester på GitHub), og godkjenn den</td></tr><tr><td>3</td><td>Kontrollene er ikke godkjent ennå</td><td>Kjør <code>wt config approvals add</code> i et ekte terminalvindu, svar ja der, og kjør land på nytt</td></tr></tbody></table></div>
+<p>Finnes ingen sperre, lander ingenting. Kode 6 betyr at en sjekk feilet: rett feilen og land på nytt, aldri hopp over sjekken.</p>
+<div class="key">💡 Land lander bare når prosjektet selv har sagt <code>Landing mode: solo</code> på main og har en <code>pre-merge</code>-sperre. Det er sjekkene som erstatter gjennomgangen, så de hoppes aldri over.</div>
+</section>
+
+<section class="glass" id="k2">
+  <span class="tag t-violet">Beslutning</span>
+  <h2>2&nbsp; Hva kjører jeg nå?</h2>
+  <div class="grid g2 bruk">
+    <div class="chip"><span class="ic">🎯</span><div><b>Bruk denne når</b><span>du vet hvor du er, men ikke hvilken kommando som passer</span></div></div>
+    <div class="chip"><span class="ic">🏁</span><div><b>Du er ferdig når</b><span>du har én kommando å skrive</span></div></div>
+  </div>
+<div class="scroll"><svg viewBox="0 0 960 360" role="img" aria-label="Beslutningstre for hva du kjører nå: fra spørsmålet Hvor er du går fem grener. Noe er ødelagt gir investigate, jeg har en idé gir brainstorming, spec eller plan er skrevet gir pitfall-verification, jeg tror det er ferdig gir verify-and-land eller land, og konteksten er full gir context-handoff og deretter clear">
+  <defs>
+    <marker id="n-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+  </defs>
+  <rect x="14" y="154" width="150" height="52" rx="16" fill="var(--violet-s)" stroke="var(--violet)" stroke-width="1.5"/>
+  <text x="89" y="186" text-anchor="middle" font-size="17" font-weight="600">Hvor er du?</text>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M166,180 C206,180 206,46 248,46" marker-end="url(#n-ar)"/>
+    <path d="M166,180 C206,180 206,114 248,114" marker-end="url(#n-ar)"/>
+    <path d="M166,180 L248,180" marker-end="url(#n-ar)"/>
+    <path d="M166,180 C206,180 206,248 248,248" marker-end="url(#n-ar)"/>
+    <path d="M166,180 C206,180 206,316 248,316" marker-end="url(#n-ar)"/>
+    <path d="M522,46 L578,46" marker-end="url(#n-ar)"/>
+    <path d="M522,114 L578,114" marker-end="url(#n-ar)"/>
+    <path d="M522,180 L578,180" marker-end="url(#n-ar)"/>
+    <path d="M522,248 L578,248" marker-end="url(#n-ar)"/>
+    <path d="M522,316 L578,316" marker-end="url(#n-ar)"/>
+  </g>
+  <g fill="var(--line)">
+    <rect x="250" y="20" width="270" height="52" rx="14"/>
+    <rect x="250" y="88" width="270" height="52" rx="14"/>
+    <rect x="250" y="154" width="270" height="52" rx="14"/>
+    <rect x="250" y="222" width="270" height="52" rx="14"/>
+    <rect x="250" y="290" width="270" height="52" rx="14"/>
+  </g>
+  <g fill="var(--violet-s)" stroke="var(--violet)" stroke-width="1.5">
+    <rect x="580" y="20" width="366" height="52" rx="14"/>
+    <rect x="580" y="88" width="366" height="52" rx="14"/>
+    <rect x="580" y="154" width="366" height="52" rx="14"/>
+    <rect x="580" y="222" width="366" height="52" rx="14"/>
+    <rect x="580" y="290" width="366" height="52" rx="14"/>
+  </g>
+  <g text-anchor="middle" font-size="15" font-weight="600">
+    <text x="385" y="52">Noe er ødelagt</text>
+    <text x="385" y="120">Jeg har en idé</text>
+    <text x="385" y="186">Spec eller plan er skrevet</text>
+    <text x="385" y="254">Jeg tror det er ferdig</text>
+    <text x="385" y="322">Konteksten er full</text>
+  </g>
+  <g text-anchor="middle" font-size="13" class="mono">
+    <text x="763" y="51">/investigate</text>
+    <text x="763" y="119">superpowers:brainstorming</text>
+    <text x="763" y="185">/superpowers-gstack:pitfall-verification</text>
+    <text x="763" y="244">/superpowers-gstack:verify-and-land</text>
+    <text x="763" y="262">eller /superpowers-gstack:land</text>
+    <text x="763" y="312">/superpowers-gstack:context-handoff</text>
+    <text x="763" y="330">så /clear</text>
+  </g>
+</svg></div>
+<h3>Slik bruker du tabellen</h3>
+<p>Finn raden som ligner mest på situasjonen din, og skriv kommandoen i midtkolonnen. Radene følger rutingreglene i <code>CLAUDE.md</code> i dette prosjektet (rutingreglene er tabellen Claude leser for å velge skill). Der en kommando starter med <code>/superpowers-gstack:</code> er den en skill fra denne pluginen. <code>superpowers:</code> er en skill fra Superpowers, og de andre er fra GStack. Vil du se hele flyten først, finnes den i <a href="#k0">kartet</a>.</p>
+<div class="scroll"><table><thead><tr><th>Situasjon</th><th>Kjør</th><th>Hvorfor</th></tr></thead><tbody><tr><td>Feil, krasj eller «hvorfor virker ikke dette»</td><td><code>/investigate</code></td><td>Finner årsaken før noe rettes</td></tr><tr><td>Ny idé du vil bygge, i et prosjekt med arbeidsmåten classic</td><td><code>superpowers:brainstorming</code></td><td>Claude stiller spørsmål og lager et design før noe bygges</td></tr><tr><td>Ny funksjon i et prosjekt med arbeidsmåten vibe</td><td><code>/superpowers-gstack:vibe</code></td><td>Én spørsmålsrunde, så bygger Claude ferdig og lander</td></tr><tr><td>Du lurer på om ideen er verdt å bygge</td><td><code>/superpowers-gstack:office-hours-track-aware</code></td><td>Pakker inn GStacks <code>/office-hours</code> og legger designdokumentet i <code>docs/</code></td></tr><tr><td>En spec (spesifikasjon) er nettopp skrevet</td><td><code>/superpowers-gstack:pitfall-verification</code></td><td>Leter etter feller i spesifikasjonen</td></tr><tr><td>En plan er nettopp skrevet</td><td><code>/superpowers-gstack:quality-review</code></td><td>Spør om resultatet vil føles bra, i tillegg til om det virker</td></tr><tr><td>Spec eller plan for en Apple-app</td><td><code>/superpowers-gstack:apple-native-review</code></td><td>Sjekker mot Apples designretningslinjer (HIG) før noe bygges</td></tr><tr><td>Du vil se en spec eller plan som figurer</td><td><code>/superpowers-gstack:htmlify</code></td><td>Lager en forklaringsside med så lite tekst som mulig</td></tr><tr><td>Planen er ferdig og skal bygges uten at du følger med</td><td><code>/superpowers-gstack:autoimplement</code></td><td>Én underagent per fase, med gjennomgang mellom fasene</td></tr><tr><td>Plan og kode kan ha gått fra hverandre</td><td><code>/superpowers-gstack:spec-drift</code></td><td>Sammenligner planen med koden og rapporterer, uten å endre noe</td></tr><tr><td>Du har rettet noe, men ser det ikke i appen</td><td><code>/superpowers-gstack:verify-and-land</code></td><td>Bygger og starter akkurat denne grenen, så du ser om rettelsen er der</td></tr><tr><td>Ferdig arbeid i et prosjekt uten gjennomgang</td><td><code>/superpowers-gstack:land</code></td><td>Kjører prosjektets sjekker og lander på main</td></tr><tr><td>Ferdig arbeid i et prosjekt med gjennomgang</td><td><code>/ship</code></td><td>Tester, gjennomgang og pull request</td></tr><tr><td>Du vil teste en Swift-app gjennom grensesnittet</td><td><code>/superpowers-gstack:e2e-route</code></td><td>Velger riktig kjøremåte for ende-til-ende-test</td></tr><tr><td>Konteksten er lang, eller du skal skrive <code>/clear</code></td><td><code>/superpowers-gstack:context-handoff</code></td><td>Skriver ned hvor du er, så neste økt kan fortsette</td></tr><tr><td>Du kommer tilbake til et prosjekt</td><td><code>/context-restore</code></td><td>Henter tilbake det du lagret med <code>/context-save</code>. Har prosjektet en overleveringsfil, viser startbanneret hvor du slapp</td></tr><tr><td>Sikkerhetskritisk kode: innlogging, nøkler, betaling</td><td><code>/cso</code></td><td>Sikkerhetsrevisjon av koden</td></tr></tbody></table></div>
+<div class="key">💡 Velg raden for der du er nå, ikke den du håper å komme til. Hver rad er ett steg på kartet, og Claude tar resten av steget selv.</div>
 </section>
 
 <footer>Bygget fra <code>docs/manual/</code> med <code>python3 scripts/build-manual.py</code></footer>

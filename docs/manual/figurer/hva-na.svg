@@ -1,0 +1,49 @@
+<svg viewBox="0 0 960 360" role="img" aria-label="Beslutningstre for hva du kjører nå: fra spørsmålet Hvor er du går fem grener. Noe er ødelagt gir investigate, jeg har en idé gir brainstorming, spec eller plan er skrevet gir pitfall-verification, jeg tror det er ferdig gir verify-and-land eller land, og konteksten er full gir context-handoff og deretter clear">
+  <defs>
+    <marker id="n-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+  </defs>
+  <rect x="14" y="154" width="150" height="52" rx="16" fill="var(--violet-s)" stroke="var(--violet)" stroke-width="1.5"/>
+  <text x="89" y="186" text-anchor="middle" font-size="17" font-weight="600">Hvor er du?</text>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M166,180 C206,180 206,46 248,46" marker-end="url(#n-ar)"/>
+    <path d="M166,180 C206,180 206,114 248,114" marker-end="url(#n-ar)"/>
+    <path d="M166,180 L248,180" marker-end="url(#n-ar)"/>
+    <path d="M166,180 C206,180 206,248 248,248" marker-end="url(#n-ar)"/>
+    <path d="M166,180 C206,180 206,316 248,316" marker-end="url(#n-ar)"/>
+    <path d="M522,46 L578,46" marker-end="url(#n-ar)"/>
+    <path d="M522,114 L578,114" marker-end="url(#n-ar)"/>
+    <path d="M522,180 L578,180" marker-end="url(#n-ar)"/>
+    <path d="M522,248 L578,248" marker-end="url(#n-ar)"/>
+    <path d="M522,316 L578,316" marker-end="url(#n-ar)"/>
+  </g>
+  <g fill="var(--line)">
+    <rect x="250" y="20" width="270" height="52" rx="14"/>
+    <rect x="250" y="88" width="270" height="52" rx="14"/>
+    <rect x="250" y="154" width="270" height="52" rx="14"/>
+    <rect x="250" y="222" width="270" height="52" rx="14"/>
+    <rect x="250" y="290" width="270" height="52" rx="14"/>
+  </g>
+  <g fill="var(--violet-s)" stroke="var(--violet)" stroke-width="1.5">
+    <rect x="580" y="20" width="366" height="52" rx="14"/>
+    <rect x="580" y="88" width="366" height="52" rx="14"/>
+    <rect x="580" y="154" width="366" height="52" rx="14"/>
+    <rect x="580" y="222" width="366" height="52" rx="14"/>
+    <rect x="580" y="290" width="366" height="52" rx="14"/>
+  </g>
+  <g text-anchor="middle" font-size="15" font-weight="600">
+    <text x="385" y="52">Noe er ødelagt</text>
+    <text x="385" y="120">Jeg har en idé</text>
+    <text x="385" y="186">Spec eller plan er skrevet</text>
+    <text x="385" y="254">Jeg tror det er ferdig</text>
+    <text x="385" y="322">Konteksten er full</text>
+  </g>
+  <g text-anchor="middle" font-size="13" class="mono">
+    <text x="763" y="51">/investigate</text>
+    <text x="763" y="119">superpowers:brainstorming</text>
+    <text x="763" y="185">/superpowers-gstack:pitfall-verification</text>
+    <text x="763" y="244">/superpowers-gstack:verify-and-land</text>
+    <text x="763" y="262">eller /superpowers-gstack:land</text>
+    <text x="763" y="312">/superpowers-gstack:context-handoff</text>
+    <text x="763" y="330">så /clear</text>
+  </g>
+</svg>
