@@ -12,5 +12,15 @@
 .glass th,.glass td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
 .glass th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .bruk{margin:0 0 8px}
-ol.toc{columns:2 280px;column-gap:28px;padding-left:22px;margin:8px 0 0}
+ol.toc{list-style:none;padding:0;margin:8px 0 0}
 ol.toc li{margin:6px 0}
+ol.toc a{display:block;padding:4px 6px;border-radius:8px;text-decoration:none}
+ol.toc a:hover{background:var(--line)}
+.layout{display:grid;grid-template-columns:minmax(0,1fr);gap:0 24px;margin-top:22px}
+.layout .glass{margin-top:0;margin-bottom:22px}
+main{min-width:0}
+@media (min-width:1000px){
+  .wrap{max-width:1320px}
+  .layout{grid-template-columns:260px minmax(0,1fr);gap:24px;align-items:start}
+  .layout nav{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow-y:auto}
+}

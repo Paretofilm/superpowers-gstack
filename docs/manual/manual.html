@@ -126,8 +126,18 @@ footer{color:var(--muted);font-size:13px;margin-top:28px;text-align:center}
 .glass th,.glass td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
 .glass th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .bruk{margin:0 0 8px}
-ol.toc{columns:2 280px;column-gap:28px;padding-left:22px;margin:8px 0 0}
+ol.toc{list-style:none;padding:0;margin:8px 0 0}
 ol.toc li{margin:6px 0}
+ol.toc a{display:block;padding:4px 6px;border-radius:8px;text-decoration:none}
+ol.toc a:hover{background:var(--line)}
+.layout{display:grid;grid-template-columns:minmax(0,1fr);gap:0 24px;margin-top:22px}
+.layout .glass{margin-top:0;margin-bottom:22px}
+main{min-width:0}
+@media (min-width:1000px){
+  .wrap{max-width:1320px}
+  .layout{grid-template-columns:260px minmax(0,1fr);gap:24px;align-items:start}
+  .layout nav{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow-y:auto}
+}
 </style>
 </head>
 <body>
@@ -142,11 +152,15 @@ ol.toc li{margin:6px 0}
   <button class="toggle" id="tg" aria-label="Bytt mellom lyst og mørkt">◐ Tema</button>
 </div>
 
+<div class="layout">
+<nav aria-label="Innhold">
 <section class="glass" id="innhold">
   <span class="tag t-violet">Innhold</span>
   <ol class="toc"><li><a href="#k0"><b>0</b> Hele flyten på én side</a></li><li><a href="#k1"><b>1</b> Start fra en tom mappe</a></li><li><a href="#k2"><b>2</b> Hva kjører jeg nå?</a></li><li><a href="#k3"><b>3</b> Fra idé til kode, steg for steg</a></li><li><a href="#k4"><b>4</b> Når kan du stole på resultatet?</a></li><li><a href="#k5"><b>5</b> Ikke mist tråden</a></li><li><a href="#k6"><b>6</b> Hva skjer bak kulissene</a></li><li><a href="#k7"><b>7</b> Native apper (macOS og iOS 26)</a></li><li><a href="#k8"><b>8</b> Web, Python og pipelines</a></li><li><a href="#k9"><b>9</b> Verktøy du ikke bruker, men burde</a></li><li><a href="#k10"><b>10</b> De andre verktøyene, enkelt forklart</a></li></ol>
 </section>
+</nav>
 
+<main>
 <section class="glass" id="k0">
   <span class="tag t-cyan">Kartet</span>
   <h2>0&nbsp; Hele flyten på én side</h2>
@@ -748,6 +762,8 @@ ol.toc li{margin:6px 0}
 <p>Bruk den, slik oppsettet ditt sier, når oppgaven automatiserer GUI, endrer systemtilstand (installerer, avinstallerer, skriver i <code>/Library</code>), skal se hvordan noe virker på en ren maskin, eller kjører lenge uten tilsyn. Bruk den ikke til å redigere filene i prosjektene dine, og ikke til noe som trenger din signeringsidentitet (bevis på hvem som har laget appen) eller innloggede kontoer. Skal Claude derimot styre appene på din egen maskin, og du ber om det, gjør den det og sier fra først.</p>
 <div class="key">💡 Du trenger sjelden å skrive <code>wt</code> selv, for Claude og <code>/superpowers-gstack:land</code> kjører det meste av det. Nøkler skal aldri inn i en samtale.</div>
 </section>
+</main>
+</div>
 
 <footer>Bygget fra <code>docs/manual/</code> med <code>python3 scripts/build-manual.py</code></footer>
 </div>

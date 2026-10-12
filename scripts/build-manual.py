@@ -263,12 +263,18 @@ def render_page(chapters: list[Chapter], figures: Path, css: str, manual_css: st
   <button class="toggle" id="tg" aria-label="Bytt mellom lyst og mørkt">◐ Tema</button>
 </div>
 
+<div class="layout">
+<nav aria-label="Innhold">
 <section class="glass" id="innhold">
   <span class="tag t-violet">Innhold</span>
   <ol class="toc">{toc}</ol>
 </section>
+</nav>
 
+<main>
 {cards}
+</main>
+</div>
 
 <footer>Bygget fra <code>docs/manual/</code> med <code>python3 scripts/build-manual.py</code></footer>
 </div>
