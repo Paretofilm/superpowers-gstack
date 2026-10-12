@@ -159,3 +159,8 @@ def test_manual_report_prints_findings_and_returns_the_exit_code(manual, capsys)
     write(manual, GOOD + " Prøv `/zzz`.")
     assert lint.manual_report(manual) == 1
     assert "E15a" in capsys.readouterr().out
+
+
+def test_the_real_manual_passes_e15():
+    """The shipped manual: every reference resolves, every skill is mentioned, the page is current."""
+    assert lint.check_manual() == []

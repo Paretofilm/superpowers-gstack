@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.13.0] - 2026-10-15
+
+**A Norwegian manual for vibe coders, kept honest by the release gate.**
+
+One page (`docs/manual/manual.html`) with a map of the whole flow from idea to landing, a quickstart from an empty folder, a decision tree, the proof step, how to keep the thread between sessions, what happens under the hood, a Swift track and a web/Python track, the tools the user does not yet use, and plain explanations of the surrounding tools (worktrunk, the model houses, the Swift tooling, Calyx and the spare Mac). Usage numbers in it are dated snapshots from the user's own Claude Code transcripts.
+
+### Added
+- `docs/manual/`: eleven chapters (Markdown, the source of truth), seven hand-drawn SVG figures, `manual.css`, `kommandoer.txt` (the short list of gstack and Claude Code commands the manual may name) and the built page.
+- `scripts/build-manual.py`: standard-library builder, byte-deterministic. The page follows the htmlify explainer contract, so `skills/htmlify/bin/explain-check` runs on it unchanged. `--check` fails when the committed page is not what a build gives now.
+
+### Lint
+- E15 in `scripts/lint-skills.py` (also `python3 scripts/lint-skills.py --manual`): a — every skill reference in a chapter exists (reusing E2 and E10; a bare `/name` must be an own skill or listed in `kommandoer.txt`); b — every skill in `skills/` is referenced as a command in some chapter; c — `manual.html` is current.
+- W5: a gstack command listed in `kommandoer.txt` is not installed (maintainer machines only).
+
 ## [3.12.0] - 2026-10-15
 
 **Report links open as a readable HTML page instead of GitHub, and a SwiftUI view is no longer called done until it has been seen.**

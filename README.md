@@ -4,6 +4,8 @@
 
 A Claude Code plugin that integrates [Superpowers](https://github.com/obra/superpowers) and [GStack](https://github.com/garrytan/gstack) into one workflow — with skill routing, automatic context management, and project auto-configuration. New or existing project, run `/adapt`: it analyzes your setup, preserves your CLAUDE.md, and adds routing — so you can jump right in.
 
+**Manual (Norwegian, for vibe coders):** open [`docs/manual/manual.html`](docs/manual/manual.html) — a map of the whole flow, a quickstart from an empty folder, and chapters you jump to when you are stuck. Source: `docs/manual/*.md`; rebuild with `python3 scripts/build-manual.py`.
+
 **Status: Work in Progress** — Actively developed. Contributions, feedback, and ideas are very welcome. See [Contributing](#contributing).
 
 ### What problem does this solve?

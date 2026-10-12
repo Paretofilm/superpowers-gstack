@@ -738,6 +738,15 @@ def main() -> int:
                     f"attribute is written per-emission by the generators, never stored "
                     f"in the source block")
 
+    # E15 + W5 (3.11.0): the manual cannot drift from the skills it describes.
+    errors.extend(check_manual())
+    _gstack_home = Path.home() / ".claude" / "skills"
+    if (_gstack_home / "gstack").is_dir():
+        for name in manual_gstack_missing(REPO / "docs" / "manual" / "kommandoer.txt", _gstack_home):
+            warnings.append(
+                f"W5 docs/manual/kommandoer.txt lists gstack command '{name}' — installed gstack has no such "
+                f"skill; verify before the manual teaches it")
+
     for w in warnings:
         print(f"WARN  {w}")
     for e in errors:
