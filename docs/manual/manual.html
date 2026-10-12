@@ -144,7 +144,7 @@ ol.toc li{margin:6px 0}
 
 <section class="glass" id="innhold">
   <span class="tag t-violet">Innhold</span>
-  <ol class="toc"><li><a href="#k0"><b>0</b> Hele flyten på én side</a></li><li><a href="#k1"><b>1</b> Start fra en tom mappe</a></li><li><a href="#k2"><b>2</b> Hva kjører jeg nå?</a></li></ol>
+  <ol class="toc"><li><a href="#k0"><b>0</b> Hele flyten på én side</a></li><li><a href="#k1"><b>1</b> Start fra en tom mappe</a></li><li><a href="#k2"><b>2</b> Hva kjører jeg nå?</a></li><li><a href="#k3"><b>3</b> Fra idé til kode, steg for steg</a></li><li><a href="#k4"><b>4</b> Når kan du stole på resultatet?</a></li></ol>
 </section>
 
 <section class="glass" id="k0">
@@ -299,6 +299,123 @@ ol.toc li{margin:6px 0}
 <p>Finn raden som ligner mest på situasjonen din, og skriv kommandoen i midtkolonnen. Radene følger rutingreglene i <code>CLAUDE.md</code> i dette prosjektet (rutingreglene er tabellen Claude leser for å velge skill). Der en kommando starter med <code>/superpowers-gstack:</code> er den en skill fra denne pluginen. <code>superpowers:</code> er en skill fra Superpowers, og de andre er fra GStack. Vil du se hele flyten først, finnes den i <a href="#k0">kartet</a>.</p>
 <div class="scroll"><table><thead><tr><th>Situasjon</th><th>Kjør</th><th>Hvorfor</th></tr></thead><tbody><tr><td>Feil, krasj eller «hvorfor virker ikke dette»</td><td><code>/investigate</code></td><td>Finner årsaken før noe rettes</td></tr><tr><td>Ny idé du vil bygge, i et prosjekt med arbeidsmåten classic</td><td><code>superpowers:brainstorming</code></td><td>Claude stiller spørsmål og lager et design før noe bygges</td></tr><tr><td>Ny funksjon i et prosjekt med arbeidsmåten vibe</td><td><code>/superpowers-gstack:vibe</code></td><td>Én spørsmålsrunde, så bygger Claude ferdig og lander</td></tr><tr><td>Du lurer på om ideen er verdt å bygge</td><td><code>/superpowers-gstack:office-hours-track-aware</code></td><td>Pakker inn GStacks <code>/office-hours</code> og legger designdokumentet i <code>docs/</code></td></tr><tr><td>En spec (spesifikasjon) er nettopp skrevet</td><td><code>/superpowers-gstack:pitfall-verification</code></td><td>Leter etter feller i spesifikasjonen</td></tr><tr><td>En plan er nettopp skrevet</td><td><code>/superpowers-gstack:quality-review</code></td><td>Spør om resultatet vil føles bra, i tillegg til om det virker</td></tr><tr><td>Spec eller plan for en Apple-app</td><td><code>/superpowers-gstack:apple-native-review</code></td><td>Sjekker mot Apples designretningslinjer (HIG) før noe bygges</td></tr><tr><td>Du vil se en spec eller plan som figurer</td><td><code>/superpowers-gstack:htmlify</code></td><td>Lager en forklaringsside med så lite tekst som mulig</td></tr><tr><td>Planen er ferdig og skal bygges uten at du følger med</td><td><code>/superpowers-gstack:autoimplement</code></td><td>Én underagent per fase, med gjennomgang mellom fasene</td></tr><tr><td>Plan og kode kan ha gått fra hverandre</td><td><code>/superpowers-gstack:spec-drift</code></td><td>Sammenligner planen med koden og rapporterer, uten å endre noe</td></tr><tr><td>Du har rettet noe, men ser det ikke i appen</td><td><code>/superpowers-gstack:verify-and-land</code></td><td>Bygger og starter akkurat denne grenen, så du ser om rettelsen er der</td></tr><tr><td>Ferdig arbeid i et prosjekt uten gjennomgang</td><td><code>/superpowers-gstack:land</code></td><td>Kjører prosjektets sjekker og lander på main</td></tr><tr><td>Ferdig arbeid i et prosjekt med gjennomgang</td><td><code>/ship</code></td><td>Tester, gjennomgang og pull request</td></tr><tr><td>Du vil teste en Swift-app gjennom grensesnittet</td><td><code>/superpowers-gstack:e2e-route</code></td><td>Velger riktig kjøremåte for ende-til-ende-test</td></tr><tr><td>Konteksten er lang, eller du skal skrive <code>/clear</code></td><td><code>/superpowers-gstack:context-handoff</code></td><td>Skriver ned hvor du er, så neste økt kan fortsette</td></tr><tr><td>Du kommer tilbake til et prosjekt</td><td><code>/context-restore</code></td><td>Henter tilbake det du lagret med <code>/context-save</code>. Har prosjektet en overleveringsfil, viser startbanneret hvor du slapp</td></tr><tr><td>Sikkerhetskritisk kode: innlogging, nøkler, betaling</td><td><code>/cso</code></td><td>Sikkerhetsrevisjon av koden</td></tr></tbody></table></div>
 <div class="key">💡 Velg raden for der du er nå, ikke den du håper å komme til. Hver rad er ett steg på kartet, og Claude tar resten av steget selv.</div>
+</section>
+
+<section class="glass" id="k3">
+  <span class="tag t-violet">Flyten</span>
+  <h2>3&nbsp; Fra idé til kode, steg for steg</h2>
+  <div class="grid g2 bruk">
+    <div class="chip"><span class="ic">🎯</span><div><b>Bruk denne når</b><span>du vil vite hva som skjer mellom at du beskriver en idé og at koden er bygget</span></div></div>
+    <div class="chip"><span class="ic">🏁</span><div><b>Du er ferdig når</b><span>du vet hva du får i hvert steg og hvor Claude stopper og venter på deg</span></div></div>
+  </div>
+<h3>Først velger Claude hvor tungt det skal være</h3>
+<p>Når du beskriver en idé, starter Claude <code>superpowers:brainstorming</code> (skillen som gjør en idé om til et design før noe bygges). Før det første spørsmålet sier Claude høyt hvilken av tre stier den velger, så du kan si ifra hvis du er uenig. Er den i tvil, velger den den tyngste. Oppdager den underveis at oppgaven er større enn antatt, går den opp en sti og sier det. Den går aldri ned.</p>
+<div class="scroll"><table><thead><tr><th>Sti</th><th>Når</th><th>Hva du får</th><th>Hvor du sier ja</th></tr></thead><tbody><tr><td>Spike (et billig forsøk)</td><td>Et gjennomførbarhetsspørsmål: «går det an å ...», «rask og skitten er greit»</td><td>Et svar og en anbefaling. Det Claude bygde underveis er kasteprodukt, ikke kode du beholder</td><td>Etter at Claude har lagt fram spørsmålet og forsøket i to–tre setninger. Et nikk holder</td></tr><tr><td>Bounded (avgrenset)</td><td>En liten endring i kode som allerede finnes i prosjektet: et flagg, et lite endepunkt, en rettelse i én fil</td><td>Et kort design i chatten, fra noen setninger til noen korte avsnitt. Ingen spec-fil og ingen plandokument</td><td>Etter det korte designet. Claude stopper til du har sagt ja</td></tr><tr><td>Architectural (arkitektonisk)</td><td>Nytt prosjekt, nytt delsystem, eller en endring som flytter på hvordan deler henger sammen</td><td>Spørsmål ett om gangen, to eller tre tilnærminger, design i deler, en skrevet spec og så en plan</td><td>Designet, den skrevne spec-en og planen (se under)</td></tr></tbody></table></div>
+<p>Et nytt prosjekt har ingen eksisterende flyt å endre. Det er derfor alltid arkitektonisk, selv om det er en enkel liste-app. Resten av kapittelet følger den tyngste stien, for den inneholder de andre.</p>
+<h3>Spec-en og forklaringssiden</h3>
+<p>Etter at du har godkjent designet i deler, skriver Claude det ned som en spesifikasjon (spec, et dokument som sier hva som skal bygges). Filen havner i <code>docs/superpowers/specs/</code> og heter <code>ÅÅÅÅ-MM-DD-&lt;tema&gt;-design.md</code>. Claude leser den selv først, for hull og selvmotsigelser, og ber deg så lese den.</p>
+<p>Når spec-en er ferdig og Claude har lest den selv, lager <code>/superpowers-gstack:htmlify</code> en forklaringsside ved siden av spec-en, uten at du ber om det. Den er tegnet for hånd, med figurer og så lite tekst som mulig, slik at du forstår designet på to minutter og bare åpner dokumentet for detaljer. Hvor siden ligger, avgjør filen <code>.gstack/explainer</code> i prosjektet. Der står enten <code>local</code> (en HTML-fil ved siden av dokumentet) eller <code>artifact</code> (en side på claude.ai). Mangler filen, bruker den <code>local</code>. Det var <code>/superpowers-gstack:adapt</code> som spurte om dette i <a href="#k1">kapittel 1</a>. Les siden før du sier ja. Du godkjenner spec-en, og først da får Claude lov til å skrive planen.</p>
+<h3>Planen</h3>
+<p><code>superpowers:writing-plans</code> gjør spec-en om til en plan: små oppgaver som kan bygges og sjekkes hver for seg. Planen lagres i <code>docs/superpowers/plans/</code>, og får også en forklaringsside.</p>
+<p>Så ber Claude deg lese planen og velge hvordan den skal kjøres. Du har to valg:</p>
+<ul><li>Subagent-driven: en ny underagent bygger hver oppgave, og en ny gjennomleser sjekker den før neste oppgave starter. Til slutt leser en gjennomleser hele grenen. Grundigst, men koster en ny kontekst per oppgave og per gjennomlesing.</li><li>Native: Claude bygger alle oppgavene selv i denne økten. Til slutt leser én ny gjennomleser på den sterkeste modellen hele grenen. Billigst og raskest, men ingen uavhengig gjennomlesing før til slutt.</li></ul>
+<p>Claude anbefaler ett av dem for akkurat denne planen, med en setning som begrunner det: hvor mye oppgavene avhenger av hverandres grensesnitt, hvor mange de er, og hva en feil i produksjon ville koste. Du kan følge anbefalingen eller velge det andre. Har du allerede sagt hvordan du vil ha det kjørt, spør Claude bare om planen er riktig. Valget bestemmer hvilken skill som tar over: <code>superpowers:subagent-driven-development</code> eller <code>superpowers:executing-plans</code>.</p>
+<h3>Selve byggingen</h3>
+<p>Her gjør du ingenting. Dette er det som skjer, og hvilken skill som står bak:</p>
+<ul><li>Én ny underagent per oppgave og en ny gjennomleser etter hver oppgave. Gjennomleseren sjekker både at oppgaven følger planen og at koden er god. Det er <code>superpowers:subagent-driven-development</code>.</li><li>Testen skrives først. Ingen produksjonskode uten en test som feiler først. Det er test-drevet utvikling, og skillen heter <code>superpowers:test-driven-development</code>.</li><li>Ett arbeidstre (worktree, en ekstra mappe med sin egen gren) per arbeidsoppgave, altså per gren du skal lande. Claude lager det med kommandoen under og går så inn i det, slik at alle kommandoer og skills kjører der. <code>--create</code> lager grenen, <code>--no-cd</code> flytter ikke terminalen din, og <code>--format=json</code> skriver ut stien til arbeidstreet slik at Claude kan gå inn i det.</li><li>Commit (et lagret punkt i historikken) ved hvert ferdige delmål, ikke ved hver filendring og ikke bare ved slutten. Rett etterpå kommer <code>git push</code>, for en commit som ikke er sendt opp finnes bare på én disk.</li></ul>
+<pre><code>wt switch --create feat/min-funksjon --no-cd --format=json</code></pre>
+<p>Navnet er <code>&lt;type&gt;/&lt;tema&gt;</code>: typen er for eksempel <code>feat</code>, <code>fix</code> eller <code>docs</code>, og temaet er det oppgaven handler om. Gjør Claude mer enn fem commits på rad uten å teste den samlede tilstanden, skal den stoppe og bygge og kjøre testene før den fortsetter.</p>
+<p>Når alt er bygget, venter beviset. Det handler <a href="#k4">kapittel 4</a> om.</p>
+<div class="key">💡 Du sier ja til designet, til planen og til hvordan den kjøres. Underveis stopper Claude bare når den må, og alt den bygger, er testet og lagret før neste steg.</div>
+</section>
+
+<section class="glass" id="k4">
+  <span class="tag t-emerald">Bevis</span>
+  <h2>4&nbsp; Når kan du stole på resultatet?</h2>
+  <div class="grid g2 bruk">
+    <div class="chip"><span class="ic">🎯</span><div><b>Bruk denne når</b><span>noe er bygget, og du vil vite om du kan stole på det før det lander</span></div></div>
+    <div class="chip"><span class="ic">🏁</span><div><b>Du er ferdig når</b><span>du vet hvilke kontroller som har kjørt, og du har sett det virke selv</span></div></div>
+  </div>
+<div class="scroll"><svg viewBox="0 0 960 330" role="img" aria-label="Verifiseringskjeden i tre nivåer som lag over hverandre. Trivielt: bare selvsjekk. Ship-worthy: selvsjekk og Codex via review. Høy innsats: selvsjekk, Codex og et tredje modellhus. Alle tre ender i en adversariell syntese der et funn er reelt til det er motbevist. Et merke sier at nivået regnes ut og ikke gjettes">
+  <defs>
+    <marker id="v-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+  </defs>
+  <g fill="var(--glass)" stroke="var(--line)" stroke-width="1.5">
+    <rect x="14" y="14" width="190" height="64" rx="14"/>
+    <rect x="14" y="94" width="190" height="64" rx="14"/>
+    <rect x="14" y="174" width="190" height="64" rx="14"/>
+  </g>
+  <g>
+    <text x="28" y="40" font-size="15" font-weight="600">Trivielt</text>
+    <text x="28" y="60" font-size="12" class="m">dokumenter, skrivefeil</text>
+    <text x="28" y="120" font-size="15" font-weight="600">Ship-worthy</text>
+    <text x="28" y="140" font-size="12" class="m">kode som endrer adferd</text>
+    <text x="28" y="200" font-size="15" font-weight="600">Høy innsats</text>
+    <text x="28" y="220" font-size="12" class="m">sikkerhet, kontrakter</text>
+  </g>
+  <g fill="var(--line)">
+    <rect x="224" y="14" width="150" height="64" rx="14"/>
+    <rect x="224" y="94" width="150" height="64" rx="14"/>
+    <rect x="394" y="94" width="150" height="64" rx="14"/>
+    <rect x="224" y="174" width="150" height="64" rx="14"/>
+    <rect x="394" y="174" width="150" height="64" rx="14"/>
+    <rect x="564" y="174" width="150" height="64" rx="14"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="299" y="42" font-size="14" font-weight="600">Selvsjekk</text>
+    <text x="299" y="62" font-size="12" class="m">Claude, to runder</text>
+    <text x="299" y="122" font-size="14" font-weight="600">Selvsjekk</text>
+    <text x="299" y="142" font-size="12" class="m">Claude, to runder</text>
+    <text x="469" y="122" font-size="14" font-weight="600">Codex</text>
+    <text x="469" y="142" font-size="12" class="m mono">via /review</text>
+    <text x="299" y="202" font-size="14" font-weight="600">Selvsjekk</text>
+    <text x="299" y="222" font-size="12" class="m">Claude, to runder</text>
+    <text x="469" y="202" font-size="14" font-weight="600">Codex</text>
+    <text x="469" y="222" font-size="12" class="m mono">via /review</text>
+    <text x="639" y="202" font-size="14" font-weight="600">Tredje modellhus</text>
+    <text x="639" y="222" font-size="12" class="m">annen opplæring</text>
+  </g>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M376,46 L786,46" marker-end="url(#v-ar)"/>
+    <path d="M546,126 L786,126" marker-end="url(#v-ar)"/>
+    <path d="M716,206 L786,206" marker-end="url(#v-ar)"/>
+    <path d="M376,126 L392,126" marker-end="url(#v-ar)"/>
+    <path d="M376,206 L392,206" marker-end="url(#v-ar)"/>
+    <path d="M546,206 L562,206" marker-end="url(#v-ar)"/>
+  </g>
+  <rect x="790" y="14" width="156" height="224" rx="16" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
+  <g text-anchor="middle">
+    <text x="868" y="96" font-size="14" font-weight="600">Adversariell</text>
+    <text x="868" y="116" font-size="14" font-weight="600">syntese</text>
+    <text x="868" y="148" font-size="12" class="m">et funn er reelt</text>
+    <text x="868" y="166" font-size="12" class="m">til det er motbevist</text>
+  </g>
+  <rect x="224" y="268" width="490" height="48" rx="14" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
+  <g text-anchor="middle">
+    <text x="469" y="289" font-size="14" font-weight="600">Nivået regnes ut, ikke gjettes</text>
+    <text x="469" y="307" font-size="12" class="m">gulvet kan heves, aldri senkes</text>
+  </g>
+  <path d="M469,266 L469,242" fill="none" stroke="var(--emerald)" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#v-ar)"/>
+</svg></div>
+<h3>Tre nivåer, regnet ut av en maskin</h3>
+<p><code>/superpowers-gstack:pitfall-verification</code> (skillen som leter etter feller) er ikke én gjennomgang. Hvor mange kontrollører som leser koden, avhenger av hvor mye som står på spill. Jo høyere nivå, jo flere modellhus (selskaper med hver sin opplæring, og dermed hver sine blindsoner) leser den.</p>
+<div class="scroll"><table><thead><tr><th>Nivå</th><th>Hva det gjelder</th><th>Hvem leser</th></tr></thead><tbody><tr><td>Trivielt</td><td>Dokumentasjon, skrivefeil, kommentarer, kun nye tester, midlertidige lagringspunkter</td><td>Claude selv, i opptil to runder</td></tr><tr><td>Ship-worthy (verdt å sende ut)</td><td>Nytt versjonsnummer, ny linje i endringsloggen, <code>feat</code> (ny funksjon), <code>fix</code> (rettelse) eller <code>refactor</code> (omskriving) som endrer hva programmet gjør, eller endringer i det andre er avhengige av, som API-er og filformater</td><td>Claude selv, så Codex (OpenAIs modell) gjennom <code>/review</code></td></tr><tr><td>High-stakes (høy innsats)</td><td>En ship-worthy endring som i tillegg rører arkitektur, sanntid, sikkerhet, kontrakter eller migrering av data</td><td>Alle over, så et tredje modellhus</td></tr></tbody></table></div>
+<p>Alle tre nivåene ender i en adversariell syntese (en sammenslåing som er bygget for å være uenig). Reglen er at et funn regnes som reelt helt til noen har motbevist det med en begrunnelse. Uenighet mellom modellene er selve signalet, så den glattes ikke ut.</p>
+<p>Nivået regnes ut, ikke gjettes. Skriptet <code>scripts/classify-change.py</code> leser endringen (filstier, nye linjer, størrelse) og skriver ut et gulv: det laveste nivået endringen kan få. Claude kan gå høyere hvis den mener endringen er farligere enn skriptet kan se. Den kan aldri gå lavere. Med <code>--assert-tier</code> får den et nei (utgangskode 1) hvis den prøver, og skriptet sier hvilke signaler den hoppet over. Mangler skriptet eller feiler det, regnes endringen som ship-worthy som minimum. Dette skjer uten at du blir spurt, og prisen rapporteres etter hvert kall.</p>
+<p>Kjører ikke Codex av en eller annen grunn, for eksempel fordi den ikke er logget inn, bytter <code>/review</code> stille til en Claude-underagent. Det er samme modellfamilie. Skillen leser derfor en statuslinje og skriver <code>lens 2 absent</code> i dommen, i stedet for å late som Codex var med.</p>
+<h3>Et tredje modellhus kan ikke se alt</h3>
+<p>Det tredje modellhuset kjøres av <code>/superpowers-gstack:third-lens-review</code>, som du vanligvis ikke starter selv. Pitfall-verification kaller den automatisk på høy innsats. Hvilken modell den bruker, avhenger av rollen: Zhipu for arkitektur og DeepSeek for logikk, begge gjennom OpenRouter (en tjeneste som videreformidler til flere modellselskaper), og OpenAI gjennom <code>codex</code>-programmet for å motbevise Claudes egne avgjørelser.</p>
+<p>Advarsel: modellene i det tredje huset kjører på ikke-vestlig infrastruktur. Material om innlogging, nøkler, helse og økonomi skal derfor bare leses av Claude selv og Codex. Et eksempel er Kvitteria, som håndterer fakturaer: koden kan få vanlig gjennomgang, men fakturadata og alt som berører nøkler skal aldri bli med til det tredje huset. Hører koden hjemme i slik materiale, si til Claude at det tredje huset ikke skal brukes på den, og la de to første nivåene gjøre jobben.</p>
+<h3>Se at det virker</h3>
+<p>Tester svarer på om noe annet gikk i stykker. De svarer ikke på om det du rettet faktisk er rettet. Det må noen se.</p>
+<p><code>/superpowers-gstack:verify-and-land</code> bygger grenen du står på, starter akkurat den appen og viser på skjermen hvilken bygging som kjører. Så spør den om rettelsen er der. Grunnen er en vanlig felle: åpner du appen ved navn, starter macOS kopien i <code>/Applications</code>, som er forrige utgivelse, ikke grenen din. Mange konkluderer da at rettelsen ikke virket, når de egentlig så en gammel bygging. Skillen er laget for macOS-apper og iOS-simulator, og har en kortere vei for utviklingsservere på nett. Er det ikke en app (et bibliotek eller et kommandolinjeverktøy), nekter den og sier at du bør kjøre testene.</p>
+<p>Har du endringer som ikke er committet, ber skillen deg committe først. Ellers ville du godkjent noe annet enn det som lander. Svarer du ja, lander grenen slik prosjektet har bestemt, uten et nytt spørsmål (<a href="#k0">se kapittel 0</a>).</p>
+<p><code>superpowers:verification-before-completion</code> er en annen sikring, og den er anbefalt, ikke vane: i loggene fra seks prosjekter ble den brukt 0 ganger (målt 10. oktober 2026). Regelen er: ingen påstand om at noe er ferdig, rettet eller består uten at kommandoen som beviser det er kjørt i samme melding, med utskriften lest. Beviset kommer før påstanden.</p>
+<h3>Landing</h3>
+<p>Hvordan ferdig arbeid lander, avgjør prosjektets egen linje i CLAUDE.md: <code>Landing mode: solo</code> eller <code>Landing mode: pr</code>.</p>
+<ul><li><code>solo</code>: <code>/superpowers-gstack:land</code> kjører prosjektets lokale sjekker, flytter main fremover (fast-forward, uten ny sammenslåings-commit) og sender til GitHub. Ingen pull request.</li><li><code>pr</code>: <code>/ship</code> kjører testene, kjører gjennomgang og lager en pull request (en forespørsel om gjennomgang på GitHub).</li></ul>
+<p>Sjekkene i <code>.config/wt.toml</code> (pre-merge-sperren) er det som erstatter gjennomgangen når ingen andre leser, så de hoppes aldri over. Land bruker ikke <code>--no-hooks</code> eller <code>--yes</code>. En rød sjekk rettes, og land kjøres på nytt. Mangler prosjektet sperren, lander ingenting før du har godkjent en. De vanligste stoppkodene fra land står i <a href="#k1">kapittel 1</a>.</p>
+<div class="key">💡 Du kan stole på resultatet når nivået er regnet ut, kontrollørene har lest det, og du selv har sett akkurat den bygde versjonen virke. Sjekkene før landing hoppes aldri over.</div>
 </section>
 
 <footer>Bygget fra <code>docs/manual/</code> med <code>python3 scripts/build-manual.py</code></footer>

@@ -1,0 +1,61 @@
+<svg viewBox="0 0 960 330" role="img" aria-label="Verifiseringskjeden i tre nivåer som lag over hverandre. Trivielt: bare selvsjekk. Ship-worthy: selvsjekk og Codex via review. Høy innsats: selvsjekk, Codex og et tredje modellhus. Alle tre ender i en adversariell syntese der et funn er reelt til det er motbevist. Et merke sier at nivået regnes ut og ikke gjettes">
+  <defs>
+    <marker id="v-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+  </defs>
+  <g fill="var(--glass)" stroke="var(--line)" stroke-width="1.5">
+    <rect x="14" y="14" width="190" height="64" rx="14"/>
+    <rect x="14" y="94" width="190" height="64" rx="14"/>
+    <rect x="14" y="174" width="190" height="64" rx="14"/>
+  </g>
+  <g>
+    <text x="28" y="40" font-size="15" font-weight="600">Trivielt</text>
+    <text x="28" y="60" font-size="12" class="m">dokumenter, skrivefeil</text>
+    <text x="28" y="120" font-size="15" font-weight="600">Ship-worthy</text>
+    <text x="28" y="140" font-size="12" class="m">kode som endrer adferd</text>
+    <text x="28" y="200" font-size="15" font-weight="600">Høy innsats</text>
+    <text x="28" y="220" font-size="12" class="m">sikkerhet, kontrakter</text>
+  </g>
+  <g fill="var(--line)">
+    <rect x="224" y="14" width="150" height="64" rx="14"/>
+    <rect x="224" y="94" width="150" height="64" rx="14"/>
+    <rect x="394" y="94" width="150" height="64" rx="14"/>
+    <rect x="224" y="174" width="150" height="64" rx="14"/>
+    <rect x="394" y="174" width="150" height="64" rx="14"/>
+    <rect x="564" y="174" width="150" height="64" rx="14"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="299" y="42" font-size="14" font-weight="600">Selvsjekk</text>
+    <text x="299" y="62" font-size="12" class="m">Claude, to runder</text>
+    <text x="299" y="122" font-size="14" font-weight="600">Selvsjekk</text>
+    <text x="299" y="142" font-size="12" class="m">Claude, to runder</text>
+    <text x="469" y="122" font-size="14" font-weight="600">Codex</text>
+    <text x="469" y="142" font-size="12" class="m mono">via /review</text>
+    <text x="299" y="202" font-size="14" font-weight="600">Selvsjekk</text>
+    <text x="299" y="222" font-size="12" class="m">Claude, to runder</text>
+    <text x="469" y="202" font-size="14" font-weight="600">Codex</text>
+    <text x="469" y="222" font-size="12" class="m mono">via /review</text>
+    <text x="639" y="202" font-size="14" font-weight="600">Tredje modellhus</text>
+    <text x="639" y="222" font-size="12" class="m">annen opplæring</text>
+  </g>
+  <g stroke="var(--muted)" stroke-width="2" fill="none">
+    <path d="M376,46 L786,46" marker-end="url(#v-ar)"/>
+    <path d="M546,126 L786,126" marker-end="url(#v-ar)"/>
+    <path d="M716,206 L786,206" marker-end="url(#v-ar)"/>
+    <path d="M376,126 L392,126" marker-end="url(#v-ar)"/>
+    <path d="M376,206 L392,206" marker-end="url(#v-ar)"/>
+    <path d="M546,206 L562,206" marker-end="url(#v-ar)"/>
+  </g>
+  <rect x="790" y="14" width="156" height="224" rx="16" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
+  <g text-anchor="middle">
+    <text x="868" y="96" font-size="14" font-weight="600">Adversariell</text>
+    <text x="868" y="116" font-size="14" font-weight="600">syntese</text>
+    <text x="868" y="148" font-size="12" class="m">et funn er reelt</text>
+    <text x="868" y="166" font-size="12" class="m">til det er motbevist</text>
+  </g>
+  <rect x="224" y="268" width="490" height="48" rx="14" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
+  <g text-anchor="middle">
+    <text x="469" y="289" font-size="14" font-weight="600">Nivået regnes ut, ikke gjettes</text>
+    <text x="469" y="307" font-size="12" class="m">gulvet kan heves, aldri senkes</text>
+  </g>
+  <path d="M469,266 L469,242" fill="none" stroke="var(--emerald)" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#v-ar)"/>
+</svg>
