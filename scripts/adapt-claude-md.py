@@ -28,8 +28,9 @@ touches the file, deterministically:
 
 A FRESH project — no CLAUDE.md, no package file, fewer than five files outside
 `.git/`, `.gstack/`, `.claude/` and `docs/superpowers/` — has nothing to protect
-and nothing to read the stack off. `--dry-run` reports `fresh` and `fresh_reason`
-so the skill can take the short path: `--fresh` writes the pins `.gstack/workflow`
+and nothing to read the stack off. `--fresh-check` prints just that verdict (and
+`--dry-run` carries `fresh` and `fresh_reason` in its JSON) so the skill can take
+the short path: `--fresh` writes the pins `.gstack/workflow`
 (vibe) and `.gstack/explainer` (local) when they are missing, defaults the
 sensitivity to `medium`, the local state to `none` and the routing to
 `blocks/routing-default.md`, whose `## Project` carries
@@ -399,7 +400,8 @@ def detect_fresh(project: Path) -> tuple[bool, str]:
     for root, dirs, files in os.walk(project):
         rel = Path(root).relative_to(project)
         dirs[:] = sorted(d for d in dirs if d not in FRESH_SKIP_DIRS and rel / d != Path("docs/superpowers"))
-        count += len(files)
+        # in a linked worktree `.git` is a file; it is git's, not the project's
+        count += sum(1 for f in files if not (rel == Path(".") and f in FRESH_SKIP_DIRS))
         if count >= FRESH_MAX_FILES:
             return False, (f"{FRESH_MAX_FILES} or more files outside .git/, .gstack/, .claude/ and "
                            f"docs/superpowers/ — not an empty folder")
@@ -1353,6 +1355,8 @@ def main(argv=None) -> int:
     ap.add_argument("--fresh", action="store_true",
                     help="the short path for an empty folder: pins, defaults and a pending `## Project`, no questions; "
                          "refuses when the project is not fresh")
+    ap.add_argument("--fresh-check", action="store_true",
+                    help="print only {fresh, fresh_reason} as JSON and exit 0 — no merge, no --set needed")
     ap.add_argument("--project-section", metavar="FILE",
                     help="replace the pending `## Project` section (marker gstack-project-pending) with this file, once")
     a = ap.parse_args(argv)
@@ -1363,8 +1367,11 @@ def main(argv=None) -> int:
         if a.fresh and a.project_section:
             raise Refusal("USAGE ERROR: --fresh and --project-section are two different runs — the first writes "
                           "the pending section, the second fills it in")
-        blocks = load_blocks(Path(a.blocks).expanduser())
         fresh, fresh_reason = detect_fresh(project)
+        if a.fresh_check:
+            print(json.dumps({"fresh": fresh, "fresh_reason": fresh_reason}, ensure_ascii=False))
+            return 0
+        blocks = load_blocks(Path(a.blocks).expanduser())
         if a.fresh and not fresh:
             raise Refusal(f"BLOCKED — not a fresh project: {fresh_reason}; run without --fresh, the full "
                           f"procedure protects what is there")
@@ -1392,6 +1399,8 @@ def main(argv=None) -> int:
         # placeholder, say) must leave the folder exactly as it was
         pending_pins: dict[str, str] = {}
         if a.fresh:
+            if (project / ".gstack").exists() and not (project / ".gstack").is_dir():
+                raise Refusal("BLOCKED — .gstack is a file; the pins need that directory")
             for name, default in FRESH_DEFAULTS.items():
                 if not (project / ".gstack" / name).is_file():
                     pending_pins[name] = default

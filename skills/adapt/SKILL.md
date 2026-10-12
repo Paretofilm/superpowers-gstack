@@ -66,15 +66,17 @@ decides later.
 
 ### Step 0: An empty folder gets the short path
 
-Run the dry run first, with no inputs:
+Ask the script first, with no inputs:
 
 ```bash
 SKILL_DIR='<the base directory the Skill tool printed>'
 SCRIPT="$SKILL_DIR/../../scripts/adapt-claude-md.py"
-python3 "$SCRIPT" --dry-run --set DOMAIN_SENSITIVITY=medium | tail -1
+python3 "$SCRIPT" --fresh-check
 ```
 
-The JSON line carries `fresh` and `fresh_reason`. The script, not you, decides what
+It prints one JSON line, `fresh` and `fresh_reason`, and merges nothing (a plain
+`--dry-run` would refuse on a fresh folder that already pins a native track, since the
+native blocks need their placeholders). The script, not you, decides what
 fresh means: no `CLAUDE.md`, no package file (`package.json`, `Package.swift`,
 `Cargo.toml`, `pyproject.toml`, `go.mod`, `Gemfile`, `.claude-plugin/plugin.json`,
 `*.xcodeproj`, `*.xcworkspace`), and fewer than five files outside `.git/`, `.gstack/`,
@@ -199,7 +201,8 @@ python3 "$SCRIPT" --project-section .gstack/adapt-project.md \
 
 The script replaces the pending section once, drops the marker (the section is the
 project's from then on; without the marker the flag refuses) and rewrites `Model
-Routing` with the sensitivity. A native platform decided since Step 0: write
+Routing` with the sensitivity. Delete `.gstack/adapt-project.md` afterwards; it was
+the input, not a record. A native platform decided since Step 0: write
 `.gstack/track` first (item 1) and resolve the native placeholders (item 3); the native
 blocks come in on the same run. Relay the report and go to Step 7; Steps 5–6 ask about a
 merge this run does not do.

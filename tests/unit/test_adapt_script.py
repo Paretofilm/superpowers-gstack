@@ -1287,8 +1287,46 @@ def fresh_project(tmp_path, *files: str, git: bool = True) -> Path:
 
 
 def detect(proj: Path) -> tuple[bool, str]:
-    j = last_json(run(proj, "--dry-run", "--set", "DOMAIN_SENSITIVITY=medium"))
+    j = last_json(run(proj, "--fresh-check"))
+    dry = last_json(run(proj, "--dry-run", "--set", "DOMAIN_SENSITIVITY=medium"))
+    assert {k: dry[k] for k in j} == j, "--fresh-check and --dry-run agree on freshness"
     return j["fresh"], j["fresh_reason"]
+
+
+def test_fresh_check_needs_no_placeholders_and_merges_nothing(tmp_path):
+    """Step 0 asks before anything is resolved: a fresh folder that already pins a native
+    track must still answer, although a dry run of the merge would refuse on the
+    native placeholders."""
+    proj = fresh_project(tmp_path)
+    (proj / ".gstack").mkdir()
+    (proj / ".gstack" / "track").write_text("ios\n")
+    run(proj, "--dry-run", expect=2)
+    p = run(proj, "--fresh-check")
+    assert p.stdout.strip().count("\n") == 0, "one JSON line, no report"
+    assert last_json(p) == {"fresh": True, "fresh_reason": last_json(p)["fresh_reason"]}
+    assert not (proj / "CLAUDE.md").exists()
+
+
+def test_a_linked_worktrees_git_file_is_not_a_project_file(tmp_path):
+    primary = tmp_path / "primary"
+    primary.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=primary, check=True)
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "init"],
+                   cwd=primary, check=True)
+    linked = tmp_path / "linked"
+    subprocess.run(["git", "worktree", "add", "-q", str(linked), "-b", "feat/x"], cwd=primary, check=True)
+    assert (linked / ".git").is_file()
+    fresh, why = detect(linked)
+    assert fresh and "0 file(s)" in why
+
+
+def test_a_gstack_file_in_the_way_of_the_pins_refuses_before_any_write(tmp_path):
+    proj = fresh_project(tmp_path)
+    (proj / ".gstack").write_text("not a folder\n")
+    p = run(proj, "--fresh", "--mkdirs", expect=2)
+    assert "BLOCKED" in p.stderr and ".gstack is a file" in p.stderr
+    assert not (proj / "CLAUDE.md").exists() and not (proj / "docs").exists()
+    assert (proj / ".gstack").read_text() == "not a folder\n"
 
 
 @pytest.mark.parametrize("files, fresh, reason", [

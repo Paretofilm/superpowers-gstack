@@ -63,6 +63,7 @@ first and resolve `IOS_SIMULATOR` and `DEVELOPMENT_TEAM` per adapt's
 `blocks/PLACEHOLDERS.md`. Then:
 
 ```bash
+SKILL_DIR='<the base directory the Skill tool printed when this skill loaded>'
 ADAPT="$SKILL_DIR/../../scripts/adapt-claude-md.py"
 [ -f "$ADAPT" ] || ADAPT=$(ls ~/.claude/plugins/cache/*/superpowers-gstack/*/scripts/adapt-claude-md.py 2>/dev/null | sort -V | tail -1)
 python3 "$ADAPT" --project-section .gstack/adapt-project.md --set 'DOMAIN_SENSITIVITY=<level>' \
@@ -70,8 +71,8 @@ python3 "$ADAPT" --project-section .gstack/adapt-project.md --set 'DOMAIN_SENSIT
 ```
 
 The script replaces the pending section once and drops the marker; exit 2 means the
-section is already the project's own — leave it and say so. Commit CLAUDE.md with
-the spec, and write one line in the log: `Filled in ## Project: <stack>, tests via
+section is already the project's own — leave it and say so. Delete
+`.gstack/adapt-project.md`, commit CLAUDE.md with the spec, and write one line in the log: `Filled in ## Project: <stack>, tests via
 <command>, sensitivity <level>.`
 
 ## Step 3: Acceptance tests — the one checkpoint

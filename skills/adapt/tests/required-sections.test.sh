@@ -12,7 +12,7 @@ REQUIRED=(
   # 3.11.0: an empty folder takes the short path — no gate, one Assumed line,
   # straight on to the intake; the script decides what fresh means
   "### Step 0: An empty folder gets the short path"
-  '--dry-run --set DOMAIN_SENSITIVITY=medium | tail -1'
+  'python3 "$SCRIPT" --fresh-check'
   '--fresh --mkdirs'
   'BLOCKED — not a fresh project'
   'blocks/routing-default.md'
