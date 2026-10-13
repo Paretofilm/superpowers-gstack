@@ -12,6 +12,43 @@ When a skill ships, its entry moves to the "Shipped" section below with the comm
 
 ---
 
+## `swiftui-view-gate` — gate for every SwiftUI view change made during feature work (proposed 2026-10-13, from fagfilm-pipeline)
+
+**Gap.** The plugin checks SwiftUI against HIG in two places only, and neither covers the moment a feature's views get written:
+
+- `apple-native-review` reads **specs and plans** (before any code exists).
+- `swiftui-design-consultation` runs `review_macos_hig` / `review_accessibility` / `review_liquid_glass` on files under `DesignSystem/Sources/DesignSystem/` only (its code-level table).
+- The `xcode-tools` block in the generated CLAUDE.md lists the tools in a routing table, but a table row is advice, not a gate. Nothing fires when `Views/*.swift` in the app target is edited, and nothing requires the result to be *seen* before the agent reports done.
+
+Field evidence (fagfilm-pipeline, macOS app, 2026-10-13): an agent added a category dropdown to a library table with `.menuIndicator(.hidden)` and a plain label, so the control had no affordance and looked like static text. The user had to point that out. The first fix then used guessed sizes (11 pt text, 8 pt chevron) and the claim "35 % opacity follows the HIG", neither looked up. The user's screenshot showed the control did not even render as the code said (chevron on the wrong side, no outline), which the agent could only have caught by looking at the render. The corpus (`search_swiftui_corpus`), `review_macos_hig` and `live-swiftui` were available in the session the whole time. The failure was process, not tooling: the rule existed only as advisory prose in the user's global CLAUDE.md.
+
+**Scope.** A gate that applies whenever a diff in a SwiftUI project touches a `.swift` file that declares a `View` (or lives under `Views/`, `Components/`), and that must pass before the agent says a UI change is done:
+
+1. **Look up before writing.** One `search_swiftui_corpus` query for the *control category* being built or changed (pop-up button, table row, chip, toggle in a list), not for a SwiftUI symbol. Record the query and the one thing it decided. If the corpus returns nothing relevant (it can return menu-bar examples for "Menu"), say so instead of citing it.
+2. **Lint after writing.** `review_macos_hig` (track `macos` or `both`), `review_accessibility` and, when the project targets Liquid Glass, `review_liquid_glass`, on each changed view file. Findings go into the same fix loop as compile errors.
+3. **See it.** Render the changed view with `live-swiftui` (`render` + `screenshot`) or take a screenshot of the built app, and look at it before reporting. For a change in a list or table, render with at least one row per state (normal, hover if cheap, empty, longest label).
+4. **Report honestly.** The final message separates *rendered and seen* from *built but appearance unverified*. A design claim ("follows HIG", "matches the system control") needs a source from step 1; otherwise it is worded as a choice, not as conformance.
+5. **Affordance check** (cheap, catches this exact bug): every interactive element must have a visible cue that it is interactive without hovering: chevron or indicator for pop-ups and pull-downs, outline or fill for fields, standard control shape for buttons. If the cue is deliberately hidden, the agent states why.
+
+**Method.**
+
+- Wire it as a *skill* (`swiftui-view-gate`) plus a light `PostToolUse` nudge, in the style of the existing `explainer-nudge.py`: when a `Write|Edit|MultiEdit` lands on a `.swift` file containing `: View` or `some View`, and the session has not run `review_macos_hig` since, print a one-line reminder naming the skill. Nudge, not block: the false-positive cost of blocking edits is high.
+- `/superpowers-gstack:verify-and-land` and `/ship` read the session's gate record (a line in `.gstack/` or in the transcript) and refuse to present "ready to land" for a diff that touches views and has no record, unless the user waives it.
+- Track-aware: macOS projects get `review_macos_hig`; iOS projects skip it (its window and menu-bar findings mislead on iOS, as `swiftui-design-consultation` already notes); `both` runs both.
+- Add a fallback when `live-swiftui` cannot render the target (needs a `#Preview`; hand-written pbxproj projects cannot add a preview file without editing the project): either append a `#Preview` to the existing view file, or use `screencapture`/the computer-use screenshot of the built app opened by absolute path (see `verify-and-land`).
+- Include the lessons about the linters' limits in the skill text: they are pattern checks. "Clean" means no known pattern matched, not that the control looks right. In the field case the linters passed the very control the user found unusable.
+
+**Differentiation.**
+
+- `apple-native-review` = does the *plan* respect the HIG (before code).
+- `swiftui-design-consultation` = is the *design system* sound (DesignSystem package only).
+- `quality-review` = would the experience feel premium (judgement, no tooling).
+- `swiftui-view-gate` = was *this diff's* UI looked up, linted and **seen** before it was called done. It is the only one that runs at implementation time on app views.
+
+**Status.** Proposed, not started. Smallest useful first step: step 3 and 4 only (a short section in `verify-and-land` and in the generated `xcode-tools` block that makes "rendered and seen" vs "unverified" mandatory in the final report). The hook and the full skill can follow once that proves useful. Evidence and the failed claims are in fagfilm-pipeline's memory note `swiftui-endringer-krever-hig-og-synlig-kontroll`.
+
+---
+
 ## `ios-native-review` ✅ SHIPPED in v2.4.0 (2026-05-18) — originally proposed 2026-04-28
 
 **Gap.** Same gap as the (now-shipped) `macos-native-review` had on the macOS side: existing review skills (`pitfall-verification`, `quality-review`) don't validate iOS UI claims against Apple Human Interface Guidelines for iOS specifically. iOS HIG paths and surfaces differ from macOS — touch-first interaction, navigation paradigm (tab bar / navigation stack vs window-based), modal patterns (sheet detents, full-screen presentation), Dynamic Island, gesture conventions.
