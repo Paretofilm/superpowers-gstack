@@ -40,6 +40,29 @@ Follow-up the same day, which is the strongest argument for step 3: `review_maco
 - Add a fallback when `live-swiftui` cannot render the target (needs a `#Preview`; hand-written pbxproj projects cannot add a preview file without editing the project): either append a `#Preview` to the existing view file, or use `screencapture`/the computer-use screenshot of the built app opened by absolute path (see `verify-and-land`).
 - Include the lessons about the linters' limits in the skill text: they are pattern checks. "Clean" means no known pattern matched, not that the control looks right. In the field case the linters passed the very control the user found unusable.
 
+**Autonomous visual access: the agent looks without interrupting the user** (verified on the user's Mac 2026-10-14).
+
+The user's standing position: the user is the *sensor of last resort*, who looks only when the agent is confident it has something good. Building UI blind and then asking "is the fix there?" is the wrong way round, and a permission dialog mid-flow is an interruption the user does not want for a read-only look. The routes below work today, ordered by how little they cost the user:
+
+1. **Render in the real container with `live-swiftui`.** No permission. Pass `packagePath` explicitly: with a worktree-isolated session it otherwise resolves to the primary checkout and renders stale code (seen: it listed the primary's preview line numbers, not the worktree's).
+2. **Window-scoped capture of the running app, no dialog.** Verified here: `CGWindowListCopyWindowInfo` lists windows without any permission, and `screencapture -x -l <windowID> out.png` captured exactly one window (the app's) and nothing else. Steps: build the branch, quit only the instance this session started (kill its own PID), `open -n <absolute .app path>` (plain `open` activates an instance from another build; see `verify-and-land`), wait for the new PID (`pgrep -n -x <exe>`), look up the window id by that PID, capture, read the PNG. A bundled `scripts/window-shot.sh <pid> <out.png>` should wrap it. Working core (macOS, Swift script, run with `swift`):
+   ```swift
+   import CoreGraphics
+   let pid = Int(CommandLine.arguments[1])!
+   let w = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? [])
+       .first { ($0[kCGWindowOwnerPID as String] as? Int) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }
+   print(w?[kCGWindowNumber as String] ?? "ingen-vindu")
+   ```
+   Capture **only the window, never the whole display.** A whole-display `screencapture` on the same Mac returned the user's desktop with calendar, notes and file names. That is more than the task needs and should never be the default. Failure modes to handle in the script: no window (app minimised, other Space, not yet launched: retry, then report), and missing Screen Recording permission (the PNG is wallpaper-only or black, or `screencapture` errors): detect and fall back to route 1 or 4 and say so, instead of reporting a screenshot that shows nothing.
+3. **Interaction (clicks, typing) via computer use.** Needs `request_access` per session with a user approval dialog. That is a host-side permission the plugin cannot grant. Two things for the maintainer: ask whether a settings-level allowlist can pre-approve named apps (the project's own app), and until then use routes 1, 2 and 4 for looking and reserve route 3 for flows that must be driven. On a project connected to a shared backend, driving the app is not free (toggles write data): prefer a mock backend (route 4).
+4. **VM with the E2E mock backend** (`vm-e2e` `step()` screenshots, or `vm-run --screenshot`) for states that need seeding (empty list, failure, blocked publish) and for anything that must not touch real data.
+
+**Standing consent, so the agent does not ask each time.** Mirror `.gstack/e2e-executor`: a committed `.gstack/visual-verify` marker with `host`, `vm` or `off`. `host` is the project owner's standing authorization for window-scoped capture of the app the agent itself launched, and for nothing wider. Invalid contents are an error, not a silent default, as with the other markers. This answers the "without interrupting me" requirement: the user decides once, in the repo, instead of per task.
+
+**Conflicting advisory to reconcile.** In this setup a `PreToolUse` hook on `screencapture` says it "captures the user's own screen" and points to `vm-run --screenshot`. That is right for whole-screen capture and for GUI-driving tests, but wrong for "look at the window of the build I just launched on the host", which a guest cannot show (the data, the session and the signing identity live on the host). The hook text should distinguish window-scoped capture of an agent-launched app (allowed under `.gstack/visual-verify: host`) from whole-display capture (still discouraged).
+
+**What "seen" must mean in the report.** The agent reads the captured image and states what it saw, including defects it was not looking for. In the field case the first window capture revealed a truncated label ("Håndverk- og serviceyrk…") that nobody had asked about, and that the previous round's "bygget og åpnet" report would have missed. The skill should require listing observed defects before "done", and to attach the screenshot path.
+
 **Differentiation.**
 
 - `apple-native-review` = does the *plan* respect the HIG (before code).
