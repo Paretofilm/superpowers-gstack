@@ -180,20 +180,47 @@ def test_phase6_yes_says_when_the_branch_is_unreviewed():
 LAND = ROOT / "skills" / "land" / "SKILL.md"
 
 
+def _install_bullet():
+    t = SKILL.read_text()
+    gate = t[t.index("## Phase 6"):t.index("### Phase 6b")]
+    m = re.search(r"^  - When the default branch's `CLAUDE.md` has `Installable: macos-app.*?(?=^  - |^- )",
+                  gate, re.S | re.M)
+    assert m, "no Installable bullet in the Phase 6 yes"
+    return " ".join(m.group(0).split())
+
+
 def test_phase6_yes_says_it_installs_in_applications():
     """Spec Part 4: «gjør dette til den gjeldende versjonen, og installer den i
     `/Applications`». The yes then also covers quitting the branch build from Phase 5."""
+    assert "make this the current version and install it in /Applications" in _install_bullet()
+
+
+def test_phase6_promises_the_install_only_when_this_run_does_it():
+    """Review: with `pr` or no valid landing line, nothing installs in this run, so the
+    yes must not promise it. Only `solo` (land runs work-state) does."""
+    b = _install_bullet()
+    promise = b[:b.index("make this the current version and install it in /Applications")]
+    assert "`solo`" in promise
+    assert "own question" not in promise and "no valid line" not in promise
+    assert "`pr`" in b and "waits for the pull request" in b
+    assert "no valid line" in b and "does not promise the install" in b
+
+
+def test_phase5_records_the_launched_bundle_as_a_literal_path():
+    """Review: shell variables do not survive from one Bash call to the next, so by
+    Phase 7 `$BUILT_PRODUCTS_DIR` is empty and the flag would read `--quit-path "/"`."""
     t = SKILL.read_text()
-    gate = " ".join(t[t.index("## Phase 6"):t.index("### Phase 6b")].split())
-    assert "make this the current version and install it in /Applications" in gate
+    p5 = " ".join(t[t.index("## Phase 5"):t.index("## Phase 6")].split())
+    assert "Record the launched bundle's literal absolute path" in p5
+    assert "do not survive from one Bash call to the next" in p5
 
 
 def test_phase7_passes_the_phase5_bundle_as_quit_path():
     """Without it the commonest path stops at install's code 4: the branch build the
-    user just looked at is still running."""
+    user just looked at is still running. The path is passed as text, never a variable."""
     p7 = " ".join(_phase7().split())
-    assert "--quit-path" in p7
-    assert '"$BUILT_PRODUCTS_DIR/$FULL_PRODUCT_NAME"' in p7
+    assert "--quit-path '<the literal bundle path recorded in Phase 5>'" in p7
+    assert "$BUILT_PRODUCTS_DIR" not in p7 and "$FULL_PRODUCT_NAME" not in p7
 
 
 def test_phase7_runs_work_state_after_ship_in_pr_mode():
@@ -212,3 +239,9 @@ def test_land_exit_0_runs_work_state_after_the_cleanup():
     assert row.index("remaining") < row.index("/superpowers-gstack:work-state")
     assert "`stale`" in row and "macos-app" in row and "background" in row
     assert "end the message with" in row.lower()
+
+
+def test_work_state_skill_quotes_the_same_phase6_wording():
+    ws = " ".join((ROOT / "skills" / "work-state" / "SKILL.md").read_text().split())
+    assert "make this the current version and install it" in ws
+    assert "live version" not in ws

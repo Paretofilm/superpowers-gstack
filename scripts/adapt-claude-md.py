@@ -1158,18 +1158,33 @@ def validate_installable(value: str) -> str:
 def apply_installable(lines: list[str], ctx: Context, report: Report) -> list[str]:
     """The project's own `Installable:` line, written once like `Local state:`: outside
     every managed section and fence, under `## <project> install`, never edited again.
-    work-state reads it from origin/main; a missing line reads as «ikke definert»."""
+    work-state reads it from origin/main; a missing line reads as «ikke definert».
+
+    "Present" is decided the way work-state reads the file (parse_installable over the
+    whole text, which skips only fenced code), so a line in an HTML comment or a
+    plugin-managed section counts: writing a second, different line beside it would
+    make work-state see a conflict. A project-owned label that is invalid counts too,
+    since /adapt never rewrites the project's line. The comment and managed exclusions
+    only decide which lines are the project's own."""
     mask = fence_mask(lines)
     managed = _managed_ranges(lines)
-    found = [i for i, line in enumerate(lines)
-             if INSTALLABLE_LABEL_RE.match(line) and not mask[i] and not any(s <= i < e for s, e in managed)]
-    if found:
+    own = [i for i, line in enumerate(lines)
+           if INSTALLABLE_LABEL_RE.match(line) and not mask[i] and not any(s <= i < e for s, e in managed)]
+    parsed = parse_installable("\n".join(lines))
+    if parsed is not None or own:
         report.preserved.append("Installable: the project's line is present, kept as-is"
                                 + (" (--installable ignored)" if ctx.installable is not None else ""))
-        parsed = parse_installable("\n".join(lines[i] for i in found))
-        if parsed is None or parsed == "conflict" or any(parse_installable(lines[i]) is None for i in found):
-            report.notes.append(f"an `Installable:` line is not one of the four shapes ({INSTALLABLE_SHAPES}) "
-                                f"or two lines disagree: work-state reads it as undefined — correct it by hand")
+        if parsed == "conflict":
+            report.notes.append("two `Installable:` lines disagree (work-state reads every line outside code "
+                                "blocks, HTML comments and plugin-managed sections included): it treats the "
+                                "line as undefined — keep one by hand; nothing was written")
+        elif parsed is None or any(parse_installable(lines[i]) is None for i in own):
+            report.notes.append(f"an `Installable:` line is not one of the four shapes ({INSTALLABLE_SHAPES}): "
+                                f"work-state does not read it — correct it by hand")
+        elif not any(parse_installable(lines[i]) == parsed for i in own):
+            report.notes.append("the `Installable:` line work-state reads sits inside an HTML comment or a "
+                                "plugin-managed section (an upgrade replaces those whole): move it under a "
+                                "heading the project owns")
         return lines
     if ctx.installable is None:
         return lines

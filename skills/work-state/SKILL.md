@@ -73,7 +73,7 @@ Collect everything in `ask`, plus any stop code from `install` that needs the us
 | 64 | Usage error (bad flags, scheme or settings not usable) | Show the state as printed. Do not guess. |
 | 70 | Unexpected error, interrupted ("avbrutt"), or Python older than 3.11 | Show the printed state. Do not guess. |
 
-`/superpowers-gstack:verify-and-land` has already opened the branch build in Phase 5; when the user says yes to "make this the live version and install it", it passes `--quit-path <the bundle from Phase 5>` to `install`, so the commonest path does not stop at code 4. Without that yes, the flag is not passed.
+`/superpowers-gstack:verify-and-land` has already opened the branch build in Phase 5; when the user says yes to "make this the current version and install it in /Applications", it passes `--quit-path <the bundle from Phase 5>` to `install`, so the commonest path does not stop at code 4. Without that yes, the flag is not passed.
 
 ## Never
 

@@ -233,6 +233,12 @@ The timestamp must be from this run. If it is older the install did not take:
 `xcrun simctl uninstall "$UDID" "$PRODUCT_BUNDLE_IDENTIFIER"`, install again.
 
 Report one line: which branch, which bundle path, and which commit is on screen.
+Record the launched bundle's literal absolute path from that line (the expanded
+`<BUILT_PRODUCTS_DIR>/<FULL_PRODUCT_NAME>`, for example
+`/Users/me/Library/Developer/Xcode/DerivedData/App-abc/Build/Products/Debug/App.app`),
+the way `VERIFIED_HEAD` is recorded: Phase 7 hands it to `install` as `--quit-path`, and
+shell variables do not survive from one Bash call to the next, so `$BUILT_PRODUCTS_DIR`
+would be empty by then.
 
 ## Phase 6 — the human gate
 
@@ -259,11 +265,14 @@ what they looked at, not the whole diff. The options:
     branch in this session, say that a yes lands code no review has seen (`land`
     assumes one has).
   - When the default branch's `CLAUDE.md` has `Installable: macos-app <Scheme>` (read
-    like the landing mode, outside code blocks) and the landing is `solo` or `land`'s
-    own question, the option says: yes, make this the current version and install it in /Applications.
-    That yes also covers quitting the branch build Phase 5 opened, so Phase 7 can hand
-    it to `install` as `--quit-path`. With `pr` the install waits for the pull request;
-    say so instead.
+    like the landing mode, outside code blocks) and the landing mode is `solo`, the
+    option says: yes, make this the current version and install it in /Applications.
+    `land` runs `/superpowers-gstack:work-state` on its exit 0, and that starts the
+    install. The yes also covers quitting the branch build Phase 5 opened, so Phase 7
+    can hand it to `install` as `--quit-path`. With `pr` the install waits for the pull
+    request; say so instead. With no valid line, the option does not promise the
+    install: `land` first asks how this project lands, and only a `solo` answer lands
+    and installs in this run.
   - When Phase 0 skipped or blocked Phase 7 (the default branch, a detached HEAD, or
     uncommitted changes the user declined to commit), say instead that a yes lands
     nothing.
@@ -347,9 +356,10 @@ default branch themselves; do not hand-roll a merge.
 After `land` exits 0, follow its `remaining` field: it prints the cleanup commands in the
 order git needs them (the worktree first, then the branch). `land` then runs
 `/superpowers-gstack:work-state`. When its `install` entry starts and the Phase 6 yes named
-the install, add `--quit-path "$BUILT_PRODUCTS_DIR/$FULL_PRODUCT_NAME"` (the bundle Phase 5
-launched) to that entry, so the commonest path does not stop at code 4 because the branch
-build is still running. Without that yes in this session, pass no quit flag: code 4 is
+the install, add `--quit-path '<the literal bundle path recorded in Phase 5>'` to that
+entry, written out in full (never a shell variable: `install` compares the path as exact
+text), so the commonest path does not stop at code 4 because the branch build is still
+running. Without that yes in this session, pass no quit flag: code 4 is
 then a question for the user, as the work-state skill says.
 
 ## What this skill is not

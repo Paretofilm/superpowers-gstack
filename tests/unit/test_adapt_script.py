@@ -1303,20 +1303,61 @@ def test_an_installable_line_under_the_projects_own_heading_is_kept(tmp_path):
     assert not any("Installable" in n for n in last_json(p)["notes"]), "a valid line needs no note"
 
 
+def work_state():
+    spec = importlib.util.spec_from_file_location("work_state_for_adapt_tests", REPO / "scripts" / "work-state.py")
+    ws = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ws)
+    return ws
+
+
 def test_an_installable_line_inside_a_fence_does_not_count(tmp_path):
+    """work-state skips fenced code too, so the written line is the only one it reads."""
     proj = project(tmp_path, "# Kvitt\n\n```\nInstallable: plugin\n```\n")
     run(proj, *WEB_SETS, "--installable", "none")
-    assert "## Kvitt install\n\nInstallable: none\n" in (proj / "CLAUDE.md").read_text()
+    text = (proj / "CLAUDE.md").read_text()
+    assert "## Kvitt install\n\nInstallable: none\n" in text
+    assert work_state().parse_installable(text) == ("none", None)
 
 
-def test_an_installable_line_inside_a_managed_section_does_not_count(tmp_path):
+def test_an_installable_line_inside_a_managed_section_is_kept_with_a_note(tmp_path):
+    """Review: work-state reads a line inside a plugin-managed section too, so a second
+    line under `## <project> install` made the two disagree («conflict» = undefined)."""
     proj = project(tmp_path)
     run(proj, *WEB_SETS)
     text = (proj / "CLAUDE.md").read_text()
     at = text.index("\n", text.index("<!-- gstack-worktrunk-v4 -->"))
     (proj / "CLAUDE.md").write_text(text[:at] + "\n\nInstallable: plugin\n" + text[at:])
-    run(proj, *WEB_SETS, "--installable", "none")
-    assert "install\n\nInstallable: none\n" in (proj / "CLAUDE.md").read_text()
+    p = run(proj, *WEB_SETS, "--installable", "none")
+    text = (proj / "CLAUDE.md").read_text()
+    assert re.findall(r"^Installable:.*$", text, re.M) == ["Installable: plugin"]
+    assert work_state().parse_installable(text) == ("plugin", None)
+    assert any("heading the project owns" in n for n in last_json(p)["notes"])
+
+
+def test_an_installable_line_inside_an_html_comment_is_kept_with_a_note(tmp_path):
+    """Review repro: `<!--\\nInstallable: plugin\\n-->` made adapt append `none`, and
+    work-state (which skips only fences) then saw two different lines."""
+    proj = project(tmp_path, "# Kvitt\n\n<!--\nInstallable: plugin\n-->\n")
+    p = run(proj, *WEB_SETS, "--installable", "none")
+    text = (proj / "CLAUDE.md").read_text()
+    assert re.findall(r"^Installable:.*$", text, re.M) == ["Installable: plugin"]
+    assert "## Kvitt install" not in text
+    assert work_state().parse_installable(text) == ("plugin", None)
+    assert any("HTML comment" in n for n in last_json(p)["notes"])
+    assert any(s.startswith("Installable:") for s in last_json(p)["preserved"])
+
+
+@pytest.mark.parametrize("claude_md", [
+    "# Kvitt\n\n## A\n\nInstallable: plugin\n\n## B\n\nInstallable: none\n",
+    "# Kvitt\n\n## A\n\nInstallable: plugin\n\n<!--\nInstallable: none\n-->\n",
+])
+def test_two_disagreeing_installable_lines_write_nothing_and_say_so(tmp_path, claude_md):
+    proj = project(tmp_path, claude_md)
+    p = run(proj, *WEB_SETS, "--installable", "macos-app Kvitt")
+    text = (proj / "CLAUDE.md").read_text()
+    assert "Installable: macos-app" not in text
+    assert work_state().parse_installable(text) == "conflict"
+    assert any("disagree" in n for n in last_json(p)["notes"])
 
 
 def test_an_invalid_existing_installable_line_is_kept_with_a_note(tmp_path):
