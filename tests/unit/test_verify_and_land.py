@@ -219,7 +219,8 @@ def test_phase7_passes_the_phase5_bundle_as_quit_path():
     """Without it the commonest path stops at install's code 4: the branch build the
     user just looked at is still running. The path is passed as text, never a variable."""
     p7 = " ".join(_phase7().split())
-    assert "--quit-path '<the literal bundle path recorded in Phase 5>'" in p7
+    assert "--quit-path <the literal bundle path recorded in Phase 5>" in p7
+    assert "ONE argv element, without quote characters" in p7
     assert "$BUILT_PRODUCTS_DIR" not in p7 and "$FULL_PRODUCT_NAME" not in p7
 
 

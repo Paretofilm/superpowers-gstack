@@ -356,9 +356,9 @@ default branch themselves; do not hand-roll a merge.
 After `land` exits 0, follow its `remaining` field: it prints the cleanup commands in the
 order git needs them (the worktree first, then the branch). `land` then runs
 `/superpowers-gstack:work-state`. When its `install` entry starts and the Phase 6 yes named
-the install, add `--quit-path '<the literal bundle path recorded in Phase 5>'` to that
+the install, add `--quit-path <the literal bundle path recorded in Phase 5>` to that
 entry, written out in full (never a shell variable: `install` compares the path as exact
-text), so the commonest path does not stop at code 4 because the branch build is still
+text) and as ONE argv element, without quote characters, so the commonest path does not stop at code 4 because the branch build is still
 running. Without that yes in this session, pass no quit flag: code 4 is
 then a question for the user, as the work-state skill says.
 

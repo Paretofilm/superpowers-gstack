@@ -41,7 +41,7 @@ On exit 0 and 1 the last line of stdout is a JSON object, also when the report i
 
 `safe_actions` is a list of argument lists the script judged safe: a push of a branch that has an upstream, removal of a clean worktree whose branch is an ancestor of `origin/main`, `git branch -d` of such a branch, a leftover folder that holds only cache moved to the Trash, and the `install` call for a `macos-app` that is `stale`.
 
-- Run `safe_actions` as printed: one entry at a time, from the main folder (the first entry of `git worktree list`), in the order given. Do not add flags, reorder, merge or "improve" an entry. The only permitted addition is the `--quit-path <bundle recorded in verify-and-land Phase 5>` that the user's Phase 6 yes covered, appended to the `install` entry.
+- Run `safe_actions` as printed: one entry at a time, from the main folder (the first entry of `git worktree list`), in the order given. Do not add flags, reorder, merge or "improve" an entry. The only permitted addition is the `--quit-path <bundle recorded in verify-and-land Phase 5>` that the user's Phase 6 yes covered, appended to the `install` entry (the path is one argv element, no quote characters).
 - Each entry is an argv list (a JSON array of separate arguments). Execute it directly as separate arguments (for example `subprocess.run(argv)`), never joined into a shell string and never re-quoted: paths contain spaces, and the Trash entry carries an AppleScript fragment. The `install` entry starts with the absolute path of a Python 3.11+ interpreter, so it needs no substitution.
 - Stop at the first entry that fails and show its output; do not try the later ones.
 - An `install` entry can take minutes (it builds). Run it in the background and wait for the session's notification that it finished before the second `report`; a `report` while it runs would show the old state.
@@ -73,11 +73,11 @@ Collect everything in `ask`, plus any stop code from `install` that needs the us
 | 64 | Usage error (bad flags, scheme or settings not usable) | Show the state as printed. Do not guess. |
 | 70 | Unexpected error, interrupted ("avbrutt"), or Python older than 3.11 | Show the printed state. Do not guess. |
 
-`/superpowers-gstack:verify-and-land` has already opened the branch build in Phase 5; when the user says yes to "make this the current version and install it in /Applications", it passes `--quit-path <the bundle from Phase 5>` to `install`, so the commonest path does not stop at code 4. Without that yes, the flag is not passed.
+`/superpowers-gstack:verify-and-land` has already opened the branch build in Phase 5; when the user says yes to "make this the current version and install it in /Applications", it passes `--quit-path <the bundle from Phase 5>` to `install` (the argument is the literal absolute path as ONE argv element, without quote characters), so the commonest path does not stop at code 4. Without that yes, the flag is not passed.
 
 ## Never
 
 - never `git branch -D` (a refused `-d` is the guard working), never force push, never `sudo`, never kill a process; an app is quit with `--quit-running` or `--quit-path` only.
 - Never pass `--quit-running`, `--quit-path`, `--accept-migration` or `--replace-unstamped` without the user's yes in this session. A yes from an earlier session or from a stored result does not count.
-- Never edit, shorten or reword the script's output: not `line`, not an entry of `safe_actions`, not a `reason`. The only permitted addition is the `--quit-path <bundle recorded in verify-and-land Phase 5>` that the user's Phase 6 yes covered, appended to the `install` entry.
+- Never edit, shorten or reword the script's output: not `line`, not an entry of `safe_actions`, not a `reason`. The only permitted addition is the `--quit-path <bundle recorded in verify-and-land Phase 5>` that the user's Phase 6 yes covered, appended to the `install` entry (the path is one argv element, no quote characters).
 - Never stash, reset, or remove a worktree the session stands in or one that `report` marked as in use.
