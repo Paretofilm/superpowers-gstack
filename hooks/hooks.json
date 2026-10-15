@@ -41,6 +41,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|mcp__.*review_(macos_hig|accessibility|liquid_glass)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/view-gate.py nudge",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "SessionEnd": [

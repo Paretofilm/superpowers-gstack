@@ -212,8 +212,10 @@ def test_denylist_catches_a_hardcoded_simulator_model():
      "v13 must not be caught by the v12 alternation — the \\b is load-bearing"),
     ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v8 -->", True,
      "v8 is stale since 3.5.0 — it said verify-and-land offers the landing"),
-    ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v9 -->", False,
-     "current xcode-tools, carries the user-override paragraph"),
+    ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v9 -->", True,
+     "v9 is stale since 3.12.0 — it had no SwiftUI view gate"),
+    ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v10 -->", False,
+     "current xcode-tools, carries the view gate — the \\b is load-bearing, v1 must not catch v10"),
     ("mode: continuous", False, "the only handoff mode still read"),
     ("run gstack `/review` before landing", False, "the 3.0.0 wording for the Codex pass"),
     # the two sites that must name the retired skill in order to remove it

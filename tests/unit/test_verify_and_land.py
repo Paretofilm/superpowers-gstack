@@ -173,3 +173,34 @@ def test_phase6_yes_says_when_the_branch_is_unreviewed():
     t = SKILL.read_text()
     gate = " ".join(t[t.index("## Phase 6"):t.index("### Phase 6b")].split())
     assert "a yes lands code no review has seen" in gate
+
+
+def test_skill_names_views_looks_first_and_requires_the_view_gate_line():
+    """3.12.0: a diff that touches SwiftUI views is not 'ready to land' on a build and clean
+    linters. The agent looks first (window capture, only with the host pin), and the
+    session must hold a `View gate:` line, or the user waives it."""
+    t = SKILL.read_text()
+    assert "scripts/view-gate.py" in t and "files --base" in t
+    assert "Phase 5b" in t and "scripts/window-shot.sh" in t
+    assert t.index("Phase 5b") < t.index("## Phase 6")
+    assert 'reads exactly `host`' in t, "window capture needs the standing consent"
+    assert "never fall back to a" in t.lower() and "whole-display" in t
+    gate = t[t.index("**View gate.**"):]
+    assert "View gate: waived by user" in gate and "swiftui-view-gate" in gate
+
+
+def test_xcode_block_carries_the_view_gate_and_the_consent_marker():
+    t = XCODE.read_text()
+    assert "<!-- gstack-xcode-tools-v10 -->" in t.splitlines()[0]
+    assert "swiftui-view-gate" in t and "View gate:" in t
+    assert "scripts/window-shot.sh" in t and ".gstack/visual-verify" in t
+    assert "never the whole display" in t
+
+
+def test_skills_find_the_scripts_through_skill_dir_not_a_hook_only_variable():
+    """${CLAUDE_PLUGIN_ROOT} is set for hooks, not for the Bash tool; every other skill
+    resolves its scripts through SKILL_DIR with a plugin-cache fallback."""
+    for name in ("verify-and-land", "swiftui-view-gate"):
+        t = (ROOT / "skills" / name / "SKILL.md").read_text()
+        assert "CLAUDE_PLUGIN_ROOT" not in t, name
+        assert '$SKILL_DIR/../../scripts/view-gate.py' in t, name

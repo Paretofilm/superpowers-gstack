@@ -1,4 +1,4 @@
-## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v9 -->
+## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v10 -->
 
 Xcode-related operations MUST be performed by the agent — NEVER delegated to the user; the user should never need to open Xcode to verify your work. Prefer MCP tools, falling back to CLI otherwise. Check MCP availability via `ToolSearch` first (deferred tools load on demand); drop to CLI only if the search returns nothing.
 
@@ -47,6 +47,12 @@ not inspection**:
 
 `/superpowers-gstack:verify-and-land` performs exactly this sequence and then lands it
 by the project's `Landing mode:` line; reach for it rather than re-deriving the steps.
+
+### SwiftUI view changes are not done until they are seen
+
+A SwiftUI view change is finished when the view was looked up before it was written, linted after, and **seen** in its real container (the `Menu`, the table row), not when it compiles. The linters (`review_macos_hig`, `review_accessibility`, `review_liquid_glass`) are pattern checks: "clean" means no known pattern matched, not that the control looks right. Follow `/superpowers-gstack:swiftui-view-gate`, and end the report with one line: `View gate: rendered and seen`, `View gate: built, appearance unverified` or `View gate: waived by user`. Before `/ship` or any landing of a diff that touches views, that line must exist; without it the branch is not "ready to land" unless the user waives it. Never claim "follows the HIG" without a lookup from this run; word it as a choice.
+
+Look yourself first, so that what reaches the user's eyes at the human gate is something you already looked at. In order of cost to the user: `live-swiftui` with an explicit `packagePath` (no permission); a window capture of the app this session launched, `scripts/window-shot.sh <pid> <out.png>`, allowed only when `.gstack/visual-verify` reads exactly `host` (`host`, `vm` or `off`; no file is `off`; anything else is `BLOCKED — invalid .gstack/visual-verify`); the VM rig with the mock backend. Window capture is one window by id, never the whole display: a whole-display capture shows whatever else is on the user's screen, and a hook that warns against `screencapture` is right about that case.
 
 ### E2E executor — where committed UI tests run
 
@@ -129,6 +135,7 @@ Three surfaces, three different handlers:
 - ❌ "Open the app and check" (macOS) — that opens `/Applications`, not this branch. Build, then `open` the absolute `BUILT_PRODUCTS_DIR` path
 - ❌ "Take a screenshot of the simulator" — use `mcp__XcodeBuildMCP__screenshot` (MCP) or `xcrun simctl io booted screenshot` (CLI) instead
 - ❌ "Click through the Signing & Capabilities pane in Xcode" — declare entitlements in `*.entitlements` + `project.yml` (XcodeGen) instead
+- ❌ Reporting a SwiftUI view change done on "builds" or "the linters are clean" — render it in its real container, read the image, and end with the `View gate:` line
 - ❌ "Check what the system color looks like in HIG" — use `mcp__apple-docs__search_apple_docs` or `mcp__swiftui-rag__search_swiftui_corpus` instead
 
 If a verification step requires the Xcode UI, you have not finished the task — verify via MCP or CLI tools, then report results.

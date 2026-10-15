@@ -164,6 +164,23 @@ def test_explainer_pin_is_validated_and_never_normalised(tmp_path):
     assert "BLOCKED" in p.stderr and ".gstack/explainer" in p.stderr
 
 
+def test_visual_verify_pin_is_validated_never_normalised_and_never_written(tmp_path):
+    """3.12.0: `.gstack/visual-verify` is the standing consent for window capture.
+    adapt refuses a wrong value (`Host`, `host `) instead of reading it as `off`, and it
+    never creates the file: the consent is the project owner's, not a default."""
+    proj = project(tmp_path)
+    (proj / ".gstack").mkdir(exist_ok=True)
+    run(proj, *WEB_SETS)
+    assert not (proj / ".gstack" / "visual-verify").exists()
+    for ok in ("host\n", "vm\n", "off\n", "off"):
+        (proj / ".gstack" / "visual-verify").write_text(ok)
+        run(proj, *WEB_SETS)
+    for bad in ("Host\n", "host \n", "", "yes\n"):
+        (proj / ".gstack" / "visual-verify").write_text(bad)
+        p = run(proj, *WEB_SETS, expect=2)
+        assert "BLOCKED" in p.stderr and ".gstack/visual-verify" in p.stderr
+
+
 def test_an_invalid_track_is_blocked(tmp_path):
     proj = project(tmp_path, track="tvos")
     p = run(proj, *NATIVE_SETS, expect=2)
