@@ -112,7 +112,7 @@ def test_pushed_on_main_ahead_is_ask_only_and_listed_once(tmp_path):
 
 
 # --- measure_tidy: mapper ryddet ---------------------------------------------------------
-# `wt -C <main> remove <branch>` names the branch, not the folder, so a removal is
+# `wt -C <main> remove --foreground <branch>` names the branch, not the folder, so a removal is
 # recognised by the branch (or by the folder in the no-`wt` fallback).
 
 def make_landed_branch(repo, name="feat/done"):
@@ -279,6 +279,75 @@ def test_the_session_worktree_with_a_landed_branch_is_listed_in_ask_not_removed(
     repo, wt, g = landed_worktree(tmp_path)
     r = ws.measure_tidy(wt)
     assert not removes(r, wt, "feat/x") and any("ExitWorktree" in a and "feat/x" in a for a in r["ask"])
+
+
+# --- final review: fixes -------------------------------------------------------------------
+
+def test_a_branch_without_upstream_with_unpushed_commits_is_asked_never_pushed(tmp_path):   # T2
+    repo = make_repo(tmp_path); add_origin(repo)
+    subprocess.run(["git", "-C", str(repo), "switch", "-q", "-c", "feat/n"], check=True)
+    commit_file(repo, "n.txt", "n")
+    r = ws.measure_pushed(repo)
+    assert r["status"] == "open" and r["safe_actions"] == []
+    assert any("feat/n" in a and "upstream" in a for a in r["ask"])
+
+def landed_elsewhere(tmp_path):
+    """feat/x was committed here and pushed; another clone landed it on origin/main. After the
+    fetch, origin/main proves it landed, but the main folder's own main is behind."""
+    repo = make_repo(tmp_path); origin = add_origin(repo)
+    g = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True)
+    g("switch", "-q", "-c", "feat/x"); commit_file(repo, "x.txt", "x"); g("push", "-q", "origin", "feat/x")
+    g("switch", "-q", "main")
+    other = tmp_path / "other clone"
+    subprocess.run(["git", "clone", "-q", str(origin), str(other)], check=True)
+    subprocess.run(["git", "-C", str(other), "merge", "-q", "--ff-only", "origin/feat/x"], check=True)
+    subprocess.run(["git", "-C", str(other), "push", "-q", "origin", "main"], check=True)
+    g("fetch", "-q", "origin")
+    return repo, g
+
+def test_r12_a_behind_clean_main_folder_is_pulled_once_before_branch_d(tmp_path):
+    repo, g = landed_elsewhere(tmp_path)
+    acts = ws.measure_tidy(repo)["safe_actions"]
+    pull = ["git", "-C", str(repo), "pull", "--ff-only"]
+    assert acts[0] == pull and acts.count(pull) == 1
+    assert ["git", "-C", str(repo), "branch", "-d", "feat/x"] in acts
+    for a in acts:                                   # the entries work when run as printed
+        assert subprocess.run(a, capture_output=True).returncode == 0, a
+    assert subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "-q", "refs/heads/feat/x"],
+                          capture_output=True).returncode != 0
+
+def test_r12_a_dirty_main_folder_gets_no_branch_d_for_an_origin_only_proof(tmp_path):
+    repo, g = landed_elsewhere(tmp_path)
+    (repo / "CLAUDE.md").write_text("changed\n")
+    r = ws.measure_tidy(repo)
+    assert not any("feat/x" in a for a in r["safe_actions"])
+    assert not any("pull" in a for a in r["safe_actions"])
+    assert any("feat/x" in a and "pull main i hovedmappen først" in a for a in r["ask"])
+
+def test_r12_no_pull_when_main_is_not_behind(tmp_path):
+    repo = make_repo(tmp_path); add_origin(repo); make_landed_branch(repo)
+    acts = ws.measure_tidy(repo)["safe_actions"]
+    assert acts == [["git", "-C", str(repo), "branch", "-d", "feat/done"]]
+
+def test_wt_remove_runs_in_the_foreground(tmp_path, monkeypatch):                     # M2
+    repo, wt, g = landed_worktree(tmp_path)
+    monkeypatch.setattr(ws.shutil, "which", lambda name: "/usr/local/bin/wt" if name == "wt" else None)
+    acts = ws.measure_tidy(repo)["safe_actions"]
+    assert acts == [["wt", "-C", str(repo), "remove", "--foreground", "feat/x"]]
+
+def test_lsof_runs_once_per_report(tmp_path, monkeypatch):                              # M3
+    repo, wt, g = landed_worktree(tmp_path)
+    g("worktree", "add", "-q", "-b", "feat/y", str(tmp_path / "wt y"))
+    (tmp_path / "my proj.cache").mkdir()
+    calls = []
+    monkeypatch.setattr(ws, "_cwds", lambda: calls.append(1) or [])
+    ws.measure_tidy(repo)
+    assert len(calls) == 1
+
+def test_without_origin_a_macos_app_gets_no_install_action(tmp_path):                  # M4
+    repo = make_repo(tmp_path); commit_file(repo, "CLAUDE.md", "Installable: macos-app App\n")
+    r = ws.measure_installable(repo)
+    assert r["kind"] == "macos-app" and r["safe_actions"] == [] and "origin" in r["detail"]
 
 
 # ---- Task 4: report ----
@@ -1054,6 +1123,22 @@ def test_sigint_is_stored_as_avbrutt_too(tmp_path):
     stubs = stub_bin(tmp_path, xcodebuild=_with_settings('kill -INT "$PPID"; sleep 5; exit 0'))
     code, out = run_install(repo, stubs, apps)
     assert code == 70 and "avbrutt" in out["reason"] and _stored(repo)["code"] == 70
+
+def test_a_current_install_still_retries_a_hidden_leftover(tmp_path):                 # M1
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"
+    assert run_install(repo, stub_bin(tmp_path), apps)[0] == 0
+    leftover = write_app(apps / ".Fake App.gstack-new-999")
+    code, out = run_install(repo, stub_bin(tmp_path), apps)
+    assert code == 0 and out["status"] == "current" and not leftover.exists()
+    assert len(list(_trash(tmp_path).iterdir())) == 1 and "papirkurven" in out["reason"]
+
+def test_an_interrupt_after_the_stamp_does_not_claim_it_is_unstamped(tmp_path):       # M7
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    stubs = stub_bin(tmp_path, osascript='case "$*" in *Finder*delete*) kill -TERM "$PPID"; '
+                                         'for last; do :; done; mv "$last" "$STUB_TRASH/" ;; esac')
+    code, out = run_install(repo, stubs, apps, "--replace-unstamped")
+    assert code == 70 and "avbrutt" in out["reason"] and "ikke stemplet" not in out["reason"]
+    assert (ws.gitdir(repo) / "gstack-installed-app.json").exists()
 
 def test_the_swap_without_the_test_knob_refuses_outside_macos(tmp_path, monkeypatch):
     monkeypatch.delenv("GSTACK_SWAP", raising=False)

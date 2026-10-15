@@ -2,7 +2,10 @@
 """scripts/work-state.py — what is landed, what is installed, and how to install it.
 
 Standard library only, Python >= 3.11. Helpers (CLAUDE.md reading with the symlink rules,
-fence regex, locking, git wrappers) are reused from land-worktree.py, never copied.
+fence regex, git wrappers, quoting, the default branch and the work folders) are reused from
+land-worktree.py, never copied. Locking is this script's own `_Flock`: the same kernel lock
+(flock) as land's `Lock`, but it can wait a bounded time, which land's lock never does
+(install waits up to 60 s for land's `gstack-land.lock`).
 
 Subcommands:
   report  [--repo PATH] [--json-only]
@@ -147,7 +150,6 @@ def measure_committed(repo) -> dict:
 
 def fetch_origin(repo):
     """`git fetch --quiet origin` (15 s). The error text, or None when it worked."""
-    land = _load_land()
     try:
         r = subprocess.run(["git", "-C", str(repo), "fetch", "--quiet", "origin"],
                            capture_output=True, text=True, errors="replace",
@@ -250,14 +252,6 @@ def _landed_state(land, repo, branch) -> bool:
     return any(line.startswith("commit") for line in log.stdout.splitlines())
 
 
-def proven_landed(repo, branch) -> bool:
-    """Both conditions of the spec; an empty or expired reflog, or any git failure, proves nothing."""
-    try:
-        return _landed_state(_load_land(), Path(repo), branch)
-    except _CountError:
-        return False
-
-
 def _cwds() -> list[str]:
     """Working directories of all processes (`lsof -d cwd -Fn`). Raises when lsof cannot run."""
     try:
@@ -270,11 +264,12 @@ def _cwds() -> list[str]:
     return [line[1:] for line in r.stdout.splitlines() if line.startswith("n")]
 
 
-def in_use(path) -> bool:
-    """Does a process have its working directory in `path`? Whole path components only."""
+def in_use(path, cwds=None) -> bool:
+    """Does a process have its working directory in `path`? Whole path components only.
+    `cwds` is a list already read with _cwds(); without it, lsof runs now."""
     cands = {str(path), str(Path(path).resolve())}
     prefixes = tuple(c.rstrip(os.sep) + os.sep for c in cands)
-    return any((c.rstrip(os.sep) + os.sep).startswith(prefixes) for c in _cwds())
+    return any((c.rstrip(os.sep) + os.sep).startswith(prefixes) for c in (_cwds() if cwds is None else cwds))
 
 
 def _status_entries(land, path):
@@ -285,15 +280,8 @@ def _status_entries(land, path):
     return [e for e in r.stdout.split("\0") if e]
 
 
-def is_clean(path) -> bool:
-    """Empty `git status --porcelain --ignored`, or only ignored cache content. False on failure."""
-    try:
-        return _is_clean(_load_land(), Path(path))
-    except _CountError:
-        return False
-
-
 def _is_clean(land, path) -> bool:
+    """Empty `git status --porcelain --ignored`, or only ignored cache content."""
     for e in _status_entries(land, path):
         if not e.startswith("!! ") or not _is_cache_path(e[3:]):
             return False
@@ -349,6 +337,40 @@ def _worktree_entries(land, repo) -> list[dict]:
     return items
 
 
+_PULL_STATE_TEXT = {
+    "dirty": "hovedmappen er ikke ren",
+    "not-on-main": "hovedmappen står ikke på standardgrenen",
+    "diverged": "den og origin har skilt lag",
+    "unknown": "hovedmappen kunne ikke måles",
+}
+
+
+def _main_folder_pull_state(land, primary: Path, main) -> str:
+    """R12. "has-all": local main already has everything on origin/main (equal or ahead);
+    "pullable": behind, clean and on main, so `pull --ff-only` there is safe; else the reason
+    it is not ("dirty", "not-on-main", "diverged", "unknown")."""
+    if not main:
+        return "unknown"
+    local = land.out(primary, "rev-parse", "--verify", "--quiet", f"refs/heads/{main}^{{commit}}")
+    remote = land.out(primary, "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{main}^{{commit}}")
+    if not local or not remote:
+        return "unknown"
+    if local == remote:
+        return "has-all"
+    behind = land.git(primary, "merge-base", "--is-ancestor", local, remote).returncode
+    if behind == 1:
+        ahead = land.git(primary, "merge-base", "--is-ancestor", remote, local).returncode
+        return "has-all" if ahead == 0 else ("diverged" if ahead == 1 else "unknown")
+    if behind:
+        return "unknown"
+    if land.out(primary, "symbolic-ref", "--short", "-q", "HEAD") != main:
+        return "not-on-main"
+    try:
+        return "dirty" if land.dirty_files(primary) else "pullable"
+    except land.Stop:
+        return "unknown"
+
+
 def measure_tidy(repo) -> dict:
     """Work folders, local branches and leftover sibling folders. Proposes, never executes."""
     land = _load_land()
@@ -372,6 +394,31 @@ def _tidy_scan(land, repo):
     checked_out = {t["branch"] for t in trees if t.get("branch")}
     main = land.default_branch(repo)
     have_wt = shutil.which("wt") is not None
+    pull_state = _main_folder_pull_state(land, primary, main)
+    cwds = []                                   # lsof once per report, only when something needs it
+
+    def busy(path):
+        if not cwds:
+            cwds.append(_cwds())
+        return in_use(path, cwds[0])
+
+    def needs_pull(branch):
+        """R12: the branch's only proof is origin/main; the main folder's own main lacks it."""
+        if land.git(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{main}").returncode:
+            return True                         # no local main at all: only origin proves it
+        r = land.git(repo, "merge-base", "--is-ancestor", f"refs/heads/{branch}", f"refs/heads/{main}")
+        if r.returncode not in (0, 1):
+            raise _CountError(f"kunne ikke avgjøre om {main} har {branch}: {r.stderr.strip()[-200:]}")
+        return r.returncode == 1
+
+    def blocked(branch, what):
+        """Only an origin/main proof, and the main folder cannot be pulled: no removal (R12)."""
+        if pull_state != "pullable" and needs_pull(branch):
+            ask.append(f"{what}: landet på origin/{main}, men ikke i hovedmappens {main} "
+                       f"({_PULL_STATE_TEXT.get(pull_state, pull_state)}); pull main i hovedmappen først")
+            return True
+        return False
+
     for t in trees:
         path = Path(t["path"])
         branch = t.get("branch")
@@ -387,7 +434,7 @@ def _tidy_scan(land, repo):
             if branch and _landed_state(land, repo, branch):
                 ask.append(f"{path}: arbeidsmappen du står i ({branch}) ryddes etter ExitWorktree")
             continue
-        if in_use(path):
+        if busy(path):
             ask.append(f"{path} i bruk")
         elif not branch:
             ask.append(f"{path} har ingen gren (frakoblet HEAD)")
@@ -395,8 +442,11 @@ def _tidy_scan(land, repo):
             ask.append(f"{path}: grenen {branch} er ikke bevist landet")
         elif not _is_clean(land, path):
             ask.append(f"{path}: har uncommittede eller ignorerte filer som ikke er hurtigbuffer")
+        elif blocked(branch, f"{path} ({branch})"):
+            pass
         elif have_wt:
-            safe.append(["wt", "-C", str(primary), "remove", branch])
+            # --foreground: the removal is done when wt returns, so the next `report` does not see it.
+            safe.append(["wt", "-C", str(primary), "remove", "--foreground", branch])
         else:
             safe.append(["git", "-C", str(primary), "worktree", "remove", str(path)])
             safe.append(["git", "-C", str(primary), "branch", "-d", branch])
@@ -406,17 +456,19 @@ def _tidy_scan(land, repo):
     for name in r.stdout.split():
         if name in checked_out or name == main:
             continue
-        if _landed_state(land, repo, name):
-            safe.append(["git", "-C", str(primary), "branch", "-d", name])
-        else:
+        if not _landed_state(land, repo, name):
             ask.append(f"{name} er ikke bevist landet")
+        elif not blocked(name, name):
+            safe.append(["git", "-C", str(primary), "branch", "-d", name])
+    if safe and pull_state == "pullable":       # R12: once, before the removals
+        safe.insert(0, ["git", "-C", str(primary), "pull", "--ff-only"])
     if primary.parent.is_dir():
         for d in sorted(primary.parent.glob(glob.escape(primary.name) + ".*")):
             if not d.is_dir() or d.resolve() in known:
                 continue
             if d.is_symlink():
                 ask.append(f"{d}: er en symbolsk lenke; den flyttes ikke til papirkurven")
-            elif in_use(d):
+            elif busy(d):
                 ask.append(f"{d} i bruk")
             elif all_cache(d):
                 # The path is an argument, never interpolated into the AppleScript source.
@@ -528,7 +580,7 @@ def measure_installable(repo) -> dict:
         if unpushed:    # a remote exists but origin/<main> does not: nothing is landed there yet
             return _inst(kind, "open", "main er ikke pushet")
         if kind == "macos-app":
-            return _installable_app(repo, head, ref)
+            return _installable_app(repo, head, ref, has_origin)
         if kind == "plugin":
             return _installable_plugin(land, repo, ref, has_origin)
         return _installable_command(land, repo, arg)
@@ -536,7 +588,16 @@ def measure_installable(repo) -> dict:
         return _inst("undefined", "unknown", f"kunne ikke måle: {e}")
 
 
-def _installable_app(repo, head, ref):
+def _installable_app(repo, head, ref, has_origin=True):
+    r = _installable_app_state(repo, head, ref)
+    if not has_origin and r["status"] == "stale":
+        # install pulls and builds origin/main, so without an `origin` remote it always stops at 3
+        r["safe_actions"] = []
+        r["detail"] += "; install trenger en origin-remote"
+    return r
+
+
+def _installable_app_state(repo, head, ref):
     gd = gitdir(repo)
     safe = [[sys.executable, os.path.abspath(__file__), "install", "--repo", str(repo)]]
     ask = []
@@ -1006,13 +1067,6 @@ def _spellings(path) -> set[str]:
     return {str(path), os.path.realpath(str(path))}
 
 
-def running_instances(executable_path) -> list[int]:
-    """PIDs whose `comm` (the full program path on macOS) equals the path as text — never a
-    regular expression or a prefix."""
-    want = _spellings(executable_path)
-    return [pid for pid, comm in _processes() if comm in want]
-
-
 def app_instances(executable_name, bundle_id) -> list[tuple[int, str]]:
     """Every running copy of the app, wherever its bundle lies: `comm` ends in
     /Contents/MacOS/<exe> and the bundle three levels up has our bundle id. A bundle that cannot
@@ -1151,11 +1205,12 @@ def _remove_leftovers(apps: Path, bundle_id: str):
     """Under the install lock every `.<name>.gstack-new-<pid>` with our bundle id is a leftover
     of an interrupted run (a PID can be reused, so it is not checked). Such a leftover may be the
     user's previous version (a run stopped between the swap and the Trash), so it goes to the Trash,
-    never to rm. Others are left alone."""
+    never to rm. Others are left alone. Returns where each one went."""
     try:
         entries = list(apps.iterdir()) if apps.is_dir() else []
     except OSError as e:
         raise Stop(70, f"kunne ikke lese {apps}: {e}") from None
+    moved = []
     for p in entries:
         m = _NEW_COPY_RE.fullmatch(p.name)
         if not m or p.is_symlink() or not p.is_dir():
@@ -1165,6 +1220,8 @@ def _remove_leftovers(apps: Path, bundle_id: str):
         where, problem = _to_trash(p, _old_name(m.group(1)))
         if problem:                 # _to_trash has given it its hidden name back
             raise Stop(70, f"en rest etter en avbrutt installering ble liggende: {problem}")
+        moved.append(where)
+    return moved
 
 
 def _read_stamp(gd: Path):
@@ -1496,7 +1553,7 @@ def deliver(args, info, scheme, apps: Path, gd: Path, primary: Path, head: str) 
     target = apps / name
     product = build(primary, info, scheme, gd)          # 8: nothing touched, the app keeps running
     tmp = apps / f".{stem}.gstack-new-{os.getpid()}"
-    st = {"holds": None, "swapped": False}
+    st = {"holds": None, "swapped": False, "stamped": False}
     try:
         if os.path.lexists(tmp):
             raise Stop(70, f"{tmp} finnes allerede og er ikke en rest av denne appen; rydd den selv")
@@ -1524,6 +1581,7 @@ def deliver(args, info, scheme, apps: Path, gd: Path, primary: Path, head: str) 
         notes = [n for n in (register(target),) if n]
         with _critical():
             write_stamp(gd, scheme, bid, head, target)
+            st["stamped"] = True
         old_note = "det fantes ingen gammel kopi"
         if st["holds"] == "old":                # only now, after the check at the final path
             with _critical():
@@ -1536,22 +1594,21 @@ def deliver(args, info, scheme, apps: Path, gd: Path, primary: Path, head: str) 
         with _critical(raise_pending=False):
             _cleanup(tmp, st, stem)
         if isinstance(e, Stop) and e.code == 70 and st["swapped"]:
-            e.message += f"; {target} var allerede byttet, men er ikke stemplet"
+            e.message += (f"; {target} var allerede byttet og stemplet" if st["stamped"]
+                          else f"; {target} var allerede byttet, men er ikke stemplet")
         raise
 
 
 def _already_current(primary: Path, gd: Path, apps: Path, scheme, head):
-    """The reason when the stamp already proves `head` is installed in `apps` (same predicate as
-    report: stamp_is_current), else None. Checked before anything is asked or built."""
+    """The stamp when it already proves `head` is installed in `apps` (same predicate as report:
+    stamp_is_current), else None. Checked before anything is asked or built."""
     stamp, problem = _read_stamp(gd)
     if problem or not stamp or stamp.get("scheme") != scheme:
         return None
     app = stamp.get("app_path")
     if not isinstance(app, str) or not app or os.path.realpath(os.path.dirname(app)) != os.path.realpath(apps):
         return None
-    if not stamp_is_current(primary, stamp, head):
-        return None
-    return f"{Path(app).name} {head[:7]} er allerede installert"
+    return stamp if stamp_is_current(primary, stamp, head) else None
 
 
 def _install_locked(args, repo: Path, gd: Path, ctx: dict) -> dict:
@@ -1566,7 +1623,12 @@ def _install_locked(args, repo: Path, gd: Path, ctx: dict) -> dict:
     apps = Path(args.applications_dir) if args.applications_dir else Path("/Applications")
     current = _already_current(primary, gd, apps, scheme, head)
     if current:                                        # before the running check: never asks to quit
-        return {"status": "current", "reason": current}
+        # A hidden copy an earlier run could not trash is retried here too (still under the lock).
+        moved = _remove_leftovers(apps, current["bundle_id"])
+        reason = f"{Path(current['app_path']).name} {head[:7]} er allerede installert"
+        if moved:
+            reason += f"; {len(moved)} rest(er) etter en avbrutt installering lagt i {', '.join(moved)}"
+        return {"status": "current", "reason": reason}
     info = discover_build(primary, scheme, gd / BUILD_DIR)
     _require_writable(apps)                            # 10 before any build time is spent
     _remove_leftovers(apps, info["bundle_id"])
