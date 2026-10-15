@@ -26,7 +26,9 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -80,6 +82,93 @@ def installable_at(repo, rev):
     """The Installable: line of CLAUDE.md as committed at `rev` (None: no line or no file)."""
     found = _load_land().claude_md_at(Path(repo), rev)
     return parse_installable(found[1]) if found else None
+
+
+def _result(status, detail, items=()):
+    return {"status": status, "detail": detail, "items": list(items)}
+
+
+def measure_committed(repo) -> dict:
+    """Uncommitted files in this folder and in the main folder (when they differ)."""
+    land = _load_land()
+    repo = Path(repo)
+    folders = [repo]
+    primary = land.primary_worktree(repo)
+    if primary and Path(primary).resolve() != repo.resolve():
+        folders.append(Path(primary))
+    files = set()
+    for folder in folders:
+        try:
+            files |= land.dirty_files(folder)
+        except land.Stop as e:
+            return _result("unknown", f"git status failed in {folder}: {e}")
+    items = sorted(files)
+    if items:
+        return _result("open", f"{len(items)} filer", items)
+    return _result("ok", "0 filer")
+
+
+def fetch_origin(repo):
+    """`git fetch --quiet origin` (15 s). The error text, or None when it worked."""
+    land = _load_land()
+    try:
+        r = subprocess.run(["git", "-C", str(repo), "fetch", "--quiet", "origin"],
+                           capture_output=True, text=True, errors="replace",
+                           stdin=subprocess.DEVNULL, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}, timeout=15)
+    except subprocess.TimeoutExpired:
+        return "git fetch origin timed out after 15 s"
+    if r.returncode:
+        return (r.stderr.strip() or f"git fetch origin exited {r.returncode}")[-300:]
+    return None
+
+
+def _count(land, repo, *args):
+    out = land.out(repo, "rev-list", "--count", *args)
+    return int(out) if out and out.isdigit() else None
+
+
+def measure_pushed(repo) -> dict:
+    """Is everything on origin? Never proposes a force push."""
+    land = _load_land()
+    repo = Path(repo)
+    base = {"safe_actions": [], "ask": []}
+    if land.git(repo, "remote", "get-url", "origin").returncode:
+        return {**_result("undefined", "– (ingen fjern-repo)"), **base}
+    err = fetch_origin(repo)
+    if err:
+        return {**_result("unknown", f"kunne ikke hente fra origin: {err}"), **base}
+    safe, ask, items = [], [], []
+    branch = land.out(repo, "symbolic-ref", "--short", "-q", "HEAD")
+    if branch is None:
+        n = _count(land, repo, "HEAD", "--not", "--remotes")
+        if n:
+            items.append(f"detached HEAD: {n} commits no remote has")
+            ask.append("detached HEAD has commits no remote has; give them a branch and push it")
+    else:
+        upstream = land.out(repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+        if upstream:
+            n = _count(land, repo, "@{upstream}..HEAD")
+            if n:
+                items.append(f"{branch}: {n} commits not on {upstream}")
+                if land.git(repo, "merge-base", "--is-ancestor", upstream, "HEAD").returncode == 0:
+                    safe.append(["git", "-C", str(repo), "push"])
+                else:
+                    ask.append(f"push of '{branch}' would need force")
+        else:
+            n = _count(land, repo, "HEAD", "--not", "--remotes")
+            if n:
+                items.append(f"{branch}: {n} commits no remote has (no upstream)")
+                ask.append(f"'{branch}' has no upstream; push it with: git push -u origin {branch}")
+    main = land.default_branch(repo)
+    if (main and land.git(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{main}").returncode == 0
+            and land.git(repo, "show-ref", "--verify", "--quiet", f"refs/remotes/origin/{main}").returncode == 0):
+        n = _count(land, repo, f"origin/{main}..{main}")
+        if n:
+            items.append(f"{main}: {n} commits not on origin/{main}")
+            ask.append(f"{main} has {n} commits not landed through land")
+    if items:
+        return {**_result("open", f"{len(items)} åpne", items), "safe_actions": safe, "ask": ask}
+    return {**_result("ok", "alt er på origin"), **base}
 
 
 def cmd_report(args) -> int:
