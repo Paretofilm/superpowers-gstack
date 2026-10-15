@@ -522,7 +522,16 @@ def test_code_3_when_the_main_folder_is_dirty_but_ignored_files_are_fine(tmp_pat
 def test_code_3_for_untracked_files_that_are_not_ignored(tmp_path):
     repo = app_repo(tmp_path)
     (repo / "Extra.swift").write_text("// would be compiled into the build\n")
+    code, out = run_install(repo, stub_bin(tmp_path), tmp_path / "Applications dir")
+    assert code == 3 and "Extra.swift" in out["reason"]                          # R10: names the files
+
+def test_a_stored_code_3_is_shown_by_report(tmp_path):                            # R10
+    repo = app_repo(tmp_path)
+    (repo / "Extra.swift").write_text("x\n")
     assert run_install(repo, stub_bin(tmp_path), tmp_path / "Applications dir")[0] == 3
+    (repo / "Extra.swift").unlink()
+    ask = json.loads(run_report(repo)[1][-1])["ask"]
+    assert any("kode 3" in a and "Extra.swift" in a for a in ask)
 
 def test_code_3_when_local_main_has_commits_origin_lacks(tmp_path):
     repo = app_repo(tmp_path); commit_file(repo, "notes.txt", "unpushed\n")
@@ -589,12 +598,50 @@ def test_quit_path_quits_the_branch_build_when_it_is_the_only_instance(tmp_path)
     code, out = run_install(repo, stub_bin(tmp_path), apps, "--quit-path", str(branch_app))
     assert passed(code, out) and not ps_file.exists() and "to quit" in Path(env["STUB_LOG"]).read_text()
 
-def test_quit_path_with_another_bundle_id_is_refused(tmp_path):
+def test_a_process_with_the_same_exe_name_but_another_bundle_id_is_ignored(tmp_path):   # review fix 1
     repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; apps.mkdir()
-    branch_app = write_app(tmp_path / "DerivedData dir" / "Fake App.app", "com.other.app")
+    stranger = write_app(tmp_path / "Elsewhere dir" / "Other.app", "com.other.app")
+    env = stub_env(tmp_path); Path(env["STUB_PS_FILE"]).write_text(f"1 {stranger}/Contents/MacOS/Fake\n")
+    for flags in ([], ["--quit-running"], ["--quit-path", str(stranger)]):
+        assert passed(*run_install(repo, stub_bin(tmp_path), apps, *flags))
+    assert "osascript" not in Path(env["STUB_LOG"]).read_text()
+
+@pytest.mark.parametrize("flag", ["--quit-running", "--quit-path"])
+def test_a_third_running_copy_with_our_bundle_id_stops_both_flags(tmp_path, flag):     # review fix 1
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    stamp_at(repo, apps, _rev(repo, "HEAD"))
+    branch_app = write_app(tmp_path / "DerivedData dir" / "Fake App.app")
+    third = write_app(tmp_path / "Third dir" / "Fake App.app")
+    covered = apps / "Fake App.app" if flag == "--quit-running" else branch_app
+    env = stub_env(tmp_path)
+    Path(env["STUB_PS_FILE"]).write_text(f"1 {covered}/Contents/MacOS/Fake\n2 {third}/Contents/MacOS/Fake\n")
+    extra = [flag] if flag == "--quit-running" else [flag, str(branch_app)]
+    code, out = run_install(repo, stub_bin(tmp_path), apps, *extra)
+    assert code == 4 and str(third) in out["reason"]
+    assert "osascript" not in Path(env["STUB_LOG"]).read_text()
+
+def test_a_running_branch_build_without_a_flag_is_4(tmp_path):                         # review fix 1
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; apps.mkdir()
+    branch_app = write_app(tmp_path / "DerivedData dir" / "Fake App.app")
     env = stub_env(tmp_path); Path(env["STUB_PS_FILE"]).write_text(f"1 {branch_app}/Contents/MacOS/Fake\n")
-    code, _ = run_install(repo, stub_bin(tmp_path), apps, "--quit-path", str(branch_app))
-    assert code == 64 and "to quit" not in Path(env["STUB_LOG"]).read_text()
+    assert run_install(repo, stub_bin(tmp_path), apps)[0] == 4
+    assert run_install(repo, stub_bin(tmp_path), apps, "--quit-running")[0] == 4
+
+def test_quit_path_is_made_absolute(tmp_path):                                          # review minor 6
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; apps.mkdir()
+    branch_app = write_app(tmp_path / "DerivedData dir" / "Fake App.app")
+    env = stub_env(tmp_path); ps_file = Path(env["STUB_PS_FILE"])
+    ps_file.write_text(f"1 {branch_app}/Contents/MacOS/Fake\n")
+    full = {**os.environ, **env, "PATH": f"{stub_bin(tmp_path)}:{os.environ['PATH']}"}
+    p = subprocess.run([sys.executable, str(SCRIPT), "install", "--repo", str(repo), "--applications-dir", str(apps),
+                        "--quit-path", "DerivedData dir/Fake App.app"], capture_output=True, text=True, env=full,
+                       cwd=str(tmp_path))
+    assert passed(p.returncode, json.loads(p.stdout.strip().splitlines()[-1])) and not ps_file.exists()
+
+def test_both_quit_flags_are_a_usage_error_that_still_ends_in_json(tmp_path):          # review minor 6
+    repo = app_repo(tmp_path)
+    code, out = run_install(repo, stub_bin(tmp_path), tmp_path / "Applications dir", "--quit-running", "--quit-path", "/x.app")
+    assert code == 64 and out["code"] == 64 and out["status"] == "stopped"
 
 def test_no_quit_is_sent_when_nothing_runs(tmp_path):
     repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; apps.mkdir()
@@ -715,7 +762,20 @@ def test_a_generated_project_that_changes_tracked_files_is_3(tmp_path):
     commit_file(repo, "project.yml", "name: Fake\n"); commit_file(repo, "Fake.xcodeproj/project.pbxproj", "old\n")
     push(repo); os.utime(repo / "project.yml", (2_000_000_000, 2_000_000_000))
     stubs = stub_bin(tmp_path, xcodegen='echo new > Fake.xcodeproj/project.pbxproj')
-    assert run_install(repo, stubs, tmp_path / "Applications dir")[0] == 3
+    code, out = run_install(repo, stubs, tmp_path / "Applications dir")
+    assert code == 3 and "xcodegen" in out["reason"] and "project.pbxproj" in out["reason"]
+
+def test_helper_apps_in_the_settings_do_not_make_it_ambiguous(tmp_path):        # review fix 2
+    repo = app_repo(tmp_path)
+    body = ("echo 'Build settings for action build and target Helper:'\n"
+            "echo '    TARGET_NAME = Helper'\necho '    BUILT_PRODUCTS_DIR = /x'\necho '    FULL_PRODUCT_NAME = Helper.app'\n"
+            "echo '    PRODUCT_BUNDLE_IDENTIFIER = com.example.helper'\necho '    EXECUTABLE_NAME = Helper'\n"
+            "echo 'Build settings for action build and target Fake App:'\n"
+            "echo '    TARGET_NAME = Fake App'\necho '    BUILT_PRODUCTS_DIR = /x'\necho '    FULL_PRODUCT_NAME = Fake App.app'\n"
+            "echo '    PRODUCT_BUNDLE_IDENTIFIER = com.example.fake'\necho '    EXECUTABLE_NAME = Fake'")
+    assert passed(*run_install(repo, stub_bin(tmp_path, xcodebuild=body), tmp_path / "Applications dir"))
+    ambiguous = body.replace("TARGET_NAME = Fake App", "TARGET_NAME = Main").replace("= Fake App.app", "= Main.app")
+    assert run_install(repo, stub_bin(tmp_path, xcodebuild=ambiguous), tmp_path / "Applications dir")[0] == 64
 
 def test_a_workspace_is_preferred_to_a_project(tmp_path):
     repo = app_repo(tmp_path); env = stub_env(tmp_path)

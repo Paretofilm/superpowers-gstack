@@ -527,7 +527,8 @@ def _installable_app(repo, head, ref):
     result, rerr = _read_json(gd / RESULT_FILE)
     if rerr:
         ask.append(rerr)
-    elif result and isinstance(result.get("code"), int) and result["code"] >= 4:
+    elif (result and isinstance(result.get("code"), int) and not isinstance(result["code"], bool)
+          and result["code"] != 0):     # R10: every stored stop, 2..70, until a run succeeds
         ask.append(f"siste install stoppet (kode {result['code']}): {result.get('reason', 'ukjent årsak')}")
     stamp, serr = _read_json(gd / STAMP_FILE)
     if serr:
@@ -759,7 +760,8 @@ class _Flock:
             except BlockingIOError:
                 if time.monotonic() >= end:
                     os.close(fd)
-                    raise Stop(12, self.message, state=f"lsof {self.path}   # the process that holds it") from None
+                    raise Stop(12, self.message,
+                               state=f"lsof {_load_land().q(str(self.path))}   # the process that holds it") from None
                 time.sleep(0.2)
         self.fd = fd
         return self
@@ -793,15 +795,25 @@ def _run(argv, cwd=None, timeout=120, env=None):
                           stdin=subprocess.DEVNULL, timeout=timeout, env=env)
 
 
-def _clean_main_folder(land, primary: Path):
+def _clean_main_folder(land, primary: Path, after_xcodegen=False):
     """Ignored local files are fine (they are Local state); anything else is not, untracked
-    included: a stray untracked source file would be built into the Release copy."""
+    included (Ruling R10): a stray untracked source file would be built into the Release copy,
+    and classify-change.py folds untracked files into the migration span. The reason names the
+    first files, so a stop stored in the background still says what to clean."""
     r = land.git(primary, "status", "--porcelain", "-z", "--untracked-files=all", "--ignore-submodules=none")
     if r.returncode:
         raise Stop(3, f"git status feilet i hovedmappen {primary}", state=r.stderr.strip()[-300:])
     entries = [e for e in r.stdout.split("\0") if e]
     if entries:
-        raise Stop(3, f"hovedmappen {primary} er ikke ren", state="\n".join(entries[:20]))
+        files, parts = [], iter(entries)
+        for e in parts:
+            files.append(e[3:])
+            if e[:1] in ("R", "C"):         # a rename or copy: the old path follows, no status
+                next(parts, None)
+        shown = ", ".join(files[:5]) + (f" (+{len(files) - 5})" if len(files) > 5 else "")
+        what = (f"xcodegen generate endret eller lagde filer i hovedmappen {primary}: {shown}" if after_xcodegen
+                else f"hovedmappen {primary} er ikke ren: {shown}")
+        raise Stop(3, what, state="\n".join(entries[:20]))
 
 
 def precondition_main(land, repo: Path, gd: Path):
@@ -824,8 +836,9 @@ def precondition_main(land, repo: Path, gd: Path):
             raise Stop(3, "git pull --ff-only brukte over 120 s") from None
         if r.returncode:
             raise Stop(3, "git pull --ff-only feilet", state=(r.stderr.strip() or r.stdout.strip())[-300:])
-    head = land.out(primary, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
-    upstream = land.out(primary, "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{main}^{{commit}}")
+        # Read under the lock: a land that moves main right after it is released is not a mismatch.
+        head = land.out(primary, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+        upstream = land.out(primary, "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{main}^{{commit}}")
     if not head or not upstream:
         raise Stop(3, f"kunne ikke lese HEAD eller origin/{main} etter hentingen")
     if head != upstream:
@@ -877,7 +890,7 @@ def _generate_if_needed(land, primary: Path):
         raise Stop(64, f"xcodegen generate feilet: {e}") from None
     if r.returncode:
         raise Stop(64, f"xcodegen generate ga kode {r.returncode}", state=_last_line(r.stderr, r.stdout))
-    _clean_main_folder(land, primary)     # a generated project that differs from the committed one
+    _clean_main_folder(land, primary, after_xcodegen=True)   # generated output that differs from the commit
 
 
 def _parse_settings(text: str) -> list[dict]:
@@ -894,6 +907,23 @@ def _parse_settings(text: str) -> list[dict]:
     if cur:
         sections.append(cur)
     return sections
+
+
+def _distinct(sections):
+    return {(s.get("FULL_PRODUCT_NAME"), s.get("PRODUCT_BUNDLE_IDENTIFIER")) for s in sections}
+
+
+def _pick_app_section(apps: list[dict], scheme: str) -> list[dict]:
+    """A scheme may also build helper apps or login items. The app is the section whose
+    TARGET_NAME is the scheme, else the one named <scheme>.app; still several is never guessed."""
+    if len(_distinct(apps)) <= 1:
+        return apps
+    for match in ([s for s in apps if s.get("TARGET_NAME") == scheme],
+                  [s for s in apps if s.get("FULL_PRODUCT_NAME") == f"{scheme}.app"]):
+        if match and len(_distinct(match)) == 1:
+            return match
+    names = ", ".join(sorted(str(n) for n, _ in _distinct(apps)))
+    raise Stop(64, f"skjemaet '{scheme}' bygger flere apper, og ingen heter som skjemaet: {names}")
 
 
 def discover_build(repo, scheme) -> dict:
@@ -914,10 +944,7 @@ def discover_build(repo, scheme) -> dict:
         raise Stop(64, f"xcodebuild -showBuildSettings for skjemaet '{scheme}' ga kode {r.returncode}",
                    state=_last_line(r.stderr, r.stdout))
     sections = _parse_settings(r.stdout)
-    apps = [s for s in sections if s.get("FULL_PRODUCT_NAME", "").endswith(".app")]
-    picked = {(s.get("FULL_PRODUCT_NAME"), s.get("PRODUCT_BUNDLE_IDENTIFIER")) for s in apps}
-    if len(picked) > 1:
-        raise Stop(64, f"skjemaet '{scheme}' bygger flere apper: {', '.join(sorted(n for n, _ in picked))}")
+    apps = _pick_app_section([s for s in sections if s.get("FULL_PRODUCT_NAME", "").endswith(".app")], scheme)
     settings = apps[0] if apps else (sections[0] if len(sections) == 1 else {})
     missing = [k for k, _ in _SETTINGS if not settings.get(k)]
     if missing:
@@ -934,26 +961,50 @@ def discover_build(repo, scheme) -> dict:
     return info
 
 
-def running_instances(executable_path) -> list[int]:
-    """PIDs whose `comm` (the full program path on macOS) equals the path as text — never a
-    regular expression or a prefix. A ps that fails is a stop, never 'not running'."""
-    want = {str(executable_path), os.path.realpath(str(executable_path))}
+def _processes() -> list[tuple[int, str]]:
+    """(pid, comm) from `ps -Axo pid=,comm=`. A ps that fails is a stop, never 'not running'."""
     try:
         r = _run(["ps", "-Axo", "pid=,comm="], timeout=30)
     except (OSError, subprocess.TimeoutExpired) as e:
         raise Stop(70, f"kunne ikke liste prosessene (ps): {e}") from None
     if r.returncode:
         raise Stop(70, f"ps ga kode {r.returncode}; kan ikke vite om appen kjører", state=_last_line(r.stderr))
-    pids = []
+    procs = []
     for line in r.stdout.splitlines():
         parts = line.strip().split(None, 1)
-        if len(parts) == 2 and parts[0].isdigit() and parts[1] in want:
-            pids.append(int(parts[0]))
-    return pids
+        if len(parts) == 2 and parts[0].isdigit():
+            procs.append((int(parts[0]), parts[1]))
+    return procs
 
 
-def quit_app(bundle_id, executables, deadline=None) -> bool:
-    """Ask the app to quit itself and wait until no instance of `executables` runs.
+def _spellings(path) -> set[str]:
+    return {str(path), os.path.realpath(str(path))}
+
+
+def running_instances(executable_path) -> list[int]:
+    """PIDs whose `comm` (the full program path on macOS) equals the path as text — never a
+    regular expression or a prefix."""
+    want = _spellings(executable_path)
+    return [pid for pid, comm in _processes() if comm in want]
+
+
+def app_instances(executable_name, bundle_id) -> list[tuple[int, str]]:
+    """Every running copy of the app, wherever its bundle lies: `comm` ends in
+    /Contents/MacOS/<exe> and the bundle three levels up has our bundle id. A bundle that cannot
+    be read counts as ours (fails closed); a readable other bundle id is another app."""
+    suffix = f"/Contents/MacOS/{executable_name}"
+    found = []
+    for pid, comm in _processes():
+        if not comm.endswith(suffix) or len(comm) == len(suffix):
+            continue
+        other, problem = _bundle_id(Path(comm).parent.parent.parent)
+        if problem or other == bundle_id:
+            found.append((pid, comm))
+    return found
+
+
+def quit_app(bundle_id, executable_name, deadline=None) -> bool:
+    """Ask the app to quit itself and wait until no copy of it runs anywhere.
     Never kill, never relaunch. True when they are all gone within the deadline."""
     if deadline is None:
         deadline = _env_seconds("GSTACK_QUIT_DEADLINE", 20)
@@ -969,7 +1020,7 @@ def quit_app(bundle_id, executables, deadline=None) -> bool:
     except OSError as e:
         raise Stop(4, f"kunne ikke be appen avslutte seg selv (osascript): {e}") from None
     while True:
-        if not any(running_instances(x) for x in executables):
+        if not app_instances(executable_name, bundle_id):
             return True
         if time.monotonic() >= end:
             return False
@@ -1043,7 +1094,7 @@ def _read_stamp(gd: Path):
 def ask_questions(args, info, apps: Path, gd: Path, primary: Path, head: str):
     """Step 3, in fail-closed order: 7 (another app; no flag helps, and quitting by bundle id must
     never address it), 4 (running), 5 (migration since the stamp), 6 (unstamped copy).
-    Nothing is quit here: the returned plan (None, or the executables to wait for) is carried out
+    Nothing is quit here: the returned plan (None, or (label, executable name)) is carried out
     only after every question has passed, so a stop on 5 or 6 never leaves the app closed."""
     target = apps / info["full_product_name"]
     bid, exe = info["bundle_id"], info["executable_name"]
@@ -1056,23 +1107,25 @@ def ask_questions(args, info, apps: Path, gd: Path, primary: Path, head: str):
         if other != bid:
             raise Stop(7, f"{target} er en annen app ({other}, ikke {bid}); rydd den selv")
 
-    apps_exe = target / "Contents" / "MacOS" / exe
-    running = running_instances(apps_exe)
+    # Every running copy with our bundle id must be the one the flag covers, compared as exact text:
+    # --quit-running covers the copy in the applications folder, --quit-path that one bundle.
     plan = None
-    if args.quit_path:
-        qp = Path(args.quit_path)
-        if running:
-            raise Stop(4, f"{target.name} kjører fra {target}, ikke bare fra {qp}", state=f"PID {running}")
-        qp_exe = qp / "Contents" / "MacOS" / exe
-        if running_instances(qp_exe):
-            qbid, problem = _bundle_id(qp)
+    running = app_instances(exe, bid)
+    if running:
+        listed = ", ".join(f"{c} (PID {p})" for p, c in running[:3])
+        if not (args.quit_running or args.quit_path):
+            raise Stop(4, f"{target.name} kjører: {listed}", state=listed)
+        covered_bundle = Path(os.path.abspath(args.quit_path)) if args.quit_path else target
+        covered = _spellings(covered_bundle / "Contents" / "MacOS" / exe)
+        others = [c for _, c in running if c not in covered]
+        if others:
+            raise Stop(4, f"{target.name} kjører også utenfor {covered_bundle}: {', '.join(others[:3])}",
+                       state=listed)
+        if args.quit_path:
+            qbid, problem = _bundle_id(covered_bundle)
             if problem or qbid != bid:
-                raise Stop(64, f"--quit-path {qp} er ikke {bid}: {problem or qbid}")
-            plan = (f"{qp.name} fra {qp}", [qp_exe, apps_exe])
-    elif running:
-        if not args.quit_running:
-            raise Stop(4, f"{target.name} kjører", state=f"PID {running}")
-        plan = (target.name, [apps_exe])
+                raise Stop(64, f"--quit-path {covered_bundle} er ikke {bid}: {problem or qbid}")
+        plan = (f"{target.name} i {covered_bundle}", exe)
 
     stamp, problem = _read_stamp(gd)
     ours = stamp is not None and stamp.get("bundle_id") == bid
@@ -1198,10 +1251,15 @@ def main(argv=None) -> int:
         print("Python >= 3.11 required", file=sys.stderr)
         return 70
     parser = build_parser()
+    argv = sys.argv[1:] if argv is None else list(argv)
     try:
-        args = parser.parse_args(sys.argv[1:] if argv is None else argv)
+        args = parser.parse_args(argv)
     except SystemExit as e:
-        return 0 if e.code in (0, None) else 64
+        if e.code in (0, None):
+            return 0
+        if argv[:1] == ["install"]:     # install's last stdout line is always the JSON object
+            print(json.dumps(_outcome(64, "feil bruk av install (se stderr)", None), ensure_ascii=False))
+        return 64
     if not getattr(args, "func", None):
         parser.print_usage(sys.stderr)
         return 64
