@@ -23,10 +23,20 @@ nudge`) reminds the session when a view file is edited; it never blocks.
 
 ## Phase 0 — scope
 
+Begin every Bash call that needs the scripts with:
+
+```bash
+SKILL_DIR='<the base directory the Skill tool printed when this skill loaded>'
+VG="$SKILL_DIR/../../scripts/view-gate.py"; WS="$SKILL_DIR/../../scripts/window-shot.sh"
+[ -f "$VG" ] || VG=$(ls ~/.claude/plugins/cache/*/superpowers-gstack/*/scripts/view-gate.py 2>/dev/null | sort -V | tail -1)
+[ -f "$WS" ] || WS=$(ls ~/.claude/plugins/cache/*/superpowers-gstack/*/scripts/window-shot.sh 2>/dev/null | sort -V | tail -1)
+[ -f "$VG" ] && [ -f "$WS" ] || { echo "BLOCKED — view-gate.py / window-shot.sh not found; run /plugin update superpowers-gstack"; exit 2; }
+```
+
 | Check | Detect via | If it fails |
 |---|---|---|
 | Native project | `.gstack/track` is exactly `ios`, `macos` or `both` | `web` or missing: refuse, "not a native Apple project". Anything else: `BLOCKED — invalid .gstack/track`. |
-| Which files | `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/view-gate.py" files --base <default-ref>` | None listed: say there is no view change and stop. |
+| Which files | `python3 "$VG" files --base <default-ref>` (`$VG` and `$WS` are resolved below) | None listed: say there is no view change and stop. |
 
 Track decides the linters: `macos` → `review_macos_hig` + `review_accessibility`; `ios` →
 `review_accessibility` only (the macOS linter's window and menu-bar findings mislead on iOS);
@@ -66,7 +76,7 @@ Choose the route by cost to the user, cheapest first:
    (the project owner's standing consent for *this* and nothing wider). Build the branch, launch that
    exact bundle and prove which one is running (`/superpowers-gstack:verify-and-land` Phase 5), then
    ```bash
-   WINDOW_SHOT_EXPECT="$WANT" "${CLAUDE_PLUGIN_ROOT}/scripts/window-shot.sh" "$PID" /tmp/<name>.png
+   WINDOW_SHOT_EXPECT="$WANT" "$WS" "$PID" "${TMPDIR:-/tmp}/<name>.png"
    ```
    It captures one window by id, never the display, and exits non-zero rather than hand back an
    image that shows nothing (exit 3 not macOS, 4 no window, 5 blank capture, 6 wrong process).

@@ -14,7 +14,7 @@ SCRIPT = REPO / "scripts" / "window-shot.sh"
 SKILL_FAKES = {
     "uname": 'echo "${FAKE_UNAME:-Darwin}"',
     "ps": 'if [ -n "${FAKE_COMM:-}" ]; then echo "  $FAKE_COMM"; fi',
-    "swift": 'echo "${FAKE_WID:-}"',
+    "swift": 'case "$1" in *.swift) echo "${FAKE_WID:-}";; esac',
     "screencapture": 'for a; do last=$a; done; if [ "${FAKE_CAPTURE:-ok}" = fail ]; then exit 1; fi; '
                      'echo "$@" > "${FAKE_ARGS:-/dev/null}"; head -c "${FAKE_BYTES:-5000}" /dev/zero > "$last"',
     "sips": 'case "$*" in *pixelWidth*) echo "  pixelWidth: ${FAKE_W:-100}";; *) echo "  pixelHeight: ${FAKE_H:-100}";; esac',

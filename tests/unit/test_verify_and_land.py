@@ -195,3 +195,12 @@ def test_xcode_block_carries_the_view_gate_and_the_consent_marker():
     assert "swiftui-view-gate" in t and "View gate:" in t
     assert "scripts/window-shot.sh" in t and ".gstack/visual-verify" in t
     assert "never the whole display" in t
+
+
+def test_skills_find_the_scripts_through_skill_dir_not_a_hook_only_variable():
+    """${CLAUDE_PLUGIN_ROOT} is set for hooks, not for the Bash tool; every other skill
+    resolves its scripts through SKILL_DIR with a plugin-cache fallback."""
+    for name in ("verify-and-land", "swiftui-view-gate"):
+        t = (ROOT / "skills" / name / "SKILL.md").read_text()
+        assert "CLAUDE_PLUGIN_ROOT" not in t, name
+        assert '$SKILL_DIR/../../scripts/view-gate.py' in t, name

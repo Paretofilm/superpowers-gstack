@@ -1,5 +1,29 @@
 # Changelog
 
+## [3.12.0] - 2026-10-15
+
+**A SwiftUI view change is not done until it was looked up, linted and seen — and the agent can look without interrupting the user.**
+
+Field case (macOS app, 2026-10-13): a dropdown got `.menuIndicator(.hidden)` and looked like static text; the first fix used guessed sizes and an unsourced "follows the HIG"; `review_macos_hig` and `review_accessibility` both said clean on a control that was still wrong, because inside `Menu { … } label: { … }` the style `.borderlessButton` discards the custom label. Only a render of the view *in its container* showed it. Nothing in the plugin fired at the moment a view was written. Design: `docs/superpowers/specs/2026-10-15-swiftui-view-gate-design.md`.
+
+### Added
+- **`/superpowers-gstack:swiftui-view-gate`**: five steps — look up the control category in the corpus, lint (`review_macos_hig` for macos/both, `review_accessibility`, `review_liquid_glass` on Liquid Glass; iOS skips the macOS linter), render in the real container and *read the image*, an affordance check, and one closing line: `View gate: rendered and seen` / `built, appearance unverified` / `waived by user`. It says plainly that the linters are pattern checks.
+- **`scripts/view-gate.py`**: `nudge` is a `PostToolUse` hook (registered in `hooks/hooks.json`) that reminds the session once per unlinted streak of view edits and never blocks; an edit after a lint earns a new reminder because that lint is stale. `files --base REF` lists the view files a diff touches (a `.swift` file declaring a `View`, returning `some View`, or under `Views/` / `Components/`).
+- **`.gstack/visual-verify`** (`host` | `vm` | `off`, no file = `off`): the project owner's standing consent for window capture of an app the agent launched. `scripts/adapt-claude-md.py` validates it exactly like `.gstack/e2e-executor` (`Host`, `host `, empty are `BLOCKED`) and never writes it.
+- **`scripts/window-shot.sh <pid> <out.png>`**: finds the window by PID with `CGWindowListCopyWindowInfo` (no permission) and captures that one window with `screencapture -x -o -l`; never the display. Refuses without `host` (exit 2), off macOS (3), without a window after ~10 s (4), on a blank or uniform capture, which means Screen Recording is not granted (5), and for a wrong or dead process (6, with `WINDOW_SHOT_EXPECT`).
+
+### Changed
+- **`xcode-tools` block v9 → v10**: a section on view changes ("not done until seen", the routes in order of cost to the user, window-scoped versus whole-display) and an anti-pattern line. Lint's stale-marker denylist now covers v0–v9.
+- **`verify-and-land`**: Phase 1 names the views the diff touches; new Phase 5b looks at the launched app itself when `.gstack/visual-verify` is `host`; the human gate and Phase 7 refuse to present "ready to land" for views with no `View gate:` line unless the user waives it.
+
+### Not verified
+- The Mac-only parts have **not** run on a Mac: the Swift snippet inside `window-shot.sh`, `screencapture -l`, and `sips` on a real capture. The control flow, pin handling and every failure path are tested here with fakes on `PATH` (`tests/unit/test_window_shot.py`). The first run on a Mac is the missing verification; if the blank-capture ratio (2 bytes per 1000 pixels) is wrong for real windows, exit 5 will say so loudly rather than hand back an empty image.
+- `/ship` is gstack's and is not edited; the rule reaches it through the generated CLAUDE.md block.
+
+### For the maintainer (outside this repo)
+- A `PreToolUse` hook on `screencapture` in the user's own settings says it "captures the user's own screen" and points to `vm-run --screenshot`. That is right for whole-display capture and for GUI-driving tests; it is wrong for a window of the build the agent just launched. Suggested wording: *"Whole-display capture is discouraged. Window capture of an app this session launched is allowed through `scripts/window-shot.sh` when `.gstack/visual-verify` is `host`."* The plugin cannot edit that file.
+- Computer use (clicks, typing) still needs a per-session approval dialog. Whether a settings-level allowlist can pre-approve the project's own app is an open question for the host, not something the plugin can grant.
+
 ## [3.11.0] - 2026-10-11
 
 **An empty folder gets its CLAUDE.md with no questions. The stack is filled in after the first spec, once.**

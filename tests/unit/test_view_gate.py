@@ -131,3 +131,16 @@ def test_hook_is_registered_and_points_at_the_script():
         assert __import__("re").fullmatch(entry["matcher"], tool), tool
     assert not __import__("re").fullmatch(entry["matcher"], "mcp__swiftui-rag__search_swiftui_corpus")
     assert (REPO / "scripts" / "view-gate.py").stat().st_mode & 0o111
+
+
+def test_files_from_a_subdirectory_still_finds_untracked_views(tmp_path):
+    """`git ls-files --others` prints paths relative to the cwd, `git diff --name-only`
+    relative to the top; mixing them would silently drop a view."""
+    git(tmp_path, "init", "-q", "-b", "main")
+    (tmp_path / "App" / "Sources").mkdir(parents=True)
+    (tmp_path / "App" / "Sources" / "Item.swift").write_text(MODEL)
+    git(tmp_path, "add", "."); git(tmp_path, "commit", "-q", "-m", "base")
+    (tmp_path / "App" / "Sources" / "New.swift").write_text(VIEW)
+    r = subprocess.run([sys.executable, str(SCRIPT), "files", "--base", "main"],
+                       capture_output=True, text=True, cwd=tmp_path / "App" / "Sources")
+    assert r.returncode == 0 and r.stdout.split() == ["App/Sources/New.swift"], (r.stdout, r.stderr)

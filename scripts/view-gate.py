@@ -127,12 +127,12 @@ def nudge() -> int:
 
 
 def changed_view_files(base: str) -> list[str]:
-    def git(*args: str) -> str:
-        return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout
+    def git(*args: str, cwd: Path | None = None) -> str:
+        return subprocess.run(["git", *args], capture_output=True, text=True, check=True, cwd=cwd).stdout
 
     try:
         top = Path(git("rev-parse", "--show-toplevel").strip())
-        git("rev-parse", "--verify", "--quiet", f"{base}^{{commit}}")
+        git("rev-parse", "--verify", "--quiet", f"{base}^{{commit}}", cwd=top)
     except (subprocess.CalledProcessError, FileNotFoundError):
         raise SystemExit(f"BLOCKED — cannot resolve {base!r}, or this is not a git repository")
     names: set[str] = set()
@@ -140,7 +140,7 @@ def changed_view_files(base: str) -> list[str]:
                  ("diff", "--name-only", "--diff-filter=d", "HEAD"),
                  ("ls-files", "--others", "--exclude-standard")):
         try:
-            names.update(n for n in git(*args).splitlines() if n.endswith(".swift"))
+            names.update(n for n in git(*args, cwd=top).splitlines() if n.endswith(".swift"))
         except subprocess.CalledProcessError:
             continue
     return sorted(n for n in names if is_view_file(top / n))

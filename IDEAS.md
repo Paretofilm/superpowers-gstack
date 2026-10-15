@@ -12,7 +12,7 @@ When a skill ships, its entry moves to the "Shipped" section below with the comm
 
 ---
 
-## `swiftui-view-gate` — gate for every SwiftUI view change made during feature work (proposed 2026-10-13, from fagfilm-pipeline)
+## `swiftui-view-gate` ✅ SHIPPED in v3.12.0 (2026-10-15) — gate for every SwiftUI view change made during feature work (proposed 2026-10-13, from fagfilm-pipeline)
 
 **Gap.** The plugin checks SwiftUI against HIG in two places only, and neither covers the moment a feature's views get written:
 
@@ -70,7 +70,7 @@ The user's standing position: the user is the *sensor of last resort*, who looks
 - `quality-review` = would the experience feel premium (judgement, no tooling).
 - `swiftui-view-gate` = was *this diff's* UI looked up, linted and **seen** before it was called done. It is the only one that runs at implementation time on app views.
 
-**Status.** Proposed, not started. Smallest useful first step: step 3 and 4 only (a short section in `verify-and-land` and in the generated `xcode-tools` block that makes "rendered and seen" vs "unverified" mandatory in the final report). The hook and the full skill can follow once that proves useful. Evidence and the failed claims are in fagfilm-pipeline's memory note `swiftui-endringer-krever-hig-og-synlig-kontroll`.
+**Status.** Shipped in 3.12.0 at the full scope (skill, `PostToolUse` nudge, `verify-and-land` coupling, `.gstack/visual-verify`, `scripts/window-shot.sh`). Not yet run on a Mac: the window capture itself (see CHANGELOG 3.12.0, "Not verified"). Still open: the user's own `PreToolUse` hook on `screencapture` (outside this repo) and a host-side allowlist for computer use. Design and plan: `docs/superpowers/specs/2026-10-15-swiftui-view-gate-design.md`, `docs/superpowers/plans/2026-10-15-swiftui-view-gate.md`.
 
 ---
 

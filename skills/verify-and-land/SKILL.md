@@ -67,7 +67,12 @@ view gate (`/superpowers-gstack:swiftui-view-gate`), because "it builds" and "th
 are clean" are not a look:
 
 ```bash
-VIEW_FILES=$(python3 "${CLAUDE_PLUGIN_ROOT}/scripts/view-gate.py" files --base "$DEFAULT_REF")
+SKILL_DIR='<the base directory the Skill tool printed when this skill loaded>'
+VG="$SKILL_DIR/../../scripts/view-gate.py"; WS="$SKILL_DIR/../../scripts/window-shot.sh"
+[ -f "$VG" ] || VG=$(ls ~/.claude/plugins/cache/*/superpowers-gstack/*/scripts/view-gate.py 2>/dev/null | sort -V | tail -1)
+[ -f "$WS" ] || WS=$(ls ~/.claude/plugins/cache/*/superpowers-gstack/*/scripts/window-shot.sh 2>/dev/null | sort -V | tail -1)
+[ -f "$VG" ] || echo "view-gate.py not found: the view gate cannot be checked (run /plugin update superpowers-gstack)" >&2
+VIEW_FILES=$([ -f "$VG" ] && python3 "$VG" files --base "$DEFAULT_REF")
 ```
 
 Keep the list. Empty means the gate does not apply; say nothing about it.
@@ -251,7 +256,7 @@ the project owner has said, once, in the repo, that the agent may look at the ap
 launched. The user is the sensor of last resort, so look before asking.
 
 ```bash
-WINDOW_SHOT_EXPECT="$WANT" "${CLAUDE_PLUGIN_ROOT}/scripts/window-shot.sh" "$PID" "$TMPDIR/verify-$(git rev-parse --short HEAD).png"
+WINDOW_SHOT_EXPECT="$WANT" "$WS" "$PID" "${TMPDIR:-/tmp}/verify-$(git rev-parse --short HEAD).png"
 ```
 
 It captures one window by id, never the display. Read the PNG and list what is on screen,

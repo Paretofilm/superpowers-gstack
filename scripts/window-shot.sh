@@ -57,8 +57,10 @@ if [ -n "${WINDOW_SHOT_EXPECT:-}" ] && [ "$ACTUAL" != "$WINDOW_SHOT_EXPECT" ]; t
   die 6 "pid $PID runs '$ACTUAL', not '$WINDOW_SHOT_EXPECT'"
 fi
 
-SWIFT_SRC=$(mktemp "${TMPDIR:-/tmp}/window-shot.XXXXXX") || die 2 "cannot create a temp file"
-trap 'rm -f "$SWIFT_SRC"' EXIT
+# the swift driver decides what a file is by its extension, so the source needs `.swift`
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/window-shot.XXXXXX") || die 2 "cannot create a temp directory"
+trap 'rm -rf "$WORK"' EXIT
+SWIFT_SRC="$WORK/window-id.swift"
 cat > "$SWIFT_SRC" <<'SWIFT'
 import CoreGraphics
 let pid = Int(CommandLine.arguments[1])!
