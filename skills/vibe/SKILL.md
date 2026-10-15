@@ -181,8 +181,9 @@ Exit 0 is required before landing.
 branch's history (a warning, not exit 1); in `pr` landing mode, a squash-merge commit on
 main that changed the receipt makes `verify` exit 1 (`receipt changed by commit …`).
 Both mean the lock must be redone by the user, and re-locking after a rebase or a
-squash-merge receipt change is not editing a test. Tell the user and ask them to
-re-lock.
+squash-merge receipt change is not editing a test. The squash-merge case applies only
+when the exit-1 output names no file other than the receipt. A changed test file is never
+a re-lock case: it goes to the next paragraph. Tell the user and ask them to re-lock.
 
 **Any other exit 1** names each changed file (the receipt `.gstack/acceptance-lock.json`,
 a new file under a locked path and a hidden assume-unchanged flag included): restore it

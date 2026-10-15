@@ -241,6 +241,18 @@ def test_land_exit_0_runs_work_state_after_the_cleanup():
     assert "end the message with" in row.lower()
 
 
+def test_work_state_skill_allows_exactly_the_phase7_quit_path_addition():
+    """Final review I1: "run entries as printed, add no flags" and "never edit an entry" would
+    forbid the `--quit-path` Phase 7 appends. Both places name it as the one exception."""
+    ws = (ROOT / "skills" / "work-state" / "SKILL.md").read_text()
+    safe = " ".join(ws[ws.index("## Do what is safe"):ws.index("## Ask once")].split())
+    never = " ".join(ws[ws.index("## Never"):].split())
+    exception = "The only permitted addition is the `--quit-path <bundle recorded in verify-and-land Phase 5>`"
+    for section in (safe, never):
+        assert exception in section
+        assert "that the user's Phase 6 yes covered, appended to the `install` entry" in section
+
+
 def test_work_state_skill_quotes_the_same_phase6_wording():
     ws = " ".join((ROOT / "skills" / "work-state" / "SKILL.md").read_text().split())
     assert "make this the current version and install it" in ws

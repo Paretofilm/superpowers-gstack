@@ -185,7 +185,7 @@ Installable: plugin
      Regenerate with `python3 scripts/sync-own-claude-md.py`; lint rule E11
      fails if stale. -->
 
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v14 --><!-- emitted=108 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v14 --><!-- emitted=109 -->
 
 Commit at meaningful milestones — not at every file save, not only at session end.
 
@@ -230,7 +230,8 @@ review, and rots against the default branch while everything else moves.
 - **Before the last message of a task that changed files, run
   `/superpowers-gstack:work-state`**, do what its `safe_actions` say, ask what its
   `ask` says once, and end the message with its line. Not for pure questions or
-  conversations without file changes.
+  conversations without file changes. Only the session that talks to the user runs
+  this; a dispatched subagent reports and leaves it to its orchestrator.
 - **A fix nobody has watched run is not verified.** Tests answer *did I break
   something else*; they cannot answer *is the thing I fixed actually fixed*. When the
   project has a runnable app, build the branch and launch **that build** before

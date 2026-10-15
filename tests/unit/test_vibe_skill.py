@@ -174,6 +174,14 @@ def test_step_7_names_the_file_when_no_context_skill_exists():
     )
 
 
+def test_step_8_relock_only_when_exit_1_names_no_file_but_the_receipt():
+    """Final review T9: a squash-merge that also changed a test file must not pass as a
+    re-lock case; a changed test file is never re-locked away."""
+    special = VIBE[VIBE.index("Re-lock cases first"):VIBE.index("Any other exit 1")]
+    assert "only when the exit-1 output names no file other than the receipt" in special
+    assert "A changed test file is never a re-lock case" in special
+
+
 def test_step_8_handles_rebase_and_pr_receipt_before_the_generic_exit_1():
     i_special = VIBE.index("Re-lock cases first")
     i_generic = VIBE.index("Any other exit 1")

@@ -316,6 +316,9 @@ def test_the_shipped_git_hygiene_block_is_v14_and_runs_work_state():
     assert "/superpowers-gstack:work-state" in landing
     assert "safe_actions" in landing and "end the message with its line" in landing
     assert "Not for pure questions" in landing
+    # Final review I2: a subagent's final message goes to its orchestrator, not to the user.
+    assert ("Only the session that talks to the user runs this; a dispatched subagent reports "
+            "and leaves it to its orchestrator.") in landing
 
 
 def test_emitted_blocks_no_longer_say_verify_and_land_offers_the_landing():
