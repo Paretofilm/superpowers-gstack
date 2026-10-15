@@ -12,6 +12,68 @@ When a skill ships, its entry moves to the "Shipped" section below with the comm
 
 ---
 
+## `swiftui-view-gate` — gate for every SwiftUI view change made during feature work (proposed 2026-10-13, from fagfilm-pipeline)
+
+**Gap.** The plugin checks SwiftUI against HIG in two places only, and neither covers the moment a feature's views get written:
+
+- `apple-native-review` reads **specs and plans** (before any code exists).
+- `swiftui-design-consultation` runs `review_macos_hig` / `review_accessibility` / `review_liquid_glass` on files under `DesignSystem/Sources/DesignSystem/` only (its code-level table).
+- The `xcode-tools` block in the generated CLAUDE.md lists the tools in a routing table, but a table row is advice, not a gate. Nothing fires when `Views/*.swift` in the app target is edited, and nothing requires the result to be *seen* before the agent reports done.
+
+Field evidence (fagfilm-pipeline, macOS app, 2026-10-13): an agent added a category dropdown to a library table with `.menuIndicator(.hidden)` and a plain label, so the control had no affordance and looked like static text. The user had to point that out. The first fix then used guessed sizes (11 pt text, 8 pt chevron) and the claim "35 % opacity follows the HIG", neither looked up. The user's screenshot showed the control did not even render as the code said (chevron on the wrong side, no outline), which the agent could only have caught by looking at the render. The corpus (`search_swiftui_corpus`), `review_macos_hig` and `live-swiftui` were available in the session the whole time. The failure was process, not tooling: the rule existed only as advisory prose in the user's global CLAUDE.md.
+
+Follow-up the same day, which is the strongest argument for step 3: `review_macos_hig` and `review_accessibility` both returned "clean" on the control's code. Rendering it with `live-swiftui` showed the real cause. Inside `Menu { … } label: { CategoryPill(…) }`, `.menuStyle(.borderlessButton)` flattens the label: AppKit draws its own chevron on the left and discards the custom outline, colours and layout. The same view rendered alone looked correct, so only the *composition* (view inside its menu) revealed it. `.menuStyle(.button)` with `.buttonStyle(.plain)` keeps the label. The linters are pattern checks and cannot see this; a render of the view in its real container can. The skill should therefore require the render to include the container (the `Menu`, the table row), not the bare subview, and leave a `#Preview` of that composition behind.
+
+**Scope.** A gate that applies whenever a diff in a SwiftUI project touches a `.swift` file that declares a `View` (or lives under `Views/`, `Components/`), and that must pass before the agent says a UI change is done:
+
+1. **Look up before writing.** One `search_swiftui_corpus` query for the *control category* being built or changed (pop-up button, table row, chip, toggle in a list), not for a SwiftUI symbol. Record the query and the one thing it decided. If the corpus returns nothing relevant (it can return menu-bar examples for "Menu"), say so instead of citing it.
+2. **Lint after writing.** `review_macos_hig` (track `macos` or `both`), `review_accessibility` and, when the project targets Liquid Glass, `review_liquid_glass`, on each changed view file. Findings go into the same fix loop as compile errors.
+3. **See it.** Render the changed view with `live-swiftui` (`render` + `screenshot`) or take a screenshot of the built app, and look at it before reporting. For a change in a list or table, render with at least one row per state (normal, hover if cheap, empty, longest label).
+4. **Report honestly.** The final message separates *rendered and seen* from *built but appearance unverified*. A design claim ("follows HIG", "matches the system control") needs a source from step 1; otherwise it is worded as a choice, not as conformance.
+5. **Affordance check** (cheap, catches this exact bug): every interactive element must have a visible cue that it is interactive without hovering: chevron or indicator for pop-ups and pull-downs, outline or fill for fields, standard control shape for buttons. If the cue is deliberately hidden, the agent states why.
+
+**Method.**
+
+- Wire it as a *skill* (`swiftui-view-gate`) plus a light `PostToolUse` nudge, in the style of the existing `explainer-nudge.py`: when a `Write|Edit|MultiEdit` lands on a `.swift` file containing `: View` or `some View`, and the session has not run `review_macos_hig` since, print a one-line reminder naming the skill. Nudge, not block: the false-positive cost of blocking edits is high.
+- `/superpowers-gstack:verify-and-land` and `/ship` read the session's gate record (a line in `.gstack/` or in the transcript) and refuse to present "ready to land" for a diff that touches views and has no record, unless the user waives it.
+- Track-aware: macOS projects get `review_macos_hig`; iOS projects skip it (its window and menu-bar findings mislead on iOS, as `swiftui-design-consultation` already notes); `both` runs both.
+- Add a fallback when `live-swiftui` cannot render the target (needs a `#Preview`; hand-written pbxproj projects cannot add a preview file without editing the project): either append a `#Preview` to the existing view file, or use `screencapture`/the computer-use screenshot of the built app opened by absolute path (see `verify-and-land`).
+- Include the lessons about the linters' limits in the skill text: they are pattern checks. "Clean" means no known pattern matched, not that the control looks right. In the field case the linters passed the very control the user found unusable.
+
+**Autonomous visual access: the agent looks without interrupting the user** (verified on the user's Mac 2026-10-14).
+
+The user's standing position: the user is the *sensor of last resort*, who looks only when the agent is confident it has something good. Building UI blind and then asking "is the fix there?" is the wrong way round, and a permission dialog mid-flow is an interruption the user does not want for a read-only look. The routes below work today, ordered by how little they cost the user:
+
+1. **Render in the real container with `live-swiftui`.** No permission. Pass `packagePath` explicitly: with a worktree-isolated session it otherwise resolves to the primary checkout and renders stale code (seen: it listed the primary's preview line numbers, not the worktree's).
+2. **Window-scoped capture of the running app, no dialog.** Verified here: `CGWindowListCopyWindowInfo` lists windows without any permission, and `screencapture -x -l <windowID> out.png` captured exactly one window (the app's) and nothing else. Steps: build the branch, quit only the instance this session started (kill its own PID), `open -n <absolute .app path>` (plain `open` activates an instance from another build; see `verify-and-land`), wait for the new PID (`pgrep -n -x <exe>`), look up the window id by that PID, capture, read the PNG. A bundled `scripts/window-shot.sh <pid> <out.png>` should wrap it. Working core (macOS, Swift script, run with `swift`):
+   ```swift
+   import CoreGraphics
+   let pid = Int(CommandLine.arguments[1])!
+   let w = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? [])
+       .first { ($0[kCGWindowOwnerPID as String] as? Int) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }
+   print(w?[kCGWindowNumber as String] ?? "ingen-vindu")
+   ```
+   Capture **only the window, never the whole display.** A whole-display `screencapture` on the same Mac returned the user's desktop with calendar, notes and file names. That is more than the task needs and should never be the default. Failure modes to handle in the script: no window (app minimised, other Space, not yet launched: retry, then report), and missing Screen Recording permission (the PNG is wallpaper-only or black, or `screencapture` errors): detect and fall back to route 1 or 4 and say so, instead of reporting a screenshot that shows nothing.
+3. **Interaction (clicks, typing) via computer use.** Needs `request_access` per session with a user approval dialog. That is a host-side permission the plugin cannot grant. Two things for the maintainer: ask whether a settings-level allowlist can pre-approve named apps (the project's own app), and until then use routes 1, 2 and 4 for looking and reserve route 3 for flows that must be driven. On a project connected to a shared backend, driving the app is not free (toggles write data): prefer a mock backend (route 4).
+4. **VM with the E2E mock backend** (`vm-e2e` `step()` screenshots, or `vm-run --screenshot`) for states that need seeding (empty list, failure, blocked publish) and for anything that must not touch real data.
+
+**Standing consent, so the agent does not ask each time.** Mirror `.gstack/e2e-executor`: a committed `.gstack/visual-verify` marker with `host`, `vm` or `off`. `host` is the project owner's standing authorization for window-scoped capture of the app the agent itself launched, and for nothing wider. Invalid contents are an error, not a silent default, as with the other markers. This answers the "without interrupting me" requirement: the user decides once, in the repo, instead of per task.
+
+**Conflicting advisory to reconcile.** In this setup a `PreToolUse` hook on `screencapture` says it "captures the user's own screen" and points to `vm-run --screenshot`. That is right for whole-screen capture and for GUI-driving tests, but wrong for "look at the window of the build I just launched on the host", which a guest cannot show (the data, the session and the signing identity live on the host). The hook text should distinguish window-scoped capture of an agent-launched app (allowed under `.gstack/visual-verify: host`) from whole-display capture (still discouraged).
+
+**What "seen" must mean in the report.** The agent reads the captured image and states what it saw, including defects it was not looking for. In the field case the first window capture revealed a truncated label ("Håndverk- og serviceyrk…") that nobody had asked about, and that the previous round's "bygget og åpnet" report would have missed. The skill should require listing observed defects before "done", and to attach the screenshot path.
+
+**Differentiation.**
+
+- `apple-native-review` = does the *plan* respect the HIG (before code).
+- `swiftui-design-consultation` = is the *design system* sound (DesignSystem package only).
+- `quality-review` = would the experience feel premium (judgement, no tooling).
+- `swiftui-view-gate` = was *this diff's* UI looked up, linted and **seen** before it was called done. It is the only one that runs at implementation time on app views.
+
+**Status.** Proposed, not started. Smallest useful first step: step 3 and 4 only (a short section in `verify-and-land` and in the generated `xcode-tools` block that makes "rendered and seen" vs "unverified" mandatory in the final report). The hook and the full skill can follow once that proves useful. Evidence and the failed claims are in fagfilm-pipeline's memory note `swiftui-endringer-krever-hig-og-synlig-kontroll`.
+
+---
+
 ## `ios-native-review` ✅ SHIPPED in v2.4.0 (2026-05-18) — originally proposed 2026-04-28
 
 **Gap.** Same gap as the (now-shipped) `macos-native-review` had on the macOS side: existing review skills (`pitfall-verification`, `quality-review`) don't validate iOS UI claims against Apple Human Interface Guidelines for iOS specifically. iOS HIG paths and surfaces differ from macOS — touch-first interaction, navigation paradigm (tab bar / navigation stack vs window-based), modal patterns (sheet detents, full-screen presentation), Dynamic Island, gesture conventions.
