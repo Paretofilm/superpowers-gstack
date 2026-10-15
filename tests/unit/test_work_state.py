@@ -887,12 +887,17 @@ def test_code_10_when_the_applications_dir_is_not_writable_and_no_sudo_is_attemp
     assert not [l for l in log.splitlines() if l.startswith("xcodebuild") and "-showBuildSettings" not in l]  # no build
 
 def test_code_11_when_main_moves_during_the_build_nothing_is_swapped_or_stamped(tmp_path):
-    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; apps.mkdir()
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    marker = apps / "Fake App.app" / "old.txt"; marker.write_text("old")
     mover = f'git -C "{repo}" commit -q --allow-empty -m moved && git -C "{repo}" push -q origin main'
-    code, _ = run_install(repo, stub_bin(tmp_path, xcodebuild=_with_settings(mover)), apps)
-    assert code == 11 and not (apps / "Fake App.app").exists()
+    ps_file = Path(stub_env(tmp_path)["STUB_PS_FILE"])
+    ps_file.write_text(f"123 {apps}/Fake App.app/Contents/MacOS/Fake\n")
+    code, _ = run_install(repo, stub_bin(tmp_path, xcodebuild=_with_settings(mover)), apps,
+                          "--replace-unstamped", "--quit-running")
+    assert code == 11 and marker.read_text() == "old" and not (apps / "Fake App.app" / "built.txt").exists()
     assert not (ws.gitdir(repo) / "gstack-installed-app.json").exists()
-    assert not list(apps.iterdir())
+    assert [p.name for p in apps.iterdir()] == ["Fake App.app"] and not list(_trash(tmp_path).iterdir())
+    assert "to quit" in _log(tmp_path)              # review minor 3: HEAD is re-checked after the quit, right before the swap
 
 def test_install_replaces_with_a_swap_and_the_old_copy_ends_in_the_trash(tmp_path):
     repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
@@ -924,19 +929,76 @@ def test_a_name_with_spaces_and_non_ascii_survives(tmp_path):                  #
     assert stamp["scheme"] == "Fake App æøå" and stamp["app_path"] == str(apps / "Fake App æøå.app")
     assert run_install(repo, stubs, apps)[1]["status"] == "current"
 
-def test_no_stamp_when_the_final_path_signature_check_fails(tmp_path):              # R4
-    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; apps.mkdir()
-    stubs = stub_bin(tmp_path, lsregister='for last; do :; done; touch "$last/bad-signature"')   # corrupts the final copy
-    code, _ = run_install(repo, stubs, apps)
-    assert code == 9 and not (ws.gitdir(repo) / "gstack-installed-app.json").exists()
+# R4': passes the check of the temporary copy, fails the check at the final path.
+_FINAL_CHECK_FAILS = 'for last; do :; done; case "$last" in *.gstack-new-*) exit 0;; esac; exit 1'
 
-def test_a_failed_final_check_says_the_old_copy_is_already_in_the_trash(tmp_path):  # R4
+def test_a_failed_final_check_without_an_old_copy_rolls_back_and_stamps_nothing(tmp_path):   # R4'
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; apps.mkdir()
+    code, out = run_install(repo, stub_bin(tmp_path, codesign=_FINAL_CHECK_FAILS), apps)
+    assert code == 9 and "rullet tilbake" in out["reason"]
+    assert not (ws.gitdir(repo) / "gstack-installed-app.json").exists()
+    assert not list(apps.iterdir()) and not list(_trash(tmp_path).iterdir())
+    assert "lsregister" not in _log(tmp_path)
+
+def test_a_failed_final_check_swaps_the_old_copy_back_untouched(tmp_path):         # R4'
     repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
     (apps / "Fake App.app" / "old.txt").write_text("old")
-    stubs = stub_bin(tmp_path, lsregister='for last; do :; done; touch "$last/bad-signature"')
-    code, out = run_install(repo, stubs, apps, "--replace-unstamped")
-    assert code == 9 and "papirkurven" in out["reason"] and list(_trash(tmp_path).rglob("old.txt"))
+    code, out = run_install(repo, stub_bin(tmp_path, codesign=_FINAL_CHECK_FAILS), apps, "--replace-unstamped")
+    assert code == 9 and "rullet tilbake" in out["reason"] and "urørt" in out["reason"]
+    assert (apps / "Fake App.app" / "old.txt").read_text() == "old"
+    assert not (apps / "Fake App.app" / "built.txt").exists()
+    assert [p.name for p in apps.iterdir()] == ["Fake App.app"]                  # no leftover
+    assert not list(_trash(tmp_path).iterdir())                                 # nothing trashed
     assert not (ws.gitdir(repo) / "gstack-installed-app.json").exists()
+
+def _broken_trash(tmp_path):
+    """Finder fails and ~/.Trash is read-only: the previous version cannot go anywhere."""
+    home_trash = Path(stub_env(tmp_path)["HOME"]) / ".Trash"
+    home_trash.mkdir(exist_ok=True); home_trash.chmod(0o555)
+    return home_trash, stub_bin(tmp_path, osascript='case "$*" in *Finder*) exit 1 ;; esac')
+
+def test_an_old_copy_that_cannot_be_trashed_stays_hidden_for_the_next_run(tmp_path):   # review IMPORTANT 2
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    (apps / "Fake App.app" / "old.txt").write_text("old")
+    home_trash, stubs = _broken_trash(tmp_path)
+    try:
+        code, out = run_install(repo, stubs, apps, "--replace-unstamped")
+    finally:
+        home_trash.chmod(0o755)
+    assert code == 0 and "neste kjøring" in out["reason"]
+    assert [p.name for p in apps.iterdir() if not p.name.startswith(".")] == ["Fake App.app"]
+    hidden = [p for p in apps.iterdir() if p.name.startswith(".")]
+    assert len(hidden) == 1 and ".gstack-new-" in hidden[0].name and (hidden[0] / "old.txt").is_file()
+
+def test_a_leftover_that_cannot_be_trashed_is_renamed_back_to_hidden(tmp_path):    # review IMPORTANT 2
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"
+    leftover = write_app(apps / ".Fake App.gstack-new-999")
+    home_trash, stubs = _broken_trash(tmp_path)
+    try:
+        code, out = run_install(repo, stubs, apps)
+    finally:
+        home_trash.chmod(0o755)
+    assert code == 70 and str(leftover) in out["reason"]
+    assert leftover.is_dir() and [p.name for p in apps.iterdir()] == [".Fake App.gstack-new-999"]
+
+def test_placing_without_an_old_copy_never_replaces_an_empty_folder(tmp_path, monkeypatch):   # review minor 2
+    monkeypatch.setenv("GSTACK_SWAP", "rename")                    # honoured only outside macOS
+    new, target = tmp_path / "new dir", tmp_path / "Fake App.app"; new.mkdir(); (new / "n.txt").write_text("n")
+    target.mkdir()
+    with pytest.raises(OSError):
+        ws._place(new, target)
+    assert (new / "n.txt").is_file() and not list(target.iterdir())
+    target.rmdir()
+    ws._place(new, target)
+    assert (target / "n.txt").is_file() and not new.exists()
+
+def test_the_test_swap_knob_is_ignored_on_macos(monkeypatch):                      # review minor 1
+    monkeypatch.setenv("GSTACK_SWAP", "rename")
+    monkeypatch.setattr(ws.sys, "platform", "darwin")
+    calls = []
+    monkeypatch.setattr(ws, "_renamex", lambda a, b, flags: calls.append(flags))
+    ws._swap("a", "b"); ws._place("c", "d")
+    assert calls == [ws.RENAME_SWAP, ws.RENAME_EXCL]
 
 def test_current_comes_before_the_running_check(tmp_path):                          # carry-over (c)
     repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"

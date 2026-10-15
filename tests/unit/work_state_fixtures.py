@@ -93,6 +93,7 @@ DEFAULT_STUBS = {
         "esac"),
     "lsregister": "exit 0",
     "xcodegen": "exit 0",
+    "sudo": "exit 1",          # any sudo call is logged (and fails), so "no sudo" can be asserted
 }
 
 

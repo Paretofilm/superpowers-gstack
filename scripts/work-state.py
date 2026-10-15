@@ -33,8 +33,9 @@ run that holds the install lock stores the same object in <git dir>/gstack-insta
   6   a copy without a stamp is in the way (--replace-unstamped)
   7   another app (or one that cannot be identified) has the name; no flag helps
   8   the build failed; the reason names <git dir>/gstack-install-build.log; nothing was touched
-  9   the check failed: before the swap the temporary copy is removed and the old copy is untouched;
-      on the final path after the swap nothing is stamped and the old copy is already in the Trash
+  9   the check failed and the old copy is untouched: before the swap the temporary copy is removed;
+      at the final path the swap is rolled back (R4'); nothing is stamped either way. The previous
+      version goes to the Trash only after the check at the final path has passed
   10  the applications folder is missing or not writable (or macOS refused the swap); never sudo
   11  main moved during the build; nothing was swapped or stamped
   12  another install holds the lock, or land held its lock longer than 60 s
@@ -42,13 +43,14 @@ run that holds the install lock stores the same object in <git dir>/gstack-insta
   70  unexpected error (state printed), interrupted by SIGTERM/SIGINT ("avbrutt"), or Python < 3.11
 
 Hidden test knobs (environment): GSTACK_QUIT_DEADLINE, GSTACK_LAND_LOCK_WAIT (seconds),
-GSTACK_LSREGISTER (the lsregister binary), GSTACK_SWAP=rename (a plain rename dance instead of
-renamex_np, so the tests run on Linux); --applications-dir replaces /Applications.
+GSTACK_LSREGISTER (the lsregister binary), GSTACK_SWAP=rename (outside macOS only: plain renames
+instead of renamex_np, so the tests run on Linux CI); --applications-dir replaces /Applications.
 """
 from __future__ import annotations
 
 import argparse
 import contextlib
+import errno
 import fcntl
 import glob
 import importlib.util
@@ -738,6 +740,7 @@ BUILD_DIR = "gstack-install-build"            # -derivedDataPath, so the next bu
 BUILD_LOG = "gstack-install-build.log"
 BUILD_TIMEOUT = 3600
 RENAME_SWAP = 0x2                             # <stdio.h>: renamex_np flag that exchanges two paths
+RENAME_EXCL = 0x4                             # <stdio.h>: renamex_np fails when the target exists
 LSREGISTER = ("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework"
               "/Support/lsregister")
 _BUNDLE_ID_RE = re.compile(r"^[A-Za-z0-9.-]+$")
@@ -1108,8 +1111,10 @@ def _to_trash(path: Path, visible: str):
     """Move a previous version to the Trash, never delete it: (where, None) | (None, problem).
     It is first renamed to the visible name next to itself. Then Finder, with the path as an
     AppleScript argument (never in the source), so Put Back works; it counts only when the path is
-    gone afterwards. Without Finder: ~/.Trash/<visible>, with a free name."""
-    path = Path(path)
+    gone afterwards. Without Finder: ~/.Trash/<visible>, with a free name. When both fail, the
+    copy gets its hidden `.<name>.gstack-new-<pid>` name back, so the next run's sweep retries:
+    never a visible dated duplicate in the applications folder."""
+    original = path = Path(path)
     try:
         named = _free_name(path.parent, visible)
         os.rename(path, named)
@@ -1131,7 +1136,15 @@ def _to_trash(path: Path, visible: str):
         shutil.move(str(path), str(dest))
         return f"papirkurven ({dest})", None
     except (OSError, RuntimeError, shutil.Error) as e:
-        return None, f"kunne ikke legge {path} i papirkurven: {e}"
+        failure = e
+    if path != original and not os.path.lexists(original):
+        try:
+            os.rename(path, original)
+            path = original
+        except OSError:
+            pass
+    retry = "; neste kjøring prøver igjen" if path == original else ""
+    return None, f"kunne ikke legge den i papirkurven ({failure}); den ligger i {path}{retry}"
 
 
 def _remove_leftovers(apps: Path, bundle_id: str):
@@ -1150,7 +1163,7 @@ def _remove_leftovers(apps: Path, bundle_id: str):
         if _bundle_id(p)[0] != bundle_id:
             continue
         where, problem = _to_trash(p, _old_name(m.group(1)))
-        if problem:
+        if problem:                 # _to_trash has given it its hidden name back
             raise Stop(70, f"en rest etter en avbrutt installering ble liggende: {problem}")
 
 
@@ -1323,45 +1336,62 @@ def _copy(product: Path, tmp: Path):
         raise Stop(9, f"ditto lagde ikke {tmp}")
 
 
-def _renamex_swap(a, b):
+def _renamex(a, b, flags):
+    """macOS renamex_np(a, b, flags) through ctypes; errno becomes the matching OSError subclass."""
     import ctypes
     libc = ctypes.CDLL(None, use_errno=True)
     fn = libc.renamex_np
     fn.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint)
     fn.restype = ctypes.c_int
-    if fn(os.fsencode(str(a)), os.fsencode(str(b)), RENAME_SWAP) != 0:
+    if fn(os.fsencode(str(a)), os.fsencode(str(b)), flags) != 0:
         err = ctypes.get_errno()
         raise OSError(err, os.strerror(err), str(a), None, str(b))
 
 
 def _rename_dance(a, b):
-    """Three renames. NOT atomic: only for the tests (GSTACK_SWAP=rename)."""
+    """Three renames. NOT atomic: only for the tests on Linux (GSTACK_SWAP=rename)."""
     mid = Path(a).with_name(Path(a).name + ".gstack-swap")
     os.rename(a, mid)
     os.rename(b, a)
     os.rename(mid, b)
 
 
+def _test_knob() -> bool:
+    """GSTACK_SWAP=rename, honoured only outside macOS: on a Mac the real renamex_np always runs."""
+    return sys.platform != "darwin" and os.environ.get("GSTACK_SWAP") == "rename"
+
+
 def _swap(old, new):
-    """Exchange two folders in one step: renamex_np(RENAME_SWAP) through ctypes on macOS. The
-    hidden test knob GSTACK_SWAP=rename selects _rename_dance instead, so the tests run on Linux;
-    anywhere else without it the swap refuses (70)."""
-    if os.environ.get("GSTACK_SWAP") == "rename":
+    """Exchange two folders in one step: renamex_np(RENAME_SWAP) on macOS. Elsewhere only the test
+    knob works (_rename_dance); without it the swap refuses (70)."""
+    if sys.platform == "darwin":
+        return _renamex(old, new, RENAME_SWAP)
+    if _test_knob():
         return _rename_dance(old, new)
-    if sys.platform != "darwin":
-        raise Stop(70, "byttet i ett steg (renamex_np) finnes bare på macOS")
-    return _renamex_swap(old, new)
+    raise Stop(70, "byttet i ett steg (renamex_np) finnes bare på macOS")
+
+
+def _place(new, target):
+    """Move `new` to `target`, never replacing anything there (not even an empty folder, which a
+    plain rename would): renamex_np(RENAME_EXCL) on macOS, the test knob's checked rename elsewhere."""
+    if sys.platform == "darwin":
+        return _renamex(new, target, RENAME_EXCL)
+    if _test_knob():
+        if os.path.lexists(target):
+            raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), str(target))
+        return os.rename(new, target)
+    raise Stop(70, "å flytte appen på plass (renamex_np) finnes bare på macOS")
 
 
 def _put_in_place(tmp: Path, target: Path, st: dict):
     """Step 6. With an old copy the two are swapped, and `tmp` then holds the previous version;
-    without one `os.rename` is enough. A refusal from the file system is code 10."""
+    without one the copy is moved there without replacing anything. A refusal is code 10."""
     try:
         if os.path.lexists(target):
             _swap(target, tmp)
             st["holds"] = "old"
         else:
-            os.rename(tmp, target)
+            _place(tmp, target)
             st["holds"] = None
         st["swapped"] = True
     except PermissionError as e:
@@ -1435,6 +1465,29 @@ def _cleanup(tmp: Path, st: dict, stem: str):
         _to_trash(tmp, _old_name(stem))
 
 
+def _roll_back(tmp: Path, target: Path, st: dict, failed: Stop):
+    """R4': the copy at the final path failed its check. Undo the swap so the previous version
+    is back at `target` untouched, and leave the rejected copy at `tmp` for _cleanup to remove.
+    Always raises Stop(9). If the swap back itself fails, nothing is cleaned up or trashed and the
+    reason says where each copy lies."""
+    had_old = st["holds"] == "old"
+    try:
+        if had_old:
+            _swap(target, tmp)
+        else:
+            _place(target, tmp)
+    except (OSError, Stop) as err:
+        st["holds"] = None                      # never let cleanup touch either copy now
+        where = (f"den avviste kopien ligger i {target}, den gamle i {tmp}" if had_old
+                 else f"den avviste kopien ligger i {target}")
+        raise Stop(9, f"{failed.message} på den endelige stien, og byttet kunne ikke rulles tilbake ({err}); "
+                      f"{where}; ingenting er stemplet", failed.state) from None
+    st["holds"], st["swapped"] = "new", False
+    old = "den gamle kopien er urørt" if had_old else "det fantes ingen gammel kopi"
+    raise Stop(9, f"{failed.message} på den endelige stien; byttet er rullet tilbake, {old}; "
+                  "ingenting er stemplet", failed.state)
+
+
 def deliver(args, info, scheme, apps: Path, gd: Path, primary: Path, head: str) -> dict:
     """Steps 4-7. The old copy stays until the new one is verified; the app is asked to quit only
     right before the swap; every failure removes only what this run created."""
@@ -1455,29 +1508,28 @@ def deliver(args, info, scheme, apps: Path, gd: Path, primary: Path, head: str) 
             if e.code != 9:
                 raise
             raise Stop(9, f"{e.message}; den midlertidige kopien er fjernet, den gamle er urørt", e.state) from None
-        now = _load_land().out(primary, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
-        if now != head:
-            raise Stop(11, f"main flyttet seg under bygget ({head[:7]} → {(now or 'ukjent')[:7]}); "
-                           "ingenting er byttet eller stemplet", state=f"bygget {head}, HEAD nå {now}")
         plan = ask_questions(args, info, apps, gd, primary, head)    # the build took time: ask again
         carry_out_quit(bid, plan)
         _require_writable(apps)
-        with _critical():
+        now = _load_land().out(primary, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+        if now != head:                                             # immediately before the swap
+            raise Stop(11, f"main flyttet seg under bygget ({head[:7]} → {(now or 'ukjent')[:7]}); "
+                           "ingenting er byttet eller stemplet", state=f"bygget {head}, HEAD nå {now}")
+        with _critical():                       # R4': swap and final check are one unit
             _put_in_place(tmp, target, st)
+            try:
+                verify_copy(target, bid)
+            except Stop as e:
+                _roll_back(tmp, target, st, e)
+        notes = [n for n in (register(target),) if n]
+        with _critical():
+            write_stamp(gd, scheme, bid, head, target)
         old_note = "det fantes ingen gammel kopi"
-        if st["holds"] == "old":
+        if st["holds"] == "old":                # only now, after the check at the final path
             with _critical():
                 where, problem = _to_trash(tmp, _old_name(stem))
                 st["holds"] = None
-            old_note = f"den gamle kopien ligger i {where}" if where else problem
-        notes = [n for n in (register(target),) if n]
-        try:
-            verify_copy(target, bid)
-        except Stop as e:
-            raise Stop(9, f"{e.message} etter byttet; {old_note.replace('ligger i', 'ligger allerede i')}; "
-                          "ingenting er stemplet", e.state) from None
-        with _critical():
-            write_stamp(gd, scheme, bid, head, target)
+            old_note = f"den gamle kopien ligger i {where}" if where else f"den gamle kopien: {problem}"
         return {"status": "installed",
                 "reason": "; ".join([f"{name} {head[:7]} er installert i {apps}", old_note, *notes])}
     except BaseException as e:
