@@ -258,6 +258,12 @@ what they looked at, not the whole diff. The options:
     pushed and the landing stays on this machine. If `/review` has not run on this
     branch in this session, say that a yes lands code no review has seen (`land`
     assumes one has).
+  - When the default branch's `CLAUDE.md` has `Installable: macos-app <Scheme>` (read
+    like the landing mode, outside code blocks) and the landing is `solo` or `land`'s
+    own question, the option says: yes, make this the current version and install it in /Applications.
+    That yes also covers quitting the branch build Phase 5 opened, so Phase 7 can hand
+    it to `install` as `--quit-path`. With `pr` the install waits for the pull request;
+    say so instead.
   - When Phase 0 skipped or blocked Phase 7 (the default branch, a detached HEAD, or
     uncommitted changes the user declined to commit), say instead that a yes lands
     nothing.
@@ -319,7 +325,9 @@ adds no question of its own when the project has already decided how it lands.
      no further question.
    - **`pr`** → invoke `/ship` inside this worktree, with no further question from this
      skill. `/ship` may ask its own questions about the pull request; those are not a
-     second ask of the landing.
+     second ask of the landing. When `/ship` has opened the pull request, run
+     `/superpowers-gstack:work-state` and say that the work waits for a pull request
+     before it is landed or installed; end the message with its line.
    - **No valid line** (missing, only inside a code block, or both values) → invoke
      `/superpowers-gstack:land` anyway. Its exit-2 row owns this question: it asks the
      user once (solo or pull request? or, with both values, which one holds) and records
@@ -337,7 +345,12 @@ outright elsewhere (`git worktree list` gives the path). The landing skills move
 default branch themselves; do not hand-roll a merge.
 
 After `land` exits 0, follow its `remaining` field: it prints the cleanup commands in the
-order git needs them (the worktree first, then the branch).
+order git needs them (the worktree first, then the branch). `land` then runs
+`/superpowers-gstack:work-state`. When its `install` entry starts and the Phase 6 yes named
+the install, add `--quit-path "$BUILT_PRODUCTS_DIR/$FULL_PRODUCT_NAME"` (the bundle Phase 5
+launched) to that entry, so the commonest path does not stop at code 4 because the branch
+build is still running. Without that yes in this session, pass no quit flag: code 4 is
+then a question for the user, as the work-state skill says.
 
 ## What this skill is not
 

@@ -173,3 +173,42 @@ def test_phase6_yes_says_when_the_branch_is_unreviewed():
     t = SKILL.read_text()
     gate = " ".join(t[t.index("## Phase 6"):t.index("### Phase 6b")].split())
     assert "a yes lands code no review has seen" in gate
+
+
+# --- work-state: installed is part of done ---------------------------------------------
+
+LAND = ROOT / "skills" / "land" / "SKILL.md"
+
+
+def test_phase6_yes_says_it_installs_in_applications():
+    """Spec Part 4: «gjør dette til den gjeldende versjonen, og installer den i
+    `/Applications`». The yes then also covers quitting the branch build from Phase 5."""
+    t = SKILL.read_text()
+    gate = " ".join(t[t.index("## Phase 6"):t.index("### Phase 6b")].split())
+    assert "make this the current version and install it in /Applications" in gate
+
+
+def test_phase7_passes_the_phase5_bundle_as_quit_path():
+    """Without it the commonest path stops at install's code 4: the branch build the
+    user just looked at is still running."""
+    p7 = " ".join(_phase7().split())
+    assert "--quit-path" in p7
+    assert '"$BUILT_PRODUCTS_DIR/$FULL_PRODUCT_NAME"' in p7
+
+
+def test_phase7_runs_work_state_after_ship_in_pr_mode():
+    p7 = _phase7()
+    pr = " ".join(_mode_bullet(p7, "pr").split())
+    assert "/superpowers-gstack:work-state" in pr
+    assert "waits for a pull request" in pr
+    solo = " ".join(_mode_bullet(p7, "solo").split())
+    assert "/superpowers-gstack:work-state" not in solo, "land runs it on its own exit 0"
+
+
+def test_land_exit_0_runs_work_state_after_the_cleanup():
+    t = LAND.read_text()
+    row = next(l for l in t.splitlines() if l.startswith("| 0 |"))
+    assert "/superpowers-gstack:work-state" in row
+    assert row.index("remaining") < row.index("/superpowers-gstack:work-state")
+    assert "`stale`" in row and "macos-app" in row and "background" in row
+    assert "end the message with" in row.lower()
