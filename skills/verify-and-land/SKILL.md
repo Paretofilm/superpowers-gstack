@@ -315,8 +315,8 @@ adds no question of its own when the project has already decided how it lands.
 0. **Check that the yes still applies.** A yes covers the build the user saw and the
    landing they were told about, nothing else. If `git rev-parse HEAD` is no longer
    `VERIFIED_HEAD`, or the landing mode now reads differently from what the Phase 6
-   option said, or `VIEW_FILES` is not empty and the session holds no `View gate:` line, land
-   nothing and say what changed. A new commit means a new build: go
+   option said, or `VIEW_FILES` is not empty and the session holds no `View gate:` line,
+   land nothing and say what changed. A new commit means a new build: go
    back to Phase 4. A changed mode only invalidates the announcement: go back to Phase 6
    and ask again with the mode as it now reads.
 1. **Push first**, so the verified work exists in more than one place whatever is
