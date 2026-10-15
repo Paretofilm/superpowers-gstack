@@ -122,9 +122,16 @@ def fetch_origin(repo):
     return None
 
 
+class _CountError(Exception):
+    pass
+
+
 def _count(land, repo, *args):
-    out = land.out(repo, "rev-list", "--count", *args)
-    return int(out) if out and out.isdigit() else None
+    r = land.git(repo, "rev-list", "--count", *args)
+    out = r.stdout.strip()
+    if r.returncode or not out.isdigit():
+        raise _CountError(f"kunne ikke telle commits: {r.stderr.strip()[-200:] or 'ingen utdata'}")
+    return int(out)
 
 
 def measure_pushed(repo) -> dict:
@@ -137,6 +144,16 @@ def measure_pushed(repo) -> dict:
     err = fetch_origin(repo)
     if err:
         return {**_result("unknown", f"kunne ikke hente fra origin: {err}"), **base}
+    try:
+        safe, ask, items = _pushed_scan(land, repo)
+    except _CountError as e:
+        return {**_result("unknown", str(e)), **base}
+    if items:
+        return {**_result("open", f"{len(items)} åpne", items), "safe_actions": safe, "ask": ask}
+    return {**_result("ok", "alt er på origin"), **base}
+
+
+def _pushed_scan(land, repo):
     safe, ask, items = [], [], []
     branch = land.out(repo, "symbolic-ref", "--short", "-q", "HEAD")
     if branch is None:
@@ -150,7 +167,9 @@ def measure_pushed(repo) -> dict:
             n = _count(land, repo, "@{upstream}..HEAD")
             if n:
                 items.append(f"{branch}: {n} commits not on {upstream}")
-                if land.git(repo, "merge-base", "--is-ancestor", upstream, "HEAD").returncode == 0:
+                if branch == land.default_branch(repo):
+                    ask.append(f"{branch} has {n} commits not landed through land")
+                elif land.git(repo, "merge-base", "--is-ancestor", upstream, "HEAD").returncode == 0:
                     safe.append(["git", "-C", str(repo), "push"])
                 else:
                     ask.append(f"push of '{branch}' would need force")
@@ -160,15 +179,13 @@ def measure_pushed(repo) -> dict:
                 items.append(f"{branch}: {n} commits no remote has (no upstream)")
                 ask.append(f"'{branch}' has no upstream; push it with: git push -u origin {branch}")
     main = land.default_branch(repo)
-    if (main and land.git(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{main}").returncode == 0
+    if (main and branch != main and land.git(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{main}").returncode == 0
             and land.git(repo, "show-ref", "--verify", "--quiet", f"refs/remotes/origin/{main}").returncode == 0):
         n = _count(land, repo, f"origin/{main}..{main}")
         if n:
             items.append(f"{main}: {n} commits not on origin/{main}")
             ask.append(f"{main} has {n} commits not landed through land")
-    if items:
-        return {**_result("open", f"{len(items)} åpne", items), "safe_actions": safe, "ask": ask}
-    return {**_result("ok", "alt er på origin"), **base}
+    return safe, ask, items
 
 
 def cmd_report(args) -> int:

@@ -92,3 +92,20 @@ def test_pushed_with_unreachable_origin_is_unknown_with_the_reason(tmp_path):
     subprocess.run(["git", "-C", str(repo), "remote", "set-url", "origin", str(tmp_path / "gone")], check=True)
     r = ws.measure_pushed(repo)
     assert r["status"] == "unknown" and r["detail"]
+
+
+def test_pushed_unborn_head_is_unknown_not_ok(tmp_path):
+    repo = tmp_path / "my proj"; repo.mkdir()
+    origin = tmp_path / "origin dir"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
+    subprocess.run(["git", "-C", str(repo), "remote", "add", "origin", str(origin)], check=True)
+    r = ws.measure_pushed(repo)
+    assert r["status"] == "unknown" and "kunne ikke telle" in r["detail"]
+
+def test_pushed_on_main_ahead_is_ask_only_and_listed_once(tmp_path):
+    repo = make_repo(tmp_path); add_origin(repo)
+    commit_file(repo, "a.txt", "a")
+    r = ws.measure_pushed(repo)
+    assert r["status"] == "open" and r["safe_actions"] == []
+    assert len(r["ask"]) == 1 and len(r["items"]) == 1
