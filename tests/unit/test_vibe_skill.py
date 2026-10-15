@@ -161,3 +161,24 @@ def test_the_contract_names_brainstorm_as_a_start_choice_and_the_marker_is_v2():
     assert "gstack-vibe-v2" in block
     assert "Brainstorm" in block
     assert "gstack-vibe-v2" in VIBE
+
+
+def test_a_pasted_goal_counts_as_approval_and_the_lock_runs_first():
+    assert "whether they say ok or paste the `/goal` line, run the lock first" in VIBE
+
+
+def test_step_7_names_the_file_when_no_context_skill_exists():
+    assert (
+        "If the project has no context skill, create "
+        "`.claude/skills/<project>-context/SKILL.md`" in VIBE
+    )
+
+
+def test_step_8_handles_rebase_and_pr_receipt_before_the_generic_exit_1():
+    i_special = VIBE.index("Re-lock cases first")
+    i_generic = VIBE.index("Any other exit 1")
+    assert i_special < i_generic
+    assert (
+        "re-locking after a rebase or a squash-merge receipt change is not editing a test"
+        in VIBE
+    )

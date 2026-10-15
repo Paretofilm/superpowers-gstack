@@ -114,8 +114,9 @@ line for the user to paste:
 /goal All tasks in PLAN.md are done: tests green, build without warnings, STATUS.md updated. Or stop after 60 turns.
 ```
 
-`/goal` is started by the user; without it, continue with step 4 when they say ok.
-After their ok, lock the tests:
+The user approves in one of two ways: they say ok, or they paste the `/goal` line;
+whether they say ok or paste the `/goal` line, run the lock first and only then start
+Step 4 (a `/goal` the user pastes is started by them; lock before you act on it):
 
 ```bash
 python3 "$LOCK" lock --feature <feature> --path '<acceptance-test glob>'
@@ -164,7 +165,9 @@ Read `ROUNDS.md`: a mistake that came back in two phases or more becomes one wor
 rule — at most three per feature — in the **How we work** section of the context skill,
 never into CLAUDE.md. Commit the change now, on the feature branch: lessons written
 after landing never reach the default branch and vanish with the worktree. Touch neither
-the locked tests nor the contract in this step.
+the locked tests nor the contract in this step. If the project has no context skill,
+create `.claude/skills/<project>-context/SKILL.md` with a `## How we work` section
+holding the rules, and commit it with the feature; never put them in CLAUDE.md.
 
 ## Step 8: The lock must hold
 
@@ -172,19 +175,25 @@ the locked tests nor the contract in this step.
 python3 "$LOCK" verify --feature <feature>
 ```
 
-Exit 0 is required before landing. Exit 1 names each changed file (the receipt
-`.gstack/acceptance-lock.json`, a new file under a locked path and a hidden
-assume-unchanged flag included): restore it from the lock commit, or stop and tell the
-user which test is wrong. The lock defends against mistakes and shortcuts, not against deliberate history
-rewriting; `verify` is a gate, not proof. It compares the locked files with the lock
-commit in the working tree, the index and HEAD, and checks the receipt and new files
-under the locked paths. It cannot see a `conftest.py` or pytest configuration outside
-those paths that changes what the tests do, a faked or amended commit subject on the
-receipt, or a rewritten history. After a rebase it warns that the lock commit left the
-branch's history: tell the user, who can re-lock. In `pr` landing mode, when another
-feature's squash-merge commit changed the receipt on main, `verify` exits 1 ("receipt
-changed by commit …") after a rebase: re-lock. Only `__pycache__`, `.pytest_cache` and
-`.DS_Store` are exempt from the new-file check.
+Exit 0 is required before landing.
+
+**Re-lock cases first.** After a rebase it warns that the lock commit left the
+branch's history (a warning, not exit 1); in `pr` landing mode, a squash-merge commit on
+main that changed the receipt makes `verify` exit 1 (`receipt changed by commit …`).
+Both mean the lock must be redone by the user, and re-locking after a rebase or a
+squash-merge receipt change is not editing a test. Tell the user and ask them to
+re-lock.
+
+**Any other exit 1** names each changed file (the receipt `.gstack/acceptance-lock.json`,
+a new file under a locked path and a hidden assume-unchanged flag included): restore it
+from the lock commit, or stop and tell the user which test is wrong. The lock defends
+against mistakes and shortcuts, not against deliberate history rewriting; `verify` is a
+gate, not proof. It compares the locked files with the lock commit in the working tree,
+the index and HEAD, and checks the receipt and new files under the locked paths. It
+cannot see a `conftest.py` or pytest configuration outside those paths that changes what
+the tests do, a faked or amended commit subject on the receipt, or a rewritten history.
+Only `__pycache__`, `.pytest_cache` and `.DS_Store` are exempt from the new-file
+check.
 
 ## Step 9: Land
 
