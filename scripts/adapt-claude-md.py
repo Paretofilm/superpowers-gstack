@@ -91,6 +91,7 @@ SENSITIVITIES = ("very high", "high", "medium", "low")
 EXECUTORS = ("host", "vm")
 PROFILES = ("vibe", "classic")
 EXPLAINER_TARGETS = ("local", "artifact")
+VISUAL_VERIFY_MODES = ("host", "vm", "off")
 NO_TEAM_TEXT = "<none — no paid developer account was found; stable signing requires a Team ID>"
 
 RATIO = 1.5          # section more than 1.5x the block's line count
@@ -1284,6 +1285,21 @@ def read_explainer(project: Path) -> str:
     return value
 
 
+def read_visual_verify(project: Path) -> str:
+    """The standing consent for window capture of an app the agent launched
+    (`swiftui-view-gate`, `scripts/window-shot.sh`). Exactly `host`, `vm` or `off`; the
+    newline is the only thing stripped, so `Host` or `host ` is refused, never read as
+    `off`. No file is `off`. adapt only refuses a wrong value; it never writes the pin:
+    the consent is the project owner's decision."""
+    f = project / ".gstack" / "visual-verify"
+    if not f.is_file():
+        return "off"
+    value = f.read_text().removesuffix("\n")
+    if value not in VISUAL_VERIFY_MODES:
+        raise Refusal(f"BLOCKED — invalid .gstack/visual-verify {value!r}: must be exactly host, vm or off")
+    return value
+
+
 NO_PRIOR_NOTE = "no prior CLAUDE.md — nothing to snapshot; the file is created"
 NO_WORKFLOW_NOTE = ("no .gstack/workflow file — classic profile "
                     "(write `vibe` there to opt in to the vibe contract)")
@@ -1433,6 +1449,7 @@ def main(argv=None) -> int:
         track = read_track(project, a.track, pre_notes)
         profile = read_workflow(project, None if "workflow" in pending_pins else pre_notes)
         explainer = read_explainer(project)
+        read_visual_verify(project)   # validation only: a wrong value is refused, the pin is never written here
         if "workflow" in pending_pins:
             profile = pending_pins["workflow"]
         if "explainer" in pending_pins:
