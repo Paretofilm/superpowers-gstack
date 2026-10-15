@@ -1,4 +1,4 @@
-## Git hygiene & commit cadence <!-- gstack-git-hygiene-v13 -->
+## Git hygiene & commit cadence <!-- gstack-git-hygiene-v14 -->
 
 Commit at meaningful milestones — not at every file save, not only at session end.
 
@@ -40,6 +40,10 @@ review, and rots against the default branch while everything else moves.
 - **Never end a session silently on a branch with unmerged commits.** Say where the
   work stands — landed, ready to land, or still open — even when the answer is "still
   open". The failure mode is not a wrong decision, it's no decision being stated.
+- **Before the last message of a task that changed files, run
+  `/superpowers-gstack:work-state`**, do what its `safe_actions` say, ask what its
+  `ask` says once, and end the message with its line. Not for pure questions or
+  conversations without file changes.
 - **A fix nobody has watched run is not verified.** Tests answer *did I break
   something else*; they cannot answer *is the thing I fixed actually fixed*. When the
   project has a runnable app, build the branch and launch **that build** before

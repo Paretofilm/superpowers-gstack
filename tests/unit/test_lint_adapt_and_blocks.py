@@ -208,8 +208,11 @@ def test_denylist_catches_a_hardcoded_simulator_model():
      "v11 is stale since 3.4.0 — it sent every landing to /ship's pull request"),
     ("## Git hygiene <!-- gstack-git-hygiene-v12 --><!-- emitted=103 -->", True,
      "v12 is stale since 3.5.0 — it said verify-and-land offers the landing"),
-    ("## Git hygiene <!-- gstack-git-hygiene-v13 --><!-- emitted=104 -->", False,
-     "v13 must not be caught by the v12 alternation — the \\b is load-bearing"),
+    ("## Git hygiene <!-- gstack-git-hygiene-v13 --><!-- emitted=104 -->", True,
+     "v13 is stale since work-state — it had no rule to run work-state before the last message"),
+    ("## Git hygiene <!-- gstack-git-hygiene-v14 --><!-- emitted=110 -->", False,
+     "v14 must not be caught by the v1[0-3] alternation — the \\b is load-bearing"),
+    ("## Git hygiene <!-- gstack-git-hygiene-v1 -->", True, "v1 git-hygiene"),
     ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v8 -->", True,
      "v8 is stale since 3.5.0 — it said verify-and-land offers the landing"),
     ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v9 -->", True,
@@ -302,6 +305,17 @@ def test_this_repos_own_routing_matches_the_lite_roster():
     routing = claude[start:claude.index("\n## ", start + 1)]
     assert "invoke plan-eng-review" not in routing
     assert "brainstorming → invoke /superpowers-gstack:office-hours-track-aware" not in routing
+
+
+def test_the_shipped_git_hygiene_block_is_v14_and_runs_work_state():
+    """v14 adds the one rule v13 lacked: before the last message of a task that changed
+    files, run work-state and end with its line."""
+    text = (BLOCKS / "git-hygiene.md").read_text()
+    assert text.split("\n", 1)[0].endswith("<!-- gstack-git-hygiene-v14 -->")
+    landing = " ".join(text[text.index("### Landing the branch"):text.index("### Landing work that lives")].split())
+    assert "/superpowers-gstack:work-state" in landing
+    assert "safe_actions" in landing and "end the message with its line" in landing
+    assert "Not for pure questions" in landing
 
 
 def test_emitted_blocks_no_longer_say_verify_and_land_offers_the_landing():
