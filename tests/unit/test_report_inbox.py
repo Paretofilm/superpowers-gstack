@@ -64,6 +64,12 @@ def env(tmp_path):
         a = sys.argv[1:]
         open({str(gh_calls)!r}, "a").write(" ".join(a) + "\\n")
         data = json.load(open({str(fixture)!r}))
+        if a[0] == "api":  # `gh api repos/o/r/issues/N`: the fixture's "api" maps N to a payload, absent = fail
+            payload = data.get("api", {{}}).get(a[1].rsplit("/", 1)[1])
+            if payload is None:
+                sys.exit(1)
+            print(json.dumps(payload))
+            sys.exit(0)
         label = a[a.index("--label") + 1]
         if data.get("fail") is True or label in data.get("fail_labels", []):
             sys.exit(1)
@@ -446,6 +452,42 @@ def test_click_marks_read_and_redirects(env):
     status, headers, _ = http(env, "/seen/gh-issue-90", extra="Sec-Fetch-Site: none\r\n")
     assert status == 302 and headers["Location"] == "https://github.com/o/r/issues/90"
     assert "gh-issue-90" in state(env)["seen"]
+
+
+def set_api(env, **payloads):
+    d = json.loads(env["fixture"].read_text())
+    d["api"] = payloads
+    env["fixture"].write_text(json.dumps(d))
+
+
+def test_click_shows_the_github_report_as_sandboxed_html(env):
+    run(env, "collect")
+    set_api(env, **{"90": {"title": "Ny modell <b>", "body_html": "<p>Hei <strong>verden</strong></p>",
+                           "created_at": "2026-10-12T08:00:00Z"}})
+    status, headers, body = http(env, "/seen/gh-issue-90", extra="Sec-Fetch-Site: none\r\n")
+    assert status == 200 and headers["Content-Type"].startswith("text/html")
+    assert b"<strong>verden</strong>" in body and b"2026-10-12" in body
+    assert b"Ny modell &lt;b&gt;" in body and b"Ny modell <b>" not in body  # the title is escaped
+    assert b"href='https://github.com/o/r/issues/90'" in body
+    assert "sandbox" in headers["Content-Security-Policy"] and "script" not in headers["Content-Security-Policy"]
+    assert "gh-issue-90" in state(env)["seen"]
+    assert "api repos/o/r/issues/90 -H Accept: application/vnd.github.html+json" in env["gh_calls"].read_text()
+
+
+def test_click_falls_back_to_github_when_the_body_cannot_be_fetched(env):
+    run(env, "collect")  # the stub has no "api" payload, so gh api exits 1
+    status, headers, _ = http(env, "/seen/gh-issue-90", extra="Sec-Fetch-Site: none\r\n")
+    assert status == 302 and headers["Location"] == "https://github.com/o/r/issues/90"
+    assert "gh-issue-90" in state(env)["seen"]
+
+
+def test_hanging_gh_api_falls_back_to_github_within_the_deadline(env):
+    run(env, "collect")
+    (env["bindir"] / "gh").write_text("#!/bin/sh\nsleep 30\n")
+    t = time.time()
+    status, headers, _ = http(env, "/seen/gh-issue-90", extra="Sec-Fetch-Site: none\r\n")
+    assert status == 302 and headers["Location"] == "https://github.com/o/r/issues/90"
+    assert time.time() - t < 9
 
 
 def test_head_request_does_not_mark_read(env):

@@ -15,7 +15,9 @@ Subcommands:
   notify [--force]    daily reminder (launchd, 17:00): one macOS notification per unread
                       report, newest first, once per 17:00 slot
   serve-one           answer one HTTP request on stdin/stdout (launchd inetd mode):
-                      GET /seen/<id> marks the report read and redirects to it
+                      GET /seen/<id> marks the report read and shows it: a GitHub report
+                      as an HTML page (rendered by GitHub, fetched with `gh api`), a local
+                      file as itself; when gh cannot deliver, it redirects to GitHub
   write-plists DIR LOG   write the two launchd agents (used by setup-hooks.sh)
   seen <id> / unseen <id> / list   manual use and tests
 
@@ -496,6 +498,58 @@ def page(title, inner):
             f"{inner}</body>").encode()
 
 
+GH_URL_RE = re.compile(r"^https://github\.com/([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)/(?:issues|pull)/(\d+)$")
+
+REPORT_CSS = (
+    ":root{color-scheme:light dark}"
+    "body{font:16px/1.55 -apple-system,sans-serif;max-width:46em;margin:2.5em auto;padding:0 1em}"
+    "h1{font-size:1.5em;margin:0 0 .2em}.meta{color:GrayText;font-size:.9em;margin-bottom:1.5em}"
+    "pre{overflow-x:auto;padding:.8em;border-radius:6px;background:color-mix(in srgb,CanvasText 7%,Canvas)}"
+    "code{font-family:ui-monospace,Menlo,monospace;font-size:.92em}"
+    "table{border-collapse:collapse}td,th{border:1px solid color-mix(in srgb,CanvasText 25%,Canvas);padding:.3em .6em}"
+    "blockquote{margin-left:0;padding-left:1em;border-left:3px solid color-mix(in srgb,CanvasText 25%,Canvas)}"
+    "footer{margin-top:3em;font-size:.9em}")
+
+
+def fetch_github_body(url):
+    """Return (title, body_html, created) for a report's issue or pull request, or None on any failure.
+
+    GitHub renders and sanitises the Markdown itself (the html+json media type), so no
+    Markdown is parsed here. A failure is never fatal: the caller redirects to GitHub."""
+    m = GH_URL_RE.match(url)
+    gh = find_tool("gh")
+    if not m or not gh:
+        return None
+    cmd = [gh, "api", f"repos/{m.group(1)}/issues/{m.group(2)}", "-H", "Accept: application/vnd.github.html+json"]
+    try:
+        p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                             text=True, start_new_session=True)
+    except OSError:
+        return None
+    try:
+        out, _ = p.communicate(timeout=GH_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        stop(p)
+        return None
+    if p.returncode != 0:
+        return None
+    try:
+        data = json.loads(out)
+        return str(data["title"]), str(data.get("body_html") or ""), str(data.get("created_at", ""))
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def render_github_report(item, fetched):
+    title, body_html, created = fetched
+    shown = html.escape(clean_title(title, item["title"]))
+    link = html.escape(item["url"], quote=True)
+    return (f"<!doctype html><meta charset=utf-8><title>{shown}</title><style>{REPORT_CSS}</style>"
+            f"<h1>{shown}</h1><div class=meta>{html.escape(created[:10])} · {html.escape(item['source'])}</div>"
+            f"{body_html or '<p><em>(ingen tekst)</em></p>'}"
+            f"<footer><a href='{link}'>Åpne på GitHub</a></footer>").encode()
+
+
 def foreign(value):
     """True when a Referer/Origin names a page other than this server."""
     if not value or value == "null":
@@ -553,8 +607,14 @@ def cmd_serve_one(stdin=None, stdout=None):
     if rid.startswith("gh-"):
         if not item["url"].startswith("https://github.com/"):
             return http_response(out, 404)
+        fetched = fetch_github_body(item["url"]) if method == "GET" else None
         mark_read(method, rid)
-        return http_response(out, 302, {"Location": item["url"]})
+        if fetched is None:  # HEAD, or gh missing, offline or slow: GitHub's own page is the fallback
+            return http_response(out, 302, {"Location": item["url"]})
+        # sandbox: the text is GitHub-sanitised and still gets no script and no network.
+        csp = "sandbox; default-src 'none'; style-src 'unsafe-inline'"
+        return http_response(out, 200, {"Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp},
+                             render_github_report(item, fetched))
     report = Path(item["url"]).resolve()
     if report.parent != reports_dir().resolve() or not report.is_file():
         return http_response(out, 404)
