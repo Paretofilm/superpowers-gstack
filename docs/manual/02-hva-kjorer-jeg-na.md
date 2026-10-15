@@ -28,8 +28,8 @@ Finn raden som ligner mest på situasjonen din, og skriv kommandoen i midtkolonn
 | Plan og kode kan ha gått fra hverandre | `/superpowers-gstack:spec-drift` | Sammenligner planen med koden og rapporterer, uten å endre noe |
 | Du har rettet noe, men ser det ikke i appen | `/superpowers-gstack:verify-and-land` | Bygger og starter akkurat denne grenen, så du ser om rettelsen er der |
 | Ferdig arbeid i et prosjekt uten gjennomgang | `/superpowers-gstack:land` | Kjører prosjektets sjekker og lander på main |
-| Arbeidet er landet, og du vil vite om alt er committet, sendt, ryddet og installert | `/superpowers-gstack:work-state` | Måler de fire delene, gjør det trygge, spør om resten én gang og avslutter med en ærlig statuslinje |
 | Ferdig arbeid i et prosjekt med gjennomgang | `/ship` | Tester, gjennomgang og pull request |
+| Arbeidet er landet, og du vil vite om alt er committet, sendt, ryddet og installert | `/superpowers-gstack:work-state` | Måler de fire delene, gjør det trygge, spør om resten én gang og avslutter med en ærlig statuslinje |
 | Du vil teste en Swift-app gjennom grensesnittet | `/superpowers-gstack:e2e-route` | Velger riktig kjøremåte for ende-til-ende-test |
 | Konteksten er lang, eller du skal skrive `/clear` | `/superpowers-gstack:context-handoff` | Skriver ned hvor du er, så neste økt kan fortsette |
 | Du kommer tilbake til et prosjekt | `/context-restore` | Henter tilbake det du lagret med `/context-save`. Har prosjektet en overleveringsfil, viser startbanneret hvor du slapp |

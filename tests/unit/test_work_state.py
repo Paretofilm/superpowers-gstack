@@ -453,6 +453,13 @@ def test_stamp_is_current_checks_commit_path_and_bundle_id(tmp_path):
     assert not ws.stamp_is_current(repo, {**_stamp(app, head), "bundle_id": "other.id"}, head)
     assert not ws.stamp_is_current(repo, {"commit": head}, head)
 
+def test_install_safe_action_starts_with_the_running_interpreter(tmp_path):
+    import sys
+    repo = make_repo(tmp_path); commit_file(repo, "CLAUDE.md", "Installable: macos-app App\n"); add_origin(repo)
+    argv = ws.measure_installable(repo)["safe_actions"][0]
+    assert argv[0] == sys.executable and os.path.isabs(argv[0])
+    assert argv[1:3] == [os.path.abspath(ws.__file__), "install"]
+
 def test_macos_app_ok_stale_and_corrupt_stamp(tmp_path):
     repo = make_repo(tmp_path); commit_file(repo, "CLAUDE.md", "Installable: macos-app App\n"); add_origin(repo)
     head = _rev(repo, "origin/main")

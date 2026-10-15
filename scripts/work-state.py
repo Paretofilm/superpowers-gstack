@@ -538,7 +538,7 @@ def measure_installable(repo) -> dict:
 
 def _installable_app(repo, head, ref):
     gd = gitdir(repo)
-    safe = [["python3", os.path.abspath(__file__), "install", "--repo", str(repo)]]
+    safe = [[sys.executable, os.path.abspath(__file__), "install", "--repo", str(repo)]]
     ask = []
     result, rerr = _read_json(gd / RESULT_FILE)
     if rerr:
