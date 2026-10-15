@@ -48,6 +48,17 @@ run that holds the install lock stores the same object in <git dir>/gstack-insta
 Hidden test knobs (environment): GSTACK_QUIT_DEADLINE, GSTACK_LAND_LOCK_WAIT (seconds),
 GSTACK_LSREGISTER (the lsregister binary), GSTACK_SWAP=rename (outside macOS only: plain renames
 instead of renamex_np, so the tests run on Linux CI); --applications-dir replaces /Applications.
+
+Known limits:
+  - `Installable: command <cmd>` runs shell text from the repository (`sh -c`, in the main folder,
+    120 s) during `report`, without the approval step that `wt` hooks have. That command is the
+    project's own responsibility: do not run `report` in an untrusted clone with such a line. The
+    measurement reflects the main folder's working tree, not the landed commit.
+  - When both Trash routes fail and a copy cannot be renamed back to its hidden
+    `.<name>.gstack-new-<pid>` name, it stays under its visible dated name, and no later sweep
+    finds it. The reason names the path; the user must move it.
+  - A signal that arrives inside a critical section that then fails with another error is
+    dropped: the real error's code wins.
 """
 from __future__ import annotations
 

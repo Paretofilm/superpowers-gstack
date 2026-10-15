@@ -286,3 +286,6 @@ Alt under er sjekket mot rapportene fra planens oppgaver 1–10 (`.superpowers/s
 - `install` holder `gstack-land.lock` mens den henter `main`. En `land` som starter samtidig, sier da at en annen landing holder låsen.
 - To kloner av samme app har hver sin lås. Ryddingen av rester i den ene kan derfor legge den andres midlertidige kopi i papirkurven mens den andre installerer.
 - Med en DerivedData-mappe relativt til arbeidsområdet ligger bunten fra fase 5 inne i arbeidsmappen. `land` fjerner den før `--quit-path` brukes, og `install` stopper da med kode 64.
+- `Installable: command <cmd>` kjører skalltekst fra repoet (`sh -c`, i hovedmappen, 120 sekunder) under `report`, uten godkjenningssteget som `wt`-kroker har. Kommandoen er prosjektets eget ansvar, og `report` bør ikke kjøres i en klone man ikke stoler på når den har en slik linje. Målingen viser hovedmappens arbeidstre, ikke den landede commiten.
+- Feiler begge veiene til papirkurven, og kopien heller ikke kan få tilbake sitt skjulte navn, blir den liggende under det synlige navnet med dato. Ingen senere opprydding finner den. Årsaken nevner stien, og brukeren må flytte den selv.
+- Et signal som kommer inne i en kritisk seksjon som deretter feiler med en annen feil, forsvinner. Koden til den virkelige feilen gjelder.
