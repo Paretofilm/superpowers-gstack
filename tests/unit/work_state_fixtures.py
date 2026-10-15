@@ -49,27 +49,39 @@ _FAKE_PLIST = """<?xml version="1.0" encoding="UTF-8"?>
 <key>CFBundleExecutable</key><string>Fake</string>
 </dict></plist>"""
 
-# The default stub contract for `install` (Task 5). Everything external is a stub on PATH, so the
-# tests run on Linux CI too. Bundle ids are read with plistlib from Contents/Info.plist (Ruling R8):
-# there is no plutil stub.
-DEFAULT_STUBS = {
-    "xcodebuild": (
+def _with_settings(extra=None, product="Fake App.app", settings=None):
+    """An xcodebuild stub body. `-showBuildSettings` prints the four settings (`product` as
+    FULL_PRODUCT_NAME, BUILT_PRODUCTS_DIR = $STUB_OUT), or the shell lines `settings` when given.
+    Every other invocation runs `extra` first (it may `exit`) and then the default build, which
+    writes `$STUB_OUT/<product>` with a real Info.plist and `built.txt` (the commit built)."""
+    shown = settings if settings is not None else (
+        "    printf '    BUILT_PRODUCTS_DIR = %s\\n' \"$STUB_OUT\"\n"
+        f"    echo '    FULL_PRODUCT_NAME = {product}'\n"
+        "    echo '    PRODUCT_BUNDLE_IDENTIFIER = com.example.fake'\n"
+        "    echo '    EXECUTABLE_NAME = Fake'\n")
+    return (
         'case " $* " in\n'
         '  *" -showBuildSettings "*)\n'
-        '    printf \'    BUILT_PRODUCTS_DIR = %s\\n\' "$STUB_OUT"\n'
-        "    echo '    FULL_PRODUCT_NAME = Fake App.app'\n"
-        "    echo '    PRODUCT_BUNDLE_IDENTIFIER = com.example.fake'\n"
-        "    echo '    EXECUTABLE_NAME = Fake'\n"
+        f"{shown}"
         "    ;;\n"
-        '  *" build "*)\n'
-        '    app="$STUB_OUT/Fake App.app"\n'
+        "  *)\n"
+        f"{extra or ':'}\n"
+        f'    app="$STUB_OUT/{product}"\n'
         '    mkdir -p "$app/Contents/MacOS" && touch "$app/Contents/MacOS/Fake"\n'
         "    cat > \"$app/Contents/Info.plist\" <<'PLIST'\n"
         f"{_FAKE_PLIST}\n"
         "PLIST\n"
         '    git rev-parse HEAD > "$app/built.txt"\n'
         "    ;;\n"
-        "esac"),
+        "esac")
+
+
+# The default stub contract for `install` (Tasks 5 and 6). Everything external is a stub on PATH,
+# so the tests run on Linux CI too. Bundle ids are read with plistlib from Contents/Info.plist
+# (Ruling R8): there is no plutil stub. codesign fails for a bundle that holds `bad-signature`;
+# osascript's quit removes $STUB_PS_FILE, its Finder delete moves the last argument to $STUB_TRASH.
+DEFAULT_STUBS = {
+    "xcodebuild": _with_settings(),
     "codesign": 'for last; do :; done\n[ -e "$last/bad-signature" ] && exit 1\nexit 0',
     "ditto": 'cp -R "$1" "$2"',
     "ps": 'if [ -f "$STUB_PS_FILE" ]; then cat "$STUB_PS_FILE"; fi',
@@ -112,13 +124,15 @@ def stub_bin(tmp_path, **behaviours) -> Path:
 def stub_env(tmp_path) -> dict:
     """Environment variables the stubs and work-state.py read, all under tmp_path."""
     base = Path(tmp_path)
-    out, trash = base / "stub out", base / "stub trash"
-    out.mkdir(parents=True, exist_ok=True)
-    trash.mkdir(parents=True, exist_ok=True)
+    out, trash, home = base / "stub out", base / "stub trash", base / "home dir"
+    for d in (out, trash, home):
+        d.mkdir(parents=True, exist_ok=True)
     return {
         "STUB_OUT": str(out),
         "STUB_LOG": str(base / "stub.log"),
         "STUB_PS_FILE": str(base / "stub ps.txt"),
         "STUB_TRASH": str(trash),
         "GSTACK_LSREGISTER": str(base / "stub bin" / "lsregister"),
+        "GSTACK_SWAP": "rename",        # hidden test knob: a rename dance instead of renamex_np
+        "HOME": str(home),              # the ~/.Trash fallback never reaches the real home folder
     }

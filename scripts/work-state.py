@@ -17,25 +17,38 @@ outside fenced code blocks:
 A line with an unknown kind, `macos-app` without a scheme or `command` without a command
 is invalid and counts as absent. Two different valid lines are a conflict.
 
-Exit codes (report):
-  0   ok (or nothing open)       1  something open or unknown       2  not a git repository
+Exit codes (report; the last stdout line is the JSON object, also when the report itself fails):
+  0   no part is open, unknown or stale (installable `undefined`/`none` and "no remote" count as done)
+  1   something is open, unknown or stale, or the report could not be assembled
+  2   --repo is not a git repository
+  64  usage error (no subcommand, unknown subcommand, bad flags)
+  70  Python older than 3.11
 Exit codes (install; the last stdout line is {"status", "code", "reason", "commit"}, and every
 run that holds the install lock stores the same object in <git dir>/gstack-install-result.json):
-  0   installed or already current
+  0   installed ("installed"), or the stamp already proves origin/main is installed ("current")
   2   the Installable: line is not macos-app, or missing (or --repo is not a git repository)
   3   the main folder is not on main, is not clean, pull --ff-only failed, or main != origin/main
   4   the app runs (--quit-running / --quit-path ask it to quit itself; never kill)
   5   the span since the stamp may change data on disk, or cannot be measured (--accept-migration)
   6   a copy without a stamp is in the way (--replace-unstamped)
   7   another app (or one that cannot be identified) has the name; no flag helps
-  8-11 build, verify, applications dir, main moved (the build and swap steps)
+  8   the build failed; the reason names <git dir>/gstack-install-build.log; nothing was touched
+  9   the check failed: before the swap the temporary copy is removed and the old copy is untouched;
+      on the final path after the swap nothing is stamped and the old copy is already in the Trash
+  10  the applications folder is missing or not writable (or macOS refused the swap); never sudo
+  11  main moved during the build; nothing was swapped or stamped
   12  another install holds the lock, or land held its lock longer than 60 s
   64  usage error (no subcommand, unknown subcommand, bad flags, scheme/settings not usable)
-  70  unexpected error (state printed), or Python older than 3.11
+  70  unexpected error (state printed), interrupted by SIGTERM/SIGINT ("avbrutt"), or Python < 3.11
+
+Hidden test knobs (environment): GSTACK_QUIT_DEADLINE, GSTACK_LAND_LOCK_WAIT (seconds),
+GSTACK_LSREGISTER (the lsregister binary), GSTACK_SWAP=rename (a plain rename dance instead of
+renamex_np, so the tests run on Linux); --applications-dir replaces /Applications.
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import fcntl
 import glob
 import importlib.util
@@ -45,6 +58,7 @@ import os
 import plistlib
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -719,7 +733,13 @@ def cmd_report(args) -> int:
 CLASSIFY = Path(__file__).with_name("classify-change.py")
 INSTALL_LOCK = "gstack-install.lock"
 LAND_LOCK = "gstack-land.lock"
-_NEW_COPY_RE = re.compile(r"^\..+\.gstack-new-\d+$")
+_NEW_COPY_RE = re.compile(r"^\.(.+)\.gstack-new-\d+$")
+BUILD_DIR = "gstack-install-build"            # -derivedDataPath, so the next build is incremental
+BUILD_LOG = "gstack-install-build.log"
+BUILD_TIMEOUT = 3600
+RENAME_SWAP = 0x2                             # <stdio.h>: renamex_np flag that exchanges two paths
+LSREGISTER = ("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework"
+              "/Support/lsregister")
 _BUNDLE_ID_RE = re.compile(r"^[A-Za-z0-9.-]+$")
 _SETTING_RE = re.compile(r"^\s+([A-Z_][A-Z0-9_]*) = (.*)$")
 _SETTINGS = (("BUILT_PRODUCTS_DIR", "built_products_dir"), ("FULL_PRODUCT_NAME", "full_product_name"),
@@ -926,14 +946,16 @@ def _pick_app_section(apps: list[dict], scheme: str) -> list[dict]:
     raise Stop(64, f"skjemaet '{scheme}' bygger flere apper, og ingen heter som skjemaet: {names}")
 
 
-def discover_build(repo, scheme) -> dict:
-    """Step 2: container, scheme and the four settings, read through the Release macOS destination."""
+def discover_build(repo, scheme, derived=None) -> dict:
+    """Step 2: container, scheme and the four settings, read through the Release macOS destination.
+    `derived` is the build's -derivedDataPath, so BUILT_PRODUCTS_DIR is where the build puts the app."""
     land = _load_land()
     primary = Path(repo)
     _generate_if_needed(land, primary)
     container = _container(primary)
     argv = ["xcodebuild", *container, "-showBuildSettings", "-configuration", "Release",
-            "-destination", "platform=macOS", "-scheme", scheme]
+            "-destination", "platform=macOS", "-scheme", scheme,
+            *(["-derivedDataPath", str(derived)] if derived else [])]
     try:
         r = _run(argv, cwd=primary, timeout=300)
     except OSError as e:
@@ -1068,22 +1090,68 @@ def migration_signal(repo, stamp_commit, head):
     return False, "ingen migreringssignal"
 
 
+def _free_name(folder: Path, name: str) -> Path:
+    """`name` in `folder`, or `<stem> 2.app`, `<stem> 3.app` … when it is taken."""
+    stem, suffix = (name[:-4], ".app") if name.endswith(".app") else (name, "")
+    candidate, n = folder / name, 2
+    while os.path.lexists(candidate):
+        candidate, n = folder / f"{stem} {n}{suffix}", n + 1
+    return candidate
+
+
+def _old_name(stem: str) -> str:
+    """The visible name a previous version gets in the Trash: Finder hides dot-names there too."""
+    return f"{stem} {time.strftime('%Y-%m-%d %H.%M.%S')}.app"
+
+
+def _to_trash(path: Path, visible: str):
+    """Move a previous version to the Trash, never delete it: (where, None) | (None, problem).
+    It is first renamed to the visible name next to itself. Then Finder, with the path as an
+    AppleScript argument (never in the source), so Put Back works; it counts only when the path is
+    gone afterwards. Without Finder: ~/.Trash/<visible>, with a free name."""
+    path = Path(path)
+    try:
+        named = _free_name(path.parent, visible)
+        os.rename(path, named)
+        path = named
+    except OSError:
+        pass                        # trashed under its own name rather than not at all
+    try:
+        r = _run(["osascript", "-e", "on run argv", "-e",
+                  'tell application "Finder" to delete (POSIX file (item 1 of argv))', "-e", "end run",
+                  str(path)], timeout=60)
+        if r.returncode == 0 and not os.path.lexists(path):
+            return "papirkurven", None
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    try:
+        trash = Path.home() / ".Trash"
+        trash.mkdir(exist_ok=True)
+        dest = _free_name(trash, visible)
+        shutil.move(str(path), str(dest))
+        return f"papirkurven ({dest})", None
+    except (OSError, RuntimeError, shutil.Error) as e:
+        return None, f"kunne ikke legge {path} i papirkurven: {e}"
+
+
 def _remove_leftovers(apps: Path, bundle_id: str):
     """Under the install lock every `.<name>.gstack-new-<pid>` with our bundle id is a leftover
-    of an interrupted run (a PID can be reused, so it is not checked). Others are left alone."""
+    of an interrupted run (a PID can be reused, so it is not checked). Such a leftover may be the
+    user's previous version (a run stopped between the swap and the Trash), so it goes to the Trash,
+    never to rm. Others are left alone."""
     try:
         entries = list(apps.iterdir()) if apps.is_dir() else []
     except OSError as e:
         raise Stop(70, f"kunne ikke lese {apps}: {e}") from None
     for p in entries:
-        if not _NEW_COPY_RE.fullmatch(p.name) or p.is_symlink() or not p.is_dir():
+        m = _NEW_COPY_RE.fullmatch(p.name)
+        if not m or p.is_symlink() or not p.is_dir():
             continue
         if _bundle_id(p)[0] != bundle_id:
             continue
-        try:
-            shutil.rmtree(p)
-        except OSError as e:
-            raise Stop(70, f"kunne ikke fjerne resten {p}: {e}") from None
+        where, problem = _to_trash(p, _old_name(m.group(1)))
+        if problem:
+            raise Stop(70, f"en rest etter en avbrutt installering ble liggende: {problem}")
 
 
 def _read_stamp(gd: Path):
@@ -1095,7 +1163,8 @@ def ask_questions(args, info, apps: Path, gd: Path, primary: Path, head: str):
     """Step 3, in fail-closed order: 7 (another app; no flag helps, and quitting by bundle id must
     never address it), 4 (running), 5 (migration since the stamp), 6 (unstamped copy).
     Nothing is quit here: the returned plan (None, or (label, executable name)) is carried out
-    only after every question has passed, so a stop on 5 or 6 never leaves the app closed."""
+    just before the swap, after the build and the copy are verified and the questions are asked
+    again, so a stop on 5 or 6, a failed build or a failed check never leaves the app closed."""
     target = apps / info["full_product_name"]
     bid, exe = info["bundle_id"], info["executable_name"]
     if target.is_symlink() or (target.exists() and not target.is_dir()):
@@ -1130,9 +1199,9 @@ def ask_questions(args, info, apps: Path, gd: Path, primary: Path, head: str):
     stamp, problem = _read_stamp(gd)
     ours = stamp is not None and stamp.get("bundle_id") == bid
     if problem or ours:
-        signal, why = (True, f"stempelet kan ikke leses ({problem}); spennet er ukjent") if problem else \
+        flagged, why = (True, f"stempelet kan ikke leses ({problem}); spennet er ukjent") if problem else \
             migration_signal(primary, stamp.get("commit"), head)
-        if signal and not args.accept_migration:
+        if flagged and not args.accept_migration:
             raise Stop(5, why)
     covered = False
     if ours and isinstance(stamp.get("app_path"), str) and stamp["app_path"]:
@@ -1148,34 +1217,181 @@ def carry_out_quit(bundle_id, plan):
         raise Stop(4, f"{plan[0]} avsluttet seg ikke selv i tide; den ble ikke drept")
 
 
-def _install_locked(args, repo: Path, gd: Path, ctx: dict) -> dict:
-    land = _load_land()
-    ref = _line_ref(land, repo)[0]
-    if ref is None:
-        raise Stop(2, "fant ingen standardgren å lese Installable: fra")
-    _scheme_from_line(repo, ref)                       # fast stop before anything is pulled
-    primary, head = precondition_main(land, repo, gd)
-    ctx["commit"] = head
-    scheme = _scheme_from_line(primary, head)          # the line as it stands on the commit to build
-    info = discover_build(primary, scheme)
-    apps = Path(args.applications_dir) if args.applications_dir else Path("/Applications")
-    _remove_leftovers(apps, info["bundle_id"])
-    plan = ask_questions(args, info, apps, gd, primary, head)
-    carry_out_quit(info["bundle_id"], plan)
-    raise Stop(70, "not implemented")                  # Task 6: build, verify, swap, register, stamp
+# --- interruption: SIGTERM / SIGINT become Stop(70, "avbrutt …") ------------------------------
+# A background install that is killed still stores its result and removes what it created. A
+# signal never splits a critical section (the swap and its bookkeeping, the cleanup, the atomic
+# writes): it is held there and raised when the section ends. Only the first signal raises.
+
+_SIGNALS = {"critical": 0, "pending": None, "fired": False}
 
 
-def _write_result(gd: Path, outcome: dict) -> str | None:
-    """Atomic: a temp file in the same folder, then os.replace. The error text, or None."""
-    data = {**outcome, "finished_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+def _interrupted(signum) -> Stop:
+    _SIGNALS["fired"] = True
+    try:
+        name = signal.Signals(signum).name
+    except ValueError:
+        name = str(signum)
+    return Stop(70, f"avbrutt ({name})")
+
+
+def _on_signal(signum, frame):
+    if _SIGNALS["fired"]:
+        return                                  # one interruption is enough; let the cleanup finish
+    if _SIGNALS["critical"]:
+        _SIGNALS["pending"] = signum
+        return
+    raise _interrupted(signum)
+
+
+@contextlib.contextmanager
+def _critical(raise_pending=True):
+    _SIGNALS["critical"] += 1
+    try:
+        yield
+    finally:
+        _SIGNALS["critical"] -= 1
+    if raise_pending and not _SIGNALS["critical"] and _SIGNALS["pending"] is not None and not _SIGNALS["fired"]:
+        signum, _SIGNALS["pending"] = _SIGNALS["pending"], None
+        raise _interrupted(signum)
+
+
+# --- steps 4-7: build, verify before the swap, swap, register and stamp ------------------------
+
+def _require_writable(apps: Path):
+    if not apps.is_dir():
+        raise Stop(10, f"{apps} finnes ikke")
+    if not os.access(apps, os.W_OK | os.X_OK):
+        raise Stop(10, f"{apps} er ikke skrivbar for denne brukeren; install bruker aldri sudo")
+
+
+def _log_tail(log: Path) -> str:
+    try:
+        return log.read_text(encoding="utf-8", errors="replace")[-1500:]
+    except OSError:
+        return ""
+
+
+def build(repo, info, scheme, gd=None) -> Path:
+    """Step 4: `xcodebuild … -derivedDataPath <git dir>/gstack-install-build build`, all output in
+    <git dir>/gstack-install-build.log. No signing override. Code 8 names the log. Returns the app."""
+    gd = Path(gd) if gd else gitdir(repo)
+    log = gd / BUILD_LOG
+    argv = ["xcodebuild", *info["container"], "-scheme", scheme, "-configuration", "Release",
+            "-destination", "platform=macOS", "-derivedDataPath", str(gd / BUILD_DIR), "build"]
+    try:
+        with open(log, "wb") as f:
+            r = subprocess.run(argv, cwd=repo, stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT,
+                               timeout=BUILD_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise Stop(8, f"bygget brukte over {BUILD_TIMEOUT} s; logg: {log}") from None
+    except OSError as e:
+        raise Stop(8, f"bygget kunne ikke kjøres ({e}); logg: {log}") from None
+    if r.returncode:
+        raise Stop(8, f"bygget feilet (xcodebuild ga kode {r.returncode}); logg: {log}", state=_log_tail(log))
+    product = Path(info["built_products_dir"]) / info["full_product_name"]
+    if product.is_symlink() or not product.is_dir():
+        raise Stop(8, f"bygget lagde ikke {product}; logg: {log}")
+    return product
+
+
+def verify_copy(app, bundle_id):
+    """Step 5's check, also run on the final path: `codesign --verify --deep --strict`, then the
+    bundle id read with plistlib (R8). Raises Stop(9); the caller removes what it created."""
+    try:
+        r = _run(["codesign", "--verify", "--deep", "--strict", str(app)], timeout=600)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise Stop(9, f"codesign kunne ikke kontrollere {app}: {e}") from None
+    if r.returncode:
+        raise Stop(9, f"codesign --verify --deep --strict avviste {app}", state=_last_line(r.stderr, r.stdout))
+    bid, problem = _bundle_id(app)
+    if problem:
+        raise Stop(9, problem)
+    if bid != bundle_id:
+        raise Stop(9, f"{app} har bundle-ID {bid}, ikke {bundle_id}")
+
+
+def _copy(product: Path, tmp: Path):
+    """`ditto <product> <apps>/.<name>.gstack-new-<pid>`."""
+    try:
+        r = _run(["ditto", str(product), str(tmp)], timeout=600)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise Stop(9, f"ditto kunne ikke kopiere {product}: {e}") from None
+    if r.returncode:
+        _require_writable(tmp.parent)
+        raise Stop(9, f"ditto ga kode {r.returncode} for {tmp}", state=_last_line(r.stderr, r.stdout))
+    if tmp.is_symlink() or not tmp.is_dir():
+        raise Stop(9, f"ditto lagde ikke {tmp}")
+
+
+def _renamex_swap(a, b):
+    import ctypes
+    libc = ctypes.CDLL(None, use_errno=True)
+    fn = libc.renamex_np
+    fn.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint)
+    fn.restype = ctypes.c_int
+    if fn(os.fsencode(str(a)), os.fsencode(str(b)), RENAME_SWAP) != 0:
+        err = ctypes.get_errno()
+        raise OSError(err, os.strerror(err), str(a), None, str(b))
+
+
+def _rename_dance(a, b):
+    """Three renames. NOT atomic: only for the tests (GSTACK_SWAP=rename)."""
+    mid = Path(a).with_name(Path(a).name + ".gstack-swap")
+    os.rename(a, mid)
+    os.rename(b, a)
+    os.rename(mid, b)
+
+
+def _swap(old, new):
+    """Exchange two folders in one step: renamex_np(RENAME_SWAP) through ctypes on macOS. The
+    hidden test knob GSTACK_SWAP=rename selects _rename_dance instead, so the tests run on Linux;
+    anywhere else without it the swap refuses (70)."""
+    if os.environ.get("GSTACK_SWAP") == "rename":
+        return _rename_dance(old, new)
+    if sys.platform != "darwin":
+        raise Stop(70, "byttet i ett steg (renamex_np) finnes bare på macOS")
+    return _renamex_swap(old, new)
+
+
+def _put_in_place(tmp: Path, target: Path, st: dict):
+    """Step 6. With an old copy the two are swapped, and `tmp` then holds the previous version;
+    without one `os.rename` is enough. A refusal from the file system is code 10."""
+    try:
+        if os.path.lexists(target):
+            _swap(target, tmp)
+            st["holds"] = "old"
+        else:
+            os.rename(tmp, target)
+            st["holds"] = None
+        st["swapped"] = True
+    except PermissionError as e:
+        raise Stop(10, f"{target.parent} tillot ikke byttet ({e}). Er mappen skrivbar? macOS kan også kreve "
+                       "«Appadministrasjon» for terminalen (Systeminnstillinger → Personvern og sikkerhet)") from None
+    except OSError as e:
+        raise Stop(70, f"byttet av {target} feilet: {e}") from None
+
+
+def register(target: Path):
+    """`lsregister -f <app>`. A failure does not undo the install (Launch Services finds the app
+    on its own later); the problem is named in the reason. The problem text, or None."""
+    exe = os.environ.get("GSTACK_LSREGISTER") or LSREGISTER
+    try:
+        r = _run([exe, "-f", str(target)], timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"lsregister kunne ikke kjøres: {e}"
+    return f"lsregister ga kode {r.returncode}" if r.returncode else None
+
+
+def _atomic_json(path: Path, data: dict) -> str | None:
+    """A temp file in the same folder, fsync, then os.replace. The error text, or None."""
     tmp = None
     try:
-        fd, tmp = tempfile.mkstemp(dir=gd, prefix=f".{RESULT_FILE}.", suffix=".tmp")
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, gd / RESULT_FILE)
+        os.replace(tmp, path)
         return None
     except OSError as e:
         if tmp:
@@ -1186,12 +1402,147 @@ def _write_result(gd: Path, outcome: dict) -> str | None:
         return str(e)
 
 
+def _utc_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def write_stamp(gd: Path, scheme, bundle_id, commit, target: Path):
+    """Step 7's stamp, written atomically: scheme, bundle_id, commit, app_path, version, installed_at."""
+    version = None
+    try:
+        with open(target / "Contents" / "Info.plist", "rb") as f:
+            plist = plistlib.load(f)
+        short, number = plist.get("CFBundleShortVersionString"), plist.get("CFBundleVersion")
+        if isinstance(short, str) and short:
+            version = short + (f" ({number})" if isinstance(number, str) and number and number != short else "")
+    except (OSError, ValueError, AttributeError, plistlib.InvalidFileException):
+        pass
+    data = {"scheme": scheme, "bundle_id": bundle_id, "commit": commit, "app_path": os.path.abspath(target),
+            "version": version, "installed_at": _utc_now()}
+    err = _atomic_json(gd / STAMP_FILE, data)
+    if err:
+        raise Stop(70, f"{target} er installert, men stempelet kunne ikke skrives: {err}")
+
+
+def _cleanup(tmp: Path, st: dict, stem: str):
+    """What this run created and still holds: its own copy is removed, the previous version
+    (after a swap) goes to the Trash."""
+    if not os.path.lexists(tmp):
+        return
+    if st["holds"] == "new":
+        shutil.rmtree(tmp, ignore_errors=True)        # our pid-named copy, checked absent before ditto
+    elif st["holds"] == "old":
+        _to_trash(tmp, _old_name(stem))
+
+
+def deliver(args, info, scheme, apps: Path, gd: Path, primary: Path, head: str) -> dict:
+    """Steps 4-7. The old copy stays until the new one is verified; the app is asked to quit only
+    right before the swap; every failure removes only what this run created."""
+    bid, name = info["bundle_id"], info["full_product_name"]
+    stem = name[:-len(".app")]
+    target = apps / name
+    product = build(primary, info, scheme, gd)          # 8: nothing touched, the app keeps running
+    tmp = apps / f".{stem}.gstack-new-{os.getpid()}"
+    st = {"holds": None, "swapped": False}
+    try:
+        if os.path.lexists(tmp):
+            raise Stop(70, f"{tmp} finnes allerede og er ikke en rest av denne appen; rydd den selv")
+        st["holds"] = "new"
+        try:
+            _copy(product, tmp)
+            verify_copy(tmp, bid)
+        except Stop as e:
+            if e.code != 9:
+                raise
+            raise Stop(9, f"{e.message}; den midlertidige kopien er fjernet, den gamle er urørt", e.state) from None
+        now = _load_land().out(primary, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+        if now != head:
+            raise Stop(11, f"main flyttet seg under bygget ({head[:7]} → {(now or 'ukjent')[:7]}); "
+                           "ingenting er byttet eller stemplet", state=f"bygget {head}, HEAD nå {now}")
+        plan = ask_questions(args, info, apps, gd, primary, head)    # the build took time: ask again
+        carry_out_quit(bid, plan)
+        _require_writable(apps)
+        with _critical():
+            _put_in_place(tmp, target, st)
+        old_note = "det fantes ingen gammel kopi"
+        if st["holds"] == "old":
+            with _critical():
+                where, problem = _to_trash(tmp, _old_name(stem))
+                st["holds"] = None
+            old_note = f"den gamle kopien ligger i {where}" if where else problem
+        notes = [n for n in (register(target),) if n]
+        try:
+            verify_copy(target, bid)
+        except Stop as e:
+            raise Stop(9, f"{e.message} etter byttet; {old_note.replace('ligger i', 'ligger allerede i')}; "
+                          "ingenting er stemplet", e.state) from None
+        with _critical():
+            write_stamp(gd, scheme, bid, head, target)
+        return {"status": "installed",
+                "reason": "; ".join([f"{name} {head[:7]} er installert i {apps}", old_note, *notes])}
+    except BaseException as e:
+        with _critical(raise_pending=False):
+            _cleanup(tmp, st, stem)
+        if isinstance(e, Stop) and e.code == 70 and st["swapped"]:
+            e.message += f"; {target} var allerede byttet, men er ikke stemplet"
+        raise
+
+
+def _already_current(primary: Path, gd: Path, apps: Path, scheme, head):
+    """The reason when the stamp already proves `head` is installed in `apps` (same predicate as
+    report: stamp_is_current), else None. Checked before anything is asked or built."""
+    stamp, problem = _read_stamp(gd)
+    if problem or not stamp or stamp.get("scheme") != scheme:
+        return None
+    app = stamp.get("app_path")
+    if not isinstance(app, str) or not app or os.path.realpath(os.path.dirname(app)) != os.path.realpath(apps):
+        return None
+    if not stamp_is_current(primary, stamp, head):
+        return None
+    return f"{Path(app).name} {head[:7]} er allerede installert"
+
+
+def _install_locked(args, repo: Path, gd: Path, ctx: dict) -> dict:
+    land = _load_land()
+    ref = _line_ref(land, repo)[0]
+    if ref is None:
+        raise Stop(2, "fant ingen standardgren å lese Installable: fra")
+    _scheme_from_line(repo, ref)                       # fast stop before anything is pulled
+    primary, head = precondition_main(land, repo, gd)
+    ctx["commit"] = head
+    scheme = _scheme_from_line(primary, head)          # the line as it stands on the commit to build
+    apps = Path(args.applications_dir) if args.applications_dir else Path("/Applications")
+    current = _already_current(primary, gd, apps, scheme, head)
+    if current:                                        # before the running check: never asks to quit
+        return {"status": "current", "reason": current}
+    info = discover_build(primary, scheme, gd / BUILD_DIR)
+    _require_writable(apps)                            # 10 before any build time is spent
+    _remove_leftovers(apps, info["bundle_id"])
+    ask_questions(args, info, apps, gd, primary, head)  # stops before the build; nothing is quit yet
+    return deliver(args, info, scheme, apps, gd, primary, head)
+
+
+def _write_result(gd: Path, outcome: dict) -> str | None:
+    """Atomic: a temp file in the same folder, then os.replace. The error text, or None."""
+    return _atomic_json(gd / RESULT_FILE, {**outcome, "finished_at": _utc_now()})
+
+
 def _outcome(code, reason, commit, status=None) -> dict:
     return {"status": status or ("installed" if code == 0 else "stopped"), "code": code,
             "reason": reason, "commit": commit}
 
 
 def cmd_install(args) -> int:
+    _SIGNALS.update(critical=0, pending=None, fired=False)
+    previous = {s: signal.signal(s, _on_signal) for s in (signal.SIGTERM, signal.SIGINT)}
+    try:
+        return _cmd_install(args)
+    finally:
+        for s, handler in previous.items():
+            signal.signal(s, handler)
+
+
+def _cmd_install(args) -> int:
     ctx = {"commit": None}
     state = ""
     outcome = _outcome(70, "avbrutt før resultatet ble målt", None)
@@ -1213,7 +1564,9 @@ def cmd_install(args) -> int:
                 outcome = _outcome(70, f"uventet feil: {type(e).__name__}: {e}", ctx["commit"])
                 state = traceback.format_exc()[-1500:]
             finally:
-                err = _write_result(gd, {**outcome, "state": state})
+                with _critical(raise_pending=False):
+                    err = _write_result(gd, {**outcome, "state": state})
+                    _SIGNALS["fired"] = True    # the run is over: a later signal must not change the outcome
                 if err:
                     outcome["reason"] += f" (resultatet kunne ikke lagres: {err})"
     except Stop as e:

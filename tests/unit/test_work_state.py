@@ -1,7 +1,7 @@
 import fcntl, importlib.util, json, os, plistlib, subprocess, sys
 from pathlib import Path
 import pytest
-from work_state_fixtures import make_repo, add_origin, commit_file, stub_bin, stub_env, write_app
+from work_state_fixtures import make_repo, add_origin, commit_file, stub_bin, stub_env, write_app, _with_settings
 
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "work-state.py"
@@ -475,12 +475,11 @@ def test_stub_helpers_make_a_logging_stub_dir(tmp_path):
 
 
 # ---- Task 5: install — preconditions, discovery, the four questions, the lock ----
-# Until Task 6 builds and swaps, a run that passes every question stops at 70 "not implemented".
+# A run that passes every question now builds and installs (Task 6): `passed` is exit 0.
 # Ruling R8: fake apps carry a real Contents/Info.plist (write_app); there is no plutil stub.
 
-PASSED = 70
-
 def run_install(repo, stubs, apps, *extra, env_extra=None):
+    apps.mkdir(parents=True, exist_ok=True)        # the applications folder of the test (never /Applications)
     env = {**os.environ, **stub_env(apps.parent), "PATH": f"{stubs}:{os.environ['PATH']}", **(env_extra or {})}
     p = subprocess.run([sys.executable, str(SCRIPT), "install", "--repo", str(repo),
                         "--applications-dir", str(apps), *extra], capture_output=True, text=True, env=env)
@@ -491,7 +490,7 @@ def app_repo(tmp_path, line="Installable: macos-app Fake App\n"):
     return repo
 
 def passed(code, out):
-    return code == PASSED and out["reason"] == "not implemented"
+    return code == 0 and out["status"] in ("installed", "current")
 
 def stamp_at(repo, apps, commit):
     (ws.gitdir(repo) / "gstack-installed-app.json").write_text(json.dumps(
@@ -610,6 +609,7 @@ def test_a_process_with_the_same_exe_name_but_another_bundle_id_is_ignored(tmp_p
 def test_a_third_running_copy_with_our_bundle_id_stops_both_flags(tmp_path, flag):     # review fix 1
     repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
     stamp_at(repo, apps, _rev(repo, "HEAD"))
+    commit_file(repo, "Sources/View.swift", "struct V {}\n"); push(repo)     # Task 6: a current stamp is 0
     branch_app = write_app(tmp_path / "DerivedData dir" / "Fake App.app")
     third = write_app(tmp_path / "Third dir" / "Fake App.app")
     covered = apps / "Fake App.app" if flag == "--quit-running" else branch_app
@@ -652,7 +652,7 @@ def test_no_quit_is_sent_when_nothing_runs(tmp_path):
 def test_a_failing_ps_is_never_read_as_not_running(tmp_path):
     repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; apps.mkdir()
     code, out = run_install(repo, stub_bin(tmp_path, ps="exit 1"), apps)
-    assert code == 70 and out["reason"] != "not implemented"
+    assert code == 70 and "ps" in out["reason"]
 
 def test_code_5_when_the_span_since_the_stamp_has_a_migration_signal(tmp_path):
     repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; apps.mkdir()
@@ -729,6 +729,7 @@ def test_stale_temporary_copies_for_the_same_bundle_id_are_removed_under_the_loc
     other = write_app(apps / ".Other.gstack-new-998", "com.other.app")
     assert passed(*run_install(repo, stub_bin(tmp_path), apps))
     assert not mine.exists() and other.exists()
+    assert len(list(Path(stub_env(tmp_path)["STUB_TRASH"]).iterdir())) == 1      # to the Trash, never rm
 
 def test_every_stop_is_stored_atomically_with_code_reason_and_commit(tmp_path):
     repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
@@ -767,15 +768,19 @@ def test_a_generated_project_that_changes_tracked_files_is_3(tmp_path):
 
 def test_helper_apps_in_the_settings_do_not_make_it_ambiguous(tmp_path):        # review fix 2
     repo = app_repo(tmp_path)
+    dirs = "printf '    BUILT_PRODUCTS_DIR = %s\\n' \"$STUB_OUT\"\n"
     body = ("echo 'Build settings for action build and target Helper:'\n"
-            "echo '    TARGET_NAME = Helper'\necho '    BUILT_PRODUCTS_DIR = /x'\necho '    FULL_PRODUCT_NAME = Helper.app'\n"
+            f"echo '    TARGET_NAME = Helper'\n{dirs}echo '    FULL_PRODUCT_NAME = Helper.app'\n"
             "echo '    PRODUCT_BUNDLE_IDENTIFIER = com.example.helper'\necho '    EXECUTABLE_NAME = Helper'\n"
             "echo 'Build settings for action build and target Fake App:'\n"
-            "echo '    TARGET_NAME = Fake App'\necho '    BUILT_PRODUCTS_DIR = /x'\necho '    FULL_PRODUCT_NAME = Fake App.app'\n"
-            "echo '    PRODUCT_BUNDLE_IDENTIFIER = com.example.fake'\necho '    EXECUTABLE_NAME = Fake'")
-    assert passed(*run_install(repo, stub_bin(tmp_path, xcodebuild=body), tmp_path / "Applications dir"))
+            f"echo '    TARGET_NAME = Fake App'\n{dirs}echo '    FULL_PRODUCT_NAME = Fake App.app'\n"
+            "echo '    PRODUCT_BUNDLE_IDENTIFIER = com.example.fake'\necho '    EXECUTABLE_NAME = Fake'\n")
     ambiguous = body.replace("TARGET_NAME = Fake App", "TARGET_NAME = Main").replace("= Fake App.app", "= Main.app")
-    assert run_install(repo, stub_bin(tmp_path, xcodebuild=ambiguous), tmp_path / "Applications dir")[0] == 64
+    assert run_install(repo, stub_bin(tmp_path, xcodebuild=_with_settings(settings=ambiguous)),
+                       tmp_path / "Applications dir")[0] == 64
+    # after an install the stamp is current and discovery never runs, so the ambiguous case goes first
+    assert passed(*run_install(repo, stub_bin(tmp_path, xcodebuild=_with_settings(settings=body)),
+                               tmp_path / "Applications dir"))
 
 def test_a_workspace_is_preferred_to_a_project(tmp_path):
     repo = app_repo(tmp_path); env = stub_env(tmp_path)
@@ -784,3 +789,222 @@ def test_a_workspace_is_preferred_to_a_project(tmp_path):
     run_install(repo, stub_bin(tmp_path), tmp_path / "Applications dir")
     log = Path(env["STUB_LOG"]).read_text()
     assert f"-workspace {repo}/Fake.xcworkspace" in log and "-project" not in log
+
+
+# ---- Task 6: install — build, verify before the swap, atomic swap, register, stamp ----
+# Adapted from the brief: old copies are write_app bundles (R8; an empty folder is 7), build behaviour
+# is changed through _with_settings (a bare "exit 65" would fail -showBuildSettings with 64), and the
+# lsregister stub takes its last argument (the argv is `lsregister -f <app>`).
+
+def _trash(tmp_path):
+    return Path(stub_env(tmp_path)["STUB_TRASH"])
+
+def _log(tmp_path):
+    f = Path(stub_env(tmp_path)["STUB_LOG"])
+    return f.read_text() if f.exists() else ""
+
+def test_a_successful_install_swaps_stamps_and_a_second_run_is_current(tmp_path):
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; apps.mkdir()
+    code, out = run_install(repo, stub_bin(tmp_path), apps)
+    assert code == 0 and out["status"] == "installed"
+    stamp = json.loads((ws.gitdir(repo) / "gstack-installed-app.json").read_text())
+    assert stamp["commit"] == _rev(repo, "origin/main") == out["commit"]
+    assert set(stamp) == {"scheme", "bundle_id", "commit", "app_path", "version", "installed_at"}
+    assert stamp["app_path"] == str(apps / "Fake App.app") and stamp["bundle_id"] == "com.example.fake"
+    assert (apps / "Fake App.app").is_dir()
+    assert (apps / "Fake App.app" / "built.txt").read_text().strip() == stamp["commit"]
+    assert not [p for p in apps.iterdir() if ".gstack-new-" in p.name]
+    stored = json.loads((ws.gitdir(repo) / "gstack-install-result.json").read_text())
+    assert stored["code"] == 0 and stored["status"] == "installed"
+    code, out = run_install(repo, stub_bin(tmp_path), apps)
+    assert code == 0 and out["status"] == "current"
+    assert ws.measure_installable(repo)["status"] == "ok"
+
+def test_the_build_uses_release_macos_the_install_build_folder_and_no_signing_override(tmp_path):
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"
+    assert run_install(repo, stub_bin(tmp_path), apps)[0] == 0
+    gd = ws.gitdir(repo)
+    build = [l for l in _log(tmp_path).splitlines() if l.startswith("xcodebuild") and "-showBuildSettings" not in l]
+    assert len(build) == 1 and build[0].endswith(" build")
+    assert f"-derivedDataPath {gd}/gstack-install-build" in build[0]
+    assert "-configuration Release -destination platform=macOS" in build[0] and "CODE_SIGN" not in build[0]
+    assert (gd / "gstack-install-build.log").is_file()
+    assert "lsregister -f " + str(apps / "Fake App.app") in _log(tmp_path)
+
+def test_code_8_leaves_the_old_copy_untouched_and_names_the_log(tmp_path):
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    marker = apps / "Fake App.app" / "old.txt"; marker.write_text("old")
+    code, out = run_install(repo, stub_bin(tmp_path, xcodebuild=_with_settings("echo boom; exit 65")), apps,
+                            "--replace-unstamped")
+    assert code == 8 and "gstack-install-build.log" in out["reason"] and marker.read_text() == "old"
+    assert "boom" in (ws.gitdir(repo) / "gstack-install-build.log").read_text()
+    assert not [p for p in apps.iterdir() if ".gstack-new-" in p.name]
+
+def test_a_failed_build_leaves_the_running_app_running(tmp_path):                    # carry-over (b)
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    ps_file = Path(stub_env(tmp_path)["STUB_PS_FILE"])
+    ps_file.write_text(f"123 {apps}/Fake App.app/Contents/MacOS/Fake\n")
+    code, _ = run_install(repo, stub_bin(tmp_path, xcodebuild=_with_settings("exit 65")), apps,
+                          "--quit-running", "--replace-unstamped")
+    assert code == 8 and ps_file.exists() and "osascript" not in _log(tmp_path)
+
+def test_the_app_is_asked_to_quit_only_after_the_copy_is_verified(tmp_path):        # carry-over (b)
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    ps_file = Path(stub_env(tmp_path)["STUB_PS_FILE"])
+    ps_file.write_text(f"123 {apps}/Fake App.app/Contents/MacOS/Fake\n")
+    code, _ = run_install(repo, stub_bin(tmp_path), apps, "--quit-running", "--replace-unstamped")
+    log = _log(tmp_path)
+    assert code == 0 and not ps_file.exists()
+    build = log.index("xcodebuild -")                                           # the first, -showBuildSettings
+    build = log.index("xcodebuild", build + 1)
+    assert build < log.index("ditto") < log.index("codesign") < log.index("to quit") < log.index("lsregister")
+
+def test_code_9_removes_the_temporary_copy_and_keeps_the_old_one(tmp_path):
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    (apps / "Fake App.app" / "old.txt").write_text("old")
+    stubs = stub_bin(tmp_path, ditto='cp -R "$1" "$2" && touch "$2/bad-signature"')   # the copy fails verification
+    code, _ = run_install(repo, stubs, apps, "--replace-unstamped")
+    assert code == 9 and (apps / "Fake App.app" / "old.txt").read_text() == "old"
+    assert not [p for p in apps.iterdir() if ".gstack-new-" in p.name]
+    assert json.loads((ws.gitdir(repo) / "gstack-install-result.json").read_text())["code"] == 9
+    assert not (ws.gitdir(repo) / "gstack-installed-app.json").exists()
+
+def test_code_9_when_the_copy_has_another_bundle_id(tmp_path):
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"
+    other = _with_settings().replace("<string>com.example.fake</string>", "<string>com.example.other</string>")
+    code, out = run_install(repo, stub_bin(tmp_path, xcodebuild=other), apps)
+    assert code == 9 and "com.example.other" in out["reason"]
+    assert not (apps / "Fake App.app").exists() and not list(apps.iterdir())
+
+def test_code_10_when_the_applications_dir_is_not_writable_and_no_sudo_is_attempted(tmp_path):
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; apps.mkdir(); apps.chmod(0o555)
+    try:
+        code, _ = run_install(repo, stub_bin(tmp_path), apps)
+    finally:
+        apps.chmod(0o755)
+    log = _log(tmp_path)
+    assert code == 10 and "sudo" not in log
+    assert not [l for l in log.splitlines() if l.startswith("xcodebuild") and "-showBuildSettings" not in l]  # no build
+
+def test_code_11_when_main_moves_during_the_build_nothing_is_swapped_or_stamped(tmp_path):
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; apps.mkdir()
+    mover = f'git -C "{repo}" commit -q --allow-empty -m moved && git -C "{repo}" push -q origin main'
+    code, _ = run_install(repo, stub_bin(tmp_path, xcodebuild=_with_settings(mover)), apps)
+    assert code == 11 and not (apps / "Fake App.app").exists()
+    assert not (ws.gitdir(repo) / "gstack-installed-app.json").exists()
+    assert not list(apps.iterdir())
+
+def test_install_replaces_with_a_swap_and_the_old_copy_ends_in_the_trash(tmp_path):
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    (apps / "Fake App.app" / "old.txt").write_text("old")
+    code, out = run_install(repo, stub_bin(tmp_path), apps, "--replace-unstamped")
+    assert code == 0 and (apps / "Fake App.app" / "built.txt").is_file() and not (apps / "Fake App.app" / "old.txt").exists()
+    trashed = list(_trash(tmp_path).rglob("old.txt"))                     # the old copy went to the trash, not to rm
+    assert trashed and not trashed[0].parent.name.startswith(".")        # a visible name in the Trash
+    assert "papirkurven" in out["reason"]
+    assert [p.name for p in apps.iterdir()] == ["Fake App.app"]
+
+def test_the_trash_falls_back_to_the_home_trash_with_a_timestamp(tmp_path):        # carry-over (d)
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    (apps / "Fake App.app" / "old.txt").write_text("old")
+    stubs = stub_bin(tmp_path, osascript='case "$*" in *Finder*) exit 1 ;; esac')
+    code, out = run_install(repo, stubs, apps, "--replace-unstamped")
+    home_trash = Path(stub_env(tmp_path)["HOME"]) / ".Trash"
+    found = list(home_trash.rglob("old.txt"))
+    assert code == 0 and found and found[0].parent.name.startswith("Fake App ")
+    assert 'tell application "Finder" to delete (POSIX file (item 1 of argv))' in _log(tmp_path)
+    assert str(home_trash) in out["reason"] and [p.name for p in apps.iterdir()] == ["Fake App.app"]
+
+def test_a_name_with_spaces_and_non_ascii_survives(tmp_path):                  # Review Focus 5
+    repo = app_repo(tmp_path, "Installable: macos-app Fake App æøå\n"); apps = tmp_path / "Applications dir ø"; apps.mkdir()
+    stubs = stub_bin(tmp_path, xcodebuild=_with_settings(None, product="Fake App æøå.app"))
+    code, out = run_install(repo, stubs, apps)
+    assert code == 0 and (apps / "Fake App æøå.app").is_dir()
+    stamp = json.loads((ws.gitdir(repo) / "gstack-installed-app.json").read_text(encoding="utf-8"))
+    assert stamp["scheme"] == "Fake App æøå" and stamp["app_path"] == str(apps / "Fake App æøå.app")
+    assert run_install(repo, stubs, apps)[1]["status"] == "current"
+
+def test_no_stamp_when_the_final_path_signature_check_fails(tmp_path):              # R4
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; apps.mkdir()
+    stubs = stub_bin(tmp_path, lsregister='for last; do :; done; touch "$last/bad-signature"')   # corrupts the final copy
+    code, _ = run_install(repo, stubs, apps)
+    assert code == 9 and not (ws.gitdir(repo) / "gstack-installed-app.json").exists()
+
+def test_a_failed_final_check_says_the_old_copy_is_already_in_the_trash(tmp_path):  # R4
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    (apps / "Fake App.app" / "old.txt").write_text("old")
+    stubs = stub_bin(tmp_path, lsregister='for last; do :; done; touch "$last/bad-signature"')
+    code, out = run_install(repo, stubs, apps, "--replace-unstamped")
+    assert code == 9 and "papirkurven" in out["reason"] and list(_trash(tmp_path).rglob("old.txt"))
+    assert not (ws.gitdir(repo) / "gstack-installed-app.json").exists()
+
+def test_current_comes_before_the_running_check(tmp_path):                          # carry-over (c)
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"
+    assert run_install(repo, stub_bin(tmp_path), apps)[0] == 0
+    ps_file = Path(stub_env(tmp_path)["STUB_PS_FILE"])
+    ps_file.write_text(f"123 {apps}/Fake App.app/Contents/MacOS/Fake\n")
+    Path(stub_env(tmp_path)["STUB_LOG"]).unlink()
+    code, out = run_install(repo, stub_bin(tmp_path), apps)
+    assert code == 0 and out["status"] == "current" and ps_file.exists()
+    assert not [l for l in _log(tmp_path).splitlines() if l.split(" ")[0] in ("osascript", "ps", "xcodebuild")]
+
+def test_a_new_commit_after_an_install_is_installed_over_the_stamped_copy(tmp_path):
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"
+    assert run_install(repo, stub_bin(tmp_path), apps)[0] == 0
+    commit_file(repo, "Sources/View.swift", "struct V {}\n"); push(repo)
+    code, out = run_install(repo, stub_bin(tmp_path), apps)
+    assert code == 0 and out["status"] == "installed" and out["commit"] == _rev(repo, "HEAD")
+    assert (apps / "Fake App.app" / "built.txt").read_text().strip() == _rev(repo, "HEAD")
+    assert len(list(_trash(tmp_path).iterdir())) == 1
+
+def _stored(repo):
+    return json.loads((ws.gitdir(repo) / "gstack-install-result.json").read_text())
+
+def test_sigterm_during_the_build_stores_avbrutt_with_the_commit_and_ends_in_json(tmp_path):   # carry-over (a)
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    (apps / "Fake App.app" / "old.txt").write_text("old")
+    stubs = stub_bin(tmp_path, xcodebuild=_with_settings('kill -TERM "$PPID"; sleep 5; exit 0'))
+    code, out = run_install(repo, stubs, apps, "--replace-unstamped")
+    assert code == 70 and "avbrutt" in out["reason"] and out["commit"] == _rev(repo, "HEAD")
+    assert _stored(repo)["code"] == 70 and _stored(repo)["commit"] == out["commit"]
+    assert (apps / "Fake App.app" / "old.txt").read_text() == "old"
+    assert [p.name for p in apps.iterdir()] == ["Fake App.app"]
+
+def test_sigterm_during_the_copy_removes_the_temporary_copy(tmp_path):              # carry-over (a)
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    (apps / "Fake App.app" / "old.txt").write_text("old")
+    stubs = stub_bin(tmp_path, ditto='cp -R "$1" "$2"; kill -TERM "$PPID"; sleep 5')
+    code, out = run_install(repo, stubs, apps, "--replace-unstamped")
+    assert code == 70 and "avbrutt" in out["reason"] and _stored(repo)["code"] == 70
+    assert [p.name for p in apps.iterdir()] == ["Fake App.app"]
+    assert (apps / "Fake App.app" / "old.txt").read_text() == "old"
+    assert not list(_trash(tmp_path).iterdir())                                  # our own copy: removed, not trashed
+
+def test_sigint_is_stored_as_avbrutt_too(tmp_path):
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"
+    stubs = stub_bin(tmp_path, xcodebuild=_with_settings('kill -INT "$PPID"; sleep 5; exit 0'))
+    code, out = run_install(repo, stubs, apps)
+    assert code == 70 and "avbrutt" in out["reason"] and _stored(repo)["code"] == 70
+
+def test_the_swap_without_the_test_knob_refuses_outside_macos(tmp_path, monkeypatch):
+    monkeypatch.delenv("GSTACK_SWAP", raising=False)
+    monkeypatch.setattr(ws.sys, "platform", "linux")
+    a, b = tmp_path / "a dir", tmp_path / "b dir"; a.mkdir(); b.mkdir()
+    with pytest.raises(ws.Stop) as e:
+        ws._swap(a, b)
+    assert e.value.code == 70 and a.is_dir() and b.is_dir()
+
+def test_the_rename_dance_swaps_two_folders(tmp_path, monkeypatch):
+    monkeypatch.setenv("GSTACK_SWAP", "rename")
+    a, b = tmp_path / "a dir", tmp_path / "b dir"; a.mkdir(); b.mkdir()
+    (a / "a.txt").write_text("a"); (b / "b.txt").write_text("b")
+    ws._swap(a, b)
+    assert (a / "b.txt").is_file() and (b / "a.txt").is_file() and sorted(p.name for p in tmp_path.iterdir()) == ["a dir", "b dir"]
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="renamex_np exists only on macOS")
+def test_renamex_np_swaps_two_folders_atomically_on_macos(tmp_path, monkeypatch):
+    monkeypatch.delenv("GSTACK_SWAP", raising=False)
+    a, b = tmp_path / "a dir æ", tmp_path / "b dir"; a.mkdir(); b.mkdir()
+    (a / "a.txt").write_text("a"); (b / "b.txt").write_text("b")
+    ws._swap(a, b)
+    assert (a / "b.txt").is_file() and (b / "a.txt").is_file()
