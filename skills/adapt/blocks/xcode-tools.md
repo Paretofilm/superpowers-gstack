@@ -1,4 +1,4 @@
-## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v9 -->
+## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v10 -->
 
 Xcode-related operations MUST be performed by the agent — NEVER delegated to the user; the user should never need to open Xcode to verify your work. Prefer MCP tools, falling back to CLI otherwise. Check MCP availability via `ToolSearch` first (deferred tools load on demand); drop to CLI only if the search returns nothing.
 
@@ -47,6 +47,30 @@ not inspection**:
 
 `/superpowers-gstack:verify-and-land` performs exactly this sequence and then lands it
 by the project's `Landing mode:` line; reach for it rather than re-deriving the steps.
+
+### SwiftUI view changes — look up, lint, see, then say what you saw
+
+A control can compile, pass every linter and still be unusable: a pop-up button with
+`.menuIndicator(.hidden)` and a plain label looks like static text. This applies
+whenever you add or change a `View` in the app target, not only in a design-system package.
+
+1. **Look up before writing.** One `mcp__swiftui-rag__search_swiftui_corpus` query for the
+   *kind of control* ("pop-up button in a table row"), not for a SwiftUI symbol. Note the one
+   thing it decided. If nothing relevant comes back, say so; never cite a source you did not get.
+2. **Lint after writing.** `review_macos_hig` (macOS or both; skip it on iOS, where its
+   window and menu-bar findings mislead), `review_accessibility`, and `review_liquid_glass`
+   when the project targets Liquid Glass, on each changed view file. They are pattern
+   checks: "clean" means no known pattern matched, not that the control looks right.
+3. **Affordance check.** Every interactive element shows, without hovering, that it is
+   interactive: an indicator on pop-ups and pull-downs, an outline or fill on fields, a
+   standard shape on buttons. If a cue is hidden on purpose, say why.
+4. **See it.** Render the view with `live-swiftui` (`render`, then `screenshot`; it needs a
+   `#Preview`) or launch the built app by absolute path (previous section) and screenshot it.
+   For a list or table, at least one row per state: normal, empty, longest label.
+5. **Report what you saw.** In the final message, say per changed view either *rendered and
+   seen* or *built, appearance unverified* and why. "Follows the HIG" and "matches the system
+   control" need a source from step 1; without one, word it as a choice. A size or opacity you
+   did not look up is a choice, not conformance.
 
 ### E2E executor — where committed UI tests run
 
@@ -127,6 +151,7 @@ Three surfaces, three different handlers:
 - ❌ "Open Xcode and run the tests" — use `mcp__XcodeBuildMCP__test_sim` (MCP) or `xcodebuild test` (CLI) instead
 - ❌ "Build the app in Xcode to verify" — use `mcp__XcodeBuildMCP__build_sim` (MCP) or `xcodebuild build` (CLI) instead
 - ❌ "Open the app and check" (macOS) — that opens `/Applications`, not this branch. Build, then `open` the absolute `BUILT_PRODUCTS_DIR` path
+- ❌ "This follows the HIG" about a SwiftUI view you never rendered, or with no corpus or HIG page behind it
 - ❌ "Take a screenshot of the simulator" — use `mcp__XcodeBuildMCP__screenshot` (MCP) or `xcrun simctl io booted screenshot` (CLI) instead
 - ❌ "Click through the Signing & Capabilities pane in Xcode" — declare entitlements in `*.entitlements` + `project.yml` (XcodeGen) instead
 - ❌ "Check what the system color looks like in HIG" — use `mcp__apple-docs__search_apple_docs` or `mcp__swiftui-rag__search_swiftui_corpus` instead

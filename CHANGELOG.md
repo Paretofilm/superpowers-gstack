@@ -1,5 +1,27 @@
 # Changelog
 
+## [3.12.0] - 2026-10-15
+
+**Report links open as a readable HTML page instead of GitHub, and a SwiftUI view is no longer called done until it has been seen.**
+
+### Added
+- **`report-inbox.py` serve-one shows a GitHub report as HTML.** Following `/seen/gh-issue-N` used to answer `302` to the issue on GitHub, where a long report is hard to read. It now fetches the issue or pull request with `gh api … -H "Accept: application/vnd.github.html+json"` (GitHub renders and sanitises the Markdown; nothing is parsed here) and serves a page with light and dark theme, under `Content-Security-Policy: sandbox; default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'` (no script, no network, no images; `default-src` does not cover `base-uri` or `form-action`, so they are set on their own), with the title escaped and a link back to GitHub. Fallbacks keep the old behaviour: a `HEAD` request, a missing `gh`, an offline machine or a call slower than 6 s still redirect to GitHub, and the report is marked read in every case.
+- **A "SwiftUI view changes" section in the generated `xcode-tools` block** (marker `v9` → `v10`, so `/adapt` replaces it in adapted projects): look up the kind of control in the corpus before writing, lint with `review_macos_hig` / `review_accessibility` / `review_liquid_glass` after, check that every interactive element shows without hover that it is interactive, render and look, and report each changed view as *rendered and seen* or *built, appearance unverified*. A claim of HIG conformance needs a source. Field case: an agent shipped a pop-up button with `.menuIndicator(.hidden)` that looked like static text, and the linters passed it.
+- **`verify-and-land` Phase 6** names each changed SwiftUI view file in the question to the user and says whether it was seen or only built.
+
+### Not done, with a trigger
+- The `PostToolUse` nudge, the standalone `swiftui-view-gate` skill, and `/ship` refusing "ready to land" without a gate record (`IDEAS.md`). Build them if an adapted project with the v10 marker is seen skipping the section.
+
+### Tests
+- `test_report_inbox.py`: the click shows sandboxed HTML with an escaped title and a link back; the redirect remains when `gh api` fails or hangs; `HEAD` still marks nothing read.
+- `test_e2e_executor_marker.py` pins `gstack-xcode-tools-v10`; the denylist treats `v9` as stale and `v10` as current (the `\b` is load-bearing).
+
+### Review
+- Tier floor high-stakes (`scripts/classify-change.py`: `subprocess.`, 10 files). Self-pitfall round 1 found three things, fixed: the CSP did not cover `base-uri` and `form-action`; step 4 of the new section named a macOS-only launch path for iOS projects; `verify-and-land` pointed at a CLAUDE.md section older adapted projects lack. Lens 2 absent (`codex_reviews=disabled`). Third house (DeepSeek, role `correctness`, $0.011): no P1 or P2. Refuted: single quote not escaped in the footer `href` (`html.escape(quote=True)` gives `&#x27;`, measured); `subprocess.run` instead of `Popen` (it kills only the child, not a grandchild holding the pipe, which the existing hanging-gh test covers); `color-mix()` without fallback (macOS 26+ only). Checked live: issue 96 fetched with the real `gh`, 51 kB of body HTML with no `script`, `base`, `meta`, `iframe` or `form`.
+
+### Target version
+- Taken at landing, as the 3.11.0 entry says. `docs/manual` still carries its own 3.11.0 and 3.12.0 and takes the next free number when it lands.
+
 ## [3.11.0] - 2026-10-11
 
 **An empty folder gets its CLAUDE.md with no questions. The stack is filled in after the first spec, once.**

@@ -237,7 +237,14 @@ Report one line: which branch, which bundle path, and which commit is on screen.
 ## Phase 6 — the human gate
 
 The user is the instrument; a person looking is the entire point. Ask with
-`AskUserQuestion`, naming the behaviour from Phase 1:
+`AskUserQuestion`, naming the behaviour from Phase 1.
+
+When the diff changes SwiftUI views, name each changed view file in the question and
+say, per file, whether you *rendered and saw* it (`live-swiftui`, or a screenshot of the
+launched bundle) or only *built* it, appearance unverified. The generated CLAUDE.md's
+"SwiftUI view changes" section has the five steps (look up, lint, affordance check, see,
+report). A view you did not see is listed as unverified, and the user's yes then covers
+what they looked at, not the whole diff. The options:
 
 - **Yes, it works** — asked per observable change when there are several; only when
   all of them hold → Phase 7. Phase 7 then lands without asking again, so settle now
