@@ -20,27 +20,24 @@ Hver kommando under er komplett og kan limes inn. Navnet `min-app` kan du bytte 
 2. Gå inn i den med `cd min-app`.
 3. Gjør den til et git-prosjekt med `git init -b main`. Grenen heter main (grenen alt det ferdige samles på).
 4. Start Claude Code i mappen med `claude`.
-5. Skriv `/superpowers-gstack:adapt` i Claude Code. Skillen (en ferdig arbeidsmåte Claude laster inn) setter opp prosjektet og har tre hovedstopp der den venter på deg, pluss noen spørsmål underveis.
-6. Første stopp: i en tom mappe spør adapt om prosjekttype, testverktøy, hvor det skal kjøre ut, om det har nettleser-grensesnitt, sikkerhetshensyn og plattform for en Apple-app. Den oppsummerer og spør «Is this correct?»
-7. Andre stopp: adapt viser hvilke skills den velger og en følsomhetsgrad for prosjektet, og spør «Does this look right?» Svar ja, eller si hva som skal endres.
-8. Underveis spør adapt om arbeidsmåte, og foreslår Vibe. Velg Classic for å følge dette kapittelet. Vibe lar deg velge startmåte (brainstorm, Hurtig, ferdig spec eller utforsk først), gir én spørsmålsrunde og låste akseptansetester som eneste sjekkpunkt, og Claude bygger resten selv med `/superpowers-gstack:vibe` ([se kapittel 0](#k0)).
-9. Adapt spør også om filer utenfor git, og hvor forklaringssiden etter hver spec og plan skal ligge: lokal fil eller Artifact-side på claude.ai.
-10. Tredje stopp: adapt viser hva den vil endre og spør «Shall I proceed with these changes?» Svar ja. Den skriver CLAUDE.md og lager mappene `docs/superpowers/specs/` og `plans/`. Etterpå spør den om du vil ha en grundig gjennomgang av det den gjorde. Den anbefales for prosjekter som allerede hadde et komplisert oppsett, og kan hoppes over i en tom mappe.
-11. La Claude Code stå, og åpne et vanlig terminalvindu i samme mappe (`min-app`). De neste fire kommandoene kjører du selv der.
-12. Legg til landingsvalget med `printf '\n## Prosjektvalg\n\nLanding mode: solo\n' >> CLAUDE.md`. Solo betyr at ferdig arbeid lander rett på main etter lokale sjekker, uten pull request (en forespørsel om gjennomgang på GitHub). Velger du gjennomgang, bruk `pr` og senere `/ship`.
-13. Lagre oppsettet med `git add CLAUDE.md docs .gstack`.
-14. Lag det første commit-et (et lagret punkt i historikken) med `git commit -m "chore: adapt"`.
-15. Lag fjernlageret på GitHub og send det opp med `gh repo create min-app --private --source=. --push`. Flaggene betyr: privat, bruk denne mappen, send commit-ene.
-16. Gå tilbake til Claude Code-vinduet.
-17. Beskriv den første funksjonen i én setning, for eksempel «lag en side som viser dagens dato».
-18. Claude starter `superpowers:brainstorming`. En tom mappe har ingen eksisterende flyt, så Claude behandler det som stor oppgave: spørsmål ett om gangen, to eller tre tilnærminger, design i deler.
-19. Ja nummer 1: du godkjenner designet. Claude skriver en spesifikasjon (spec) i `docs/superpowers/specs/`, og du leser og godkjenner den.
-20. Ja nummer 2: Claude skriver en plan med små oppgaver. Du leser den og velger hvordan den kjøres.
-21. Claude bygger i et eget arbeidstre (worktree, en ekstra mappe med sin egen gren) og committer underveis. Du gjør ingenting.
-22. Ja nummer 3: du ser at det virker. Er det en app, bygger og starter `/superpowers-gstack:verify-and-land` akkurat denne grenen, og ditt ja lander den.
-23. Vil du lande direkte, skriv `/superpowers-gstack:land` i arbeidstreet. Skillen kjører prosjektets sjekker, flytter main fremover og sender til GitHub.
-24. Første gang mangler prosjektet en `pre-merge`-sperre (sjekkene som må være grønne før noe lander, i `.config/wt.toml`). Land stopper da, og Claude foreslår en som kjører de samme kommandoene som testene dine. Du godkjenner forslaget.
-25. Så må kontrollene godkjennes en gang: `wt config approvals add` må kjøres i et ekte terminalvindu, for den spør deg om å si ja. Land skriver ut den nøyaktige kommandoen med riktig sti. Har du Calyx (terminalprogrammet Claude kan åpne faner i), kan Claude åpne en fane der du svarer selv.
+5. Vil du følge den klassiske løypa (Claude stiller spørsmål ett om gangen og venter på deg ved hvert ja), velg den før adapt går i gang, for adapt beholder en arbeidsmåte som allerede er valgt: `mkdir -p .gstack && printf 'classic\n' > .gstack/workflow`. Uten dette får du Vibe, som lar deg velge startmåte (brainstorm, Hurtig, ferdig spec eller utforsk først), gir én spørsmålsrunde og låste akseptansetester som eneste sjekkpunkt, og lar Claude bygge resten selv med `/superpowers-gstack:vibe` ([se kapittel 0](#k0)). Resten av dette kapittelet følger den klassiske løypa.
+6. Skriv `/superpowers-gstack:adapt` i Claude Code. Skillen (en ferdig arbeidsmåte Claude laster inn) ser at mappen er tom, og stiller da ingen spørsmål. Den skriver CLAUDE.md og noen hjelpefiler, og velger arbeidsmåten Vibe.
+7. Adapt skriver én linje som begynner med `Assumed:` og forteller hva den antok: webprosjekt, Vibe, forklaringssider som lokale filer, ingen filer utenfor git og middels følsomhet. Alt kan rettes senere med én linje i én fil. Hva slags prosjekt det er, vet ikke adapt ennå. Det fylles inn av Claude etter den første spec-en, uten nye spørsmål.
+8. La Claude Code stå, og åpne et vanlig terminalvindu i samme mappe (`min-app`). De neste fire kommandoene kjører du selv der.
+9. Legg til landingsvalget med `printf '\n## Prosjektvalg\n\nLanding mode: solo\n' >> CLAUDE.md`. Solo betyr at ferdig arbeid lander rett på main etter lokale sjekker, uten pull request (en forespørsel om gjennomgang på GitHub). Velger du gjennomgang, bruk `pr` og senere `/ship`.
+10. Lagre oppsettet med `git add CLAUDE.md docs .gstack`.
+11. Lag det første commit-et (et lagret punkt i historikken) med `git commit -m "chore: adapt"`.
+12. Lag fjernlageret på GitHub og send det opp med `gh repo create min-app --private --source=. --push`. Flaggene betyr: privat, bruk denne mappen, send commit-ene.
+13. Gå tilbake til Claude Code-vinduet.
+14. Beskriv den første funksjonen i én setning, for eksempel «lag en side som viser dagens dato».
+15. Claude starter `superpowers:brainstorming`. En tom mappe har ingen eksisterende flyt, så Claude behandler det som stor oppgave: spørsmål ett om gangen, to eller tre tilnærminger, design i deler.
+16. Ja nummer 1: du godkjenner designet. Claude skriver en spesifikasjon (spec) i `docs/superpowers/specs/`, og du leser og godkjenner den.
+17. Ja nummer 2: Claude skriver en plan med små oppgaver. Du leser den og velger hvordan den kjøres.
+18. Claude bygger i et eget arbeidstre (worktree, en ekstra mappe med sin egen gren) og committer underveis. Du gjør ingenting.
+19. Ja nummer 3: du ser at det virker. Er det en app, bygger og starter `/superpowers-gstack:verify-and-land` akkurat denne grenen, og ditt ja lander den.
+20. Vil du lande direkte, skriv `/superpowers-gstack:land` i arbeidstreet. Skillen kjører prosjektets sjekker, flytter main fremover og sender til GitHub.
+21. Første gang mangler prosjektet en `pre-merge`-sperre (sjekkene som må være grønne før noe lander, i `.config/wt.toml`). Land stopper da, og Claude foreslår en som kjører de samme kommandoene som testene dine. Du godkjenner forslaget.
+22. Så må kontrollene godkjennes en gang: `wt config approvals add` må kjøres i et ekte terminalvindu, for den spør deg om å si ja. Land skriver ut den nøyaktige kommandoen med riktig sti. Har du Calyx (terminalprogrammet Claude kan åpne faner i), kan Claude åpne en fane der du svarer selv.
 
 ### Hva CLAUDE.md inneholder etter adapt
 
