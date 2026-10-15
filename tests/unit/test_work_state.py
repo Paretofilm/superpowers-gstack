@@ -181,7 +181,8 @@ def test_a_cache_only_sibling_goes_to_the_trash_never_rm(tmp_path):
     repo = make_repo(tmp_path); add_origin(repo)
     left = tmp_path / "my proj.cache"; (left / "node_modules").mkdir(parents=True); (left / "node_modules" / "a.js").write_text("1")
     acts = ws.measure_tidy(repo)["safe_actions"]
-    assert [a for a in acts if str(left) in " ".join(a)] == [["osascript", "-e", f'tell application "Finder" to delete POSIX file "{left}"']]
+    assert [a for a in acts if str(left) in " ".join(a)] == [["osascript", "-e", "on run argv", "-e",
+                     'tell application "Finder" to delete (POSIX file (item 1 of argv))', "-e", "end run", str(left)]]
 
 def test_a_worktree_in_use_is_asked_about(tmp_path, monkeypatch):
     repo = make_repo(tmp_path); add_origin(repo); wt = tmp_path / "wt busy"
@@ -205,3 +206,76 @@ def test_nothing_left_is_ok_and_leftovers_are_open(tmp_path):
 def test_in_use_matches_whole_path_components_only(monkeypatch):
     monkeypatch.setattr(ws, "_cwds", lambda: ["/a/bc/sub"])
     assert ws.in_use(Path("/a/b")) is False and ws.in_use(Path("/a/bc")) is True
+
+
+# --- review round 1: fixes ---------------------------------------------------------------
+
+def landed_worktree(tmp_path, name="wt x", branch="feat/x"):
+    repo = make_repo(tmp_path); add_origin(repo); wt = tmp_path / name
+    g = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True)
+    g("worktree", "add", "-q", "-b", branch, str(wt)); commit_file(wt, "x.txt", "x")
+    g("merge", "-q", "--ff-only", branch); g("push", "-q", "origin", "main")
+    return repo, wt, g
+
+def test_untracked_work_is_seen_even_when_status_hides_untracked_files(tmp_path):
+    repo, wt, g = landed_worktree(tmp_path)
+    g("config", "status.showUntrackedFiles", "no")
+    (wt / "precious.txt").write_text("work")
+    r = ws.measure_tidy(repo)
+    assert not removes(r, wt, "feat/x") and any(str(wt) in a for a in r["ask"])
+
+def test_the_trash_action_passes_the_path_as_an_argument(tmp_path):
+    repo = make_repo(tmp_path); add_origin(repo)
+    left = tmp_path / 'my proj.q"uote'; (left / "node_modules").mkdir(parents=True); (left / "node_modules" / "a.js").write_text("1")
+    acts = [a for a in ws.measure_tidy(repo)["safe_actions"] if str(left) in " ".join(a)]
+    assert acts == [["osascript", "-e", "on run argv", "-e",
+                     'tell application "Finder" to delete (POSIX file (item 1 of argv))', "-e", "end run", str(left)]]
+
+def test_an_unreadable_sibling_is_not_taken_for_cache_only(tmp_path):
+    repo = make_repo(tmp_path); add_origin(repo)
+    left = tmp_path / "my proj.locked"; sub = left / "secret"; sub.mkdir(parents=True); (sub / "f.txt").write_text("1")
+    sub.chmod(0)
+    try:
+        r = ws.measure_tidy(repo)
+    finally:
+        sub.chmod(0o755)
+    assert not any(str(left) in " ".join(a) for a in r["safe_actions"])
+    assert r["status"] in ("unknown", "open")
+
+def test_lsof_with_no_output_is_a_failed_measurement(monkeypatch):
+    monkeypatch.setattr(ws.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 1, "", ""))
+    with pytest.raises(Exception):
+        ws.in_use(Path("/a/b"))
+
+def test_a_prunable_worktree_is_asked_about_and_does_not_make_the_measure_unknown(tmp_path):
+    import shutil
+    repo, wt, g = landed_worktree(tmp_path)
+    shutil.rmtree(wt)
+    r = ws.measure_tidy(repo)
+    assert r["status"] == "open" and any(f"git -C {repo} worktree prune" in a for a in r["ask"])
+    assert not removes(r, wt, "feat/x")
+
+def test_a_locked_worktree_is_never_removed(tmp_path):
+    repo, wt, g = landed_worktree(tmp_path)
+    g("worktree", "lock", str(wt))
+    r = ws.measure_tidy(repo)
+    assert not removes(r, wt, "feat/x") and any(str(wt) in a and "låst" in a for a in r["ask"])
+
+def test_a_symlinked_sibling_goes_to_ask(tmp_path):
+    repo = make_repo(tmp_path); add_origin(repo)
+    target = tmp_path / "elsewhere"; (target / "node_modules").mkdir(parents=True)
+    link = tmp_path / "my proj.link"; link.symlink_to(target)
+    r = ws.measure_tidy(repo)
+    assert not any(str(link) in " ".join(a) for a in r["safe_actions"]) and any(str(link) in a for a in r["ask"])
+
+def test_without_wt_the_fallback_is_worktree_remove_then_branch_d(tmp_path, monkeypatch):
+    repo, wt, g = landed_worktree(tmp_path)
+    monkeypatch.setattr(ws.shutil, "which", lambda name: None)
+    acts = ws.measure_tidy(repo)["safe_actions"]
+    assert acts == [["git", "-C", str(repo), "worktree", "remove", str(wt)],
+                    ["git", "-C", str(repo), "branch", "-d", "feat/x"]]
+
+def test_the_session_worktree_with_a_landed_branch_is_listed_in_ask_not_removed(tmp_path):
+    repo, wt, g = landed_worktree(tmp_path)
+    r = ws.measure_tidy(wt)
+    assert not removes(r, wt, "feat/x") and any("ExitWorktree" in a and "feat/x" in a for a in r["ask"])

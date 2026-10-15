@@ -226,8 +226,8 @@ def _cwds() -> list[str]:
                            stdin=subprocess.DEVNULL, timeout=20)
     except (OSError, subprocess.TimeoutExpired) as e:
         raise _CountError(f"kunne ikke kjøre lsof: {e}")
-    if not r.stdout and r.returncode not in (0, 1):
-        raise _CountError(f"lsof exited {r.returncode}")
+    if not r.stdout.strip():   # lsof always lists at least itself: nothing means it failed
+        raise _CountError(f"lsof ga ingen utdata (exit {r.returncode})")
     return [line[1:] for line in r.stdout.splitlines() if line.startswith("n")]
 
 
@@ -239,7 +239,8 @@ def in_use(path) -> bool:
 
 
 def _status_entries(land, path):
-    r = land.git(path, "status", "--porcelain", "-z", "--ignored")
+    # Explicit flags: status.showUntrackedFiles=no must not hide untracked work (as land.dirty_files).
+    r = land.git(path, "status", "--porcelain", "-z", "--ignored", "--untracked-files=all", "--ignore-submodules=none")
     if r.returncode:
         raise _CountError(f"git status failed in {path}: {r.stderr.strip()[-200:]}")
     return [e for e in r.stdout.split("\0") if e]
@@ -270,7 +271,11 @@ def _is_cache_path(rel: str) -> bool:
 def all_cache(path) -> bool:
     """Every file below `path` lies under a cache directory (an empty folder has nothing to lose)."""
     root = Path(path)
-    for dirpath, dirnames, filenames in os.walk(root):
+
+    def unreadable(e):
+        raise _CountError(f"kunne ikke lese {e.filename}: {e.strerror}")
+
+    for dirpath, dirnames, filenames in os.walk(root, onerror=unreadable):
         rel = Path(dirpath).relative_to(root)
         if any(p in _CACHE_NAMES for p in rel.parts):
             dirnames[:] = []
@@ -278,6 +283,31 @@ def all_cache(path) -> bool:
         if filenames:
             return False
     return True
+
+
+def _worktree_entries(land, repo) -> list[dict]:
+    """`git worktree list --porcelain` with the `prunable` and `locked` markers that
+    land.worktrees() drops. Raises when git fails or lists nothing."""
+    r = land.git(repo, "worktree", "list", "--porcelain")
+    if r.returncode:
+        raise _CountError(f"git worktree list failed: {r.stderr.strip()[-200:]}")
+    items, cur = [], {}
+    for line in r.stdout.splitlines() + [""]:
+        if not line:
+            if cur:
+                items.append(cur)
+            cur = {}
+        elif line.startswith("worktree "):
+            cur["path"] = Path(line[len("worktree "):])
+        elif line.startswith("branch "):
+            cur["branch"] = line[len("branch "):].removeprefix("refs/heads/")
+        elif line == "prunable" or line.startswith("prunable "):
+            cur["prunable"] = True
+        elif line == "locked" or line.startswith("locked "):
+            cur["locked"] = True
+    if not items:
+        raise _CountError("git worktree list ga ingen utdata")
+    return items
 
 
 def measure_tidy(repo) -> dict:
@@ -298,19 +328,26 @@ def _tidy_scan(land, repo):
         raise _CountError("fant ikke hovedmappen")
     primary, here = Path(primary), Path(top).resolve()
     safe, ask = [], []
-    trees = land.worktrees(repo)
-    if not trees:
-        raise _CountError("git worktree list ga ingen utdata")
+    trees = _worktree_entries(land, repo)
     known = {Path(t["path"]).resolve() for t in trees}
     checked_out = {t["branch"] for t in trees if t.get("branch")}
     main = land.default_branch(repo)
     have_wt = shutil.which("wt") is not None
-    remaining = 0
     for t in trees:
         path = Path(t["path"])
-        if path.resolve() in (primary.resolve(), here):
-            continue
         branch = t.get("branch")
+        if path.resolve() == primary.resolve():
+            continue
+        if t.get("prunable"):
+            ask.append(f"{path} finnes ikke lenger; rydd oppføringen med: git -C {primary} worktree prune")
+            continue
+        if t.get("locked"):
+            ask.append(f"{path} er låst (git worktree lock); den fjernes ikke")
+            continue
+        if path.resolve() == here:
+            if branch and _landed_state(land, repo, branch):
+                ask.append(f"{path}: arbeidsmappen du står i ({branch}) ryddes etter ExitWorktree")
+            continue
         if in_use(path):
             ask.append(f"{path} i bruk")
         elif not branch:
@@ -324,7 +361,7 @@ def _tidy_scan(land, repo):
         else:
             safe.append(["git", "-C", str(primary), "worktree", "remove", str(path)])
             safe.append(["git", "-C", str(primary), "branch", "-d", branch])
-    r = land.git(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads")
+    r = land.git(repo, "for-each-ref", "--format=%(refname:lstrip=2)", "refs/heads")
     if r.returncode:
         raise _CountError(f"kunne ikke liste grener: {r.stderr.strip()[-200:]}")
     for name in r.stdout.split():
@@ -338,10 +375,15 @@ def _tidy_scan(land, repo):
         for d in sorted(primary.parent.glob(glob.escape(primary.name) + ".*")):
             if not d.is_dir() or d.resolve() in known:
                 continue
-            if in_use(d):
+            if d.is_symlink():
+                ask.append(f"{d}: er en symbolsk lenke; den flyttes ikke til papirkurven")
+            elif in_use(d):
                 ask.append(f"{d} i bruk")
             elif all_cache(d):
-                safe.append(["osascript", "-e", f'tell application "Finder" to delete POSIX file "{d}"'])
+                # The path is an argument, never interpolated into the AppleScript source.
+                safe.append(["osascript", "-e", "on run argv", "-e",
+                             'tell application "Finder" to delete (POSIX file (item 1 of argv))',
+                             "-e", "end run", str(d)])
             else:
                 ask.append(f"{d}: rest med annet innhold enn hurtigbuffer")
     items = [" ".join(a) for a in safe] + list(ask)
