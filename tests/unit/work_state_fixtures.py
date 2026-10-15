@@ -39,3 +39,33 @@ def add_origin(repo) -> Path:
     run(repo, "fetch", "-q", "origin")
     run(repo, "branch", "--set-upstream-to=origin/main", "main")
     return origin
+
+
+def stub_bin(tmp_path, **behaviours) -> Path:
+    """One executable shell script per keyword in `<tmp_path>/stub bin`; the body is the snippet.
+    Every stub appends 'name argv...' to $STUB_LOG when it is set. Names not given are not created."""
+    d = Path(tmp_path) / "stub bin"
+    d.mkdir(parents=True, exist_ok=True)
+    for name, body in behaviours.items():
+        f = d / name
+        f.write_text(
+            "#!/bin/sh\n"
+            f'if [ -n "$STUB_LOG" ]; then printf \'%s\\n\' "{name} $*" >> "$STUB_LOG"; fi\n'
+            f"{body}\n", encoding="utf-8")
+        f.chmod(0o755)
+    return d
+
+
+def stub_env(tmp_path) -> dict:
+    """Environment variables the stubs and work-state.py read, all under tmp_path."""
+    base = Path(tmp_path)
+    out, trash = base / "stub out", base / "stub trash"
+    out.mkdir(parents=True, exist_ok=True)
+    trash.mkdir(parents=True, exist_ok=True)
+    return {
+        "STUB_OUT": str(out),
+        "STUB_LOG": str(base / "stub.log"),
+        "STUB_PS_FILE": str(base / "stub ps.txt"),
+        "STUB_TRASH": str(trash),
+        "GSTACK_LSREGISTER": str(base / "stub lsregister"),
+    }

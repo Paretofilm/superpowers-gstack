@@ -1,7 +1,7 @@
 import importlib.util, json, os, subprocess, sys
 from pathlib import Path
 import pytest
-from work_state_fixtures import make_repo, add_origin, commit_file
+from work_state_fixtures import make_repo, add_origin, commit_file, stub_bin, stub_env
 
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "work-state.py"
@@ -279,3 +279,148 @@ def test_the_session_worktree_with_a_landed_branch_is_listed_in_ask_not_removed(
     repo, wt, g = landed_worktree(tmp_path)
     r = ws.measure_tidy(wt)
     assert not removes(r, wt, "feat/x") and any("ExitWorktree" in a and "feat/x" in a for a in r["ask"])
+
+
+# ---- Task 4: report ----
+
+def run_report(repo, *extra):
+    p = subprocess.run([sys.executable, str(SCRIPT), "report", "--repo", str(repo), *extra],
+                       capture_output=True, text=True)
+    return p.returncode, p.stdout.strip().splitlines()
+
+def test_a_clean_pushed_repo_with_no_line_reports_undefined_and_exit_0_or_1_by_rule(tmp_path):
+    repo = make_repo(tmp_path); add_origin(repo)
+    code, lines = run_report(repo)
+    last = json.loads(lines[-1])
+    assert last["installable"]["status"] == "undefined"
+    assert "installerbar: ikke definert, kjør /adapt" in last["line"]
+    assert lines[0].startswith("Tilstand:")
+
+def test_all_green_is_exit_0_and_a_tick_per_part(tmp_path):
+    repo = make_repo(tmp_path); commit_file(repo, "CLAUDE.md", "# p\nInstallable: none\n"); add_origin(repo)
+    code, lines = run_report(repo)
+    assert code == 0
+    assert "committet ✓" in lines[0] and "pushet ✓" in lines[0] and "mapper ryddet ✓" in lines[0]
+
+def test_never_a_tick_when_something_is_left(tmp_path):
+    repo = make_repo(tmp_path); commit_file(repo, "CLAUDE.md", "Installable: none\n"); add_origin(repo)
+    (repo / "x.txt").write_text("x")
+    code, lines = run_report(repo)
+    assert code == 1 and "committet ✓" not in lines[0] and "committet ✗" in lines[0]
+
+def test_conflicting_installable_lines_read_as_undefined(tmp_path):             # Review Focus 2
+    repo = make_repo(tmp_path); commit_file(repo, "CLAUDE.md", "Installable: plugin\nInstallable: none\n"); add_origin(repo)
+    assert json.loads(run_report(repo)[1][-1])["installable"]["status"] == "undefined"
+
+def test_not_a_git_repo_is_exit_2(tmp_path):
+    (tmp_path / "plain").mkdir()
+    assert run_report(tmp_path / "plain")[0] == 2
+
+def test_bad_usage_is_exit_64(tmp_path):
+    assert run_report(tmp_path, "--bogus")[0] == 64
+
+def test_a_stored_stop_code_is_shown_under_ask_until_a_run_succeeds(tmp_path):
+    repo = make_repo(tmp_path); commit_file(repo, "CLAUDE.md", "Installable: macos-app App\n"); add_origin(repo)
+    (ws.gitdir(repo) / "gstack-install-result.json").write_text(json.dumps({"code": 4, "reason": "App is running", "commit": "abc"}))
+    ask = json.loads(run_report(repo)[1][-1])["ask"]
+    assert any("App is running" in a for a in ask)
+
+def test_a_corrupt_result_file_is_an_ask_not_a_crash(tmp_path):
+    repo = make_repo(tmp_path); commit_file(repo, "CLAUDE.md", "Installable: macos-app App\n"); add_origin(repo)
+    (ws.gitdir(repo) / "gstack-install-result.json").write_text("{not json")
+    code, lines = run_report(repo)
+    assert code == 1 and json.loads(lines[-1])["ask"]
+
+def test_json_only_prints_just_the_object(tmp_path):
+    repo = make_repo(tmp_path); commit_file(repo, "CLAUDE.md", "Installable: none\n"); add_origin(repo)
+    code, lines = run_report(repo, "--json-only")
+    assert len(lines) == 1 and json.loads(lines[0])["line"].startswith("Tilstand:")
+
+def test_plugin_kind_reads_installed_version_when_the_registry_exists(tmp_path, monkeypatch):
+    repo = make_repo(tmp_path)
+    commit_file(repo, "CLAUDE.md", "Installable: plugin\n")
+    commit_file(repo, ".claude-plugin/plugin.json", '{"name": "demo", "version": "3.15.0"}\n')
+    commit_file(repo, "CHANGELOG.md", "# Changelog\n\n## [3.15.0] - 2026-10-20\n")
+    add_origin(repo)
+    reg = tmp_path / "home" / ".claude" / "plugins"; reg.mkdir(parents=True)
+    (reg / "installed_plugins.json").write_text(json.dumps({"plugins": {"demo@m": [{"version": "3.14.0"}]}}))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("PATH", f"{stub_bin(tmp_path, claude='exit 0')}:{os.environ['PATH']}")
+    assert "3.15.0 på main, du har 3.14.0" in ws.measure_installable(repo)["detail"]
+
+def _plugin_repo(tmp_path, changelog="# Changelog\n\n## [3.15.0] - 2026-10-20\n"):
+    repo = make_repo(tmp_path)
+    commit_file(repo, "CLAUDE.md", "Installable: plugin\n")
+    commit_file(repo, ".claude-plugin/plugin.json", '{"name": "demo", "version": "3.15.0"}\n')
+    commit_file(repo, "CHANGELOG.md", changelog)
+    add_origin(repo)
+    return repo
+
+def test_plugin_validation_failure_is_open(tmp_path, monkeypatch):
+    repo = _plugin_repo(tmp_path)
+    monkeypatch.setenv("PATH", f"{stub_bin(tmp_path, claude='echo bad manifest; exit 1')}:{os.environ['PATH']}")
+    r = ws.measure_installable(repo)
+    assert r["status"] == "open" and "bad manifest" in r["detail"]
+
+def test_plugin_without_a_changelog_entry_is_open(tmp_path, monkeypatch):
+    repo = _plugin_repo(tmp_path, "# Changelog\n")
+    monkeypatch.setenv("PATH", f"{stub_bin(tmp_path, claude='exit 0')}:{os.environ['PATH']}")
+    assert ws.measure_installable(repo)["status"] == "open"
+
+def test_plugin_without_claude_on_path_is_unknown(tmp_path, monkeypatch):
+    repo = _plugin_repo(tmp_path)
+    monkeypatch.setenv("PATH", str(stub_bin(tmp_path, git='exec /usr/bin/git "$@"')))
+    r = ws.measure_installable(repo)
+    assert r["status"] == "unknown" and "claude ikke funnet" in r["detail"]
+
+def test_command_kind_exit_code_decides(tmp_path):
+    repo = make_repo(tmp_path); commit_file(repo, "CLAUDE.md", "Installable: command exit 0\n"); add_origin(repo)
+    assert ws.measure_installable(repo)["status"] == "ok"
+    commit_file(repo, "CLAUDE.md", "Installable: command echo nope; exit 3\n")
+    subprocess.run(["git", "-C", str(repo), "push", "-q", "origin", "main"], check=True)
+    r = ws.measure_installable(repo)
+    assert r["status"] == "open" and "nope" in r["detail"]
+
+def _app(tmp_path, bundle_id="com.example.app"):
+    app = tmp_path / "Apps dir" / "My App.app"
+    (app / "Contents").mkdir(parents=True, exist_ok=True)
+    (app / "Contents" / "Info.plist").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict>'
+        f"<key>CFBundleIdentifier</key><string>{bundle_id}</string></dict></plist>")
+    return app
+
+def _stamp(app, commit):
+    return {"scheme": "App", "bundle_id": "com.example.app", "commit": commit,
+            "app_path": str(app), "version": "1", "installed_at": "2026-10-15T10:00:00Z"}
+
+def _rev(repo, rev):
+    return subprocess.run(["git", "-C", str(repo), "rev-parse", rev], capture_output=True, text=True).stdout.strip()
+
+def test_stamp_is_current_checks_commit_path_and_bundle_id(tmp_path):
+    repo = make_repo(tmp_path); head = _rev(repo, "HEAD")
+    app = _app(tmp_path)
+    assert ws.stamp_is_current(repo, _stamp(app, head), head)
+    assert not ws.stamp_is_current(repo, _stamp(app, "0" * 40), head)
+    assert not ws.stamp_is_current(repo, _stamp(tmp_path / "gone.app", head), head)
+    assert not ws.stamp_is_current(repo, {**_stamp(app, head), "bundle_id": "other.id"}, head)
+    assert not ws.stamp_is_current(repo, {"commit": head}, head)
+
+def test_macos_app_ok_stale_and_corrupt_stamp(tmp_path):
+    repo = make_repo(tmp_path); commit_file(repo, "CLAUDE.md", "Installable: macos-app App\n"); add_origin(repo)
+    head = _rev(repo, "origin/main")
+    stamp_file = ws.gitdir(repo) / "gstack-installed-app.json"
+    r = ws.measure_installable(repo)
+    assert r["status"] == "stale" and r["safe_actions"][0][-2:] == ["--repo", str(repo)]
+    stamp_file.write_text(json.dumps(_stamp(_app(tmp_path), head)))
+    assert ws.measure_installable(repo)["status"] == "ok"
+    stamp_file.write_text(json.dumps(_stamp(_app(tmp_path), "0" * 40)))
+    assert ws.measure_installable(repo)["status"] == "stale"
+    stamp_file.write_text("{broken")
+    assert ws.measure_installable(repo)["status"] == "unknown"
+
+def test_stub_helpers_make_a_logging_stub_dir(tmp_path):
+    d = stub_bin(tmp_path, tool="echo hi")
+    env = {**os.environ, **stub_env(tmp_path)}
+    assert subprocess.run([str(d / "tool"), "a", "b"], env=env, capture_output=True, text=True).stdout == "hi\n"
+    assert "tool a b" in Path(env["STUB_LOG"]).read_text()
+    assert not (d / "other").exists()

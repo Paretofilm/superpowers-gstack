@@ -27,11 +27,15 @@ from __future__ import annotations
 import argparse
 import glob
 import importlib.util
+import io
+import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 from pathlib import Path
 
 INSTALLABLE_RE = re.compile(r"^Installable:[ \t]+(\S+)(?:[ \t]+(.+?))?[ \t]*$")
@@ -136,14 +140,18 @@ def _count(land, repo, *args):
     return int(out)
 
 
-def measure_pushed(repo) -> dict:
-    """Is everything on origin? Never proposes a force push."""
+_UNFETCHED = object()
+
+
+def measure_pushed(repo, fetched=_UNFETCHED) -> dict:
+    """Is everything on origin? Never proposes a force push. `fetched` is the outcome of a
+    fetch the caller already made (None: worked, else the error text); by default this fetches."""
     land = _load_land()
     repo = Path(repo)
     base = {"safe_actions": [], "ask": []}
     if land.git(repo, "remote", "get-url", "origin").returncode:
         return {**_result("undefined", "– (ingen fjern-repo)"), **base}
-    err = fetch_origin(repo)
+    err = fetch_origin(repo) if fetched is _UNFETCHED else fetched
     if err:
         return {**_result("unknown", f"kunne ikke hente fra origin: {err}"), **base}
     try:
@@ -393,8 +401,275 @@ def _tidy_scan(land, repo):
     return {**_result("open", detail, items), "safe_actions": safe, "ask": ask}
 
 
+STAMP_FILE = "gstack-installed-app.json"
+RESULT_FILE = "gstack-install-result.json"
+
+
+def gitdir(repo) -> Path:
+    """The common git directory (shared by all work folders), resolved."""
+    r = _load_land().git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    out = r.stdout.strip()
+    if r.returncode or not out:
+        raise _CountError(f"fant ikke git-mappen: {r.stderr.strip()[-200:] or 'ingen utdata'}")
+    return Path(out).resolve()
+
+
+def _read_json(path):
+    """(data, None) | (None, None) when the file is absent | (None, reason) when unreadable or not an object."""
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None, None
+    except (OSError, ValueError) as e:
+        return None, f"kunne ikke lese {path}: {e}"
+    try:
+        data = json.loads(text)
+    except ValueError as e:
+        return None, f"{path} er ikke gyldig JSON: {e}"
+    if not isinstance(data, dict):
+        return None, f"{path} har uventet innhold"
+    return data, None
+
+
+def _bundle_id(app_path):
+    try:
+        r = subprocess.run(["plutil", "-extract", "CFBundleIdentifier", "raw",
+                            str(Path(app_path) / "Contents" / "Info.plist")],
+                           capture_output=True, text=True, errors="replace",
+                           stdin=subprocess.DEVNULL, timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def stamp_is_current(repo, stamp, head) -> bool:
+    """Does the stamp prove that the installed app is `head`? Commit, app folder and bundle id must all match."""
+    try:
+        if not isinstance(stamp, dict) or not head:
+            return False
+        r = _load_land().git(repo, "rev-parse", "--verify", "--quiet", f"{head}^{{commit}}")
+        if r.returncode or stamp.get("commit") != r.stdout.strip():
+            return False
+        app = stamp.get("app_path")
+        if not isinstance(app, str) or not app or not Path(app).is_dir():
+            return False
+        want = stamp.get("bundle_id")
+        return bool(want) and _bundle_id(app) == want
+    except (OSError, ValueError):
+        return False
+
+
+def _inst(kind, status, detail, items=(), safe=(), ask=()):
+    return {"kind": kind, **_result(status, detail, items), "safe_actions": list(safe), "ask": list(ask)}
+
+
+def _line_ref(land, repo):
+    """The ref the Installable: line is read from: origin/<default>, else the local default branch."""
+    main = land.default_branch(repo)
+    if not main:
+        return None, False
+    if land.git(repo, "show-ref", "--verify", "--quiet", f"refs/remotes/origin/{main}").returncode == 0:
+        return f"origin/{main}", True
+    return main, False
+
+
+def measure_installable(repo) -> dict:
+    """Section 'installerbar': the project's own Installable: line decides what it means."""
+    land = _load_land()
+    repo = Path(repo)
+    try:
+        ref, has_origin = _line_ref(land, repo)
+        if ref is None:
+            return _inst("undefined", "unknown", "fant ingen standardgren å lese Installable: fra")
+        head = land.out(repo, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
+        if not head:
+            return _inst("undefined", "unknown", f"kunne ikke lese {ref}")
+        parsed = installable_at(repo, ref)
+        if parsed is None or parsed == "conflict":
+            return _inst("undefined", "undefined", "ikke definert, kjør /adapt")
+        kind, arg = parsed
+        if kind == "none":
+            return _inst("none", "na", "–")
+        if kind == "macos-app":
+            return _installable_app(repo, head, ref)
+        if kind == "plugin":
+            return _installable_plugin(land, repo, ref, has_origin)
+        return _installable_command(land, repo, arg)
+    except (_CountError, land.Stop, OSError, subprocess.SubprocessError) as e:
+        return _inst("undefined", "unknown", f"kunne ikke måle: {e}")
+
+
+def _installable_app(repo, head, ref):
+    gd = gitdir(repo)
+    safe = [["python3", os.path.abspath(__file__), "install", "--repo", str(repo)]]
+    ask = []
+    result, rerr = _read_json(gd / RESULT_FILE)
+    if rerr:
+        ask.append(rerr)
+    elif result and isinstance(result.get("code"), int) and result["code"] >= 4:
+        ask.append(f"siste install stoppet (kode {result['code']}): {result.get('reason', 'ukjent årsak')}")
+    stamp, serr = _read_json(gd / STAMP_FILE)
+    if serr:
+        return _inst("macos-app", "unknown", serr, ask=ask)
+    if stamp is None:
+        return _inst("macos-app", "stale", "ikke installert fra denne maskinen", safe=safe, ask=ask)
+    if stamp.get("commit") != head:
+        return _inst("macos-app", "stale", f"installert {str(stamp.get('commit', '?'))[:7]}, {ref} er {head[:7]}",
+                     safe=safe, ask=ask)
+    if not stamp_is_current(repo, stamp, head):
+        return _inst("macos-app", "stale", "appen mangler eller har en annen bundle-ID enn stempelet",
+                     safe=safe, ask=ask)
+    return _inst("macos-app", "ok", f"{stamp.get('version') or head[:7]} installert", ask=ask)
+
+
+def _extract_tree(repo, ref, dest):
+    r = subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", ref],
+                       capture_output=True, stdin=subprocess.DEVNULL, timeout=60)
+    if r.returncode:
+        raise _CountError(f"git archive feilet: {r.stderr.decode(errors='replace').strip()[-200:]}")
+    with tarfile.open(fileobj=io.BytesIO(r.stdout)) as tf:
+        if hasattr(tarfile, "data_filter"):
+            tf.extractall(dest, filter="data")
+        else:   # Python 3.11 before the filter backport: plain files and folders, no escaping paths
+            for m in tf.getmembers():
+                if m.name.startswith("/") or ".." in Path(m.name).parts or not (m.isfile() or m.isdir()):
+                    continue
+                tf.extract(m, dest)
+
+
+def _installed_plugin_version(name):
+    reg, _ = _read_json(Path(os.path.expanduser("~")) / ".claude" / "plugins" / "installed_plugins.json")
+    plugins = reg.get("plugins") if reg else None
+    if not isinstance(plugins, dict):
+        return None
+    for key, entries in plugins.items():
+        if key.startswith(f"{name}@") and isinstance(entries, list) and entries and isinstance(entries[0], dict):
+            return entries[0].get("version")
+    return None
+
+
+def _last_line(*texts):
+    for t in texts:
+        lines = [x for x in (t or "").strip().splitlines() if x.strip()]
+        if lines:
+            return lines[-1][:200]
+    return ""
+
+
+def _installable_plugin(land, repo, ref, has_origin):
+    claude = shutil.which("claude")
+    if not claude:
+        return _inst("plugin", "unknown", "claude ikke funnet")
+    with tempfile.TemporaryDirectory(prefix="work-state-plugin-") as tmp:
+        _extract_tree(repo, ref, tmp)
+        manifest, merr = _read_json(Path(tmp) / ".claude-plugin" / "plugin.json")
+        if merr or manifest is None:
+            return _inst("plugin", "open", merr or f"mangler .claude-plugin/plugin.json på {ref}")
+        version, name = manifest.get("version"), manifest.get("name")
+        if not isinstance(version, str) or not version:
+            return _inst("plugin", "open", "plugin.json har ingen versjon")
+        try:
+            v = subprocess.run([claude, "plugin", "validate", tmp], capture_output=True, text=True,
+                               errors="replace", stdin=subprocess.DEVNULL, timeout=120)
+        except subprocess.TimeoutExpired:
+            return _inst("plugin", "unknown", "claude plugin validate brukte over 120 s")
+        if v.returncode:
+            return _inst("plugin", "open", f"claude plugin validate avviste treet: {_last_line(v.stdout, v.stderr)}")
+        try:
+            changelog = (Path(tmp) / "CHANGELOG.md").read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            changelog = ""
+        if not re.search(rf"^## \[{re.escape(version)}\]", changelog, re.M):
+            return _inst("plugin", "open", f"CHANGELOG.md har ingen oppføring for {version}")
+    if has_origin:
+        main = ref.split("/", 1)[1]
+        if land.git(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{main}").returncode == 0:
+            n = _count(land, repo, f"{ref}..{main}")
+            if n:
+                return _inst("plugin", "open", f"lokal {main} har {n} commits som ikke er pushet")
+    installed = _installed_plugin_version(name) if isinstance(name, str) else None
+    mine = f"du har {installed}" if installed else "ikke installert"
+    return _inst("plugin", "ok", f"{version} på main, {mine}")
+
+
+def _installable_command(land, repo, cmd):
+    primary = land.primary_worktree(repo)
+    if not primary:
+        return _inst("command", "unknown", "fant ikke hovedmappen")
+    try:
+        r = subprocess.run(["sh", "-c", cmd], cwd=str(primary), capture_output=True, text=True, errors="replace",
+                           stdin=subprocess.DEVNULL, timeout=120)
+    except subprocess.TimeoutExpired:
+        return _inst("command", "unknown", "kommandoen brukte over 120 s")
+    except OSError as e:
+        return _inst("command", "unknown", f"kunne ikke kjøre kommandoen: {e}")
+    if r.returncode == 0:
+        return _inst("command", "ok", "kommandoen ga kode 0")
+    return _inst("command", "open", f"kommandoen ga kode {r.returncode}: {_last_line(r.stdout, r.stderr)}")
+
+
+def _mark(part, show_items=False) -> str:
+    status, detail = part.get("status"), part.get("detail", "")
+    if status == "ok":
+        return "✓"
+    if status in ("open", "stale"):
+        items = part.get("items") or []
+        shown = "; ".join(items[:3]) if show_items and items else ""
+        more = f" +{len(items) - 3}" if show_items and len(items) > 3 else ""
+        return f"✗ ({detail}{': ' + shown + more if shown else ''})"
+    if status == "unknown":
+        return f"? ({detail})"
+    return detail if detail.startswith("–") else "–"
+
+
+def build_line(parts) -> str:
+    """Tilstand: committet <m> · pushet <m> · mapper ryddet <m> · installerbar <m>. A tick only for status ok."""
+    inst = parts["installable"]
+    if inst.get("status") == "undefined":
+        last = "installerbar: ikke definert, kjør /adapt"
+    elif inst.get("status") == "na":
+        last = "installerbar –"
+    else:
+        last = f"installerbar {_mark(inst)}"
+        if inst.get("status") == "ok":
+            last += f" ({inst['detail']})"
+    return (f"Tilstand: committet {_mark(parts['committed'], True)} · pushet {_mark(parts['pushed'], True)}"
+            f" · mapper ryddet {_mark(parts['tidy'])} · {last}")
+
+
+def _guard(fn, *args):
+    try:
+        return fn(*args)
+    except Exception as e:   # a measurement that crashes is unknown, never a clean result
+        return _result("unknown", f"måling feilet: {type(e).__name__}: {e}")
+
+
 def cmd_report(args) -> int:
-    raise NotImplementedError("report is implemented in a later task")
+    land = _load_land()
+    repo = Path(args.repo)
+    if not repo.is_dir() or land.git(repo, "rev-parse", "--git-dir").returncode:
+        print(f"{repo} er ikke et git-repo", file=sys.stderr)
+        return 2
+    fetched = _UNFETCHED
+    if land.git(repo, "remote", "get-url", "origin").returncode == 0:
+        fetched = fetch_origin(repo)    # once; the pushed part reuses the outcome
+    parts = {
+        "committed": _guard(measure_committed, repo),
+        "pushed": _guard(measure_pushed, repo, fetched),
+        "tidy": _guard(measure_tidy, repo),
+        "installable": _guard(measure_installable, repo),
+    }
+    parts["installable"].setdefault("kind", "undefined")
+    safe, ask = [], []
+    for key in ("pushed", "tidy", "installable"):
+        safe += parts[key].get("safe_actions", [])
+    for key in ("committed", "pushed", "tidy", "installable"):
+        ask += parts[key].get("ask", [])
+    line = build_line(parts)
+    if not args.json_only:
+        print(line)
+    print(json.dumps({"line": line, **parts, "safe_actions": safe, "ask": ask}, ensure_ascii=False))
+    return 1 if any(p.get("status") in ("open", "unknown", "stale") for p in parts.values()) else 0
 
 
 def cmd_install(args) -> int:
