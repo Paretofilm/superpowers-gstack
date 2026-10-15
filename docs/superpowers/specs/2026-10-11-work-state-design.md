@@ -106,7 +106,7 @@ git-repo, og kode 64 feil bruk. En lagret stoppkode som ikke er 0 vises under `a
 |---|---|---|---|
 | **committet** | `git status --porcelain` i mappen økten står i og i hovedmappen (første oppføring i `git worktree list`) | Ingenting. Skriptet vet ikke hvem som endret hva. Agenten committer bare filer den selv har endret i oppgaven. | Filer agenten ikke selv har endret |
 | **pushet** | `@{upstream}..HEAD` på gjeldende gren (uten upstream: commits som ingen fjern-ref har), og `origin/main..main` i hovedmappen | `git push` av en gren med upstream når origin ikke har flyttet seg | Hver push som ville krevd tvang, og `main` med commits som ikke er landet gjennom `land` |
-| **mapper ryddet** | Arbeidsmapper utenom hovedmappen. Lokale grener. Mapper `<foreldremappe>/<repo>.*` som ikke er arbeidsmapper. | En arbeidsmappe er ren og grenen er forfeder til `origin/main`: `wt -C <hovedmappe> remove <gren>` (uten `wt`: `git worktree remove`, så `git branch -d`). En gren som er forfeder til `origin/main` og ikke sjekket ut: `git branch -d`. En rest som bare inneholder hurtigbuffer: flytt til papirkurven. | Grener som ikke er bevist landet, også dem som ble squash-flettet via en pull request. Rester med annet innhold. Arbeidsmappen økten står i. |
+| **mapper ryddet** | Arbeidsmapper utenom hovedmappen. Lokale grener. Mapper `<foreldremappe>/<repo>.*` som ikke er arbeidsmapper. | En arbeidsmappe er ren og grenen er forfeder til `origin/main`: `wt -C <hovedmappe> remove --foreground <gren>` (uten `wt`: `git worktree remove`, så `git branch -d`). En gren som er forfeder til `origin/main` og ikke sjekket ut: `git branch -d`. En rest som bare inneholder hurtigbuffer: flytt til papirkurven. | Grener som ikke er bevist landet, også dem som ble squash-flettet via en pull request. Rester med annet innhold. Arbeidsmappen økten står i. |
 | **installerbar** | Del 1 | Ved `macos-app` og status `stale`: `install` (del 3) | Det `install` stopper på |
 
 - **«Bare hurtigbuffer»** betyr at hver fil i mappen ligger under en av `.gstack/`,
@@ -121,7 +121,9 @@ git-repo, og kode 64 feil bruk. En lagret stoppkode som ikke er 0 vises under `a
   andre vilkåret ville en annen økts ferske arbeidsmappe sett landet ut. En
   squash-fletting er ikke bevist, og grenen nevnes da i `ask`. Skriptet foreslår aldri
   `-D`. `git branch -d` kjøres fra hovedmappen etter `pull --ff-only`, så git selv også
-  ser grenen som flettet.
+  ser grenen som flettet: er hovedmappens `main` bak `origin/main`, ren og utsjekket,
+  begynner `safe_actions` med `git -C <hovedmappe> pull --ff-only` én gang. Kan den ikke
+  hentes, står grener som bare `origin/main` beviser, i `ask` (R12).
 - **«Ren»** betyr at `git status --porcelain --ignored` er tom, eller at de eneste
   ignorerte filene er hurtigbuffer. `wt remove` og `git worktree remove` sletter
   ignorerte filer uten å spørre, og slike filer kan være data noen la der.
@@ -145,7 +147,7 @@ work-state.py install [--repo <sti>] [--quit-running | --quit-path <app>] [--acc
   kopien `/Applications/.<navn>.gstack-new-<pid>` bli liggende. Den som holder låsen er
   den eneste installeringen som kjører. Derfor er alle slike kopier for samme bundle-ID
   rester, og de fjernes uten at PID-en sjekkes. En PID kan bli brukt på nytt.
-- **Resultatet lagres.** Hver kjøring (unntatt kode 12) skriver koden, årsaken og commiten atomisk til
+- **Resultatet lagres.** Hver kjøring (unntatt kode 12 fordi installeringslåsen er tatt) skriver koden, årsaken og commiten atomisk til
   `gstack-install-result.json` i git-mappen. SIGTERM og SIGINT lagres som kode 70 «avbrutt». Står det en stoppkode der, viser `report`
   den under `ask` til en ny kjøring lykkes. En stopp i bakgrunnen går derfor aldri tapt,
   selv når økten er ferdig.
@@ -180,7 +182,7 @@ work-state.py install [--repo <sti>] [--quit-running | --quit-path <app>] [--acc
 | 9 | Kontrollen feilet, og den gamle kopien er urørt (feiler den på den endelige stien, rulles byttet tilbake og ingenting stemples) |
 | 10 | `/Applications` er ikke skrivbar, eller macOS nektet byttet (for eksempel Appadministrasjon) |
 | 11 | `main` flyttet seg under bygget, ingenting er byttet |
-| 12 | En annen installering holder låsen, eller `land` holdt sin lås lenger enn 60 sekunder (kode 12 skriver ikke resultatfilen) |
+| 12 | En annen installering holder låsen, eller `land` holdt sin lås lenger enn 60 sekunder (bare kode 12 for installeringslåsen lar resultatfilen være; kode 12 for `land`s lås lagres) |
 | 64 / 70 | Feil bruk / uventet feil eller avbrutt (SIGTERM, SIGINT), med tilstanden målt og skrevet ut |
 
 **Feilprinsipp:** Prosjektets innstillinger endres aldri. Den gamle kopien står til den
@@ -250,6 +252,10 @@ Alt under er sjekket mot rapportene fra planens oppgaver 1–10 (`.superpowers/s
 - Siste stdoutlinje er alltid JSON, også ved uventet feil (`{"line", "error"}`, kode 1).
 - Et git-kall som feiler gir `unknown`, aldri `ok` eller 0 (telling av commits, `worktree list`, `lsof`, mappegjennomgang).
 - Låste og utløpte (`prunable`) arbeidsmapper fjernes aldri; de står i `ask`.
+- R12: når en fjerning (`branch -d` eller en arbeidsmappe) foreslås og hovedmappens `main` er bak `origin/main`, ren og utsjekket, begynner `safe_actions` med `git -C <hovedmappe> pull --ff-only` én gang. Er hovedmappen skitten, på en annen gren eller har skilt lag fra `origin/main`, foreslås ingen fjerning for grener som bare `origin/main` beviser; de står i `ask` («pull main i hovedmappen først»).
+- `wt -C <hovedmappe> remove --foreground <gren>`: med `--foreground` er fjerningen ferdig når `wt` returnerer, så neste `report` ikke ser arbeidsmappen igjen.
+- `lsof` kjøres én gang per `report`, ikke per arbeidsmappe.
+- Uten `origin` får en `macos-app` ingen `install`-handling, fordi `install` henter og bygger `origin/main`; detaljen sier at `install` trenger `origin`.
 
 **`install`**
 - Klarsjekken bruker `--untracked-files=all --ignore-submodules=none`, og lokal `main` foran `origin/main` gir kode 3.
@@ -263,7 +269,7 @@ Alt under er sjekket mot rapportene fra planens oppgaver 1–10 (`.superpowers/s
 - Byttet og signaturkontrollen på endelig sti er én enhet. Feiler kontrollen, rulles byttet tilbake (kode 9, ingenting stemples), og den gamle kopien går i papirkurven først etter kontrollen (R4').
 - Rester og den gamle kopien går i papirkurven (Finder med stien som argument, ellers `~/.Trash`), aldri `rm`. Kan papirkurven ikke brukes, får kopien sitt skjulte navn tilbake, og neste kjøring prøver igjen.
 - Uten gammel kopi flyttes appen på plass med `renamex_np(RENAME_EXCL)`.
-- Kode 12 skriver ikke resultatfilen; SIGTERM og SIGINT gir kode 70 «avbrutt» med lagret resultat og commiten.
+- Kode 12 fordi installeringslåsen er tatt, skriver ikke resultatfilen (den som holder låsen skriver sitt eget). Kode 12 fordi `land` holdt sin lås for lenge, lagres. SIGTERM og SIGINT gir kode 70 «avbrutt» med lagret resultat og commiten.
 - Feiler `lsregister`, nevnes det i årsaken, men installeringen står.
 - Skjulte testvalg: `GSTACK_QUIT_DEADLINE`, `GSTACK_LAND_LOCK_WAIT`, `GSTACK_SWAP` (virker bare utenfor macOS), `GSTACK_LSREGISTER` og `--applications-dir`.
 
@@ -272,3 +278,11 @@ Alt under er sjekket mot rapportene fra planens oppgaver 1–10 (`.superpowers/s
 - `adapt` har fire regler for `Installable:`: feil verdi nektes (kode 2, ingenting skrives); en eksisterende linje beholdes også når den er ugyldig; en linje i en HTML-kommentar teller som til stede; to ulike linjer skriver ingenting.
 - `--quit-path` fra `verify-and-land` er den bokstavelige stien fra fase 5, aldri en skall-variabel.
 - Pre-merge-kroken kaller `scripts/pytest-gate.sh` (ny, ikke i utkastet).
+- Det eneste skillen kan legge til en oppføring, er `--quit-path <bunten fra verify-and-land fase 5>` på `install`, når brukerens ja i fase 6 dekket det.
+- Git-hygiene v14: bare økten som snakker med brukeren, kjører `work-state` før siste melding. En utsendt underagent rapporterer og overlater det til orkestratoren sin.
+
+## Kjente begrensninger
+
+- `install` holder `gstack-land.lock` mens den henter `main`. En `land` som starter samtidig, sier da at en annen landing holder låsen.
+- To kloner av samme app har hver sin lås. Ryddingen av rester i den ene kan derfor legge den andres midlertidige kopi i papirkurven mens den andre installerer.
+- Med en DerivedData-mappe relativt til arbeidsområdet ligger bunten fra fase 5 inne i arbeidsmappen. `land` fjerner den før `--quit-path` brukes, og `install` stopper da med kode 64.

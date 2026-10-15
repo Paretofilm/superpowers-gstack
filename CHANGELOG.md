@@ -9,7 +9,7 @@ After a piece of work was landed, the question of whether anything was left behi
 ### Added
 - **`skills/work-state/SKILL.md` and `scripts/work-state.py`** with two subcommands. `report` measures committed, pushed, tidy and installable, always ends in one JSON line, and exits 0 / 1 (something is open or unknown) / 2 / 64. `install` takes four questions (another or unreadable copy, a running copy, a migration in the span since the stamp, an unstamped copy), builds Release with `xcodebuild`, copies with `ditto`, checks the signature and the bundle id, swaps the folder atomically (`renamex_np`), moves the old copy to the Trash, registers the app and writes a stamp. Exit codes 0–12, 64 and 70 are listed in the script and the skill; the last result is stored in the git directory.
 - **The `Installable:` line** (`macos-app <Scheme>`, `plugin`, `command <cmd>` or `none`) in a project's CLAUDE.md, read from `origin/main`, and **`adapt --installable`**, which writes it once after one question and never edits it again. This repo says `Installable: plugin`.
-- **git-hygiene block v14**: the project must run work-state before the last message of a session.
+- **git-hygiene block v14**: the project must run work-state before the last message of a task that changed files.
 - **`scripts/pytest-gate.sh`**: runs pytest with `python3` when that has pytest and is 3.11 or newer, else with `uv run --python 3.14 --with pytest`, else exits 70 and names the remedy.
 
 ### Changed
