@@ -64,8 +64,9 @@ whenever you add or change a `View` in the app target, not only in a design-syst
 3. **Affordance check.** Every interactive element shows, without hovering, that it is
    interactive: an indicator on pop-ups and pull-downs, an outline or fill on fields, a
    standard shape on buttons. If a cue is hidden on purpose, say why.
-4. **See it.** Render the view with `live-swiftui` (`render`, then `screenshot`; it needs a
-   `#Preview`) or launch the built app by absolute path (previous section) and screenshot it.
+4. **See it.** On macOS, render the view with `live-swiftui` (`render`, then `screenshot`; it
+   needs a `#Preview`) or launch the built app by absolute path (previous section) and
+   screenshot it. On iOS, run it in the simulator and use `mcp__XcodeBuildMCP__screenshot`.
    For a list or table, at least one row per state: normal, empty, longest label.
 5. **Report what you saw.** In the final message, say per changed view either *rendered and
    seen* or *built, appearance unverified* and why. "Follows the HIG" and "matches the system

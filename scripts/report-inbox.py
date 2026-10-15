@@ -612,7 +612,8 @@ def cmd_serve_one(stdin=None, stdout=None):
         if fetched is None:  # HEAD, or gh missing, offline or slow: GitHub's own page is the fallback
             return http_response(out, 302, {"Location": item["url"]})
         # sandbox: the text is GitHub-sanitised and still gets no script and no network.
-        csp = "sandbox; default-src 'none'; style-src 'unsafe-inline'"
+        # default-src does not cover base-uri or form-action, so a sanitiser slip could rewire links.
+        csp = "sandbox; default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"
         return http_response(out, 200, {"Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp},
                              render_github_report(item, fetched))
     report = Path(item["url"]).resolve()

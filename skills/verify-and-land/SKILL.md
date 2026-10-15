@@ -241,9 +241,9 @@ The user is the instrument; a person looking is the entire point. Ask with
 
 When the diff changes SwiftUI views, name each changed view file in the question and
 say, per file, whether you *rendered and saw* it (`live-swiftui`, or a screenshot of the
-launched bundle) or only *built* it, appearance unverified. The generated CLAUDE.md's
-"SwiftUI view changes" section has the five steps (look up, lint, affordance check, see,
-report). A view you did not see is listed as unverified, and the user's yes then covers
+launched bundle) or only *built* it, appearance unverified. A project adapted since 3.13.0
+carries the five steps (look up, lint, affordance check, see, report) in the "SwiftUI view
+changes" section of its CLAUDE.md; the statement above applies with or without it. A view you did not see is listed as unverified, and the user's yes then covers
 what they looked at, not the whole diff. The options:
 
 - **Yes, it works** — asked per observable change when there are several; only when

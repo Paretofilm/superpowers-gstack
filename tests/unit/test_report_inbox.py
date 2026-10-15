@@ -469,7 +469,9 @@ def test_click_shows_the_github_report_as_sandboxed_html(env):
     assert b"<strong>verden</strong>" in body and b"2026-10-12" in body
     assert b"Ny modell &lt;b&gt;" in body and b"Ny modell <b>" not in body  # the title is escaped
     assert b"href='https://github.com/o/r/issues/90'" in body
-    assert "sandbox" in headers["Content-Security-Policy"] and "script" not in headers["Content-Security-Policy"]
+    csp = headers["Content-Security-Policy"]
+    assert "sandbox" in csp and "script" not in csp and "default-src 'none'" in csp
+    assert "base-uri 'none'" in csp and "form-action 'none'" in csp
     assert "gh-issue-90" in state(env)["seen"]
     assert "api repos/o/r/issues/90 -H Accept: application/vnd.github.html+json" in env["gh_calls"].read_text()
 
