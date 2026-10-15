@@ -1150,6 +1150,24 @@ def test_main_moving_as_the_swap_section_begins_is_still_11(tmp_path, monkeypatc
     assert [p.name for p in apps.iterdir()] == ["Fake App.app"]
     assert not (ws.gitdir(repo) / "gstack-installed-app.json").exists()
 
+def test_a_finder_that_does_not_answer_falls_back_to_the_home_trash_quickly(tmp_path):   # spare-Mac rehearsal
+    """macOS's unanswerable «wants to control Finder» prompt made the Finder delete hang for 60 s.
+    With GSTACK_FINDER_TIMEOUT=1 a silent Finder costs about a second per copy, both for the
+    replaced old copy and for a leftover, and the reason says Finder did not answer."""
+    import time as _time
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    (apps / "Fake App.app" / "old.txt").write_text("old")
+    write_app(apps / ".Fake App.gstack-new-999")
+    stubs = stub_bin(tmp_path, osascript='case "$*" in *Finder*) exec sleep 30 ;; esac')
+    start = _time.monotonic()
+    code, out = run_install(repo, stubs, apps, "--replace-unstamped", env_extra={"GSTACK_FINDER_TIMEOUT": "1"})
+    elapsed = _time.monotonic() - start
+    home_trash = Path(stub_env(tmp_path)["HOME"]) / ".Trash"
+    assert code == 0 and elapsed < 15, (code, elapsed)
+    assert list(home_trash.rglob("old.txt")) and len(list(home_trash.iterdir())) == 2
+    assert "Finder svarte ikke" in out["reason"]
+    assert [p.name for p in apps.iterdir()] == ["Fake App.app"]
+
 def test_a_current_install_still_retries_a_hidden_leftover(tmp_path):                 # M1
     repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"
     assert run_install(repo, stub_bin(tmp_path), apps)[0] == 0

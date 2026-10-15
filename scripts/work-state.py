@@ -45,7 +45,7 @@ run that holds the install lock stores the same object in <git dir>/gstack-insta
   64  usage error (no subcommand, unknown subcommand, bad flags, scheme/settings not usable)
   70  unexpected error (state printed), interrupted by SIGTERM/SIGINT ("avbrutt"), or Python < 3.11
 
-Hidden test knobs (environment): GSTACK_QUIT_DEADLINE, GSTACK_LAND_LOCK_WAIT (seconds),
+Hidden test knobs (environment): GSTACK_QUIT_DEADLINE, GSTACK_LAND_LOCK_WAIT, GSTACK_FINDER_TIMEOUT (s),
 GSTACK_LSREGISTER (the lsregister binary), GSTACK_SWAP=rename (outside macOS only: plain renames
 instead of renamex_np, so the tests run on Linux CI); --applications-dir replaces /Applications.
 
@@ -59,6 +59,11 @@ Known limits:
     finds it. The reason names the path; the user must move it.
   - A signal that arrives inside a critical section that then fails with another error is
     dropped: the real error's code wins.
+  - The first install that replaces an old copy may trigger macOS's «wants to control Finder»
+    prompt. Granting it makes trashing instant. Without it the Finder attempt gives up after
+    FINDER_TIMEOUT (15 s), the reason says Finder did not answer, and the old copy goes straight to
+    ~/.Trash. Privacy settings can block that too; the old copy then keeps its hidden name, and the
+    next run retries.
 """
 from __future__ import annotations
 
@@ -813,6 +818,9 @@ BUILD_LOG = "gstack-install-build.log"
 BUILD_TIMEOUT = 3600
 RENAME_SWAP = 0x2                             # <stdio.h>: renamex_np flag that exchanges two paths
 RENAME_EXCL = 0x4                             # <stdio.h>: renamex_np fails when the target exists
+FINDER_TIMEOUT = 15                           # s; an unanswered automation prompt would hang longer
+FINDER_SILENT = ("; Finder svarte ikke (tillat at terminalen styrer Finder: Systeminnstillinger → "
+                 "Personvern og sikkerhet → Automatisering)")
 LSREGISTER = ("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework"
               "/Support/lsregister")
 _BUNDLE_ID_RE = re.compile(r"^[A-Za-z0-9.-]+$")
@@ -1186,20 +1194,26 @@ def _to_trash(path: Path, visible: str):
         path = named
     except OSError:
         pass                        # trashed under its own name rather than not at all
+    silent = ""
+    wait = _env_seconds("GSTACK_FINDER_TIMEOUT", FINDER_TIMEOUT)
     try:
         r = _run(["osascript", "-e", "on run argv", "-e",
                   'tell application "Finder" to delete (POSIX file (item 1 of argv))', "-e", "end run",
-                  str(path)], timeout=60)
+                  str(path)], timeout=wait)
         if r.returncode == 0 and not os.path.lexists(path):
             return "papirkurven", None
-    except (OSError, subprocess.TimeoutExpired):
+        if "-1712" in r.stderr or "-1743" in r.stderr:      # AppleEvent timed out / not authorised
+            silent = FINDER_SILENT
+    except subprocess.TimeoutExpired:
+        silent = FINDER_SILENT      # macOS's «wants to control Finder» prompt nobody can answer
+    except OSError:
         pass
     try:
         trash = Path.home() / ".Trash"
         trash.mkdir(exist_ok=True)
         dest = _free_name(trash, visible)
         shutil.move(str(path), str(dest))
-        return f"papirkurven ({dest})", None
+        return f"papirkurven ({dest}){silent}", None
     except (OSError, RuntimeError, shutil.Error) as e:
         failure = e
     if path != original and not os.path.lexists(original):
@@ -1209,7 +1223,7 @@ def _to_trash(path: Path, visible: str):
         except OSError:
             pass
     retry = "; neste kjøring prøver igjen" if path == original else ""
-    return None, f"kunne ikke legge den i papirkurven ({failure}); den ligger i {path}{retry}"
+    return None, f"kunne ikke legge den i papirkurven ({failure}){silent}; den ligger i {path}{retry}"
 
 
 def _remove_leftovers(apps: Path, bundle_id: str):
