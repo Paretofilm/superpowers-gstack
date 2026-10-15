@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Work-state plan – overview</title>
+<style>
+/* explainer.css: the style of an htmlify explainer page (explain mode).
+   Copy this file unchanged into the page's first <style>; page-specific rules go in a
+   second <style>. explain-check compares the two and refuses a drifted copy.
+
+   Tokens: one accent per card, cyan, violet, magenta, amber or emerald (red only for a
+   failure path), each with a soft fill (--<accent>-s). Light theme on :root, dark under
+   prefers-color-scheme and [data-theme="dark"]; the theme button sets data-theme.
+
+   Parts: .wrap page · .top header with .toggle · section.glass card · .tag badge
+   (.t-cyan .t-violet .t-magenta .t-amber .t-emerald) · .key the card's one insight ·
+   .chip tile (.ic icon, <b> title, <span> one line) · .grid with .g2/.g3 tile grids ·
+   .scroll around a wide <svg> · .big headline number · .bars/.bar dot rows ·
+   .who three columns · ol.done numbered checklist · footer. */
+:root{
+  --bg:#f4f5fa;--bg2:#e9ecf6;--fg:#141826;--muted:#5c6378;--line:rgba(20,24,38,.10);
+  --glass:rgba(255,255,255,.62);--glass-edge:rgba(255,255,255,.95);
+  --cyan:#0891b2;--magenta:#c026d3;--violet:#7c3aed;--amber:#d97706;--emerald:#059669;--red:#dc2626;
+  --cyan-s:rgba(8,145,178,.12);--magenta-s:rgba(192,38,211,.10);--violet-s:rgba(124,58,237,.11);
+  --amber-s:rgba(217,119,6,.12);--emerald-s:rgba(5,150,105,.12);--red-s:rgba(220,38,38,.10);
+  --shadow:0 10px 40px -12px rgba(30,40,80,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#07080f;--bg2:#0e1020;--fg:#eef0fb;--muted:#9aa1bb;--line:rgba(255,255,255,.09);
+  --glass:rgba(22,25,44,.55);--glass-edge:rgba(255,255,255,.22);
+  --cyan:#22d3ee;--magenta:#f0abfc;--violet:#a78bfa;--amber:#fbbf24;--emerald:#34d399;--red:#f87171;
+  --cyan-s:rgba(34,211,238,.13);--magenta-s:rgba(240,171,252,.12);--violet-s:rgba(167,139,250,.14);
+  --amber-s:rgba(251,191,36,.12);--emerald-s:rgba(52,211,153,.12);--red-s:rgba(248,113,113,.13);
+  --shadow:0 10px 40px -12px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --bg:#07080f;--bg2:#0e1020;--fg:#eef0fb;--muted:#9aa1bb;--line:rgba(255,255,255,.09);
+  --glass:rgba(22,25,44,.55);--glass-edge:rgba(255,255,255,.22);
+  --cyan:#22d3ee;--magenta:#f0abfc;--violet:#a78bfa;--amber:#fbbf24;--emerald:#34d399;--red:#f87171;
+  --cyan-s:rgba(34,211,238,.13);--magenta-s:rgba(240,171,252,.12);--violet-s:rgba(167,139,250,.14);
+  --amber-s:rgba(251,191,36,.12);--emerald-s:rgba(52,211,153,.12);--red-s:rgba(248,113,113,.13);
+  --shadow:0 10px 40px -12px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;color:var(--fg);background:var(--bg);
+  font:16px/1.5 -apple-system,"SF Pro Text",system-ui,sans-serif;
+  background-image:
+    radial-gradient(900px 600px at 8% -5%,var(--violet-s),transparent 60%),
+    radial-gradient(800px 500px at 100% 10%,var(--cyan-s),transparent 60%),
+    radial-gradient(700px 600px at 50% 110%,var(--magenta-s),transparent 60%);
+  background-attachment:fixed;
+}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 16px 80px}
+h1,h2{font-family:-apple-system,"SF Pro Display",system-ui,sans-serif;letter-spacing:-.02em;margin:0}
+h1{font-size:clamp(30px,6vw,52px);line-height:1.05}
+h2{font-size:clamp(22px,3.6vw,30px);margin-bottom:6px}
+.sub{color:var(--muted);margin:6px 0 0}
+.mono,code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-variant-numeric:tabular-nums}
+code{font-size:.88em;padding:1px 6px;border-radius:6px;background:var(--line)}
+.glass{
+  position:relative;background:var(--glass);border-radius:22px;padding:24px;
+  backdrop-filter:blur(22px) saturate(170%);-webkit-backdrop-filter:blur(22px) saturate(170%);
+  box-shadow:var(--shadow);margin-top:22px;
+}
+.glass::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(140deg,var(--glass-edge),transparent 40%,transparent 70%,var(--glass-edge));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.toggle{border:0;cursor:pointer;border-radius:999px;padding:8px 14px;font:inherit;font-size:14px;
+  color:var(--fg);background:var(--glass);box-shadow:var(--shadow)}
+.tag{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 10px;border-radius:999px;margin-bottom:10px}
+.t-cyan{color:var(--cyan);background:var(--cyan-s)}.t-violet{color:var(--violet);background:var(--violet-s)}
+.t-magenta{color:var(--magenta);background:var(--magenta-s)}.t-amber{color:var(--amber);background:var(--amber-s)}
+.t-emerald{color:var(--emerald);background:var(--emerald-s)}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;fill:var(--fg)}
+svg .m{fill:var(--muted)} svg .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.chip{border-radius:16px;padding:14px 16px;background:var(--line);display:flex;gap:12px;align-items:flex-start}
+.chip .ic{font-size:24px;line-height:1}
+.chip b{display:block}
+.chip span{color:var(--muted);font-size:14px}
+.bars{display:grid;gap:8px;margin-top:16px}
+.bar{display:grid;grid-template-columns:150px 1fr 120px;gap:10px;align-items:center;font-size:14px}
+.bar .track{display:flex;gap:4px}
+.bar .dot{height:22px;flex:0 0 22px;border-radius:7px}
+.bar .how{font-size:12px;font-weight:600;text-align:right}
+@media (max-width:560px){.bar{grid-template-columns:96px 1fr;}.bar .how{grid-column:2;text-align:left}}
+.who{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:700px){.who{grid-template-columns:1fr}}
+.who > div{border-radius:18px;padding:16px;background:var(--line)}
+.who h3{margin:0 0 8px;font-size:17px}
+.who ul{margin:0;padding-left:18px;font-size:14px;color:var(--muted)}
+.who li{margin:3px 0}
+.done{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:8px}
+.done li{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:14px;background:var(--line)}
+.done .n{flex:0 0 28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:14px;
+  color:var(--emerald);background:var(--emerald-s)}
+.big{font-size:clamp(40px,8vw,64px);font-weight:700;letter-spacing:-.03em;line-height:1}
+.key{margin-top:14px;padding:14px 16px;border-radius:14px;border-left:3px solid var(--violet);background:var(--violet-s);font-size:15px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll svg{min-width:640px}
+footer{color:var(--muted);font-size:13px;margin-top:28px;text-align:center}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<div class="top">
+  <div>
+    <span class="tag t-violet">Plan · 2026-10-15</span>
+    <h1>Work-state, a self-sufficient gate, a vibe fix</h1>
+    <p class="sub">One release, 3.15.0: a one-line state after every task, an installed build of main, and two repairs.</p>
+  </div>
+  <button class="toggle" id="tg" aria-label="Switch between light and dark">◐ Theme</button>
+</div>
+
+<section class="glass">
+  <span class="tag t-amber">The problem</span>
+  <div style="display:flex;gap:22px;align-items:center;flex-wrap:wrap">
+    <div><div class="big">4</div><div class="sub">landings in one day needed<br>a hand-made pytest environment</div></div>
+    <div style="flex:1;min-width:260px" class="grid g2">
+      <div class="chip"><span class="ic">🧹</span><div><b>“Is everything committed and tidy?”</b><span>asked after every task, answered from memory</span></div></div>
+      <div class="chip"><span class="ic">📦</span><div><b>The Dock opens an old app</b><span>main moves on, /Applications does not</span></div></div>
+      <div class="chip"><span class="ic">🧪</span><div><b>The gate needs pytest</b><span>the system python does not have it</span></div></div>
+      <div class="chip"><span class="ic">🔓</span><div><b>A pasted /goal skips the lock</b><span>found by the third model house</span></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="glass">
+  <span class="tag t-violet">The whole</span>
+  <h2>Eleven tasks, three lanes</h2>
+  <div class="scroll">
+  <svg viewBox="0 0 960 300" role="img" aria-label="Tasks one to six build the script, seven and eight wire it in, nine and ten are independent repairs, all meet in the release task eleven">
+    <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+    <g font-size="14">
+      <rect x="10" y="20" width="420" height="70" rx="16" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/>
+      <text x="28" y="48" font-weight="600">🛠️ The script</text><text x="28" y="72" class="m" font-size="13">line · report (3 parts) · install (2 parts)</text>
+      <rect x="500" y="20" width="200" height="70" rx="16" fill="var(--magenta-s)" stroke="var(--magenta)" stroke-width="1.5"/>
+      <text x="518" y="48" font-weight="600">📘 The skill</text><text x="518" y="72" class="m" font-size="13">and its routing</text>
+      <rect x="760" y="20" width="190" height="70" rx="16" fill="var(--violet-s)" stroke="var(--violet)" stroke-width="1.5"/>
+      <text x="778" y="48" font-weight="600">🔌 Wired in</text><text x="778" y="72" class="m" font-size="13">land, adapt, hygiene</text>
+      <rect x="10" y="130" width="420" height="60" rx="16" fill="var(--amber-s)" stroke="var(--amber)" stroke-width="1.5"/>
+      <text x="28" y="158" font-weight="600">🔧 Gate finds its own pytest</text><text x="28" y="178" class="m" font-size="13">independent of the script</text>
+      <rect x="10" y="210" width="420" height="60" rx="16" fill="var(--amber-s)" stroke="var(--amber)" stroke-width="1.5"/>
+      <text x="28" y="238" font-weight="600">🔐 /vibe locks before /goal</text><text x="28" y="258" class="m" font-size="13">three small text fixes, tested</text>
+      <rect x="560" y="170" width="390" height="100" rx="18" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/>
+      <text x="580" y="204" font-size="16" font-weight="700">🚀 Release 3.15.0</text>
+      <text x="580" y="228" class="m" font-size="13">review lenses · rehearsal in the spare Mac</text>
+      <text x="580" y="248" class="m" font-size="13">landing · first real run with you</text>
+    </g>
+    <path d="M430,55 L496,55" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M700,55 L756,55" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M855,90 C855,130 800,140 780,166" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M430,160 C500,160 520,200 556,210" fill="none" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M430,240 L556,240" stroke="var(--muted)" stroke-width="2" marker-end="url(#ar)"/>
+  </svg>
+  </div>
+  <div class="key">💡 The two repairs touch nothing the script touches, so they can be built and landed on their own if the script slips.</div>
+</section>
+
+<section class="glass">
+  <span class="tag t-cyan">Part 1</span>
+  <h2>📋 <code>report</code> changes nothing</h2>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="chip"><span class="ic">📝</span><div><b>Committed</b><span>in this folder and in the main folder</span></div></div>
+    <div class="chip"><span class="ic">☁️</span><div><b>Pushed</b><span>or “no remote”, never a false tick</span></div></div>
+    <div class="chip"><span class="ic">🗂️</span><div><b>Tidy</b><span>branches and folders, deleted only with proof</span></div></div>
+    <div class="chip"><span class="ic">📲</span><div><b>Installable</b><span>one line in CLAUDE.md says how</span></div></div>
+  </div>
+  <div class="key">💡 The line <b>never shows ✓ while something is left</b>: it names what is left instead.</div>
+</section>
+
+<section class="glass">
+  <span class="tag t-emerald">Part 2</span>
+  <h2>📲 <code>install</code>: the old app stays until the new one is checked</h2>
+  <div class="scroll">
+  <svg viewBox="0 0 960 190" role="img" aria-label="Seven steps from a clean main folder to a stamped install, with the old copy untouched until the swap">
+    <defs><marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--cyan)"/></marker></defs>
+    <g font-size="14"><circle cx="70" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="70" y="80" font-size="30" text-anchor="middle">🔒</text><text x="70" y="140" text-anchor="middle" font-weight="600">Main folder clean</text><text x="70" y="158" text-anchor="middle" class="m" font-size="12">on main, pulled</text><circle cx="207" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="207" y="80" font-size="30" text-anchor="middle">🔎</text><text x="207" y="140" text-anchor="middle" font-weight="600">Find the build</text><text x="207" y="158" text-anchor="middle" class="m" font-size="12">scheme and settings</text><circle cx="344" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="344" y="80" font-size="30" text-anchor="middle">🙋</text><text x="344" y="140" text-anchor="middle" font-weight="600">Ask if needed</text><text x="344" y="158" text-anchor="middle" class="m" font-size="12">4 cases, 4 flags</text><circle cx="481" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="481" y="80" font-size="30" text-anchor="middle">🔨</text><text x="481" y="140" text-anchor="middle" font-weight="600">Build Release</text><text x="481" y="158" text-anchor="middle" class="m" font-size="12">inside the git dir</text><circle cx="618" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="618" y="80" font-size="30" text-anchor="middle">🧪</text><text x="618" y="140" text-anchor="middle" font-weight="600">Check the copy</text><text x="618" y="158" text-anchor="middle" class="m" font-size="12">signature, bundle id</text><circle cx="755" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="755" y="80" font-size="30" text-anchor="middle">🔁</text><text x="755" y="140" text-anchor="middle" font-weight="600">Swap in one step</text><text x="755" y="158" text-anchor="middle" class="m" font-size="12">old one to the Trash</text><circle cx="892" cy="70" r="44" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/><text x="892" y="80" font-size="30" text-anchor="middle">🏷️</text><text x="892" y="140" text-anchor="middle" font-weight="600">Stamp</text><text x="892" y="158" text-anchor="middle" class="m" font-size="12">installed commit</text><path d="M116,70 L161,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/><path d="M253,70 L298,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/><path d="M390,70 L435,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/><path d="M527,70 L572,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/><path d="M664,70 L709,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/><path d="M801,70 L846,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/></g>
+  </svg>
+  </div>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="chip"><span class="ic">🛑</span><div><b>Four questions, then stop</b><span>app running, data change, unknown copy, other app</span></div></div>
+    <div class="chip"><span class="ic">🔁</span><div><b>One install at a time</b><span>a lock; leftovers from a crash are cleaned</span></div></div>
+    <div class="chip"><span class="ic">🧯</span><div><b>Never sudo, never kill</b><span>a failed build leaves the Dock as it was</span></div></div>
+  </div>
+  <div class="key">💡 Each stop is <b>stored</b>: a stop in the background shows up in the next report instead of getting lost.</div>
+</section>
+
+<section class="glass">
+  <span class="tag t-amber">Two repairs</span>
+  <div class="grid g2">
+    <div class="chip"><span class="ic">🧪</span><div><b>The gate runs pytest where it exists</b><span>system python, else uv, else a clear message</span></div></div>
+    <div class="chip"><span class="ic">🔐</span><div><b>Lock first, even for a pasted /goal</b><span>plus a fallback file and a clear re-lock order</span></div></div>
+  </div>
+  <div class="key">💡 The fourth finding from the third house was <b>already covered</b> in the skill and is recorded as refuted, not changed.</div>
+</section>
+
+<section class="glass">
+  <span class="tag t-emerald">Who does what</span>
+  <h2>Who does what</h2>
+  <div class="who" style="margin-top:12px">
+    <div style="background:var(--amber-s)"><h3>🙋 You</h3><ul><li>choose how the plan is executed</li><li>answer the app-quit question</li><li>name the first real app</li><li>approve the changed gate in a terminal</li></ul></div>
+    <div style="background:var(--magenta-s)"><h3>🤖 Assistant</h3><ul><li>writes tests first</li><li>runs the review lenses</li><li>asks once, collected</li><li>lands through the gate</li></ul></div>
+    <div style="background:var(--violet-s)"><h3>⚙️ Script</h3><ul><li>measures, never guesses</li><li>builds and checks</li><li>swaps and stamps</li><li>stores every stop</li></ul></div>
+  </div>
+</section>
+
+<section class="glass">
+  <span class="tag t-emerald">Done when</span>
+  <ol class="done">
+    <li><span class="n">1</span><span>Every test is written first and passes, with stubs only (nothing touches the real /Applications)</span></li>
+    <li><span class="n">2</span><span>Lint and the full suite are green, and the gate passes without a hand-made environment</span></li>
+    <li><span class="n">3</span><span>The review lenses have run and findings are fixed or refuted in writing</span></li>
+    <li><span class="n">4</span><span>A tiny app is installed twice in the spare Mac: the second build only rebuilds what changed</span></li>
+    <li><span class="n">5</span><span>Landed, CI green, and one of your own Mac apps installed with you present</span></li>
+  </ol>
+</section>
+
+<section class="glass">
+  <span class="tag t-amber">Worth knowing</span>
+  <div class="grid g2">
+    <div class="chip"><span class="ic">🍎</span><div><b>The swap is macOS only</b><span>the rest is tested on any machine</span></div></div>
+    <div class="chip"><span class="ic">🐢</span><div><b>The suite takes about ten minutes</b><span>one timing test can fail under load</span></div></div>
+    <div class="chip"><span class="ic">🚫</span><div><b>Codex lens is off</b><span>the third model house runs instead</span></div></div>
+    <div class="chip"><span class="ic">🙋</span><div><b>Step 6 of the last task needs you</b><span>until it happens, it stays the one open item</span></div></div>
+  </div>
+</section>
+
+<footer>Source: <span class="mono">2026-10-15-work-state.md</span></footer>
+</div>
+<script>
+(function(){
+  var root=document.documentElement,btn=document.getElementById('tg');
+  try{var s=localStorage.getItem('explainer-tema');if(s)root.setAttribute('data-theme',s);}catch(e){}
+  btn.addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    var next=cur==='dark'?'light':'dark';root.setAttribute('data-theme',next);
+    try{localStorage.setItem('explainer-tema',next);}catch(e){}
+  });
+})();
+</script>
+</body>
+</html>
