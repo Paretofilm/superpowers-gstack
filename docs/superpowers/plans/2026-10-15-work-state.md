@@ -819,7 +819,7 @@ def test_arguments_with_spaces_survive(tmp_path):
 
 - [x] **Step 3: Implement** the script (`#!/usr/bin/env bash`, `set -u`, the three branches above, `exec` the chosen command with `"$@"`) and change `.config/wt.toml` `unit` to `bash scripts/pytest-gate.sh tests/unit -q -p no:cacheprovider --deselect … --deselect …` (the two deselects stay verbatim). CI's `lint.yml` stays as it is.
 
-- [x] **Step 4: Run to verify pass** — the new test file PASS; then **prove the hook end to end without the temporary venv**: `wt hook pre-merge` in this worktree with the default `PATH` (Homebrew `python3` without pytest) must be green. The hook edit must be approved first (`wt config approvals add` needs a real terminal — use the Calyx tab flow, the user answers).
+- [ ] **Step 4: Run to verify pass** — the new test file PASS (done); NOT done yet, the controller runs it at landing: then **prove the hook end to end without the temporary venv**: `wt hook pre-merge` in this worktree with the default `PATH` (Homebrew `python3` without pytest) must be green. The hook edit must be approved first (`wt config approvals add` needs a real terminal — use the Calyx tab flow, the user answers).
 
 - [x] **Step 5: Commit**
 
@@ -866,6 +866,8 @@ Rulings made while executing (details in `.superpowers/sdd/2026-10-15-work-state
 - **R9:** `report` exits 0 for undefined, `none` and no remote; the JSON status carries the truth.
 - **R10:** `install` keeps the strict `--untracked-files=all` clean check, and `report` shows a stored stop for every non-zero code.
 - **R11:** the `install` safe action starts with `sys.executable`, so macOS's Python 3.9 cannot run it; the skill says entries run exactly as printed.
+- **R12:** when removals rest on the `origin/main` proof, `git pull --ff-only` runs first, and `wt remove` is called with `--foreground`.
+- **Dead code removed:** `proven_landed`, `is_clean` and `running_instances`, described in Tasks 3 and 5, were removed as dead code in the final fix wave; the logic lives in `_landed_state` / `_is_clean`.
 
 ## Self-review
 
