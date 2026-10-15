@@ -56,7 +56,7 @@ The inputs the spec implies but its tests do not name, most likely first. Each h
 
 ---
 
-### Task 1: `Installable:` line — parse, read from `origin/main`, CLI skeleton
+### Task 1: `Installable:` line — parse, read from `origin/main`, CLI skeleton (done: cde97f2)
 
 **Files:**
 - Create: `scripts/work-state.py`, `tests/unit/work_state_fixtures.py`, `tests/unit/test_work_state.py`
@@ -68,7 +68,7 @@ The inputs the spec implies but its tests do not name, most likely first. Each h
   - `main(argv) -> int` with subparsers `report` and `install`; unknown usage returns 64; `sys.version_info < (3, 11)` returns 70.
   - `fixtures.make_repo(tmp_path) -> Path` (directory named `my proj`, branch `main`, one commit with a `CLAUDE.md`), `fixtures.add_origin(repo) -> Path` (a bare clone next to it named `origin dir`, remote `origin`, upstream set, fetched).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_work_state.py
@@ -113,12 +113,12 @@ def test_usage_errors_are_64():
     assert ws.main(["frobnicate"]) == 64
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `uv run --python 3.14 --with pytest python -m pytest tests/unit/test_work_state.py -q`
 Expected: FAIL (`scripts/work-state.py` does not exist).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Create `scripts/work-state.py` with: the docstring (purpose, subcommands, exit codes — copied from the spec tables); `_load_land()` that returns the module `land-worktree.py` loaded from `Path(__file__).with_name("land-worktree.py")` (reuse `claude_md_at`, `Lock`, `primary_worktree`, `worktrees`, `out`, `git`, `sh`, `FENCE` — do not copy them); `INSTALLABLE_RE = re.compile(r"^Installable:[ \t]+(\S+)(?:[ \t]+(.+?))?[ \t]*$")`; fence tracking identical to `parse_mode`; the validity table above; `main` with `argparse` (`report [--repo PATH] [--json-only]`, `install [--repo PATH] [--quit-running | --quit-path APP] [--accept-migration] [--replace-unstamped] [--applications-dir DIR]` where `--applications-dir` is `argparse.SUPPRESS` help). `report`/`install` bodies raise `NotImplementedError` for now (replaced in Tasks 2–6).
 
@@ -144,12 +144,12 @@ def parse_installable(text):
 
 `tests/unit/work_state_fixtures.py`: `make_repo` runs `git init -b main`, sets `user.name/email` locally, commits a `CLAUDE.md` containing `# proj\n`; `add_origin` runs `git clone --bare` into `origin dir`, `git remote add origin`, `git fetch`, `git branch --set-upstream-to=origin/main main`; `commit_file(repo, name, text)` writes and commits.
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `uv run --python 3.14 --with pytest python -m pytest tests/unit/test_work_state.py -q`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/work-state.py tests/unit/work_state_fixtures.py tests/unit/test_work_state.py
@@ -158,7 +158,7 @@ git commit -m "feat(work-state): the Installable: line and the command skeleton"
 
 ---
 
-### Task 2: `report` — the *committed* and *pushed* parts
+### Task 2: `report` — the *committed* and *pushed* parts (done: 8995046, a95ad24)
 
 **Files:**
 - Modify: `scripts/work-state.py`, `tests/unit/test_work_state.py`
@@ -167,7 +167,7 @@ git commit -m "feat(work-state): the Installable: line and the command skeleton"
 - Consumes: `make_repo`, `add_origin`, `commit_file` (Task 1); `land.primary_worktree`, `land.git`.
 - Produces: `measure_committed(repo) -> dict` and `measure_pushed(repo) -> dict`. Both return `{"status": "ok"|"open"|"unknown"|"undefined", "detail": str, "items": list[str]}`. `measure_pushed` also returns `"safe_actions": list[list[str]]` and `"ask": list[str]` (empty lists when none). `fetch_origin(repo) -> str|None` runs `git fetch --quiet origin` with `timeout=15` and returns the error text or `None`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_committed_is_open_for_a_dirty_tree_and_names_the_files(tmp_path):
@@ -215,13 +215,13 @@ def test_pushed_with_unreachable_origin_is_unknown_with_the_reason(tmp_path):  #
     assert r["status"] == "unknown" and r["detail"]
 ```
 
-- [ ] **Step 2: Run to verify failure** — `uv run --python 3.14 --with pytest python -m pytest tests/unit/test_work_state.py -q -k "committed or pushed"` → FAIL (`measure_committed` missing).
+- [x] **Step 2: Run to verify failure** — `uv run --python 3.14 --with pytest python -m pytest tests/unit/test_work_state.py -q -k "committed or pushed"` → FAIL (`measure_committed` missing).
 
-- [ ] **Step 3: Implement.** `measure_committed`: `git status --porcelain` in the given folder and in `land.primary_worktree(repo)` when different; `items` is the union of paths (relative); `status` `open` when any, else `ok`; detail `"N filer"`. `fetch_origin`: `subprocess.run(["git","-C",repo,"fetch","--quiet","origin"], timeout=15)`; a `TimeoutExpired` or non-zero exit returns the stderr tail. `measure_pushed`: no `origin` remote → `undefined`, detail `"– (ingen fjern-repo)"`; fetch error → `unknown`, detail the error; otherwise current branch: with upstream, `git rev-list --count @{upstream}..HEAD` > 0 → open and, when `origin/<branch>` is an ancestor of HEAD (fast-forward), `safe_actions=[["git","-C",repo,"push"]]`, else `ask=["push of '<branch>' would need force"]`; without upstream, commits no remote ref contains (`git rev-list HEAD --not --remotes`) → open and `ask`. For the main folder: `origin/main..main` > 0 → open, `ask=["main has N commits not landed through land"]` (never in `safe_actions`). Detached `HEAD` on the current folder counts commits with `--not --remotes` the same way.
+- [x] **Step 3: Implement.** `measure_committed`: `git status --porcelain` in the given folder and in `land.primary_worktree(repo)` when different; `items` is the union of paths (relative); `status` `open` when any, else `ok`; detail `"N filer"`. `fetch_origin`: `subprocess.run(["git","-C",repo,"fetch","--quiet","origin"], timeout=15)`; a `TimeoutExpired` or non-zero exit returns the stderr tail. `measure_pushed`: no `origin` remote → `undefined`, detail `"– (ingen fjern-repo)"`; fetch error → `unknown`, detail the error; otherwise current branch: with upstream, `git rev-list --count @{upstream}..HEAD` > 0 → open and, when `origin/<branch>` is an ancestor of HEAD (fast-forward), `safe_actions=[["git","-C",repo,"push"]]`, else `ask=["push of '<branch>' would need force"]`; without upstream, commits no remote ref contains (`git rev-list HEAD --not --remotes`) → open and `ask`. For the main folder: `origin/main..main` > 0 → open, `ask=["main has N commits not landed through land"]` (never in `safe_actions`). Detached `HEAD` on the current folder counts commits with `--not --remotes` the same way.
 
-- [ ] **Step 4: Run to verify pass** — same command → PASS.
+- [x] **Step 4: Run to verify pass** — same command → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/work-state.py tests/unit/test_work_state.py
@@ -230,7 +230,7 @@ git commit -m "feat(work-state): report measures committed and pushed"
 
 ---
 
-### Task 3: `report` — *mapper ryddet* (tidy), `safe_actions` and `ask`
+### Task 3: `report` — *mapper ryddet* (tidy), `safe_actions` and `ask` (done: 0b6ad30, 09f06a6)
 
 **Files:**
 - Modify: `scripts/work-state.py`, `tests/unit/test_work_state.py`
@@ -239,7 +239,7 @@ git commit -m "feat(work-state): report measures committed and pushed"
 - Consumes: `land.worktrees(repo)` (list of dicts with `path`, `branch`), `measure_*` shape from Task 2.
 - Produces: `measure_tidy(repo) -> dict` with the same shape plus `safe_actions` and `ask`. Constants `CACHE_DIRS = (".gstack/", "node_modules/", ".build/", "DerivedData/", "__pycache__/", ".pytest_cache/")` (one constant, per spec). `proven_landed(repo, branch) -> bool`: `merge-base --is-ancestor <branch> origin/main` **and** the branch reflog has at least one entry whose subject starts with `commit`. `in_use(path) -> bool`: `lsof -d cwd -Fn` output compared by path prefix (`os.sep`-terminated, so `/a/b` does not match `/a/bc`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def make_landed_branch(repo, name="feat/done"):
@@ -306,9 +306,9 @@ def test_in_use_matches_whole_path_components_only(monkeypatch):
     assert ws.in_use(Path("/a/b")) is False and ws.in_use(Path("/a/bc")) is True
 ```
 
-- [ ] **Step 2: Run to verify failure** — `-k "tidy or landed or squash or cache or leftover or in_use"` → FAIL.
+- [x] **Step 2: Run to verify failure** — `-k "tidy or landed or squash or cache or leftover or in_use"` → FAIL.
 
-- [ ] **Step 3: Implement.** Algorithm for `measure_tidy`:
+- [x] **Step 3: Implement.** Algorithm for `measure_tidy`:
   1. `primary = land.primary_worktree(repo)`; `here = repo` (resolve `git rev-parse --show-toplevel`).
   2. For every worktree except `primary` and `here`: if `in_use(path)` → `ask` entry `"<path> i bruk"`; elif not `proven_landed(branch)` → `ask` entry naming the branch; elif not `is_clean(path)` → `ask`; else `safe_actions` entry `["wt","-C",primary,"remove",branch]` when `shutil.which("wt")`, otherwise two entries `["git","-C",primary,"worktree","remove",path]` then `["git","-C",primary,"branch","-d",branch]`.
   3. For every local branch not checked out anywhere and not `main`: `proven_landed` → `safe_actions` `["git","-C",primary,"branch","-d",name]`; otherwise `ask` (`"<name> er ikke bevist landet"`).
@@ -318,9 +318,9 @@ def test_in_use_matches_whole_path_components_only(monkeypatch):
 
   The Python never executes `safe_actions`; the skill (Task 7) does.
 
-- [ ] **Step 4: Run to verify pass** → PASS.
+- [x] **Step 4: Run to verify pass** → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/work-state.py tests/unit/test_work_state.py
@@ -329,7 +329,7 @@ git commit -m "feat(work-state): report measures tidy folders and branches, with
 
 ---
 
-### Task 4: `report` — *installable* status, the stored result, the line, the JSON and the exit code
+### Task 4: `report` — *installable* status, the stored result, the line, the JSON and the exit code (done: 0acd5a9, d42d677)
 
 **Files:**
 - Modify: `scripts/work-state.py`, `tests/unit/test_work_state.py`
@@ -343,7 +343,7 @@ git commit -m "feat(work-state): report measures tidy folders and branches, with
   - `build_line(parts) -> str` and `report(args) -> int`. The line is `Tilstand: committet <m> · pushet <m> · mapper ryddet <m> · installerbar <m> (<detail>)`, with `<m>` one of `✓`, `✗ (<what is left>)`, `?` (+reason), `–`. Last stdout line is the JSON from the spec (`line, committed, pushed, tidy, installable, safe_actions, ask`).
   - Exit code: 0 all ✓ or –, 1 any ✗ or `?`, 2 not a git repo, 64 bad usage.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def run_report(repo, *extra):
@@ -398,9 +398,9 @@ def test_plugin_kind_reads_installed_version_when_the_registry_exists(tmp_path, 
     assert "3.15.0 på main, du har 3.14.0" in ws.measure_installable(repo)["detail"]
 ```
 
-- [ ] **Step 2: Run to verify failure** → FAIL.
+- [x] **Step 2: Run to verify failure** → FAIL.
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
   - `measure_installable`: read the parsed line at `origin/main` (no remote → local `main`, and the line's `pushet` part already says `–`). By kind:
     - `macos-app`: stamp present, `stamp["commit"] == rev-parse origin/main`, `Path(stamp["app_path"]).is_dir()`, `plutil -extract CFBundleIdentifier raw` equals `stamp["bundle_id"]` → `ok`; stamp for an older commit or missing → `stale` with `safe_actions` `[["python3", __file__, "install", "--repo", repo]]`; a stored result with `code` ≥ 4 adds its reason to `ask`.
     - `plugin`: extract `git archive origin/main` to a temp dir, run `claude plugin validate <dir>` if `claude` is on `PATH` (else status `unknown`, detail `claude ikke funnet`); version from `.claude-plugin/plugin.json`; CHANGELOG heading `## [<version>]` must exist; local `main` pushed (`origin/main..main` empty). Detail adds the installed version from `~/.claude/plugins/installed_plugins.json` (first entry whose key starts with `<name>@`).
@@ -408,9 +408,9 @@ def test_plugin_kind_reads_installed_version_when_the_registry_exists(tmp_path, 
     - `none` → `na` (printed `–`); `None`/`conflict` → `undefined`.
   - `build_line` as specified. `report(args)`: fetch once (`fetch_origin`), measure all four, assemble, print, exit code per the constraint. `--json-only` prints only the JSON object.
 
-- [ ] **Step 4: Run to verify pass** — whole `test_work_state.py` → PASS.
+- [x] **Step 4: Run to verify pass** — whole `test_work_state.py` → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/work-state.py tests/unit/test_work_state.py
@@ -419,7 +419,7 @@ git commit -m "feat(work-state): report assembles the line, the JSON and the exi
 
 ---
 
-### Task 5: `install` — preconditions, discovery, the four questions, the lock
+### Task 5: `install` — preconditions, discovery, the four questions, the lock (done: 89e3ee4, 67dc882)
 
 **Files:**
 - Modify: `scripts/work-state.py`, `tests/unit/test_work_state.py`
@@ -442,7 +442,7 @@ git commit -m "feat(work-state): report assembles the line, the JSON and the exi
   - `class Stop(Exception)` carrying `code, message, state`; `install(args) -> int` prints `{"status": …, "code": …, "reason": …, "commit": …}` as the last line and writes the result file atomically (`os.replace` of a temp file in the same directory).
   - Exit codes 2, 3, 4, 5, 6, 7, 12 are produced here; 8–11 in Task 6.
 
-- [ ] **Step 1: Write the failing tests** (each runs `install` through `subprocess` with the stub `PATH` and `--applications-dir "<tmp>/Applications dir"`):
+- [x] **Step 1: Write the failing tests** (each runs `install` through `subprocess` with the stub `PATH` and `--applications-dir "<tmp>/Applications dir"`):
 
 ```python
 def run_install(repo, stubs, apps, *extra, env_extra=None):
@@ -548,13 +548,13 @@ def test_stale_temporary_copies_for_the_same_bundle_id_are_removed_under_the_loc
     assert not mine.exists() and other.exists()
 ```
 
-- [ ] **Step 2: Run to verify failure** — `-k install` → FAIL.
+- [x] **Step 2: Run to verify failure** — `-k install` → FAIL.
 
-- [ ] **Step 3: Implement** `InstallLock`, `Stop`, `discover_build`, `running_instances(executable_path) -> list[int]` (`ps -Axo pid=,comm=`, exact string equality with `<app>/Contents/MacOS/<EXECUTABLE_NAME>`), `quit_app(bundle_id, deadline=20)` (`osascript -e 'tell application id "<id>" to quit'`, then poll `running_instances` once a second), `migration_signal(repo, stamp_commit)` (runs `scripts/classify-change.py --diff --diff-base <stamp_commit>` against `origin/main` and looks for the `migration` signal in its JSON; an unreachable stamp commit → treated as signal), precondition 1 (`git status --porcelain --untracked-files=no` clean on `main`, then `git pull --ff-only` while holding `land.Lock`'s lock file `gstack-land.lock` for at most 60 s — exit 12 when `land` holds it longer), and the four questions with their flags. Write the result file in a `finally` so a stop is never lost. The build and swap steps are Task 6; `install` returns `Stop(70, "not implemented")` after the questions until then.
+- [x] **Step 3: Implement** `InstallLock`, `Stop`, `discover_build`, `running_instances(executable_path) -> list[int]` (`ps -Axo pid=,comm=`, exact string equality with `<app>/Contents/MacOS/<EXECUTABLE_NAME>`), `quit_app(bundle_id, deadline=20)` (`osascript -e 'tell application id "<id>" to quit'`, then poll `running_instances` once a second), `migration_signal(repo, stamp_commit)` (runs `scripts/classify-change.py --diff --diff-base <stamp_commit>` against `origin/main` and looks for the `migration` signal in its JSON; an unreachable stamp commit → treated as signal), precondition 1 (`git status --porcelain --untracked-files=no` clean on `main`, then `git pull --ff-only` while holding `land.Lock`'s lock file `gstack-land.lock` for at most 60 s — exit 12 when `land` holds it longer), and the four questions with their flags. Write the result file in a `finally` so a stop is never lost. The build and swap steps are Task 6; `install` returns `Stop(70, "not implemented")` after the questions until then.
 
-- [ ] **Step 4: Run to verify pass** → PASS.
+- [x] **Step 4: Run to verify pass** → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/work-state.py tests/unit/test_work_state.py tests/unit/work_state_fixtures.py
@@ -563,7 +563,7 @@ git commit -m "feat(work-state): install preconditions, discovery, the four ques
 
 ---
 
-### Task 6: `install` — build, verify before the swap, atomic swap, register, stamp
+### Task 6: `install` — build, verify before the swap, atomic swap, register, stamp (done: 7f17bf8, c8dd3dc)
 
 **Files:**
 - Modify: `scripts/work-state.py`, `tests/unit/test_work_state.py`
@@ -572,7 +572,7 @@ git commit -m "feat(work-state): install preconditions, discovery, the four ques
 - Consumes: `discover_build`, `Stop`, `InstallLock` (Task 5).
 - Produces: `build(repo, info, scheme) -> Path` (`xcodebuild … -derivedDataPath <gitdir>/gstack-install-build build`, log to `gitdir/gstack-install-build.log`, exit 8 with the log path), `verify_copy(tmp_app, bundle_id)` (exit 9: `codesign --verify --deep --strict` then `plutil -extract CFBundleIdentifier raw`; the temp copy is deleted and the old copy untouched), `swap(old, new)` (`renamex_np(RENAME_SWAP)` through `ctypes.CDLL(None).renamex_np(old.encode(), new.encode(), 0x2)`; when no old copy `os.rename`; the old copy goes to the Trash through `osascript` Finder `delete`, falling back to `~/.Trash/<name> <timestamp>`; unwritable applications dir → exit 10), the `HEAD` re-check before the swap (exit 11), `register_and_stamp` (`lsregister -f`, second `codesign --verify` on the final path, atomic stamp write).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_a_successful_install_swaps_stamps_and_a_second_run_is_current(tmp_path):
@@ -639,13 +639,13 @@ def test_no_stamp_when_the_final_path_signature_check_fails(tmp_path):
 
 `_with_settings(extra, product="Fake App.app")` is a fixtures helper that wraps a stub body so `-showBuildSettings` prints the four settings (with `product` as `FULL_PRODUCT_NAME`) and every other invocation runs `extra` (or the default build) — tests that change the build behaviour use it so they never re-implement the settings output.
 
-- [ ] **Step 2: Run to verify failure** → FAIL.
+- [x] **Step 2: Run to verify failure** → FAIL.
 
-- [ ] **Step 3: Implement** the functions above and wire them after the questions in `install`. Order exactly as the spec: 4 build → 5 copy with `ditto` to `<apps>/.<name>.gstack-new-<pid>` and verify → HEAD re-check → 6 swap → 7 register and stamp. Every failure path removes only the temporary copy it created. `status: "current"` short-circuits before the build when the stamp already matches `origin/main`, the app path exists and the bundle id matches (this is the same predicate `measure_installable` uses — extract it into `stamp_is_current(repo, stamp, head)` and call it from both).
+- [x] **Step 3: Implement** the functions above and wire them after the questions in `install`. Order exactly as the spec: 4 build → 5 copy with `ditto` to `<apps>/.<name>.gstack-new-<pid>` and verify → HEAD re-check → 6 swap → 7 register and stamp. Every failure path removes only the temporary copy it created. `status: "current"` short-circuits before the build when the stamp already matches `origin/main`, the app path exists and the bundle id matches (this is the same predicate `measure_installable` uses — extract it into `stamp_is_current(repo, stamp, head)` and call it from both).
 
-- [ ] **Step 4: Run to verify pass** — whole file → PASS.
+- [x] **Step 4: Run to verify pass** — whole file → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/work-state.py tests/unit/test_work_state.py
@@ -654,7 +654,7 @@ git commit -m "feat(work-state): install builds, verifies, swaps and stamps"
 
 ---
 
-### Task 7: The `work-state` skill and its routing
+### Task 7: The `work-state` skill and its routing (done: f372105, 293a04a)
 
 **Files:**
 - Create: `skills/work-state/SKILL.md`, `skills/work-state/tests/required-sections.test.sh`
@@ -664,7 +664,7 @@ git commit -m "feat(work-state): install builds, verifies, swaps and stamps"
 - Consumes: the CLI of Tasks 2–6.
 - Produces: a skill named `work-state` whose frontmatter `description` is at most 30 words; sections `## Run`, `## Read the result`, `## Do what is safe`, `## Ask once`, `## Install codes`, `## Never`. The script is located relative to the skill (`<base>/../../scripts/work-state.py`) with the same interpreter loop as `skills/land/SKILL.md` (Python 3.11+).
 
-- [ ] **Step 1: Write the failing contract test** (`required-sections.test.sh`): grep for `## Run`, `## Never`, the sentence `Run \`safe_actions\` as printed`, the sentence `one \`AskUserQuestion\``, `--quit-path`, `never \`git branch -D\``, and the line `The line never says ✓ while something is left`.
+- [x] **Step 1: Write the failing contract test** (`required-sections.test.sh`): grep for `## Run`, `## Never`, the sentence `Run \`safe_actions\` as printed`, the sentence `one \`AskUserQuestion\``, `--quit-path`, `never \`git branch -D\``, and the line `The line never says ✓ while something is left`.
 
 ```bash
 #!/usr/bin/env bash
@@ -675,13 +675,13 @@ for s in '## Run' '## Never' 'Run `safe_actions` as printed' 'one `AskUserQuesti
 done
 ```
 
-- [ ] **Step 2: Run to verify failure** — `bash skills/work-state/tests/required-sections.test.sh` → exits 1 (file missing).
+- [x] **Step 2: Run to verify failure** — `bash skills/work-state/tests/required-sections.test.sh` → exits 1 (file missing).
 
-- [ ] **Step 3: Write the skill.** Content, in this order: purpose in two sentences; `## Run` (interpreter loop, `report --repo "$PWD"`); `## Read the result` (the last line is JSON; `line` is what ends the message); `## Do what is safe` (run each `safe_actions` entry as printed, from the main folder, one at a time, and re-run `report` once at the end — never loop more than twice); `## Ask once` (collect `ask` plus any stop code from `install` into one `AskUserQuestion` in one message; if the user does not answer, the line stays honest); `## Install codes` (the spec's table, 4/5/6 ask, 7 tell the user to tidy by hand, 8 show the log path, 9–11 report and stop, 12 wait); `## Never` (`git branch -D`, force push, `sudo`, killing a process, passing `--accept-migration`/`--replace-unstamped`/`--quit-running` without the user's yes in this session). Add the routing line to `CLAUDE.md` after the `land` line: `- "Is everything committed", "is it tidy", "is the app installable", "installer appen", "tilstand" → invoke /superpowers-gstack:work-state. …` and a README bullet.
+- [x] **Step 3: Write the skill.** Content, in this order: purpose in two sentences; `## Run` (interpreter loop, `report --repo "$PWD"`); `## Read the result` (the last line is JSON; `line` is what ends the message); `## Do what is safe` (run each `safe_actions` entry as printed, from the main folder, one at a time, and re-run `report` once at the end — never loop more than twice); `## Ask once` (collect `ask` plus any stop code from `install` into one `AskUserQuestion` in one message; if the user does not answer, the line stays honest); `## Install codes` (the spec's table, 4/5/6 ask, 7 tell the user to tidy by hand, 8 show the log path, 9–11 report and stop, 12 wait); `## Never` (`git branch -D`, force push, `sudo`, killing a process, passing `--accept-migration`/`--replace-unstamped`/`--quit-running` without the user's yes in this session). Add the routing line to `CLAUDE.md` after the `land` line: `- "Is everything committed", "is it tidy", "is the app installable", "installer appen", "tilstand" → invoke /superpowers-gstack:work-state. …` and a README bullet.
 
-- [ ] **Step 4: Run to verify pass** — the shell test passes; `python3 scripts/lint-skills.py` → 0 errors (fix any routing-coverage or cross-reference error it names).
+- [x] **Step 4: Run to verify pass** — the shell test passes; `python3 scripts/lint-skills.py` → 0 errors (fix any routing-coverage or cross-reference error it names).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add skills/work-state CLAUDE.md README.md scripts/lint-skills.py
@@ -690,7 +690,7 @@ git commit -m "feat(work-state): the skill, its contract test and its routing"
 
 ---
 
-### Task 8: Wire it in — `land`, `verify-and-land`, git-hygiene v14, `adapt --installable`, the repo's own line
+### Task 8: Wire it in — `land`, `verify-and-land`, git-hygiene v14, `adapt --installable`, the repo's own line (done: 1f82fd9, 0a34ecb, 261d500, 9089780)
 
 **Files:**
 - Modify: `skills/land/SKILL.md`, `skills/verify-and-land/SKILL.md`, `skills/adapt/blocks/git-hygiene.md`, `scripts/adapt-claude-md.py`, `skills/adapt/SKILL.md`, `scripts/lint-skills.py`, `scripts/sync-own-claude-md.py`, `CLAUDE.md`, `tests/unit/test_adapt_script.py`, `tests/unit/test_lint_adapt_and_blocks.py`, `tests/unit/test_verify_and_land.py`
@@ -699,15 +699,15 @@ git commit -m "feat(work-state): the skill, its contract test and its routing"
 - Consumes: the CLI (Tasks 2–6) and the skill (Task 7).
 - Produces: `--installable <value>` on `adapt-claude-md.py` written once under `## <project> install`, kept on later runs (mirrors `--local-state` and `apply_local_state`); the marker `gstack-git-hygiene-v14`; denylist entry `gstack-git-hygiene-v1[0-3]\b`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - `test_adapt_script.py`: `--installable plugin` on a project without the line adds `Installable: plugin` under a heading the project owns; a second run with `--installable none` keeps `plugin` and reports it as preserved; a value that is empty, multi-line or contains `<!--` is refused (exit 2) before any write; the line inside a fenced block does not count as present.
   - `test_lint_adapt_and_blocks.py`: the denylist catches `gstack-git-hygiene-v13` in a fixture; the shipped block carries `v14`.
   - `test_verify_and_land.py`: Phase 6 text contains `install it in /Applications` (the exact wording the spec gives: «gjør dette til den gjeldende versjonen, og installer den i `/Applications`») and Phase 7 names `--quit-path`.
   - A land-skill test (`skills/land/tests/required-sections.test.sh` extension or a pytest on the file text): code 0 row mentions `/superpowers-gstack:work-state`.
 
-- [ ] **Step 2: Run to verify failure** — `uv run --python 3.14 --with pytest python -m pytest tests/unit/test_adapt_script.py tests/unit/test_lint_adapt_and_blocks.py tests/unit/test_verify_and_land.py -q` → FAIL.
+- [x] **Step 2: Run to verify failure** — `uv run --python 3.14 --with pytest python -m pytest tests/unit/test_adapt_script.py tests/unit/test_lint_adapt_and_blocks.py tests/unit/test_verify_and_land.py -q` → FAIL.
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
   - `adapt-claude-md.py`: add `installable: str | None` to `Context`, argparse flag `--installable`, validation next to `local_state`'s (single line, no `<!--`, matches `INSTALLABLE_RE` semantics through a copy of the four valid shapes — if importing `work-state.py` is cheaper, load it the same `importlib` way and call `parse_installable("Installable: " + value)`), `apply_installable(lines, ctx, report)` modelled on `apply_local_state`: skip when a valid line already exists outside fences/managed regions (report as preserved), else append `Installable: <value>` under `## <project> install` (create that heading like the `Local state` rescue heading does). Update the module docstring step list.
   - `skills/adapt/SKILL.md` Step 4: one question with a recommendation per the spec's three rules (`.claude-plugin/plugin.json` → `plugin`; track `macos`/`both` and a scheme whose `SUPPORTED_PLATFORMS` contains `macosx` → `macos-app <Scheme>`; else `command`/`none`), answer passed as `--installable`. Not asked in the fresh path (`Assumed:` line gains `Installable: none`).
   - `git-hygiene.md`: marker v14 and the new bullet under *Landing the branch*: `**Before the last message of a task that changed files, run /superpowers-gstack:work-state**, do what its safe_actions say, ask what its ask says once, and end the message with its line. Not for pure questions or conversations without file changes.`
@@ -716,9 +716,9 @@ git commit -m "feat(work-state): the skill, its contract test and its routing"
   - `lint-skills.py`: widen the stale-marker denylist to `gstack-git-hygiene-v1[0-3]\b`.
   - Run `python3 scripts/sync-own-claude-md.py` so the repo's own `CLAUDE.md` gets block v14, then add the repo's own line under a heading the project owns: `Installable: plugin`.
 
-- [ ] **Step 4: Run to verify pass** — the three test files, then `python3 scripts/lint-skills.py` and `bash skills/adapt/tests/required-sections.test.sh` → all pass.
+- [x] **Step 4: Run to verify pass** — the three test files, then `python3 scripts/lint-skills.py` and `bash skills/adapt/tests/required-sections.test.sh` → all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add skills/land/SKILL.md skills/verify-and-land/SKILL.md skills/adapt scripts/adapt-claude-md.py scripts/lint-skills.py scripts/sync-own-claude-md.py CLAUDE.md tests/unit
@@ -727,7 +727,7 @@ git commit -m "feat(work-state): land, verify-and-land and git-hygiene v14 call 
 
 ---
 
-### Task 9: `/vibe` — the `/goal` path locks first; Step 7 fallback; Step 8 order
+### Task 9: `/vibe` — the `/goal` path locks first; Step 7 fallback; Step 8 order (done: baf49fa)
 
 **Files:**
 - Modify: `skills/vibe/SKILL.md`, `tests/unit/test_vibe_skill.py`
@@ -738,7 +738,7 @@ git commit -m "feat(work-state): land, verify-and-land and git-hygiene v14 call 
 
 The third house (DeepSeek `correctness`, 2026-10-15, $0.054) found, in text this release does not otherwise touch, and each was checked against the file before it went into this plan: **(a)** Step 3 hands the user a `/goal` line to paste but only says "after their ok, lock" — pasting `/goal` is an approval that never says `ok`, so the lock can be skipped (`skills/vibe/SKILL.md:117`); **(b)** Step 7 writes into "the context skill" which a project may not have; **(c)** Step 8 says "exit 1 → restore from the lock commit or stop" and later "after a rebase / in pr mode exit 1 → re-lock", which an agent can read as contradictory; **(d)** subagent briefs in Step 4 do not name the locked-test boundary. (d) is **already covered**: Step 4 reads "Two fixed rules go into every brief" and Step 3 forbids editing locked tests; it is therefore *not* changed and is recorded in the CHANGELOG as refuted with that reason.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_a_pasted_goal_counts_as_approval_and_the_lock_runs_first():
@@ -754,16 +754,16 @@ def test_step_8_handles_rebase_and_pr_receipt_before_the_generic_exit_1():
     assert "re-locking after a rebase or a squash-merge receipt change is not editing a test" in VIBE
 ```
 
-- [ ] **Step 2: Run to verify failure** — `uv run --python 3.14 --with pytest python -m pytest tests/unit/test_vibe_skill.py -q` → the three new tests FAIL.
+- [x] **Step 2: Run to verify failure** — `uv run --python 3.14 --with pytest python -m pytest tests/unit/test_vibe_skill.py -q` → the three new tests FAIL.
 
-- [ ] **Step 3: Edit `skills/vibe/SKILL.md`.**
+- [x] **Step 3: Edit `skills/vibe/SKILL.md`.**
   - Step 3: replace "`/goal` is started by the user; without it, continue with step 4 when they say ok. After their ok, lock the tests:" with "The user approves in one of two ways: they say ok, or they paste the `/goal` line. Whether they say ok or paste the `/goal` line, run the lock first and only then start Step 4 (a `/goal` the user pastes is started by them; lock before you act on it):".
   - Step 7: append "If the project has no context skill, create `.claude/skills/<project>-context/SKILL.md` with a `## How we work` section holding the rules, and commit it with the feature; never put them in CLAUDE.md."
   - Step 8: restructure to "**Re-lock cases first.** After a rebase `verify` warns that the lock commit left the branch's history; in `pr` mode a squash-merge on main that changed the receipt makes it exit 1 (`receipt changed by commit …`). Both mean the lock must be redone by the user, and re-locking after a rebase or a squash-merge receipt change is not editing a test. Tell the user and ask them to re-lock. **Any other exit 1** names each changed file …: restore it from the lock commit, or stop and say which test is wrong." Keep all other sentences (the limits of `verify`) unchanged.
 
-- [ ] **Step 4: Run to verify pass** — `test_vibe_skill.py` PASS; `python3 scripts/lint-skills.py` 0 errors.
+- [x] **Step 4: Run to verify pass** — `test_vibe_skill.py` PASS; `python3 scripts/lint-skills.py` 0 errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add skills/vibe/SKILL.md tests/unit/test_vibe_skill.py
@@ -772,7 +772,7 @@ git commit -m "fix(vibe): a pasted /goal locks the tests first; Step 7 has a fal
 
 ---
 
-### Task 10: The gate carries its own pytest
+### Task 10: The gate carries its own pytest (done: 5dad30f)
 
 **Files:**
 - Create: `scripts/pytest-gate.sh`, `tests/unit/test_pytest_gate.py`
@@ -781,7 +781,7 @@ git commit -m "fix(vibe): a pasted /goal locks the tests first; Step 7 has a fal
 **Interfaces:**
 - Produces: `scripts/pytest-gate.sh [pytest args…]` — runs `python3 -m pytest "$@"` when `python3 -c 'import pytest, sys; sys.exit(sys.version_info < (3, 11))'` succeeds; otherwise `uv run --python 3.14 --with pytest python -m pytest "$@"` when `uv` exists; otherwise prints `pytest-gate: no interpreter with pytest and Python >= 3.11 (install uv or: python3 -m pip install pytest)` to stderr and exits 70.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 import os, subprocess, stat
@@ -815,13 +815,13 @@ def test_arguments_with_spaces_survive(tmp_path):
     assert "[tests/unit dir]" in run(tmp_path, bins, "tests/unit dir").stdout
 ```
 
-- [ ] **Step 2: Run to verify failure** — `uv run --python 3.14 --with pytest python -m pytest tests/unit/test_pytest_gate.py -q` → FAIL.
+- [x] **Step 2: Run to verify failure** — `uv run --python 3.14 --with pytest python -m pytest tests/unit/test_pytest_gate.py -q` → FAIL.
 
-- [ ] **Step 3: Implement** the script (`#!/usr/bin/env bash`, `set -u`, the three branches above, `exec` the chosen command with `"$@"`) and change `.config/wt.toml` `unit` to `bash scripts/pytest-gate.sh tests/unit -q -p no:cacheprovider --deselect … --deselect …` (the two deselects stay verbatim). CI's `lint.yml` stays as it is.
+- [x] **Step 3: Implement** the script (`#!/usr/bin/env bash`, `set -u`, the three branches above, `exec` the chosen command with `"$@"`) and change `.config/wt.toml` `unit` to `bash scripts/pytest-gate.sh tests/unit -q -p no:cacheprovider --deselect … --deselect …` (the two deselects stay verbatim). CI's `lint.yml` stays as it is.
 
-- [ ] **Step 4: Run to verify pass** — the new test file PASS; then **prove the hook end to end without the temporary venv**: `wt hook pre-merge` in this worktree with the default `PATH` (Homebrew `python3` without pytest) must be green. The hook edit must be approved first (`wt config approvals add` needs a real terminal — use the Calyx tab flow, the user answers).
+- [x] **Step 4: Run to verify pass** — the new test file PASS; then **prove the hook end to end without the temporary venv**: `wt hook pre-merge` in this worktree with the default `PATH` (Homebrew `python3` without pytest) must be green. The hook edit must be approved first (`wt config approvals add` needs a real terminal — use the Calyx tab flow, the user answers).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/pytest-gate.sh tests/unit/test_pytest_gate.py .config/wt.toml
@@ -850,6 +850,22 @@ git commit -m "fix(gate): the pre-merge hook runs pytest with an interpreter tha
 - [ ] **Step 7: Commit the plan's own status** (tasks marked done with SHAs; spec status → `implementert i 3.15.0`, with a «Avvik fra utkastet» list if anything differed) and push.
 
 ---
+
+## Deviations
+
+Rulings made while executing (details in `.superpowers/sdd/2026-10-15-work-state/progress.md`):
+
+- **R1:** Task 4 creates `stub_bin` and `stub_env`; Task 5 only adds the default-stub contract. The Task 4 test needs them before Task 5.
+- **R2:** Task 4 implements `stamp_is_current`; Task 6 reuses it. This avoids a refactor in the middle of the plan.
+- **R3:** `quit_app` reads its deadline from the hidden `GSTACK_QUIT_DEADLINE` (default 20 s), so the test does not wait 20 s.
+- **R4, replaced by R4':** a failed signature check on the final path rolls the swap back and exits 9; the old copy goes to the Trash only after the check passes. R4 (keep the new copy, old one already trashed) was replaced because the Dock must always have a working app.
+- **R5:** Task 10's end-to-end proof (`wt hook pre-merge`, which needs `wt config approvals add` in a real terminal) is run by the controller with the user, not by the subagent.
+- **R6:** the session's own worktree, when its branch is proven landed, is listed in `ask` (ryddes etter ExitWorktree), never in `safe_actions`: the line may never be a tick while something stands.
+- **R7:** cache directory names are recognised at any depth (nested `node_modules` is common).
+- **R8:** bundle ids are read with `plistlib`, not `plutil`; ubuntu CI has no `plutil`, and fake apps carry a real `Info.plist`.
+- **R9:** `report` exits 0 for undefined, `none` and no remote; the JSON status carries the truth.
+- **R10:** `install` keeps the strict `--untracked-files=all` clean check, and `report` shows a stored stop for every non-zero code.
+- **R11:** the `install` safe action starts with `sys.executable`, so macOS's Python 3.9 cannot run it; the skill says entries run exactly as printed.
 
 ## Self-review
 
