@@ -1,5 +1,31 @@
 # Changelog
 
+## [3.15.0] - 2026-10-16
+
+**One script answers «is everything committed, tidy and installable?», so the answer no longer depends on memory.**
+
+After a piece of work was landed, the question of whether anything was left behind (an unpushed branch, a leftover worktree, a cache folder, an app in `/Applications` that is older than `main`) was answered by whoever remembered to ask. The Dock then opened an old app while the fix sat on `main`, and nobody had been told. `/superpowers-gstack:work-state` measures it instead: `scripts/work-state.py report` prints one status line that never says ✓ while something is left, plus a JSON record of what is safe to do and what needs a question; `scripts/work-state.py install` builds the project's Mac app from `origin/main`, verifies it, swaps it into `/Applications` and stamps what was installed. The same release closes two smaller gaps found on the way: the pre-merge gate needed a hand-made pytest environment, and a `/vibe` run could skip the acceptance-test lock when the user pasted the `/goal` line instead of saying `ok`.
+
+### Added
+- **`skills/work-state/SKILL.md` and `scripts/work-state.py`** with two subcommands. `report` measures committed, pushed, tidy and installable, always ends in one JSON line, and exits 0 / 1 (something is open or unknown) / 2 / 64. `install` takes four questions (another or unreadable copy, a running copy, a migration in the span since the stamp, an unstamped copy), builds Release with `xcodebuild`, copies with `ditto`, checks the signature and the bundle id, swaps the folder atomically (`renamex_np`), moves the old copy to the Trash, registers the app and writes a stamp. Exit codes 0–12, 64 and 70 are listed in the script and the skill; the last result is stored in the git directory.
+- **The `Installable:` line** (`macos-app <Scheme>`, `plugin`, `command <cmd>` or `none`) in a project's CLAUDE.md, read from `origin/main`, and **`adapt --installable`**, which writes it once after one question and never edits it again. This repo says `Installable: plugin`.
+- **git-hygiene block v14**: the project must run work-state before the last message of a session.
+- **`scripts/pytest-gate.sh`**: runs pytest with `python3` when that has pytest and is 3.11 or newer, else with `uv run --python 3.14 --with pytest`, else exits 70 and names the remedy.
+
+### Changed
+- `land` and `verify-and-land` run work-state after landing, start a stale app's install in the background, and end with its line. `verify-and-land` Phase 6 names the install in the question only when this run does it, and passes the Phase 5 bundle as a literal `--quit-path`.
+- The `pre-merge` hook in `.config/wt.toml` calls `scripts/pytest-gate.sh` instead of a bare `python3 -m pytest`.
+- `scripts/lint-skills.py`: the stale-pattern denylist covers git-hygiene v0–v13.
+
+### Fixed
+- **`/vibe` Step 3**: a pasted `/goal` line counts as the user's approval, and the acceptance tests are locked first.
+- **`/vibe` Step 7**: a fallback when the project has no context skill to write into.
+- **`/vibe` Step 8**: the re-lock cases (after a rebase, in `pr` mode) are read before the generic «exit 1 → restore or stop».
+- Third-house finding (d), that Step 4 subagent briefs do not name the locked-test boundary, was **already covered** («Two fixed rules go into every brief» in Step 4, and Step 3 forbids editing locked tests) and was **not changed**.
+
+### Upgrade
+- Projects adapted earlier get git-hygiene block v14 the next time `/superpowers-gstack:adapt` runs, and are asked for the `Installable:` line once. Nothing changes until then.
+
 ## [3.14.0] - 2026-10-15
 
 **`/vibe` asks how to start.**
