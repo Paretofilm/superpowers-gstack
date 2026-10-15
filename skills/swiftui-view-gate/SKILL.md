@@ -36,7 +36,7 @@ VG="$SKILL_DIR/../../scripts/view-gate.py"; WS="$SKILL_DIR/../../scripts/window-
 | Check | Detect via | If it fails |
 |---|---|---|
 | Native project | `.gstack/track` is exactly `ios`, `macos` or `both` | `web` or missing: refuse, "not a native Apple project". Anything else: `BLOCKED — invalid .gstack/track`. |
-| Which files | `python3 "$VG" files --base <default-ref>` (`$VG` and `$WS` are resolved below) | None listed: say there is no view change and stop. |
+| Which files | `python3 "$VG" files --base <default-ref>` (`$VG` and `$WS` come from the block above) | None listed: say there is no view change and stop. |
 
 Track decides the linters: `macos` → `review_macos_hig` + `review_accessibility`; `ios` →
 `review_accessibility` only (the macOS linter's window and menu-bar findings mislead on iOS);
@@ -79,7 +79,9 @@ Choose the route by cost to the user, cheapest first:
    WINDOW_SHOT_EXPECT="$WANT" "$WS" "$PID" "${TMPDIR:-/tmp}/<name>.png"
    ```
    It captures one window by id, never the display, and exits non-zero rather than hand back an
-   image that shows nothing (exit 3 not macOS, 4 no window, 5 blank capture, 6 wrong process).
+   image that shows nothing (exit 3 not macOS, 4 no window, 5 blank capture, 6 wrong process,
+   7 the Swift helper cannot be built). macOS only; `$PID` and `$WANT` are the Phase 5 proof of
+   `verify-and-land`. The pin is committed, like `.gstack/e2e-executor`, so every worktree has it.
    Missing consent is `BLOCKED`: ask the user once to write `host` into `.gstack/visual-verify`, or
    use route 1 or 4. Read the PNG afterwards; a path is not a look.
 3. **Computer use** (clicks, typing) needs a per-session approval dialog that a plugin cannot grant.

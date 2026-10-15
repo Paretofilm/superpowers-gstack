@@ -30,7 +30,7 @@ import time
 from pathlib import Path
 
 LINT_TOOLS = re.compile(r"review_(macos_hig|accessibility|liquid_glass)$")
-CONFORMS_TO_VIEW = re.compile(r"\b(?:struct|class|extension)\s+\w+\s*:[^{\n]*\bView\b")
+CONFORMS_TO_VIEW = re.compile(r"\b(?:struct|class|extension)\s+\w+(?:\s*<[^>{]*>)?\s*:[^{\n]*\bView\b")
 SOME_VIEW = re.compile(r"\bsome\s+View\b")
 VIEW_DIRS = {"Views", "Components"}
 MAX_READ = 512_000
@@ -128,7 +128,10 @@ def nudge() -> int:
 
 def changed_view_files(base: str) -> list[str]:
     def git(*args: str, cwd: Path | None = None) -> str:
-        return subprocess.run(["git", *args], capture_output=True, text=True, check=True, cwd=cwd).stdout
+        # core.quotepath=false and -z: git otherwise prints "Kategori-\303\246.swift" for a
+        # non-ASCII name, which would silently fail the .swift check below
+        return subprocess.run(["git", "-c", "core.quotepath=false", *args], capture_output=True,
+                              text=True, check=True, cwd=cwd).stdout
 
     try:
         top = Path(git("rev-parse", "--show-toplevel").strip())
@@ -136,11 +139,11 @@ def changed_view_files(base: str) -> list[str]:
     except (subprocess.CalledProcessError, FileNotFoundError):
         raise SystemExit(f"BLOCKED — cannot resolve {base!r}, or this is not a git repository")
     names: set[str] = set()
-    for args in (("diff", "--name-only", "--diff-filter=d", f"{base}...HEAD"),
-                 ("diff", "--name-only", "--diff-filter=d", "HEAD"),
-                 ("ls-files", "--others", "--exclude-standard")):
+    for args in (("diff", "--name-only", "-z", "--diff-filter=d", f"{base}...HEAD"),
+                 ("diff", "--name-only", "-z", "--diff-filter=d", "HEAD"),
+                 ("ls-files", "--others", "-z", "--exclude-standard")):
         try:
-            names.update(n for n in git(*args, cwd=top).splitlines() if n.endswith(".swift"))
+            names.update(n for n in git(*args, cwd=top).split("\0") if n.endswith(".swift"))
         except subprocess.CalledProcessError:
             continue
     return sorted(n for n in names if is_view_file(top / n))

@@ -30,8 +30,8 @@
 - [x] **4. Skill `skills/swiftui-view-gate/SKILL.md`** + `skills/swiftui-view-gate/tests/required-sections.test.sh`. Commit 4620825 (sammen med 6: lint E3 krever ruting før skillen kan committes grønn).
 - [x] **5. `xcode-tools` v10 + `verify-and-land`**: nytt avsnitt og anti-pattern i blokken, Phase 1/5b/6 i `verify-and-land`, lint-denylist `v[0-8]` → `v[0-9]` unntatt v10, oppdaterte tester (`test_e2e_executor_marker.py`, `test_lint_adapt_and_blocks.py`, `test_verify_and_land.py`). Commits 8a5779c og 38fe2d9 (den andre retter en test jeg brøt med linjeskift midt i «land nothing»).
 - [x] **6. Routing og README**: rute i `CLAUDE.md`, skill-liste i `README.md`. Commit: `docs(view-gate): routing og README`.
-- [ ] **7. Utgivelse** (pågår): `plugin.json` → 3.12.0, CHANGELOG-oppføring (med hva som ikke er verifisert på Mac og teksten til hook-endringen brukeren bør gjøre), `IDEAS.md` → SHIPPED, fullt sett: lint, pytest, `required-sections`-tester. Commit: `chore(release): 3.12.0 swiftui-view-gate`.
-- [ ] **8. Pitfall-verification** på det samlede resultatet (`scripts/classify-change.py` gir gulvet), funn rettet i egne commits, så push og draft-PR.
+- [x] **7. Utgivelse**: `plugin.json` → 3.12.0, CHANGELOG-oppføring (med hva som ikke er verifisert på Mac og teksten til hook-endringen brukeren bør gjøre), `IDEAS.md` → SHIPPED, fullt sett: lint, pytest, `required-sections`-tester. Commit: `chore(release): 3.12.0 swiftui-view-gate`.
+- [x] **8. Pitfall-verification** (self-pitfall + uavhengig lesing i samme hus; Codex og tredje hus fantes ikke i skybeholderen, se CHANGELOG 3.12.0 «Review») på det samlede resultatet (`scripts/classify-change.py` gir gulvet), funn rettet i egne commits, så push og draft-PR.
 
 ## Utsatt (med utløser)
 

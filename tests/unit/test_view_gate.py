@@ -144,3 +144,15 @@ def test_files_from_a_subdirectory_still_finds_untracked_views(tmp_path):
     r = subprocess.run([sys.executable, str(SCRIPT), "files", "--base", "main"],
                        capture_output=True, text=True, cwd=tmp_path / "App" / "Sources")
     assert r.returncode == 0 and r.stdout.split() == ["App/Sources/New.swift"], (r.stdout, r.stderr)
+
+
+def test_files_finds_non_ascii_names_and_generic_views(tmp_path):
+    git(tmp_path, "init", "-q", "-b", "main")
+    (tmp_path / "Item.swift").write_text(MODEL)
+    git(tmp_path, "add", "."); git(tmp_path, "commit", "-q", "-m", "base")
+    (tmp_path / "Kategori-æøå.swift").write_text(VIEW)
+    (tmp_path / "Generic.swift").write_text("struct Box<T>: View {\n    var body: Never { fatalError() }\n}\n")
+    r = subprocess.run([sys.executable, str(SCRIPT), "files", "--base", "main"],
+                       capture_output=True, text=True, cwd=tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert sorted(r.stdout.split("\n")[:-1]) == ["Generic.swift", "Kategori-æøå.swift"]

@@ -14,10 +14,11 @@ SCRIPT = REPO / "scripts" / "window-shot.sh"
 SKILL_FAKES = {
     "uname": 'echo "${FAKE_UNAME:-Darwin}"',
     "ps": 'if [ -n "${FAKE_COMM:-}" ]; then echo "  $FAKE_COMM"; fi',
-    "swift": 'case "$1" in *.swift) echo "${FAKE_WID:-}";; esac',
+    "swiftc": 'if [ "${FAKE_SWIFTC:-ok}" = fail ]; then echo "error: no such toolchain" >&2; exit 1; fi; '
+              'while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done; '
+              'printf \'#!/bin/bash\\ncase "$1" in id) echo "${FAKE_WID:-}";; uniform) echo "${FAKE_UNIFORM:-varied}";; esac\\n\' > "$out"; chmod +x "$out"',
     "screencapture": 'for a; do last=$a; done; if [ "${FAKE_CAPTURE:-ok}" = fail ]; then exit 1; fi; '
-                     'echo "$@" > "${FAKE_ARGS:-/dev/null}"; head -c "${FAKE_BYTES:-5000}" /dev/zero > "$last"',
-    "sips": 'case "$*" in *pixelWidth*) echo "  pixelWidth: ${FAKE_W:-100}";; *) echo "  pixelHeight: ${FAKE_H:-100}";; esac',
+                     'echo "$@" > "${FAKE_ARGS:-/dev/null}"; head -c 5000 /dev/zero > "$last"',
     "sleep": "true",
     "kill": 'exit "${FAKE_KILL:-0}"',
 }
@@ -128,8 +129,22 @@ def test_screencapture_failure_is_exit_5(env):
 def test_uniform_image_is_exit_5(env):
     project, e = env
     pin(project, "host\n")
-    r = run(project, e, "123", str(project / "a.png"), FAKE_BYTES="200", FAKE_W="800", FAKE_H="600")
+    r = run(project, e, "123", str(project / "a.png"), FAKE_UNIFORM="uniform")
     assert r.returncode == 5 and "Screen Recording" in r.stderr
+
+
+def test_helper_that_cannot_be_built_is_exit_7_not_a_fake_no_window(env):
+    project, e = env
+    pin(project, "host\n")
+    r = run(project, e, "123", str(project / "a.png"), FAKE_SWIFTC="fail")
+    assert r.returncode == 7 and "no such toolchain" in r.stderr
+    assert not Path(e["FAKE_ARGS"]).exists()
+
+
+def test_helper_is_compiled_once_not_per_retry(env):
+    """Interpreting the source on every one of 20 retries costs seconds each."""
+    code = "\n".join(l for l in SCRIPT.read_text().splitlines() if not l.lstrip().startswith("#"))
+    assert code.count("swiftc ") == 1 and "swift \"" not in code
 
 
 def test_script_never_names_a_whole_display_capture():

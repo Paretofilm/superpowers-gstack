@@ -71,11 +71,12 @@ SKILL_DIR='<the base directory the Skill tool printed when this skill loaded>'
 VG="$SKILL_DIR/../../scripts/view-gate.py"; WS="$SKILL_DIR/../../scripts/window-shot.sh"
 [ -f "$VG" ] || VG=$(ls ~/.claude/plugins/cache/*/superpowers-gstack/*/scripts/view-gate.py 2>/dev/null | sort -V | tail -1)
 [ -f "$WS" ] || WS=$(ls ~/.claude/plugins/cache/*/superpowers-gstack/*/scripts/window-shot.sh 2>/dev/null | sort -V | tail -1)
-[ -f "$VG" ] || echo "view-gate.py not found: the view gate cannot be checked (run /plugin update superpowers-gstack)" >&2
-VIEW_FILES=$([ -f "$VG" ] && python3 "$VG" files --base "$DEFAULT_REF")
+VIEW_FILES=$(python3 "$VG" files --base "$DEFAULT_REF") \
+  || { echo "the view gate could not be checked (view-gate.py missing or the base ref does not resolve)" >&2; VIEW_FILES="?"; }
 ```
 
-Keep the list. Empty means the gate does not apply; say nothing about it.
+Keep the list. Empty means the gate does not apply; say nothing about it. A failed check
+is not empty: `?` counts as views touched, and the failure is reported in one line.
 
 ## Phase 2 — resolve the container, the scheme, and the destination
 
@@ -251,7 +252,8 @@ Report one line: which branch, which bundle path, and which commit is on screen.
 
 ## Phase 5b — look yourself first
 
-Only when `VIEW_FILES` is not empty **and** `.gstack/visual-verify` reads exactly `host`:
+Only when `VIEW_FILES` is not empty, `$PID` came out of the Phase 5 proof, **and**
+`.gstack/visual-verify` reads exactly `host`:
 the project owner has said, once, in the repo, that the agent may look at the app it
 launched. The user is the sensor of last resort, so look before asking.
 
