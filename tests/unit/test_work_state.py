@@ -1,4 +1,4 @@
-import importlib.util, json, os, subprocess, sys
+import importlib.util, json, os, plistlib, subprocess, sys
 from pathlib import Path
 import pytest
 from work_state_fixtures import make_repo, add_origin, commit_file, stub_bin, stub_env
@@ -292,9 +292,58 @@ def test_a_clean_pushed_repo_with_no_line_reports_undefined_and_exit_0_or_1_by_r
     repo = make_repo(tmp_path); add_origin(repo)
     code, lines = run_report(repo)
     last = json.loads(lines[-1])
+    assert code == 0          # R9: undefined does not nag; the JSON status carries the truth
     assert last["installable"]["status"] == "undefined"
     assert "installerbar: ikke definert, kjør /adapt" in last["line"]
     assert lines[0].startswith("Tilstand:")
+
+def test_installable_line_only_inside_a_fence_is_undefined(tmp_path):
+    repo = make_repo(tmp_path); commit_file(repo, "CLAUDE.md", "```\nInstallable: plugin\n```\n"); add_origin(repo)
+    assert json.loads(run_report(repo)[1][-1])["installable"]["status"] == "undefined"
+
+def test_installable_line_only_on_a_branch_is_undefined(tmp_path):
+    repo = make_repo(tmp_path); add_origin(repo)
+    subprocess.run(["git", "-C", str(repo), "switch", "-q", "-c", "feat/x"], check=True)
+    commit_file(repo, "CLAUDE.md", "Installable: none\n")
+    assert json.loads(run_report(repo)[1][-1])["installable"]["status"] == "undefined"
+
+def test_an_unexpected_exception_still_ends_with_a_json_object(tmp_path, monkeypatch, capsys):
+    repo = make_repo(tmp_path); add_origin(repo)
+    def boom(parts): raise RuntimeError("kaboom")
+    monkeypatch.setattr(ws, "build_line", boom)
+    assert ws.main(["report", "--repo", str(repo)]) == 1
+    last = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert "kaboom" in last["error"] and "line" in last
+
+def test_remote_without_origin_main_is_never_ok_for_a_plugin(tmp_path, monkeypatch):
+    repo = _plugin_repo(tmp_path)
+    run_git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)
+    run_git("update-ref", "-d", "refs/remotes/origin/main")
+    monkeypatch.setenv("PATH", f"{stub_bin(tmp_path, claude='exit 0')}:{os.environ['PATH']}")
+    r = ws.measure_installable(repo)
+    assert r["status"] == "open" and "main er ikke pushet" in r["detail"]
+
+def test_a_corrupt_plugin_registry_is_not_reported_as_not_installed(tmp_path, monkeypatch):
+    repo = _plugin_repo(tmp_path)
+    reg = tmp_path / "home" / ".claude" / "plugins"; reg.mkdir(parents=True)
+    (reg / "installed_plugins.json").write_text("{broken")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("PATH", f"{stub_bin(tmp_path, claude='exit 0')}:{os.environ['PATH']}")
+    d = ws.measure_installable(repo)["detail"]
+    assert "kunne ikke leses" in d and "ikke installert" not in d
+
+def test_unreadable_info_plist_is_unknown_and_a_different_bundle_id_is_stale(tmp_path):
+    repo = make_repo(tmp_path); commit_file(repo, "CLAUDE.md", "Installable: macos-app App\n"); add_origin(repo)
+    head = _rev(repo, "origin/main")
+    stamp_file = ws.gitdir(repo) / "gstack-installed-app.json"
+    app = _app(tmp_path, "other.id")
+    stamp_file.write_text(json.dumps(_stamp(app, head)))
+    assert ws.measure_installable(repo)["status"] == "stale"
+    (app / "Contents" / "Info.plist").write_text("not a plist")
+    r = ws.measure_installable(repo)
+    assert r["status"] == "unknown" and r["safe_actions"] == []
+    (app / "Contents" / "Info.plist").unlink()
+    assert ws.measure_installable(repo)["status"] == "unknown"
 
 def test_all_green_is_exit_0_and_a_tick_per_part(tmp_path):
     repo = make_repo(tmp_path); commit_file(repo, "CLAUDE.md", "# p\nInstallable: none\n"); add_origin(repo)
@@ -384,9 +433,8 @@ def test_command_kind_exit_code_decides(tmp_path):
 def _app(tmp_path, bundle_id="com.example.app"):
     app = tmp_path / "Apps dir" / "My App.app"
     (app / "Contents").mkdir(parents=True, exist_ok=True)
-    (app / "Contents" / "Info.plist").write_text(
-        '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict>'
-        f"<key>CFBundleIdentifier</key><string>{bundle_id}</string></dict></plist>")
+    with open(app / "Contents" / "Info.plist", "wb") as f:
+        plistlib.dump({"CFBundleIdentifier": bundle_id}, f, fmt=plistlib.FMT_BINARY)
     return app
 
 def _stamp(app, commit):

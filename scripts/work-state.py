@@ -30,6 +30,7 @@ import importlib.util
 import io
 import json
 import os
+import plistlib
 import re
 import shutil
 import subprocess
@@ -432,14 +433,17 @@ def _read_json(path):
 
 
 def _bundle_id(app_path):
+    """(bundle id, None) | (None, reason). plistlib reads XML and binary plists on every platform."""
+    plist = Path(app_path) / "Contents" / "Info.plist"
     try:
-        r = subprocess.run(["plutil", "-extract", "CFBundleIdentifier", "raw",
-                            str(Path(app_path) / "Contents" / "Info.plist")],
-                           capture_output=True, text=True, errors="replace",
-                           stdin=subprocess.DEVNULL, timeout=20)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    return r.stdout.strip() if r.returncode == 0 else None
+        with open(plist, "rb") as f:
+            data = plistlib.load(f)
+    except (OSError, ValueError, plistlib.InvalidFileException) as e:
+        return None, f"kunne ikke lese {plist}: {e}"
+    bid = data.get("CFBundleIdentifier") if isinstance(data, dict) else None
+    if not isinstance(bid, str) or not bid:
+        return None, f"{plist} har ingen CFBundleIdentifier"
+    return bid, None
 
 
 def stamp_is_current(repo, stamp, head) -> bool:
@@ -454,7 +458,7 @@ def stamp_is_current(repo, stamp, head) -> bool:
         if not isinstance(app, str) or not app or not Path(app).is_dir():
             return False
         want = stamp.get("bundle_id")
-        return bool(want) and _bundle_id(app) == want
+        return bool(want) and _bundle_id(app)[0] == want
     except (OSError, ValueError):
         return False
 
@@ -464,13 +468,14 @@ def _inst(kind, status, detail, items=(), safe=(), ask=()):
 
 
 def _line_ref(land, repo):
-    """The ref the Installable: line is read from: origin/<default>, else the local default branch."""
+    """(ref, has_origin_ref, remote_without_it): the line is read from origin/<default>; the local
+    default branch is the fallback only when there is no remote at all."""
     main = land.default_branch(repo)
     if not main:
-        return None, False
+        return None, False, False
     if land.git(repo, "show-ref", "--verify", "--quiet", f"refs/remotes/origin/{main}").returncode == 0:
-        return f"origin/{main}", True
-    return main, False
+        return f"origin/{main}", True, False
+    return main, False, land.git(repo, "remote", "get-url", "origin").returncode == 0
 
 
 def measure_installable(repo) -> dict:
@@ -478,7 +483,7 @@ def measure_installable(repo) -> dict:
     land = _load_land()
     repo = Path(repo)
     try:
-        ref, has_origin = _line_ref(land, repo)
+        ref, has_origin, unpushed = _line_ref(land, repo)
         if ref is None:
             return _inst("undefined", "unknown", "fant ingen standardgren å lese Installable: fra")
         head = land.out(repo, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
@@ -490,6 +495,8 @@ def measure_installable(repo) -> dict:
         kind, arg = parsed
         if kind == "none":
             return _inst("none", "na", "–")
+        if unpushed:    # a remote exists but origin/<main> does not: nothing is landed there yet
+            return _inst(kind, "open", "main er ikke pushet")
         if kind == "macos-app":
             return _installable_app(repo, head, ref)
         if kind == "plugin":
@@ -516,6 +523,11 @@ def _installable_app(repo, head, ref):
     if stamp.get("commit") != head:
         return _inst("macos-app", "stale", f"installert {str(stamp.get('commit', '?'))[:7]}, {ref} er {head[:7]}",
                      safe=safe, ask=ask)
+    app = stamp.get("app_path")
+    if isinstance(app, str) and app and Path(app).is_dir():
+        bid, berr = _bundle_id(app)
+        if berr:    # cannot tell: no install proposal until the app can be read
+            return _inst("macos-app", "unknown", berr, ask=ask)
     if not stamp_is_current(repo, stamp, head):
         return _inst("macos-app", "stale", "appen mangler eller har en annen bundle-ID enn stempelet",
                      safe=safe, ask=ask)
@@ -538,14 +550,18 @@ def _extract_tree(repo, ref, dest):
 
 
 def _installed_plugin_version(name):
-    reg, _ = _read_json(Path(os.path.expanduser("~")) / ".claude" / "plugins" / "installed_plugins.json")
+    """(version | None, problem | None). A registry that exists but cannot be read is a problem, not 'absent'."""
+    path = Path(os.path.expanduser("~")) / ".claude" / "plugins" / "installed_plugins.json"
+    reg, err = _read_json(path)
+    if err:
+        return None, err
     plugins = reg.get("plugins") if reg else None
     if not isinstance(plugins, dict):
-        return None
+        return None, None
     for key, entries in plugins.items():
         if key.startswith(f"{name}@") and isinstance(entries, list) and entries and isinstance(entries[0], dict):
-            return entries[0].get("version")
-    return None
+            return entries[0].get("version"), None
+    return None, None
 
 
 def _last_line(*texts):
@@ -587,8 +603,8 @@ def _installable_plugin(land, repo, ref, has_origin):
             n = _count(land, repo, f"{ref}..{main}")
             if n:
                 return _inst("plugin", "open", f"lokal {main} har {n} commits som ikke er pushet")
-    installed = _installed_plugin_version(name) if isinstance(name, str) else None
-    mine = f"du har {installed}" if installed else "ikke installert"
+    installed, problem = _installed_plugin_version(name) if isinstance(name, str) else (None, None)
+    mine = "installert versjon kunne ikke leses" if problem else (f"du har {installed}" if installed else "ikke installert")
     return _inst("plugin", "ok", f"{version} på main, {mine}")
 
 
@@ -650,25 +666,34 @@ def cmd_report(args) -> int:
     if not repo.is_dir() or land.git(repo, "rev-parse", "--git-dir").returncode:
         print(f"{repo} er ikke et git-repo", file=sys.stderr)
         return 2
-    fetched = _UNFETCHED
-    if land.git(repo, "remote", "get-url", "origin").returncode == 0:
-        fetched = fetch_origin(repo)    # once; the pushed part reuses the outcome
-    parts = {
-        "committed": _guard(measure_committed, repo),
-        "pushed": _guard(measure_pushed, repo, fetched),
-        "tidy": _guard(measure_tidy, repo),
-        "installable": _guard(measure_installable, repo),
-    }
-    parts["installable"].setdefault("kind", "undefined")
-    safe, ask = [], []
-    for key in ("pushed", "tidy", "installable"):
-        safe += parts[key].get("safe_actions", [])
-    for key in ("committed", "pushed", "tidy", "installable"):
-        ask += parts[key].get("ask", [])
-    line = build_line(parts)
+    parts, line = {}, ""
+    try:
+        fetched = _UNFETCHED
+        if land.git(repo, "remote", "get-url", "origin").returncode == 0:
+            fetched = fetch_origin(repo)    # once; the pushed part reuses the outcome
+        parts = {
+            "committed": _guard(measure_committed, repo),
+            "pushed": _guard(measure_pushed, repo, fetched),
+            "tidy": _guard(measure_tidy, repo),
+            "installable": _guard(measure_installable, repo),
+        }
+        parts["installable"].setdefault("kind", "undefined")
+        safe, ask = [], []
+        for key in ("pushed", "tidy", "installable"):
+            safe += parts[key].get("safe_actions", [])
+        for key in ("committed", "pushed", "tidy", "installable"):
+            ask += parts[key].get("ask", [])
+        line = build_line(parts)
+        payload = json.dumps({"line": line, **parts, "safe_actions": safe, "ask": ask}, ensure_ascii=False)
+    except Exception as e:   # the last stdout line must stay a JSON object, whatever happened
+        line = line or "Tilstand: ukjent (rapporten feilet)"
+        if not args.json_only:
+            print(line)
+        print(json.dumps({"line": line, "error": f"{type(e).__name__}: {e}"}, ensure_ascii=False))
+        return 1
     if not args.json_only:
         print(line)
-    print(json.dumps({"line": line, **parts, "safe_actions": safe, "ask": ask}, ensure_ascii=False))
+    print(payload)
     return 1 if any(p.get("status") in ("open", "unknown", "stale") for p in parts.values()) else 0
 
 
