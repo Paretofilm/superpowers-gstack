@@ -1273,6 +1273,112 @@ def test_none_written_from_a_linked_worktree_is_flagged(tmp_path):
     assert not any("linked worktree" in n for n in last_json(p)["notes"])
 
 
+# --- Installable: the project's own line, written once (work-state) -------------------
+
+def test_installable_is_written_once_under_a_heading_the_project_owns(tmp_path):
+    proj = project(tmp_path, "# Kvitt\n\nSome notes.\n")
+    p = run(proj, *WEB_SETS, "--installable", "plugin")
+    text = (proj / "CLAUDE.md").read_text()
+    assert "## Kvitt install\n\nInstallable: plugin\n" in text
+    assert any(c.startswith("Installable: added") for c in last_json(p)["changes"])
+    p = run(proj, *WEB_SETS, "--installable", "none")
+    assert (proj / "CLAUDE.md").read_text() == text, "an existing line is the project's"
+    pres = [s for s in last_json(p)["preserved"] if s.startswith("Installable:")]
+    assert pres and "kept as-is" in pres[0] and "--installable ignored" in pres[0]
+
+
+@pytest.mark.parametrize("value", ["macos-app Kvitt App", "command ./scripts/check-installed.sh", "none"])
+def test_every_valid_installable_shape_is_written_as_given(tmp_path, value):
+    proj = project(tmp_path, "# Kvitt\n")
+    run(proj, *WEB_SETS, "--installable", value)
+    assert f"## Kvitt install\n\nInstallable: {value}\n" in (proj / "CLAUDE.md").read_text()
+
+
+def test_an_installable_line_under_the_projects_own_heading_is_kept(tmp_path):
+    proj = project(tmp_path, "# Kvitt\n\n## Kommandoer\n\nInstallable: macos-app Kvitt\n")
+    p = run(proj, *WEB_SETS, "--installable", "none")
+    text = (proj / "CLAUDE.md").read_text()
+    assert re.findall(r"^Installable:.*$", text, re.M) == ["Installable: macos-app Kvitt"]
+    assert "install\n\nInstallable" not in text
+    assert not any("Installable" in n for n in last_json(p)["notes"]), "a valid line needs no note"
+
+
+def test_an_installable_line_inside_a_fence_does_not_count(tmp_path):
+    proj = project(tmp_path, "# Kvitt\n\n```\nInstallable: plugin\n```\n")
+    run(proj, *WEB_SETS, "--installable", "none")
+    assert "## Kvitt install\n\nInstallable: none\n" in (proj / "CLAUDE.md").read_text()
+
+
+def test_an_installable_line_inside_a_managed_section_does_not_count(tmp_path):
+    proj = project(tmp_path)
+    run(proj, *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    at = text.index("\n", text.index("<!-- gstack-worktrunk-v4 -->"))
+    (proj / "CLAUDE.md").write_text(text[:at] + "\n\nInstallable: plugin\n" + text[at:])
+    run(proj, *WEB_SETS, "--installable", "none")
+    assert "install\n\nInstallable: none\n" in (proj / "CLAUDE.md").read_text()
+
+
+def test_an_invalid_existing_installable_line_is_kept_with_a_note(tmp_path):
+    """The line is the project's: /adapt never rewrites it, not even to fix it. It says
+    why work-state reads it as undefined instead of adding a second line beside it."""
+    proj = project(tmp_path, "# Kvitt\n\n## Kommandoer\n\nInstallable: macos-app\n")
+    p = run(proj, *WEB_SETS, "--installable", "plugin")
+    text = (proj / "CLAUDE.md").read_text()
+    assert re.findall(r"^Installable:.*$", text, re.M) == ["Installable: macos-app"]
+    assert any("not one of the four shapes" in n for n in last_json(p)["notes"])
+
+
+def test_without_the_flag_no_installable_line_is_written(tmp_path):
+    proj = project(tmp_path)
+    p = run(proj, *WEB_SETS)
+    assert not re.search(r"^Installable:", (proj / "CLAUDE.md").read_text(), re.M)
+    assert not any(s.startswith("Installable:") for s in last_json(p)["preserved"])
+
+
+@pytest.mark.parametrize("value", ["", "   ", "plugin\nnone", "plugin\rnone", "command x <!-- y",
+                                   "macos-app", "command", "plugin extra", "none of it", "app Kvitt"])
+def test_a_bad_installable_value_refuses_and_writes_nothing(tmp_path, value):
+    proj = project(tmp_path)
+    p = run(proj, *WEB_SETS, "--installable", value, expect=2)
+    assert "USAGE ERROR" in p.stderr and "--installable" in p.stderr
+    assert not (proj / "CLAUDE.md").exists()
+
+
+def test_a_bad_installable_value_leaves_an_existing_file_untouched(tmp_path):
+    proj = project(tmp_path, "# Kvitt\n")
+    run(proj, *WEB_SETS, "--installable", "macos-app", expect=2)
+    assert (proj / "CLAUDE.md").read_text() == "# Kvitt\n"
+
+
+@pytest.mark.parametrize("own_heading", ["## Kvitt install\n", "Kvitt install\n---\n"])
+def test_an_install_heading_the_project_already_wrote_gets_the_line_not_a_twin(tmp_path, own_heading):
+    proj = project(tmp_path, f"# Kvitt\n\n{own_heading}\nBuilt with the Release scheme.\n")
+    run(proj, *WEB_SETS, "--installable", "macos-app Kvitt")
+    text = (proj / "CLAUDE.md").read_text()
+    assert text.lower().count("kvitt install") == 1
+    assert f"{own_heading.rstrip(chr(10))}\n\nInstallable: macos-app Kvitt\n" in text
+    assert "Built with the Release scheme." in text
+
+
+def test_installable_and_local_state_are_two_headings(tmp_path):
+    proj = project(tmp_path, "# Kvitt\n")
+    run(proj, *WEB_SETS, "--local-state", "none", "--installable", "plugin")
+    text = (proj / "CLAUDE.md").read_text()
+    assert "## Kvitt local state\n\nLocal state: none\n" in text
+    assert "## Kvitt install\n\nInstallable: plugin\n" in text
+
+
+def test_the_written_line_is_what_work_state_reads(tmp_path):
+    """One parser: adapt validates through work-state.py's own `parse_installable`."""
+    spec = importlib.util.spec_from_file_location("work_state_for_adapt", REPO / "scripts" / "work-state.py")
+    ws = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ws)
+    proj = project(tmp_path, "# Kvitt\n")
+    run(proj, *WEB_SETS, "--installable", "macos-app Kvitt App")
+    assert ws.parse_installable((proj / "CLAUDE.md").read_text()) == ("macos-app", "Kvitt App")
+
+
 # --- 3.11.0: the fresh path — an empty folder gets CLAUDE.md with no questions -------
 
 def fresh_project(tmp_path, *files: str, git: bool = True) -> Path:
@@ -1440,6 +1546,22 @@ def test_fresh_honours_explicit_values_over_its_defaults(tmp_path):
     text = (proj / "CLAUDE.md").read_text()
     assert "domain sensitivity: high" in text and "Local state: data/" in text
     assert "high sensitivity" in last_json(p)["assumed"] and "local state `data/`" in last_json(p)["assumed"]
+
+
+def test_fresh_writes_no_installable_line_and_says_so(tmp_path):
+    """Nothing to install in an empty folder: no line, so work-state says «ikke definert,
+    kjør /adapt» and the fill-in after the first spec asks."""
+    proj = fresh_project(tmp_path)
+    p = run(proj, "--fresh")
+    assert not re.search(r"^Installable:", (proj / "CLAUDE.md").read_text(), re.M)
+    assert "medium sensitivity, Installable not set — " in last_json(p)["assumed"]
+
+
+def test_fresh_honours_an_explicit_installable(tmp_path):
+    proj = fresh_project(tmp_path)
+    p = run(proj, "--fresh", "--installable", "none")
+    assert "## proj install\n\nInstallable: none\n" in (proj / "CLAUDE.md").read_text()
+    assert "Installable `none`" in last_json(p)["assumed"]
 
 
 def test_fresh_stages_the_pins_through_an_ignored_gstack_folder(tmp_path):

@@ -108,7 +108,7 @@ sensitivity, `Local state: none`, and a `## Project` section that holds only
 context skill (vibe) and `docs/superpowers/`; and prints its report with one extra line
 at the top:
 
-> Assumed: web track, vibe workflow, local explainer, no local state, medium sensitivity — change any of them in .gstack/ or CLAUDE.md, or run /superpowers-gstack:adapt again after the first spec.
+> Assumed: web track, vibe workflow, local explainer, no local state, medium sensitivity, Installable not set — change any of them in .gstack/ or CLAUDE.md, or run /superpowers-gstack:adapt again after the first spec.
 
 Relay that line and the report, `git add` the context skill the report names, and go
 straight on — no "is this right?", no "shall I proceed?", no offer of a review (Step 6's
@@ -119,7 +119,9 @@ about the product, not about the setup.
 
 Why these defaults and not questions: each is the answer the gates below mark
 `(recommended)`, and each costs one line to change — `.gstack/workflow`,
-`.gstack/explainer`, the `Local state:` line. The sensitivity is `medium`, not `low`,
+`.gstack/explainer`, the `Local state:` line. No `Installable:` line is written: an
+empty folder has nothing to install, and `/superpowers-gstack:work-state` shows the
+missing line as not defined until the fill-in asks (Step 4, item 8). The sensitivity is `medium`, not `low`,
 because it is unknown until the stack is: `medium` routes coding to sonnet, which is
 right for the common case, and the fill-in below corrects it; `low` could send DSP code
 to haiku before anyone has seen that it is DSP. The stack, test command, deploy target
@@ -190,7 +192,10 @@ and Steps 2–3 collapse into one confirmation with the answer in it:
 
 > I read this as a **[type]** on **[stack]**, tests via `[command]`, [deployed to X /
 > not deployed], [browser UI at X / none], sensitivity **[level]** because [reason].
-> Right?
+> Installed means **[item 8's recommendation]**. Right?
+
+(Item 8's question rides along in this one confirmation instead of a stop of its own;
+leave the sentence out when CLAUDE.md already has an `Installable:` line.)
 
 **STOP HERE** (this is the one question of a fill-in). Then write the section to
 `.gstack/adapt-project.md` — `## Project` with `### Tech Stack / Testing / QA URL /
@@ -201,7 +206,8 @@ track), nothing else — and run:
 
 ```bash
 python3 "$SCRIPT" --project-section .gstack/adapt-project.md \
-  --set 'DOMAIN_SENSITIVITY=<level>' [--set 'IOS_SIMULATOR=…' --set 'DEVELOPMENT_TEAM=…']
+  --set 'DOMAIN_SENSITIVITY=<level>' [--set 'IOS_SIMULATOR=…' --set 'DEVELOPMENT_TEAM=…'] \
+  [--installable '<answer>']
 ```
 
 The script replaces the pending section once, drops the marker (the section is the
@@ -369,6 +375,35 @@ merge this run does not do.
 
    A run with nobody to answer writes no file, which means `local`.
 
+8. **Installable.** What "installed" means for this project, so
+   `/superpowers-gstack:work-state` can say whether the landed version is the one in
+   use. If CLAUDE.md already has a line starting `Installable:` outside the plugin's
+   sections and code blocks, the script keeps it; do not re-ask. Otherwise pick the
+   recommendation by these rules, in order:
+
+   - `.claude-plugin/plugin.json` exists → `plugin`
+   - the track is `macos` or `both`, and a scheme's `SUPPORTED_PLATFORMS` contains
+     `macosx` (`xcodebuild -showBuildSettings -scheme <Scheme> | grep SUPPORTED_PLATFORMS`
+     per scheme from `xcodebuild -list`) → `macos-app <Scheme>`; with several such
+     schemes, name the one that belongs in the Dock and list the others as options
+   - otherwise → `none`, or `command <cmd>` when the project has a read-only check of
+     its own that exits 0 when the installed copy is current (an iOS app, a CLI on
+     `PATH`)
+
+   Then ask **once** with `AskUserQuestion`:
+
+   > What should count as "installed" once work lands? I'll check it after every landing and show it in the status line.
+   >
+   > - **`<recommendation>`** (recommended) — [one line on what it checks: the app in `/Applications` built from `origin/main`; the plugin validates and its version has a CHANGELOG entry; the command exits 0; nothing to install]
+   > - **[the other plausible shape]** — [what it checks]
+
+   Pass the answer as `--installable '<answer>'` (`plugin`, `none`,
+   `macos-app <Scheme>` or `command <cmd>`; anything else is refused with exit 2 before
+   any write). The script writes `Installable: …` under `## <project> install`, a heading
+   the project owns from then on, and never edits it again: a wrong answer is corrected
+   by editing that line by hand. A run with nobody to answer passes no flag and writes no
+   line, and the Step 0 short path does not ask at all.
+
 ### Step 5: Dry run, then ask
 
 ```bash
@@ -376,7 +411,8 @@ SKILL_DIR='<the base directory the Skill tool printed>'
 SCRIPT="$SKILL_DIR/../../scripts/adapt-claude-md.py"
 python3 "$SCRIPT" --dry-run --mkdirs \
   --set 'DOMAIN_SENSITIVITY=<value>' [--set 'IOS_SIMULATOR=<value>' --set 'DEVELOPMENT_TEAM=<value>'] \
-  [--routing-file .gstack/adapt-routing.md] [--no-model-routing] [--local-state '<answer>']
+  [--routing-file .gstack/adapt-routing.md] [--no-model-routing] [--local-state '<answer>'] \
+  [--installable '<answer>']
 ```
 
 Exit 2 is a refusal with the reason on stderr (`BLOCKED`, `UNRESOLVED PLACEHOLDER`,

@@ -23,7 +23,10 @@ touches the file, deterministically:
   8. local      `--local-state` writes the project's `Local state:` line under a
                 heading the project then owns, only when no such line exists
                 outside the managed sections; an existing line is never touched
-  9. verify     every removed line the new block does not carry verbatim is
+     install    `--installable` writes the project's `Installable:` line the same
+                way, under `## <project> install`; the value is validated by
+                work-state.py's own parser before any write
+  9. verify    every removed line the new block does not carry verbatim is
                 listed, in full, under "Removed (not plugin prose)"
 
 A FRESH project — no CLAUDE.md, no package file, fewer than five files outside
@@ -35,6 +38,8 @@ the short path: `--fresh` writes the pins `.gstack/workflow`
 sensitivity to `medium`, the local state to `none` and the routing to
 `blocks/routing-default.md`, whose `## Project` carries
 `<!-- gstack-project-pending -->`, and says in one `Assumed:` line what it chose.
+It writes no `Installable:` line (an empty folder has nothing to install yet);
+the `Assumed:` line says so.
 `--project-section <file>` later replaces that pending section exactly once (the
 marker goes with it); without the marker it refuses, because the section is then
 the project's own. `--fresh` on a project that is not fresh refuses too.
@@ -500,6 +505,7 @@ class Context:
     project: str
     profile: str = "classic"
     local_state: str | None = None   # --local-state: the answer to adapt's one question, or None
+    installable: str | None = None   # --installable: plugin | none | macos-app <Scheme> | command <cmd>, or None
     project_section: str | None = None   # --project-section: the text that replaces the pending `## Project`
     seed: list[str] = field(default_factory=list)   # lines a fresh file starts from (the H1)
     needed: set[str] = field(default_factory=set)   # placeholders in blocks emitted this run
@@ -1117,6 +1123,68 @@ def apply_local_state(lines: list[str], ctx: Context, report: Report) -> list[st
     return _append(lines, [heading, "", line])
 
 
+# Any line starting with the label counts as the project's, valid or not: /adapt never
+# rewrites it, so an invalid one is reported, not "fixed" with a second line beside it.
+INSTALLABLE_LABEL_RE = re.compile(r"^Installable:")
+WORK_STATE = Path(__file__).with_name("work-state.py")
+INSTALLABLE_SHAPES = "`plugin`, `none`, `macos-app <Scheme>` or `command <cmd>`"
+_parse_installable = None
+
+
+def parse_installable(text: str):
+    """work-state.py's own parser (one reader of the line, not two copies of its regex),
+    loaded by path because the file name is hyphenated."""
+    global _parse_installable
+    if _parse_installable is None:
+        import importlib.util
+        if not WORK_STATE.is_file():
+            raise Refusal(f"UNREADABLE: {WORK_STATE} is missing — run `/plugin update superpowers-gstack`")
+        spec = importlib.util.spec_from_file_location("work_state_for_adapt", WORK_STATE)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _parse_installable = mod.parse_installable
+    return _parse_installable(text)
+
+
+def validate_installable(value: str) -> str:
+    value = value.strip()
+    if (not value or "\n" in value or "\r" in value or "<!--" in value
+            or parse_installable(f"Installable: {value}") in (None, "conflict")):
+        raise Refusal(f"USAGE ERROR: --installable takes one line, one of {INSTALLABLE_SHAPES}; "
+                      f"got {value!r}")
+    return value
+
+
+def apply_installable(lines: list[str], ctx: Context, report: Report) -> list[str]:
+    """The project's own `Installable:` line, written once like `Local state:`: outside
+    every managed section and fence, under `## <project> install`, never edited again.
+    work-state reads it from origin/main; a missing line reads as «ikke definert»."""
+    mask = fence_mask(lines)
+    managed = _managed_ranges(lines)
+    found = [i for i, line in enumerate(lines)
+             if INSTALLABLE_LABEL_RE.match(line) and not mask[i] and not any(s <= i < e for s, e in managed)]
+    if found:
+        report.preserved.append("Installable: the project's line is present, kept as-is"
+                                + (" (--installable ignored)" if ctx.installable is not None else ""))
+        parsed = parse_installable("\n".join(lines[i] for i in found))
+        if parsed is None or parsed == "conflict" or any(parse_installable(lines[i]) is None for i in found):
+            report.notes.append(f"an `Installable:` line is not one of the four shapes ({INSTALLABLE_SHAPES}) "
+                                f"or two lines disagree: work-state reads it as undefined — correct it by hand")
+        return lines
+    if ctx.installable is None:
+        return lines
+    heading = f"## {ctx.project} install"
+    line = f"Installable: {ctx.installable}"
+    report.changes.append(f"Installable: added `{line}` under `{heading}` (the project's section from now "
+                          f"on; /adapt never edits it — correct the line by hand if it is wrong)")
+    own = next((i for i, lvl, raw in headings(lines)
+                if lvl == 2 and heading_text(raw).lower() == f"{ctx.project} install".lower()), None)
+    if own is not None:
+        below = own + 2 if own + 1 < len(lines) and SETEXT_H2_RE.match(lines[own + 1]) else own + 1
+        return _splice(lines, below, below, ["", line])
+    return _append(lines, [heading, "", line])
+
+
 def merge(text: str | None, ctx: Context) -> tuple[str, Report]:
     report = Report()
     lines = text.split("\n") if text else list(ctx.seed)
@@ -1139,6 +1207,7 @@ def merge(text: str | None, ctx: Context) -> tuple[str, Report]:
         lines = apply_block(lines, blk, ctx, report)
     lines = apply_model_routing(lines, ctx, report)
     lines = apply_local_state(lines, ctx, report)
+    lines = apply_installable(lines, ctx, report)
     open_at = unclosed_fence(lines)
     if open_at is not None:
         kind, at = open_at
@@ -1370,6 +1439,9 @@ def main(argv=None) -> int:
     ap.add_argument("--project-name")
     ap.add_argument("--local-state", metavar="PATHS|none",
                     help="the project's files outside git, e.g. 'data/, settings.json', or 'none'")
+    ap.add_argument("--installable", metavar="KIND",
+                    help="what 'installed' means here: 'plugin', 'none', 'macos-app <Scheme>' or 'command <cmd>'; "
+                         "written once under `## <project> install`, kept on later runs")
     ap.add_argument("--fresh", action="store_true",
                     help="the short path for an empty folder: pins, defaults and a pending `## Project`, no questions; "
                          "refuses when the project is not fresh")
@@ -1410,6 +1482,7 @@ def main(argv=None) -> int:
             local_state = a.local_state.strip()
             if not local_state or "\n" in local_state or "\r" in local_state or "<!--" in local_state:
                 raise Refusal("USAGE ERROR: --local-state takes one line — the paths git ignores, or `none`")
+        installable = validate_installable(a.installable) if a.installable is not None else None
         pre_notes = Report()
         pre_notes.fresh, pre_notes.fresh_reason = fresh, fresh_reason
         # the pins a --fresh run writes: decided here, read as if written, but written
@@ -1439,8 +1512,9 @@ def main(argv=None) -> int:
             explainer = pending_pins["explainer"]
         if a.fresh:
             state = "no local state" if local_state == "none" else f"local state `{local_state}`"
+            inst = "Installable not set" if installable is None else f"Installable `{installable}`"
             pre_notes.assumed = (f"Assumed: {track} track, {profile} workflow, {explainer} explainer, {state}, "
-                                 f"{sets['DOMAIN_SENSITIVITY']} sensitivity — change any of them in .gstack/ or "
+                                 f"{sets['DOMAIN_SENSITIVITY']} sensitivity, {inst} — change any of them in .gstack/ or "
                                  f"CLAUDE.md, or run /superpowers-gstack:adapt again after the first spec.")
         if track in NATIVE:
             # the pin is authoritative; --set may only agree with it or stand in for it
@@ -1480,7 +1554,8 @@ def main(argv=None) -> int:
         display = a.project_name or (main_checkout_name(project) if text is None else project_name(text, project))
         ctx = Context(blocks=blocks, version=version, track=track, sets=sets, rescue=set(a.rescue),
                       routing=routing, model_routing=not a.no_model_routing, project=display,
-                      profile=profile, local_state=local_state, project_section=project_section,
+                      profile=profile, local_state=local_state, installable=installable,
+                      project_section=project_section,
                       # a fresh file starts with its title, so the next run reads the same name off the H1
                       seed=[f"# {display}", ""] if a.fresh and text is None else [])
         ctx_skill, content, skill_file = None, None, None

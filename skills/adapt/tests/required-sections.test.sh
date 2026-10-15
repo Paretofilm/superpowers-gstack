@@ -29,6 +29,11 @@ REQUIRED=(
   "### Routing for this stack"
   "**Workflow profile.**"
   "**Explainer page.**"
+  # work-state: one question, written once under `## <project> install`
+  "**Installable.**"
+  "--installable"
+  "## <project> install"
+  "Installable not set"
   "### Step 5: Dry run, then ask"
   "### Step 6: Apply and report"
   "**Removed (not plugin prose):**"
