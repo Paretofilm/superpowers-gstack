@@ -1124,6 +1124,32 @@ def test_sigint_is_stored_as_avbrutt_too(tmp_path):
     code, out = run_install(repo, stubs, apps)
     assert code == 70 and "avbrutt" in out["reason"] and _stored(repo)["code"] == 70
 
+def test_main_moving_as_the_swap_section_begins_is_still_11(tmp_path, monkeypatch, capsys):   # third house P2
+    """The HEAD re-read sits inside the swap's critical section, right before _put_in_place:
+    main moved there (here: as the section is entered) is caught, nothing swapped or stamped."""
+    import contextlib
+    repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"; write_app(apps / "Fake App.app")
+    marker = apps / "Fake App.app" / "old.txt"; marker.write_text("old")
+    stubs = stub_bin(tmp_path)
+    for k, v in {**stub_env(tmp_path), "PATH": f"{stubs}:{os.environ['PATH']}"}.items():
+        monkeypatch.setenv(k, v)
+    real, moved = ws._critical, []
+
+    @contextlib.contextmanager
+    def moving(raise_pending=True):
+        if not moved:                        # the first critical section of a run is the swap
+            moved.append(1)
+            subprocess.run(["git", "-C", str(repo), "commit", "-q", "--allow-empty", "-m", "moved"], check=True)
+        with real(raise_pending):
+            yield
+    monkeypatch.setattr(ws, "_critical", moving)
+    code = ws.main(["install", "--repo", str(repo), "--applications-dir", str(apps), "--replace-unstamped"])
+    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert moved and code == 11 and out["code"] == 11
+    assert marker.read_text() == "old" and not (apps / "Fake App.app" / "built.txt").exists()
+    assert [p.name for p in apps.iterdir()] == ["Fake App.app"]
+    assert not (ws.gitdir(repo) / "gstack-installed-app.json").exists()
+
 def test_a_current_install_still_retries_a_hidden_leftover(tmp_path):                 # M1
     repo = app_repo(tmp_path); apps = tmp_path / "Applications dir"
     assert run_install(repo, stub_bin(tmp_path), apps)[0] == 0

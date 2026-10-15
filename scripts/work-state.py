@@ -1568,11 +1568,13 @@ def deliver(args, info, scheme, apps: Path, gd: Path, primary: Path, head: str) 
         plan = ask_questions(args, info, apps, gd, primary, head)    # the build took time: ask again
         carry_out_quit(bid, plan)
         _require_writable(apps)
-        now = _load_land().out(primary, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
-        if now != head:                                             # immediately before the swap
-            raise Stop(11, f"main flyttet seg under bygget ({head[:7]} → {(now or 'ukjent')[:7]}); "
-                           "ingenting er byttet eller stemplet", state=f"bygget {head}, HEAD nå {now}")
         with _critical():                       # R4': swap and final check are one unit
+            # HEAD is read here, inside the section and right before the swap, so no step of ours
+            # (and no signal) lies between this check and _put_in_place.
+            now = _load_land().out(primary, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+            if now != head:
+                raise Stop(11, f"main flyttet seg under bygget ({head[:7]} → {(now or 'ukjent')[:7]}); "
+                               "ingenting er byttet eller stemplet", state=f"bygget {head}, HEAD nå {now}")
             _put_in_place(tmp, target, st)
             try:
                 verify_copy(target, bid)
