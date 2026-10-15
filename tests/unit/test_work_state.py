@@ -109,3 +109,99 @@ def test_pushed_on_main_ahead_is_ask_only_and_listed_once(tmp_path):
     r = ws.measure_pushed(repo)
     assert r["status"] == "open" and r["safe_actions"] == []
     assert len(r["ask"]) == 1 and len(r["items"]) == 1
+
+
+# --- measure_tidy: mapper ryddet ---------------------------------------------------------
+# `wt -C <main> remove <branch>` names the branch, not the folder, so a removal is
+# recognised by the branch (or by the folder in the no-`wt` fallback).
+
+def make_landed_branch(repo, name="feat/done"):
+    git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True)
+    git("switch", "-q", "-c", name); commit_file(repo, f"{name.replace('/', '_')}.txt", "x")
+    git("switch", "-q", "main"); git("merge", "-q", "--ff-only", name); git("push", "-q", "origin", "main")
+
+def removes(r, wt, branch):
+    return any(str(wt) in " ".join(a) or branch in a for a in r["safe_actions"])
+
+def test_a_landed_branch_with_a_commit_is_deleted_with_dash_d(tmp_path):
+    repo = make_repo(tmp_path); add_origin(repo); make_landed_branch(repo)
+    r = ws.measure_tidy(repo)
+    assert ["git", "-C", str(repo), "branch", "-d", "feat/done"] in r["safe_actions"]
+
+def test_a_branch_made_seconds_ago_from_main_is_not_proven_landed(tmp_path):    # Review Focus 3
+    repo = make_repo(tmp_path); add_origin(repo)
+    subprocess.run(["git", "-C", str(repo), "branch", "feat/fresh"], check=True)
+    r = ws.measure_tidy(repo)
+    assert not any("feat/fresh" in " ".join(a) for a in r["safe_actions"])
+    assert any("feat/fresh" in a for a in r["ask"])
+
+def test_a_squash_merged_branch_is_asked_about_never_deleted(tmp_path):
+    repo = make_repo(tmp_path); add_origin(repo)
+    g = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True)
+    g("switch", "-q", "-c", "feat/sq"); commit_file(repo, "s.txt", "s"); g("switch", "-q", "main")
+    g("merge", "-q", "--squash", "feat/sq"); g("commit", "-q", "-m", "squash"); g("push", "-q", "origin", "main")
+    r = ws.measure_tidy(repo)
+    assert not any("-D" in a for a in r["safe_actions"])
+    assert any("feat/sq" in a for a in r["ask"])
+
+def test_a_clean_landed_worktree_is_removed_but_not_the_one_the_session_stands_in(tmp_path):
+    repo = make_repo(tmp_path); add_origin(repo); wt = tmp_path / "wt done"
+    g = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True)
+    g("worktree", "add", "-q", "-b", "feat/w", str(wt)); commit_file(wt, "w.txt", "w")
+    g("merge", "-q", "--ff-only", "feat/w"); g("push", "-q", "origin", "main")
+    assert removes(ws.measure_tidy(repo), wt, "feat/w")
+    assert not removes(ws.measure_tidy(wt), wt, "feat/w")   # standing in it
+
+def test_ignored_non_cache_files_keep_a_worktree_in_ask(tmp_path):              # Review Focus 4
+    repo = make_repo(tmp_path); add_origin(repo); wt = tmp_path / "wt env"
+    g = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True)
+    commit_file(repo, ".gitignore", ".env\n"); g("push", "-q", "origin", "main")
+    g("worktree", "add", "-q", "-b", "feat/e", str(wt)); commit_file(wt, "e.txt", "e")
+    g("merge", "-q", "--ff-only", "feat/e"); g("push", "-q", "origin", "main")
+    (wt / ".env").write_text("SECRET=1")
+    r = ws.measure_tidy(repo)
+    assert not removes(r, wt, "feat/e") and any(str(wt) in a for a in r["ask"])
+
+def test_only_cache_content_counts_as_clean(tmp_path):
+    repo = make_repo(tmp_path); add_origin(repo); wt = tmp_path / "wt cache"
+    g = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True)
+    commit_file(repo, ".gitignore", "node_modules/\n"); g("push", "-q", "origin", "main")
+    g("worktree", "add", "-q", "-b", "feat/c", str(wt)); commit_file(wt, "c.txt", "c")
+    g("merge", "-q", "--ff-only", "feat/c"); g("push", "-q", "origin", "main")
+    (wt / "node_modules").mkdir(); (wt / "node_modules" / "x.js").write_text("1")
+    assert removes(ws.measure_tidy(repo), wt, "feat/c")
+
+def test_a_leftover_sibling_folder_with_other_content_is_asked_about(tmp_path):
+    repo = make_repo(tmp_path); add_origin(repo)
+    left = tmp_path / "my proj.old"; left.mkdir(); (left / "notes.md").write_text("keep me")
+    r = ws.measure_tidy(repo)
+    assert any(str(left) in a for a in r["ask"]) and not any(str(left) in " ".join(a) for a in r["safe_actions"])
+
+def test_a_cache_only_sibling_goes_to_the_trash_never_rm(tmp_path):
+    repo = make_repo(tmp_path); add_origin(repo)
+    left = tmp_path / "my proj.cache"; (left / "node_modules").mkdir(parents=True); (left / "node_modules" / "a.js").write_text("1")
+    acts = ws.measure_tidy(repo)["safe_actions"]
+    assert [a for a in acts if str(left) in " ".join(a)] == [["osascript", "-e", f'tell application "Finder" to delete POSIX file "{left}"']]
+
+def test_a_worktree_in_use_is_asked_about(tmp_path, monkeypatch):
+    repo = make_repo(tmp_path); add_origin(repo); wt = tmp_path / "wt busy"
+    g = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True)
+    g("worktree", "add", "-q", "-b", "feat/b", str(wt)); commit_file(wt, "b.txt", "b")
+    g("merge", "-q", "--ff-only", "feat/b"); g("push", "-q", "origin", "main")
+    monkeypatch.setattr(ws, "_cwds", lambda: [str(wt / "sub")])
+    r = ws.measure_tidy(repo)
+    assert not removes(r, wt, "feat/b") and any(str(wt) in a and "i bruk" in a for a in r["ask"])
+
+def test_a_failed_git_measurement_is_unknown_not_clean(tmp_path):
+    r = ws.measure_tidy(tmp_path / "not a repo")
+    assert r["status"] == "unknown" and r["safe_actions"] == [] and r["ask"] == []
+
+def test_nothing_left_is_ok_and_leftovers_are_open(tmp_path):
+    repo = make_repo(tmp_path); add_origin(repo)
+    assert ws.measure_tidy(repo)["status"] == "ok"
+    subprocess.run(["git", "-C", str(repo), "branch", "feat/fresh"], check=True)
+    assert ws.measure_tidy(repo)["status"] == "open"
+
+def test_in_use_matches_whole_path_components_only(monkeypatch):
+    monkeypatch.setattr(ws, "_cwds", lambda: ["/a/bc/sub"])
+    assert ws.in_use(Path("/a/b")) is False and ws.in_use(Path("/a/bc")) is True

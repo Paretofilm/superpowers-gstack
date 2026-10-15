@@ -25,9 +25,11 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import glob
 import importlib.util
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -186,6 +188,167 @@ def _pushed_scan(land, repo):
             items.append(f"{main}: {n} commits not on origin/{main}")
             ask.append(f"{main} has {n} commits not landed through land")
     return safe, ask, items
+
+
+CACHE_DIRS = (".gstack/", "node_modules/", ".build/", "DerivedData/", "__pycache__/", ".pytest_cache/")
+_CACHE_NAMES = frozenset(d.rstrip("/") for d in CACHE_DIRS)
+
+
+def _landed_state(land, repo, branch) -> bool:
+    """Proven landed: ancestor of origin/<default> AND a commit in the branch's own reflog.
+    Raises _CountError when git itself fails (that is unknown, never 'not landed')."""
+    main = land.default_branch(repo)
+    if not main or land.git(repo, "show-ref", "--verify", "--quiet", f"refs/remotes/origin/{main}").returncode:
+        return False
+    r = land.git(repo, "merge-base", "--is-ancestor", f"refs/heads/{branch}", f"origin/{main}")
+    if r.returncode == 1:
+        return False
+    if r.returncode:
+        raise _CountError(f"kunne ikke avgjøre om {branch} er landet: {r.stderr.strip()[-200:]}")
+    log = land.git(repo, "reflog", "show", "--format=%gs", f"refs/heads/{branch}")
+    if log.returncode:
+        raise _CountError(f"kunne ikke lese reflog for {branch}: {log.stderr.strip()[-200:]}")
+    return any(line.startswith("commit") for line in log.stdout.splitlines())
+
+
+def proven_landed(repo, branch) -> bool:
+    """Both conditions of the spec; an empty or expired reflog, or any git failure, proves nothing."""
+    try:
+        return _landed_state(_load_land(), Path(repo), branch)
+    except _CountError:
+        return False
+
+
+def _cwds() -> list[str]:
+    """Working directories of all processes (`lsof -d cwd -Fn`). Raises when lsof cannot run."""
+    try:
+        r = subprocess.run(["lsof", "-d", "cwd", "-Fn"], capture_output=True, text=True, errors="replace",
+                           stdin=subprocess.DEVNULL, timeout=20)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise _CountError(f"kunne ikke kjøre lsof: {e}")
+    if not r.stdout and r.returncode not in (0, 1):
+        raise _CountError(f"lsof exited {r.returncode}")
+    return [line[1:] for line in r.stdout.splitlines() if line.startswith("n")]
+
+
+def in_use(path) -> bool:
+    """Does a process have its working directory in `path`? Whole path components only."""
+    cands = {str(path), str(Path(path).resolve())}
+    prefixes = tuple(c.rstrip(os.sep) + os.sep for c in cands)
+    return any((c.rstrip(os.sep) + os.sep).startswith(prefixes) for c in _cwds())
+
+
+def _status_entries(land, path):
+    r = land.git(path, "status", "--porcelain", "-z", "--ignored")
+    if r.returncode:
+        raise _CountError(f"git status failed in {path}: {r.stderr.strip()[-200:]}")
+    return [e for e in r.stdout.split("\0") if e]
+
+
+def is_clean(path) -> bool:
+    """Empty `git status --porcelain --ignored`, or only ignored cache content. False on failure."""
+    try:
+        return _is_clean(_load_land(), Path(path))
+    except _CountError:
+        return False
+
+
+def _is_clean(land, path) -> bool:
+    for e in _status_entries(land, path):
+        if not e.startswith("!! ") or not _is_cache_path(e[3:]):
+            return False
+    return True
+
+
+def _is_cache_path(rel: str) -> bool:
+    """A relative path lies under a cache directory (the directory itself may be listed)."""
+    parts = rel.rstrip("/").split("/")
+    dirs = parts if rel.endswith("/") else parts[:-1]
+    return any(p in _CACHE_NAMES for p in dirs)
+
+
+def all_cache(path) -> bool:
+    """Every file below `path` lies under a cache directory (an empty folder has nothing to lose)."""
+    root = Path(path)
+    for dirpath, dirnames, filenames in os.walk(root):
+        rel = Path(dirpath).relative_to(root)
+        if any(p in _CACHE_NAMES for p in rel.parts):
+            dirnames[:] = []
+            continue
+        if filenames:
+            return False
+    return True
+
+
+def measure_tidy(repo) -> dict:
+    """Work folders, local branches and leftover sibling folders. Proposes, never executes."""
+    land = _load_land()
+    repo = Path(repo)
+    base = {"safe_actions": [], "ask": []}
+    try:
+        return _tidy_scan(land, repo)
+    except (_CountError, land.Stop) as e:
+        return {**_result("unknown", f"kunne ikke måle mapper: {e}"), **base}
+
+
+def _tidy_scan(land, repo):
+    primary = land.primary_worktree(repo)
+    top = land.out(repo, "rev-parse", "--show-toplevel")
+    if not primary or not top:
+        raise _CountError("fant ikke hovedmappen")
+    primary, here = Path(primary), Path(top).resolve()
+    safe, ask = [], []
+    trees = land.worktrees(repo)
+    if not trees:
+        raise _CountError("git worktree list ga ingen utdata")
+    known = {Path(t["path"]).resolve() for t in trees}
+    checked_out = {t["branch"] for t in trees if t.get("branch")}
+    main = land.default_branch(repo)
+    have_wt = shutil.which("wt") is not None
+    remaining = 0
+    for t in trees:
+        path = Path(t["path"])
+        if path.resolve() in (primary.resolve(), here):
+            continue
+        branch = t.get("branch")
+        if in_use(path):
+            ask.append(f"{path} i bruk")
+        elif not branch:
+            ask.append(f"{path} har ingen gren (frakoblet HEAD)")
+        elif not _landed_state(land, repo, branch):
+            ask.append(f"{path}: grenen {branch} er ikke bevist landet")
+        elif not _is_clean(land, path):
+            ask.append(f"{path}: har uncommittede eller ignorerte filer som ikke er hurtigbuffer")
+        elif have_wt:
+            safe.append(["wt", "-C", str(primary), "remove", branch])
+        else:
+            safe.append(["git", "-C", str(primary), "worktree", "remove", str(path)])
+            safe.append(["git", "-C", str(primary), "branch", "-d", branch])
+    r = land.git(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads")
+    if r.returncode:
+        raise _CountError(f"kunne ikke liste grener: {r.stderr.strip()[-200:]}")
+    for name in r.stdout.split():
+        if name in checked_out or name == main:
+            continue
+        if _landed_state(land, repo, name):
+            safe.append(["git", "-C", str(primary), "branch", "-d", name])
+        else:
+            ask.append(f"{name} er ikke bevist landet")
+    if primary.parent.is_dir():
+        for d in sorted(primary.parent.glob(glob.escape(primary.name) + ".*")):
+            if not d.is_dir() or d.resolve() in known:
+                continue
+            if in_use(d):
+                ask.append(f"{d} i bruk")
+            elif all_cache(d):
+                safe.append(["osascript", "-e", f'tell application "Finder" to delete POSIX file "{d}"'])
+            else:
+                ask.append(f"{d}: rest med annet innhold enn hurtigbuffer")
+    items = [" ".join(a) for a in safe] + list(ask)
+    if not safe and not ask:
+        return {**_result("ok", "ingen rester"), "safe_actions": [], "ask": []}
+    detail = f"{len(safe)} kan ryddes, {len(ask)} må avgjøres"
+    return {**_result("open", detail, items), "safe_actions": safe, "ask": ask}
 
 
 def cmd_report(args) -> int:
