@@ -17,14 +17,26 @@ outside fenced code blocks:
 A line with an unknown kind, `macos-app` without a scheme or `command` without a command
 is invalid and counts as absent. Two different valid lines are a conflict.
 
-Exit codes:
-  0   ok
-  64  usage error (no subcommand, unknown subcommand, bad flags)
-  70  Python older than 3.11
+Exit codes (report):
+  0   ok (or nothing open)       1  something open or unknown       2  not a git repository
+Exit codes (install; the last stdout line is {"status", "code", "reason", "commit"}, and every
+run that holds the install lock stores the same object in <git dir>/gstack-install-result.json):
+  0   installed or already current
+  2   the Installable: line is not macos-app, or missing (or --repo is not a git repository)
+  3   the main folder is not on main, is not clean, pull --ff-only failed, or main != origin/main
+  4   the app runs (--quit-running / --quit-path ask it to quit itself; never kill)
+  5   the span since the stamp may change data on disk, or cannot be measured (--accept-migration)
+  6   a copy without a stamp is in the way (--replace-unstamped)
+  7   another app (or one that cannot be identified) has the name; no flag helps
+  8-11 build, verify, applications dir, main moved (the build and swap steps)
+  12  another install holds the lock, or land held its lock longer than 60 s
+  64  usage error (no subcommand, unknown subcommand, bad flags, scheme/settings not usable)
+  70  unexpected error (state printed), or Python older than 3.11
 """
 from __future__ import annotations
 
 import argparse
+import fcntl
 import glob
 import importlib.util
 import io
@@ -37,6 +49,8 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
+import traceback
 from pathlib import Path
 
 INSTALLABLE_RE = re.compile(r"^Installable:[ \t]+(\S+)(?:[ \t]+(.+?))?[ \t]*$")
@@ -697,8 +711,467 @@ def cmd_report(args) -> int:
     return 1 if any(p.get("status") in ("open", "unknown", "stale") for p in parts.values()) else 0
 
 
+# --- install (Part 3 of the spec) ----------------------------------------------------------
+# Fails closed everywhere: a measurement that cannot be made is a stop, never a pass. Never
+# sudo, never kill, never an override of the project's signing or settings.
+
+CLASSIFY = Path(__file__).with_name("classify-change.py")
+INSTALL_LOCK = "gstack-install.lock"
+LAND_LOCK = "gstack-land.lock"
+_NEW_COPY_RE = re.compile(r"^\..+\.gstack-new-\d+$")
+_BUNDLE_ID_RE = re.compile(r"^[A-Za-z0-9.-]+$")
+_SETTING_RE = re.compile(r"^\s+([A-Z_][A-Z0-9_]*) = (.*)$")
+_SETTINGS = (("BUILT_PRODUCTS_DIR", "built_products_dir"), ("FULL_PRODUCT_NAME", "full_product_name"),
+             ("PRODUCT_BUNDLE_IDENTIFIER", "bundle_id"), ("EXECUTABLE_NAME", "executable_name"))
+
+
+class Stop(Exception):
+    """A stop with an exit code from the spec's table; `state` is what was measured."""
+
+    def __init__(self, code, message, state=""):
+        super().__init__(message)
+        self.code, self.message, self.state = code, message, state
+
+
+def _env_seconds(name, default):
+    """A hidden test knob in seconds; anything unreadable is the default."""
+    try:
+        v = float(os.environ.get(name, default))
+    except ValueError:
+        return float(default)
+    return v if v >= 0 else float(default)
+
+
+class _Flock:
+    """A kernel lock (flock) on a file in the git dir, waited for at most `wait` seconds.
+    The kernel drops it when the holder goes away, so there is no stale lock to detect."""
+
+    def __init__(self, path: Path, wait: float, message: str):
+        self.path, self.wait, self.message, self.fd = Path(path), wait, message, None
+
+    def __enter__(self):
+        fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o644)
+        end = time.monotonic() + self.wait
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= end:
+                    os.close(fd)
+                    raise Stop(12, self.message, state=f"lsof {self.path}   # the process that holds it") from None
+                time.sleep(0.2)
+        self.fd = fd
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            fcntl.flock(self.fd, fcntl.LOCK_UN)
+        finally:
+            os.close(self.fd)
+        return False
+
+
+class InstallLock(_Flock):
+    """One install at a time per repository (`gstack-install.lock`), never waited for."""
+
+    def __init__(self, common_dir: Path):
+        path = Path(common_dir) / INSTALL_LOCK
+        super().__init__(path, 0, f"en annen installering holder {path}")
+
+
+def _land_lock(common_dir: Path):
+    """land's own lock, held only while main is pulled; land may hold it for up to 60 s."""
+    wait = _env_seconds("GSTACK_LAND_LOCK_WAIT", 60)
+    return _Flock(Path(common_dir) / LAND_LOCK, wait,
+                  f"land holdt {LAND_LOCK} lenger enn {wait:g} s; ingenting er hentet eller bygget")
+
+
+def _run(argv, cwd=None, timeout=120, env=None):
+    """argv list, no shell, no terminal. OSError and timeouts are left to the caller."""
+    return subprocess.run([str(a) for a in argv], cwd=cwd, capture_output=True, text=True, errors="replace",
+                          stdin=subprocess.DEVNULL, timeout=timeout, env=env)
+
+
+def _clean_main_folder(land, primary: Path):
+    """Ignored local files are fine (they are Local state); anything else is not, untracked
+    included: a stray untracked source file would be built into the Release copy."""
+    r = land.git(primary, "status", "--porcelain", "-z", "--untracked-files=all", "--ignore-submodules=none")
+    if r.returncode:
+        raise Stop(3, f"git status feilet i hovedmappen {primary}", state=r.stderr.strip()[-300:])
+    entries = [e for e in r.stdout.split("\0") if e]
+    if entries:
+        raise Stop(3, f"hovedmappen {primary} er ikke ren", state="\n".join(entries[:20]))
+
+
+def precondition_main(land, repo: Path, gd: Path):
+    """Step 1: the main folder holds a clean main; pull --ff-only under land's lock; local main
+    must then equal origin/main. Returns (main folder, commit to build)."""
+    primary = land.primary_worktree(repo)
+    main = land.default_branch(repo)
+    if not primary or not main:
+        raise Stop(3, "fant ikke hovedmappen eller standardgrenen")
+    primary = Path(primary)
+    branch = land.out(primary, "symbolic-ref", "--short", "-q", "HEAD")
+    if branch != main:
+        raise Stop(3, f"hovedmappen {primary} står på {branch or 'frakoblet HEAD'}, ikke {main}")
+    _clean_main_folder(land, primary)
+    with _land_lock(gd):
+        try:
+            r = _run(["git", "-C", primary, "pull", "--ff-only", "--no-rebase", "origin", main],
+                     timeout=120, env=land.batch_env(primary))
+        except subprocess.TimeoutExpired:
+            raise Stop(3, "git pull --ff-only brukte over 120 s") from None
+        if r.returncode:
+            raise Stop(3, "git pull --ff-only feilet", state=(r.stderr.strip() or r.stdout.strip())[-300:])
+    head = land.out(primary, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+    upstream = land.out(primary, "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{main}^{{commit}}")
+    if not head or not upstream:
+        raise Stop(3, f"kunne ikke lese HEAD eller origin/{main} etter hentingen")
+    if head != upstream:
+        raise Stop(3, f"lokal {main} er ikke lik origin/{main} (commits som ikke er pushet eller landet)",
+                   state=f"{main} {head[:12]}, origin/{main} {upstream[:12]}")
+    _clean_main_folder(land, primary)
+    return primary, head
+
+
+def _scheme_from_line(repo, ref):
+    parsed = installable_at(repo, ref)
+    if parsed is None or parsed == "conflict" or parsed[0] != "macos-app":
+        what = "mangler" if parsed is None else ("står to ganger med ulike verdier" if parsed == "conflict"
+                                                 else f"er '{parsed[0]}'")
+        raise Stop(2, f"Installable:-linjen på {ref} {what}; install gjelder bare macos-app")
+    return parsed[1]
+
+
+def _container(primary: Path) -> list:
+    """Workspace before project, as verify-and-land Phase 2; more than one is never guessed."""
+    spaces = sorted(primary.glob("*.xcworkspace"))
+    if len(spaces) > 1:
+        raise Stop(64, f"flere arbeidsområder i {primary}: {', '.join(p.name for p in spaces)}")
+    if spaces:
+        return ["-workspace", str(spaces[0])]
+    projects = sorted(primary.glob("*.xcodeproj"))
+    if len(projects) > 1:
+        raise Stop(64, f"flere prosjekter og ingen arbeidsområde i {primary}: {', '.join(p.name for p in projects)}")
+    return ["-project", str(projects[0])] if projects else []
+
+
+def _generate_if_needed(land, primary: Path):
+    """`xcodegen generate` when project.yml is newer than the project (or there is none)."""
+    spec = primary / "project.yml"
+    if not spec.is_file():
+        return
+    pbx = [p / "project.pbxproj" for p in primary.glob("*.xcodeproj")]
+    try:
+        stale = not pbx or any(not p.is_file() or spec.stat().st_mtime > p.stat().st_mtime for p in pbx)
+    except OSError as e:
+        raise Stop(64, f"kunne ikke sammenligne project.yml med prosjektet: {e}") from None
+    if not stale:
+        return
+    if not shutil.which("xcodegen"):
+        raise Stop(64, "project.yml er nyere enn prosjektet, men xcodegen finnes ikke på PATH")
+    try:
+        r = _run(["xcodegen", "generate"], cwd=primary, timeout=300)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise Stop(64, f"xcodegen generate feilet: {e}") from None
+    if r.returncode:
+        raise Stop(64, f"xcodegen generate ga kode {r.returncode}", state=_last_line(r.stderr, r.stdout))
+    _clean_main_folder(land, primary)     # a generated project that differs from the committed one
+
+
+def _parse_settings(text: str) -> list[dict]:
+    sections, cur = [], {}
+    for line in text.splitlines():
+        if line.startswith("Build settings for "):
+            if cur:
+                sections.append(cur)
+            cur = {}
+            continue
+        m = _SETTING_RE.match(line)
+        if m:
+            cur.setdefault(m.group(1), m.group(2).strip())
+    if cur:
+        sections.append(cur)
+    return sections
+
+
+def discover_build(repo, scheme) -> dict:
+    """Step 2: container, scheme and the four settings, read through the Release macOS destination."""
+    land = _load_land()
+    primary = Path(repo)
+    _generate_if_needed(land, primary)
+    container = _container(primary)
+    argv = ["xcodebuild", *container, "-showBuildSettings", "-configuration", "Release",
+            "-destination", "platform=macOS", "-scheme", scheme]
+    try:
+        r = _run(argv, cwd=primary, timeout=300)
+    except OSError as e:
+        raise Stop(64, f"kunne ikke kjøre xcodebuild: {e}") from None
+    except subprocess.TimeoutExpired:
+        raise Stop(70, "xcodebuild -showBuildSettings brukte over 300 s") from None
+    if r.returncode:
+        raise Stop(64, f"xcodebuild -showBuildSettings for skjemaet '{scheme}' ga kode {r.returncode}",
+                   state=_last_line(r.stderr, r.stdout))
+    sections = _parse_settings(r.stdout)
+    apps = [s for s in sections if s.get("FULL_PRODUCT_NAME", "").endswith(".app")]
+    picked = {(s.get("FULL_PRODUCT_NAME"), s.get("PRODUCT_BUNDLE_IDENTIFIER")) for s in apps}
+    if len(picked) > 1:
+        raise Stop(64, f"skjemaet '{scheme}' bygger flere apper: {', '.join(sorted(n for n, _ in picked))}")
+    settings = apps[0] if apps else (sections[0] if len(sections) == 1 else {})
+    missing = [k for k, _ in _SETTINGS if not settings.get(k)]
+    if missing:
+        raise Stop(64, f"xcodebuild oppga ikke {', '.join(missing)} for skjemaet '{scheme}'")
+    info = {key: settings[k] for k, key in _SETTINGS}
+    name, exe, bid = info["full_product_name"], info["executable_name"], info["bundle_id"]
+    if not name.endswith(".app") or "/" in name or name.startswith("."):
+        raise Stop(64, f"FULL_PRODUCT_NAME '{name}' er ikke en app-bunt")
+    if "/" in exe or exe in (".", ".."):
+        raise Stop(64, f"EXECUTABLE_NAME '{exe}' er ugyldig")
+    if not _BUNDLE_ID_RE.fullmatch(bid):
+        raise Stop(64, f"PRODUCT_BUNDLE_IDENTIFIER '{bid}' er ugyldig")
+    info["container"] = container
+    return info
+
+
+def running_instances(executable_path) -> list[int]:
+    """PIDs whose `comm` (the full program path on macOS) equals the path as text — never a
+    regular expression or a prefix. A ps that fails is a stop, never 'not running'."""
+    want = {str(executable_path), os.path.realpath(str(executable_path))}
+    try:
+        r = _run(["ps", "-Axo", "pid=,comm="], timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise Stop(70, f"kunne ikke liste prosessene (ps): {e}") from None
+    if r.returncode:
+        raise Stop(70, f"ps ga kode {r.returncode}; kan ikke vite om appen kjører", state=_last_line(r.stderr))
+    pids = []
+    for line in r.stdout.splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) == 2 and parts[0].isdigit() and parts[1] in want:
+            pids.append(int(parts[0]))
+    return pids
+
+
+def quit_app(bundle_id, executables, deadline=None) -> bool:
+    """Ask the app to quit itself and wait until no instance of `executables` runs.
+    Never kill, never relaunch. True when they are all gone within the deadline."""
+    if deadline is None:
+        deadline = _env_seconds("GSTACK_QUIT_DEADLINE", 20)
+    if not _BUNDLE_ID_RE.fullmatch(bundle_id):
+        raise Stop(64, f"ugyldig bundle-ID '{bundle_id}'")
+    end = time.monotonic() + deadline
+    # `is running` never launches the app; a bare `tell` would start it if it quit in between.
+    script = f'if application id "{bundle_id}" is running then tell application id "{bundle_id}" to quit'
+    try:
+        _run(["osascript", "-e", script], timeout=max(deadline, 1))
+    except subprocess.TimeoutExpired:
+        pass        # the app may be showing a dialog; the poll below decides
+    except OSError as e:
+        raise Stop(4, f"kunne ikke be appen avslutte seg selv (osascript): {e}") from None
+    while True:
+        if not any(running_instances(x) for x in executables):
+            return True
+        if time.monotonic() >= end:
+            return False
+        time.sleep(1)
+
+
+def migration_signal(repo, stamp_commit, head):
+    """(signal, reason) for the span stamp..head. Anything that cannot be measured is a signal."""
+    land = _load_land()
+    repo = Path(repo)
+    if not isinstance(stamp_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", stamp_commit):
+        return True, "stempelet har ingen gyldig commit; spennet er ukjent"
+    if land.git(repo, "cat-file", "-e", f"{stamp_commit}^{{commit}}").returncode:
+        return True, f"stempelets commit {stamp_commit[:12]} finnes ikke lenger; spennet er ukjent"
+    r = land.git(repo, "merge-base", "--is-ancestor", stamp_commit, head)
+    if r.returncode == 1:
+        return True, f"stempelets commit {stamp_commit[:12]} er ikke i historikken til {head[:12]}; spennet er ukjent"
+    if r.returncode:
+        return True, f"kunne ikke avgjøre spennet: {r.stderr.strip()[-200:]}"
+    d = land.git(repo, "diff", "--quiet", stamp_commit, head, "--")
+    if d.returncode == 0:
+        return False, "ingen endringer siden stempelet"
+    if d.returncode != 1:
+        return True, f"kunne ikke lese endringene siden stempelet: {d.stderr.strip()[-200:]}"
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY")}
+    try:
+        c = _run([sys.executable, CLASSIFY, "--diff", "--diff-base", stamp_commit], cwd=repo, timeout=120, env=env)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return True, f"classify-change.py kunne ikke kjøres: {e}"
+    if c.returncode:
+        return True, f"classify-change.py ga kode {c.returncode}: {_last_line(c.stderr, c.stdout)}"
+    try:
+        result = json.loads(c.stdout)
+        signals = result["signals"]
+        degraded = bool(result["target"].get("degraded"))
+        labels = {s["label"] for s in signals}
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
+        return True, f"classify-change.py ga utdata som ikke kunne leses: {e}"
+    if degraded:
+        return True, "classify-change.py kunne ikke lese innholdet i endringene (degraded)"
+    if "migration" in labels:
+        ev = next((s.get("evidence", "") for s in signals if s.get("label") == "migration"), "")
+        return True, f"endringene siden {stamp_commit[:12]} kan endre data på disk ({ev})"
+    return False, "ingen migreringssignal"
+
+
+def _remove_leftovers(apps: Path, bundle_id: str):
+    """Under the install lock every `.<name>.gstack-new-<pid>` with our bundle id is a leftover
+    of an interrupted run (a PID can be reused, so it is not checked). Others are left alone."""
+    try:
+        entries = list(apps.iterdir()) if apps.is_dir() else []
+    except OSError as e:
+        raise Stop(70, f"kunne ikke lese {apps}: {e}") from None
+    for p in entries:
+        if not _NEW_COPY_RE.fullmatch(p.name) or p.is_symlink() or not p.is_dir():
+            continue
+        if _bundle_id(p)[0] != bundle_id:
+            continue
+        try:
+            shutil.rmtree(p)
+        except OSError as e:
+            raise Stop(70, f"kunne ikke fjerne resten {p}: {e}") from None
+
+
+def _read_stamp(gd: Path):
+    """(stamp, problem): stamp None and problem None means there is no stamp at all."""
+    return _read_json(gd / STAMP_FILE)
+
+
+def ask_questions(args, info, apps: Path, gd: Path, primary: Path, head: str):
+    """Step 3, in fail-closed order: 7 (another app; no flag helps, and quitting by bundle id must
+    never address it), 4 (running), 5 (migration since the stamp), 6 (unstamped copy).
+    Nothing is quit here: the returned plan (None, or the executables to wait for) is carried out
+    only after every question has passed, so a stop on 5 or 6 never leaves the app closed."""
+    target = apps / info["full_product_name"]
+    bid, exe = info["bundle_id"], info["executable_name"]
+    if target.is_symlink() or (target.exists() and not target.is_dir()):
+        raise Stop(7, f"{target} er ikke en vanlig app-mappe; rydd den selv")
+    if target.exists():
+        other, problem = _bundle_id(target)
+        if problem:
+            raise Stop(7, f"kan ikke vite hvilken app {target} er: {problem}; rydd den selv")
+        if other != bid:
+            raise Stop(7, f"{target} er en annen app ({other}, ikke {bid}); rydd den selv")
+
+    apps_exe = target / "Contents" / "MacOS" / exe
+    running = running_instances(apps_exe)
+    plan = None
+    if args.quit_path:
+        qp = Path(args.quit_path)
+        if running:
+            raise Stop(4, f"{target.name} kjører fra {target}, ikke bare fra {qp}", state=f"PID {running}")
+        qp_exe = qp / "Contents" / "MacOS" / exe
+        if running_instances(qp_exe):
+            qbid, problem = _bundle_id(qp)
+            if problem or qbid != bid:
+                raise Stop(64, f"--quit-path {qp} er ikke {bid}: {problem or qbid}")
+            plan = (f"{qp.name} fra {qp}", [qp_exe, apps_exe])
+    elif running:
+        if not args.quit_running:
+            raise Stop(4, f"{target.name} kjører", state=f"PID {running}")
+        plan = (target.name, [apps_exe])
+
+    stamp, problem = _read_stamp(gd)
+    ours = stamp is not None and stamp.get("bundle_id") == bid
+    if problem or ours:
+        signal, why = (True, f"stempelet kan ikke leses ({problem}); spennet er ukjent") if problem else \
+            migration_signal(primary, stamp.get("commit"), head)
+        if signal and not args.accept_migration:
+            raise Stop(5, why)
+    covered = False
+    if ours and isinstance(stamp.get("app_path"), str) and stamp["app_path"]:
+        covered = os.path.realpath(stamp["app_path"]) == os.path.realpath(target)
+    if target.exists() and not covered and not args.replace_unstamped:
+        raise Stop(6, f"{target} finnes, men uten stempel; forrige versjon er ukjent")
+    return plan
+
+
+def carry_out_quit(bundle_id, plan):
+    """The quit the user said yes to (--quit-running / --quit-path). Never kill."""
+    if plan and not quit_app(bundle_id, plan[1]):
+        raise Stop(4, f"{plan[0]} avsluttet seg ikke selv i tide; den ble ikke drept")
+
+
+def _install_locked(args, repo: Path, gd: Path, ctx: dict) -> dict:
+    land = _load_land()
+    ref = _line_ref(land, repo)[0]
+    if ref is None:
+        raise Stop(2, "fant ingen standardgren å lese Installable: fra")
+    _scheme_from_line(repo, ref)                       # fast stop before anything is pulled
+    primary, head = precondition_main(land, repo, gd)
+    ctx["commit"] = head
+    scheme = _scheme_from_line(primary, head)          # the line as it stands on the commit to build
+    info = discover_build(primary, scheme)
+    apps = Path(args.applications_dir) if args.applications_dir else Path("/Applications")
+    _remove_leftovers(apps, info["bundle_id"])
+    plan = ask_questions(args, info, apps, gd, primary, head)
+    carry_out_quit(info["bundle_id"], plan)
+    raise Stop(70, "not implemented")                  # Task 6: build, verify, swap, register, stamp
+
+
+def _write_result(gd: Path, outcome: dict) -> str | None:
+    """Atomic: a temp file in the same folder, then os.replace. The error text, or None."""
+    data = {**outcome, "finished_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    tmp = None
+    try:
+        fd, tmp = tempfile.mkstemp(dir=gd, prefix=f".{RESULT_FILE}.", suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, gd / RESULT_FILE)
+        return None
+    except OSError as e:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+        return str(e)
+
+
+def _outcome(code, reason, commit, status=None) -> dict:
+    return {"status": status or ("installed" if code == 0 else "stopped"), "code": code,
+            "reason": reason, "commit": commit}
+
+
 def cmd_install(args) -> int:
-    raise NotImplementedError("install is implemented in a later task")
+    ctx = {"commit": None}
+    state = ""
+    outcome = _outcome(70, "avbrutt før resultatet ble målt", None)
+    try:
+        repo = Path(args.repo)
+        if not repo.is_dir() or _load_land().git(repo, "rev-parse", "--git-dir").returncode:
+            raise Stop(2, f"{repo} er ikke et git-repo")
+        try:
+            gd = gitdir(repo)
+        except _CountError as e:
+            raise Stop(2, str(e)) from None
+        with InstallLock(gd):          # a run that does not hold the lock never writes the result
+            try:
+                done = _install_locked(args, repo, gd, ctx)
+                outcome = _outcome(0, done.get("reason", ""), ctx["commit"], done.get("status"))
+            except Stop as e:
+                outcome, state = _outcome(e.code, e.message, ctx["commit"]), e.state
+            except Exception as e:     # unexpected: still a stored stop, with the measured state
+                outcome = _outcome(70, f"uventet feil: {type(e).__name__}: {e}", ctx["commit"])
+                state = traceback.format_exc()[-1500:]
+            finally:
+                err = _write_result(gd, {**outcome, "state": state})
+                if err:
+                    outcome["reason"] += f" (resultatet kunne ikke lagres: {err})"
+    except Stop as e:
+        outcome, state = _outcome(e.code, e.message, ctx["commit"]), e.state
+    except Exception as e:
+        outcome = _outcome(70, f"uventet feil: {type(e).__name__}: {e}", ctx["commit"])
+        state = traceback.format_exc()[-1500:]
+    if state:
+        print(state)
+    print(json.dumps(outcome, ensure_ascii=False))
+    return outcome["code"]
 
 
 def build_parser() -> argparse.ArgumentParser:
