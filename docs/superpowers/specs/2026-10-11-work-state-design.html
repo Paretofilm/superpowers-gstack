@@ -121,7 +121,7 @@ footer{color:var(--muted);font-size:13px;margin-top:28px;text-align:center}
 <!-- ═════════ TOPP ═════════ -->
 <div class="top">
   <div>
-    <span class="tag t-violet">Spesifikasjon · 11. oktober 2026</span>
+    <span class="tag t-violet">Spesifikasjon · 11. oktober 2026 · implementert i 3.15.0</span>
     <h1>Arbeidstilstand</h1>
     <p class="sub">Én linje etter hver oppgave: committet, pushet, ryddet, og appen i Docken er nyeste main.</p>
   </div>
@@ -271,10 +271,10 @@ footer{color:var(--muted);font-size:13px;margin-top:28px;text-align:center}
       <text x="276" y="140" text-anchor="middle" font-weight="600">Bygger Release</text><text x="276" y="158" text-anchor="middle" class="m" font-size="12">eget skjema og signering</text>
       <path d="M322,70 L426,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/>
       <circle cx="472" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="472" y="80" font-size="30" text-anchor="middle">🔍</text>
-      <text x="472" y="140" text-anchor="middle" font-weight="600">Kontrollerer kopien</text><text x="472" y="158" text-anchor="middle" class="m" font-size="12">signatur og app-ID</text>
+      <text x="472" y="140" text-anchor="middle" font-weight="600">Kontrollerer kopien</text><text x="472" y="158" text-anchor="middle" class="m" font-size="12">signatur og app-ID, to ganger</text>
       <path d="M518,70 L622,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/>
       <circle cx="668" cy="70" r="44" fill="var(--cyan-s)" stroke="var(--cyan)" stroke-width="1.5"/><text x="668" y="80" font-size="30" text-anchor="middle">🔁</text>
-      <text x="668" y="140" text-anchor="middle" font-weight="600">Bytter i ett steg</text><text x="668" y="158" text-anchor="middle" class="m" font-size="12">gammel til papirkurven</text>
+      <text x="668" y="140" text-anchor="middle" font-weight="600">Bytter i ett steg</text><text x="668" y="158" text-anchor="middle" class="m" font-size="12">tilbake ved feil</text>
       <path d="M714,70 L818,70" stroke="var(--cyan)" stroke-width="2" marker-end="url(#ac)"/>
       <circle cx="864" cy="70" r="44" fill="var(--emerald-s)" stroke="var(--emerald)" stroke-width="1.5"/><text x="864" y="80" font-size="30" text-anchor="middle">🏷️</text>
       <text x="864" y="140" text-anchor="middle" font-weight="600">Stempler</text><text x="864" y="158" text-anchor="middle" class="m" font-size="12">hvilken commit</text>
@@ -291,8 +291,8 @@ footer{color:var(--muted);font-size:13px;margin-top:28px;text-align:center}
   </div>
   <div class="grid g2" style="margin-top:14px">
     <div class="chip"><span class="ic">⚙️</span><div><b>Prosjektets innstillinger røres aldri</b></div></div>
-    <div class="chip"><span class="ic">🚫</span><div><b>Aldri sudo, aldri tvang</b><span>appen bes avslutte seg selv</span></div></div>
-    <div class="chip"><span class="ic">♻️</span><div><b>Gammel kopi i papirkurven</b><span>kan legges tilbake</span></div></div>
+    <div class="chip"><span class="ic">🚫</span><div><b>Aldri sudo, aldri tvang</b><span>appen bes avslutte seg selv, rett før byttet</span></div></div>
+    <div class="chip"><span class="ic">♻️</span><div><b>Gammel kopi i papirkurven</b><span>først etter at den nye er kontrollert</span></div></div>
     <div class="chip"><span class="ic">⚡</span><div><b>Bare det som er endret</b><span>første bygg tar noen minutter</span></div></div>
   </div>
   <div class="key">💡 Den gamle kopien står til den nye er kontrollert. <b>Docken har alltid en app som virker.</b></div>
