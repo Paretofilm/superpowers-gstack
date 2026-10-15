@@ -1,6 +1,6 @@
 # Arbeidstilstand og installerbar app — design
 
-**Dato:** 2026-10-11 · **Status:** utkast, venter på brukergjennomgang · **Målversjon:** 3.11.0
+**Dato:** 2026-10-11 · **Status:** utkast, ikke implementert, venter på brukergjennomgang · **Målversjon:** tas ved landing (3.11.0–3.14.0 er tatt; neste ledige er 3.15.0)
 
 ## Formål
 
@@ -46,7 +46,7 @@ klikker på appen i Docken, skal den nyeste `main` starte, ikke en eldre kopi i
 | 5 | `skills/adapt/blocks/git-hygiene.md` v13 → v14 | Ny regel: før siste melding i en oppgave som har endret filer, kjør `work-state`, rydd det som er trygt, og avslutt med linjen. |
 | 6 | `scripts/lint-skills.py` | Utvid mønsteret mot gamle markører til å fange `v13`. Ny skill i rutingdekningen. |
 | 7 | `scripts/adapt-claude-md.py` + `skills/adapt/SKILL.md` | `--installable`, skrevet én gang under en overskrift prosjektet eier, slik som `Local state:`. Spørsmålet i steg 4. |
-| 8 | `CLAUDE.md` (rutingseksjonen), `README.md`, `CHANGELOG.md`, `plugin.json`, `scripts/sync-own-claude-md.py` | Ny skill, versjon 3.11.0. Repoets egen `CLAUDE.md` får blokken v14 gjennom synkroniseringsskriptet, og sin egen linje `Installable: plugin`. `report` leser linjen fra `origin/main`, så den virker først når landingen er pushet. |
+| 8 | `CLAUDE.md` (rutingseksjonen), `README.md`, `CHANGELOG.md`, `plugin.json`, `scripts/sync-own-claude-md.py` | Ny skill, versjon tas ved landing. Repoets egen `CLAUDE.md` får blokken v14 gjennom synkroniseringsskriptet, og sin egen linje `Installable: plugin`. `report` leser linjen fra `origin/main`, så den virker først når landingen er pushet. |
 | 9 | `tests/unit/test_work_state.py` (ny) | Se «Testing». |
 
 ## Del 1 — linjen `Installable:`
