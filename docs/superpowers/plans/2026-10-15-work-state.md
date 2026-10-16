@@ -819,7 +819,7 @@ def test_arguments_with_spaces_survive(tmp_path):
 
 - [x] **Step 3: Implement** the script (`#!/usr/bin/env bash`, `set -u`, the three branches above, `exec` the chosen command with `"$@"`) and change `.config/wt.toml` `unit` to `bash scripts/pytest-gate.sh tests/unit -q -p no:cacheprovider --deselect … --deselect …` (the two deselects stay verbatim). CI's `lint.yml` stays as it is.
 
-- [ ] **Step 4: Run to verify pass** — the new test file PASS (done); NOT done yet, the controller runs it at landing: then **prove the hook end to end without the temporary venv**: `wt hook pre-merge` in this worktree with the default `PATH` (Homebrew `python3` without pytest) must be green. The hook edit must be approved first (`wt config approvals add` needs a real terminal — use the Calyx tab flow, the user answers).
+- [x] **Step 4: Run to verify pass** — the new test file PASS; hook approved by the user in a Calyx tab; `wt hook pre-merge` in this worktree with the default `PATH` (Homebrew `python3` without pytest, no temporary venv) → exit 0, unit 1295 passed / 2 deselected (2026-10-16).
 
 - [x] **Step 5: Commit**
 
