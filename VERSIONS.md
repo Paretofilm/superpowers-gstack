@@ -4,8 +4,8 @@ This manual was last verified against these versions:
 
 | Component | Version | Date |
 |-----------|---------|------|
-| GStack | 1.87.4.0 (a6b3a57) | 2026-09-21 |
-| Superpowers | 6.4.1 | 2026-09-21 |
+| GStack | 1.91.146.0 (6a4ab69) | 2026-10-19 |
+| Superpowers | 7.0.0 | 2026-10-19 |
 | Claude Code | 2.1.268 | 2026-09-11 |
 
 When any of these change, review the manual for accuracy.
