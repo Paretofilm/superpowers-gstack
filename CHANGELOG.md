@@ -1,5 +1,33 @@
 # Changelog
 
+## [3.17.2] - 2026-10-25
+
+Upstream sync from the weekly check of 2026-10-19 (#98), landed by hand: the bot numbered it 3.16.0, which was already taken. It brings `VERSIONS.md` to GStack 1.91.146.0 and Superpowers 7.0.0, and the brainstorming, `/cso` and `/ship` descriptions in `README.md` and `skills/adapt/roster.md`. GStack has moved on since (1.91.209.0 on 2026-10-25); the next weekly run picks that up.
+
+**GStack gains merge-train support and switches its paid eval model to Claude Opus 5.5; Superpowers rebuilds brainstorming from scratch and adds Antigravity Marketplace support.**
+
+### GStack (v1.91.146.0)
+
+- **`/ship` queue can now run merge trains** (`gstack-ship-queue`). Several READY PRs share one full gate, merge one by one, and a red train is bisected on its red cases alone. Activated by a `train` block in `.gstack/ship-policy.json`; off by default. New subcommands: `train build`, `train status`, `train verdict`, `train bisect`, `train prune`, and `verify --train`. `ready --screen` dispatches a per-PR screen under a train policy. 18 new result codes (`QUEUE_TRAIN_*`, `READY_SCREEN_CHOICE_REQUIRED`). See [docs/ship-policy.md#run-a-merge-train](docs/ship-policy.md#run-a-merge-train).
+- **Paid eval model is now Claude Opus 5.5** (`claude-opus-5-5`), renamed from the frontier constant to `CLAUDE_CAPTURE_EVAL_MODEL`. The judge remains Fable 5.1. `HARNESS_VERSION` bumped 5 → 6 so Fable and Opus trial pools stay separate. First full Opus gate went 132/132 green at $32.33 vs Fable's $93.16 mean.
+- **`/cso` daily reports** now omit candidates whose impact requires code outside the snapshot or a future change, or that expose nothing sensitive. Comprehensive mode still reports them as labeled hypotheses.
+- **QA-only fixture** accepts pure local reads (shared read-only grammar from 1.91.143.0), so `qa-only-no-fix` no longer fails when the agent inspects a skill file with `wc -l` or `ls`. The shared grammar also now allows a read to end with `2>/dev/null` or `2>&1`.
+- **Docs-sync fixture** declares `git describe` (with `--tags`, `--always`, `--abbrev=<n>`, `--exact-match`) as part of its accepted Git interface, so `ship-docsync-store` no longer goes red when a child checks for release tags.
+- **Gate integrity fixes** (from Opus calibration gates): read detector, checkpoint rule, docs-sync observer, and phrasing of 11 assertion checks were widened or tightened based on captured Opus runs. No threshold, trial count, or case kind changed.
+
+### Superpowers (v7.0.0)
+
+- **Brainstorming rebuilt.** `/superpowers:brainstorming` now draws out what you want before proposing anything. Its first message asks one open question about a real moment or a concrete picture and offers to skip. It plays back what it heard in a few hundred words as it understands each part, marks its guesses as guesses, and sizes the work (quick task / small change / design document) only after it understands what you want. A builder-check subagent reads the design as the person who will build it and brings you only the questions that change what gets built. It also finds out which platform, language, and library choices you want to own — and picks sensible defaults for the rest.
+- **Antigravity Marketplace support.** `agy plugin install https://github.com/obra/superpowers` now installs Superpowers as a native Antigravity plugin via `.antigravity-plugin/plugin.json`. Superpowers bootstraps on Antigravity through skill discovery (`using-superpowers`' description prompts the model to load it at session start).
+- **SessionStart hook** no longer looks up `dirname`, `cat`, or `bash` on `PATH`, fixing bootstrap failures when the harness launches with a broken `PATH`.
+- **Windows hook fixes:** `run-hook.cmd` finds per-user Git for Windows installs, skips WSL `bash.exe` launchers, ignores `bash` and `where` in the current directory, and now correctly passes hook exit codes to the harness.
+- **`sdd-workspace`** no longer overwrites a repo's own `.superpowers/sdd/.gitignore` on every run; it writes the default only when no file exists.
+- **`task-done`** now records tasks whose test command passes silently (previously exited 1 without writing the ledger line).
+- **Hermes skill list** now shows each Superpowers skill's frontmatter description instead of a blank entry.
+- **Visual companion** (`/superpowers:brainstorming`) no longer corrupts screens containing `$'`, `$&`, and similar sequences; content is now inserted literally instead of via `String.replace`.
+- **`requesting-code-review` example** uses `cut -d' ' -f1` instead of `awk '{print $1}'` to survive skill arguments that expand `$1`.
+- **`systematic-debugging` example** no longer prints the secret it checks for.
+
 ## [3.17.1] - 2026-10-25
 
 **Model refresh: the router points at the 5.5 generation, and the model-review issue no longer sends the maintainer to a path that does not exist.**

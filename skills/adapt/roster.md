@@ -10,7 +10,7 @@ unless the user asks for it.
 
 | Skill | Consider relevant when... |
 |---|---|
-| `/superpowers:brainstorming` | Almost always — skip only for trivial projects; finds out why you want the thing before proposing features |
+| `/superpowers:brainstorming` | Almost always — skip only for trivial projects; draws out what you want before proposing anything, plays back what it heard, and sizes the work after it understands what you want |
 | `/superpowers:writing-plans` | Almost always — skip only for single-file changes; you review the saved plan before anything runs |
 | `/superpowers:subagent-driven-development` | Projects with 5+ tasks, benefits from parallel TDD |
 | `/superpowers:executing-plans` | Smaller projects (< 5 tasks), or when user wants more control; runs the whole plan then one review at the end |
@@ -44,7 +44,7 @@ unless the user asks for it.
 | `/review` | Almost always — pre-merge code review; runs design detector scan first when frontend files are in scope |
 | `/qa <url>` | Projects with a browser-accessible UI (include the URL); drives Aside first, bundled Chromium as fallback |
 | `/qa-only <url>` | Same, but report-only (no auto-fixes) |
-| `/cso` | Projects handling auth, user data, payments, or external APIs. For security-critical features, run BEFORE `/review` |
+| `/cso` | Projects handling auth, user data, payments, or external APIs. For security-critical features, run BEFORE `/review`. Daily reports omit candidates without demonstrated in-scope impact; comprehensive mode keeps them as labeled hypotheses |
 | `/design-review` | Projects with visual UI — runs 61 deterministic checks (impeccable engine, consent-gated) before the LLM pass; also scans the rendered DOM on a live URL |
 | `/design-html` | When you have an approved design and need production HTML/CSS; slop gate runs before screenshots |
 | `/devex-review` | Developer-facing projects — live audit of onboarding flow, docs, CLI help; drives Aside first |
@@ -54,7 +54,7 @@ unless the user asks for it.
 
 | Skill | Consider relevant when... |
 |---|---|
-| `/ship` | Projects using git with feature branches and PRs; design detector scan runs first when frontend files are in scope |
+| `/ship` | Projects using git with feature branches and PRs; design detector scan runs first when frontend files are in scope. A `train` block in `.gstack/ship-policy.json` enables merge-train mode for the queue |
 | `/land-and-deploy` | Projects with CI/CD deployment pipelines; post-deploy check drives Aside first |
 | `/canary` | Projects with production monitoring needs; drives Aside first, bundled Chromium as fallback |
 | `/landing-report` | Read-only PR queue + sibling-workspace dashboard (workspace-aware ship) |
