@@ -292,7 +292,7 @@ Something went wrong?  → /superpowers:diagnosing-superpowers
 | `/autoplan` | Chains all three reviews; Eng review runs last, always |
 | `/review` | Pre-merge code review (8 lenses, incl. advisory simplification) |
 | `/qa <url>` | Browser-based testing |
-| `/cso` | Security audit |
+| `/cso` | Security audit (daily reports now omit candidates without demonstrated in-scope impact) |
 | `/design-review` | Visual audit; runs 61 deterministic checks (impeccable engine, consent-gated) before the LLM pass |
 | `/design-consultation` | Design system from scratch; writes open DESIGN.md format |
 | `/design-shotgun` | Generate multiple design variants |
@@ -329,7 +329,7 @@ Something went wrong?  → /superpowers:diagnosing-superpowers
 
 | Command | When to Use |
 |---------|------------|
-| `/superpowers:brainstorming` | Refining technical approach; finds out why you want the thing before proposing features |
+| `/superpowers:brainstorming` | Refining technical approach; draws out what you want before proposing anything — asks one open question first, plays back what it heard, and sizes the work after it understands what you want |
 | `/superpowers:writing-plans` | Creating TDD task breakdown; saved plan shown for review before anything runs |
 | `/superpowers:subagent-driven-development` | Executing with subagents + TDD |
 | `/superpowers:executing-plans` | Inline execution (small projects); runs the whole plan, then one review at the end |
