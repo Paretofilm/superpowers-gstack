@@ -904,6 +904,9 @@ def test_the_build_uses_release_macos_the_install_build_folder_and_no_signing_ov
     assert len(build) == 1 and build[0].endswith(" build")
     assert f"-derivedDataPath {gd}/gstack-install-build" in build[0]
     assert "-configuration Release -destination platform=macOS" in build[0] and "CODE_SIGN" not in build[0]
+    # A fresh derived-data folder has no plug-in trust; without these the first build of a project with
+    # a code-generating package plug-in stops at "Validate plug-in" (found in the first real run).
+    assert "-skipPackagePluginValidation" in build[0] and "-skipMacroValidation" in build[0]
     assert (gd / "gstack-install-build.log").is_file()
     assert "lsregister -f " + str(apps / "Fake App.app") in _log(tmp_path)
 

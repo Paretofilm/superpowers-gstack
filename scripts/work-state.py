@@ -1368,11 +1368,16 @@ def _log_tail(log: Path) -> str:
 
 def build(repo, info, scheme, gd=None) -> Path:
     """Step 4: `xcodebuild … -derivedDataPath <git dir>/gstack-install-build build`, all output in
-    <git dir>/gstack-install-build.log. No signing override. Code 8 names the log. Returns the app."""
+    <git dir>/gstack-install-build.log. No signing override. Code 8 names the log. Returns the app.
+    Package plug-ins and macros are trusted without the Xcode dialog: a fresh derived-data folder has no
+    per-checkout trust, so a project with a code-generating plug-in (smithy-swift) would stop at "Validate
+    plug-in" on every first build. The build is the user's own `origin/main`, and the projects' own build
+    scripts pass the same two flags."""
     gd = Path(gd) if gd else gitdir(repo)
     log = gd / BUILD_LOG
     argv = ["xcodebuild", *info["container"], "-scheme", scheme, "-configuration", "Release",
-            "-destination", "platform=macOS", "-derivedDataPath", str(gd / BUILD_DIR), "build"]
+            "-destination", "platform=macOS", "-derivedDataPath", str(gd / BUILD_DIR),
+            "-skipPackagePluginValidation", "-skipMacroValidation", "build"]
     try:
         with open(log, "wb") as f:
             r = subprocess.run(argv, cwd=repo, stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT,

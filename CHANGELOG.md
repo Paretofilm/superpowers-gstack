@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.15.2] - 2026-10-23
+
+**`work-state install` can build a project that uses a code-generating Swift package plug-in.**
+
+The first real install (a macOS app that depends on `smithy-swift` through Amplify) stopped with code 8: «Validate plug-in "SmithyCodeGeneratorPlugin"». A fresh derived-data folder has no per-checkout plug-in trust, and the stand-in `xcodebuild` of the rehearsal could not show it. The old copy in `/Applications` was untouched, as designed.
+
+### Fixed
+- **`scripts/work-state.py` `build`**: passes `-skipPackagePluginValidation -skipMacroValidation`, as that project's own `build-release.sh` and `verify.sh` already do. Trust is a deliberate choice: the build is the user's own `origin/main`, and a package plug-in runs code at build time either way. The test now asserts both flags.
+
+### Review
+- One-line change to a build command, found by a real run. Tier floor computed with `scripts/classify-change.py`; Codex lens disabled (`codex_reviews=disabled`); self-check, `lint-skills` and `tests/unit/test_work_state.py` (145 passed).
+
 ## [3.15.1] - 2026-10-23
 
 **`/adapt` asks about the `Installable:` line in plain words about what happens on the user's Mac.**
