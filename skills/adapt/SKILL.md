@@ -390,12 +390,17 @@ merge this run does not do.
      its own that exits 0 when the installed copy is current (an iOS app, a CLI on
      `PATH`)
 
-   Then ask **once** with `AskUserQuestion`:
+   Then ask **once** with `AskUserQuestion`, in plain words about what happens on the
+   user's machine, never in the line's vocabulary ("installed", `work-state`): those words
+   hide that the answer decides whether an app is replaced:
 
-   > What should count as "installed" once work lands? I'll check it after every landing and show it in the status line.
+   > After work has landed on main, should the new version also be put on this Mac, so that what you open is always the latest? A short check after each landing says whether everything is saved, pushed and tidy, and whether the app on this Mac is up to date.
    >
-   > - **`<recommendation>`** (recommended) — [one line on what it checks: the app in `/Applications` built from `origin/main`; the plugin validates and its version has a CHANGELOG entry; the command exits 0; nothing to install]
-   > - **[the other plausible shape]** — [what it checks]
+   > - **`<recommendation>`** (recommended) — [say what happens, in the user's words. For `macos-app`: "after each landing I build the app from main and replace the copy in /Applications; the old copy goes to the Trash. If the app is running, I ask before closing it." For `plugin`: "after each landing I check that the plugin is valid and its version is in the changelog." For `command`: "after each landing I run `<cmd>`; it says whether the installed copy is current." For `none`: "nothing is installed; the check only covers saved, pushed and tidy."]
+   > - **[the other plausible shape]** — [what happens, in the same words. For a macOS app the other shape is `none`: "I never touch /Applications; you install a release yourself when you choose."]
+
+   When the project ships its own release copy (a notarized build script), say in the
+   `macos-app` option that it replaces that copy with a build of `main` after every landing.
 
    Pass the answer as `--installable '<answer>'` (`plugin`, `none`,
    `macos-app <Scheme>` or `command <cmd>`; anything else is refused with exit 2 before

@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.15.1] - 2026-10-23
+
+**`/adapt` asks about the `Installable:` line in plain words about what happens on the user's Mac.**
+
+The question read «What should count as "installed" once work lands?». A user who did not yet know what `work-state` is answered `none` on a macOS app with a notarized release script, without seeing that the other answer makes `work-state` replace the copy in `/Applications` with a build of `main` after every landing. Found when a real project had to be corrected by hand afterwards.
+
+### Changed
+- **`skills/adapt/SKILL.md`, Step 4 item 8**: the question now says what the answer does (build from main, replace the copy in `/Applications`, old copy to the Trash, ask before closing a running app), is worded without «installed»/`Installable`/`work-state`, and tells the skill to say so when `macos-app` would replace a release copy the project ships itself. The line, its values and `adapt --installable` are unchanged.
+
+### Review
+- Wording-only change to an instruction; tier floor computed with `scripts/classify-change.py`. Codex lens disabled (`codex_reviews=disabled`); self-check and `python3 scripts/lint-skills.py` only.
+
 ## [3.15.0] - 2026-10-16
 
 **One script answers «is everything committed, tidy and installable?», so the answer no longer depends on memory.**
