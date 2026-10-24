@@ -112,7 +112,8 @@ tests. Every criterion is checked by at least one test, and every test checks a
 criterion; fix a gap before you write to the user.
 
 The user judges outcomes, not test code: never ask them to approve a test file. Send
-ONE message in the user's language, in this order:
+ONE message in the user's language, in this order (the bold labels are for you; write
+the parts, in the user's words, without copying the labels):
 
 1. **The criteria**, as a short numbered list: the 5–10 acceptance criteria from Step 1,
    each written as observable behaviour — what the user will see or be able to do. No
@@ -130,8 +131,8 @@ ONE message in the user's language, in this order:
 /goal All tasks in PLAN.md are done: tests green, build without warnings, STATUS.md updated. Or stop after 60 turns.
 ```
 
-If the user changes a criterion, change the tests to match and send the message again;
-nothing is locked until they approve.
+If the user changes a criterion, change `SPEC.md` and the tests to match, commit the
+spec, and send the message again; nothing is locked until they approve.
 
 The user approves in one of two ways: they say ok, or they paste the `/goal` line;
 whether they say ok or paste the `/goal` line, run the lock first and only then start
