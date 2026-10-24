@@ -13,7 +13,10 @@ is yours to decide and log. The rules live in
 the project's CLAUDE.md section **Vibe contract** (marker `gstack-vibe-v3`); this skill
 is the procedure. If `.gstack/workflow` is not `vibe`, say so in one line of the intake
 (the contract's standing approvals then hold for this invocation only) and suggest
-`/superpowers-gstack:adapt` to choose the profile for good.
+`/superpowers-gstack:adapt` to choose the profile for good. If the section carries an
+older marker (`gstack-vibe-v1` or `-v2`), say so in one line of the intake and suggest
+`/superpowers-gstack:adapt`; where the old text describes the checkpoint differently,
+Step 3 below is the one you follow.
 
 Begin every Bash call that needs the lock script with:
 

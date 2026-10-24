@@ -12,7 +12,7 @@ At the one checkpoint, Step 3 told the agent to send «a short overview that lis
 - The `/adapt` profile question, the roster, README, the CLAUDE.md routing line and the lock script's docstring describe the checkpoint as the criteria.
 
 ### Review
-REVIEW_PLACEHOLDER
+- Tier floor high-stakes (architecture-scale: 10 files), computed with `scripts/classify-change.py`. Self-pitfall, two rounds: a changed criterion now updates `SPEC.md` too, and the message's bold labels are marked as the agent's, not text to copy. Codex lens absent (`codex_reviews=disabled`). Third house (`z-ai/glm-5.3`, $0.02): two findings confirmed and fixed (this placeholder; a vibe project still on the v2 contract now gets a one-line nudge to `/adapt`, and Step 3 wins where the old text differs), two dropped with evidence (the v2 → v3 upgrade was run on a project with the 3.15.2 emission and replaced the section cleanly; `SPEC.md` is always written in Step 2), one dropped because no other file reads `gstack-vibe-v2`. `lint-skills` green, the full unit suite green.
 
 ## [3.15.2] - 2026-10-23
 

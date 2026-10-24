@@ -176,6 +176,11 @@ def test_the_contract_names_brainstorm_as_a_start_choice_and_the_marker_is_v3():
     assert "gstack-vibe-v3" in VIBE
 
 
+def test_an_older_contract_marker_is_named_and_step_3_wins():
+    assert "older marker (`gstack-vibe-v1` or `-v2`)" in VIBE
+    assert "Step 3 below is the one you follow" in VIBE
+
+
 def test_the_contract_checkpoint_is_the_criteria_not_a_test_overview():
     block = " ".join((REPO / "skills" / "adapt" / "blocks" / "vibe-contract.md").read_text().split())
     assert "The one checkpoint is the acceptance criteria" in block
