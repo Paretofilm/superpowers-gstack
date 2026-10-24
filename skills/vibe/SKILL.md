@@ -1,15 +1,16 @@
 ---
 name: vibe
-description: Build one feature end to end under the vibe contract — one intake round, locked acceptance tests as the only checkpoint, a fresh subagent per phase, one review, landing.
+description: Build one feature end to end under the vibe contract — one intake round, plain-language acceptance criteria as the one checkpoint, a fresh subagent per phase, one review, landing.
 ---
 
 # Vibe: one feature, intake to landing
 
 Invoke with: `/superpowers-gstack:vibe <what to build>`
 
-The user answers questions once, reads the acceptance tests once, and reviews the
-finished work once. Everything between is yours to decide and log. The rules live in
-the project's CLAUDE.md section **Vibe contract** (marker `gstack-vibe-v2`); this skill
+The user answers questions once, approves the acceptance criteria once — in plain
+language, never as test files — and reviews the finished work once. Everything between
+is yours to decide and log. The rules live in
+the project's CLAUDE.md section **Vibe contract** (marker `gstack-vibe-v3`); this skill
 is the procedure. If `.gstack/workflow` is not `vibe`, say so in one line of the intake
 (the contract's standing approvals then hold for this invocation only) and suggest
 `/superpowers-gstack:adapt` to choose the profile for good.
@@ -29,8 +30,8 @@ Load the project's context skill (`.claude/skills/*-context` or `*-kontekst`) if
 is one, then the code the feature touches. Classify the scope: files, tracks, whether
 the result is visual (UI, render, video), and the risk tier
 `scripts/classify-change.py` would give it. Steps 0–2 change no code (Brainstorm and Utforsk først write nothing either). Do not enter plan
-mode yourself: leaving it asks the user a second time, and the acceptance tests are the
-one checkpoint.
+mode yourself: leaving it asks the user a second time, and the acceptance criteria are
+the one checkpoint.
 
 ## Step 0b: Choose how to start
 
@@ -59,7 +60,8 @@ that the chosen way already answered are skipped, not asked again.
 Ask everything in one `AskUserQuestion` round: at most eight questions, four per call,
 recommended option first and marked `(Recommended)`. Always ask for:
 - the reference ("fasit") and the 5–10 acceptance criteria you drew from the request,
-  so the user can correct them;
+  so the user can correct them — each in the user's language as observable behaviour
+  (what they will see or be able to do), never a file, test name or code;
 - what is out of scope.
 
 Ask nothing you can find in the code, the context skill or CLAUDE.md. After this round,
@@ -101,18 +103,35 @@ the project's own: leave it and say so. Relay the report's Removed list if it ha
 `.gstack/adapt-project.md`, commit CLAUDE.md with the spec, and write one line in the log: `Filled in ## Project: <stack>, tests via
 <command>, sensitivity <level>.`
 
-## Step 3: Acceptance tests — the one checkpoint
+## Step 3: Acceptance criteria — the one checkpoint
 
 Write the acceptance tests from the criteria, in a directory of their own (for example
 `Tests/Acceptance/` or `tests/acceptance/`). For visual work the test is a truth check
 against the reference — a screenshot or render measured against it — not only unit
-tests. Then send ONE message: a short overview that lists the exact files (test name, what it
-checks — the user approves an overview, but `lock` commits what is on disk), and this
-line for the user to paste:
+tests. Every criterion is checked by at least one test, and every test checks a
+criterion; fix a gap before you write to the user.
+
+The user judges outcomes, not test code: never ask them to approve a test file. Send
+ONE message in the user's language, in this order:
+
+1. **The criteria**, as a short numbered list: the 5–10 acceptance criteria from Step 1,
+   each written as observable behaviour — what the user will see or be able to do. No
+   file paths, test names or code in this list.
+2. **What approving means**, in one plain sentence: these criteria become the definition
+   of done, and the tests behind them are locked so no agent can edit a test to turn red
+   into green.
+3. **For the curious**, marked as optional: the exact test files, one line each (file,
+   what it checks). `lock` commits what is on disk, so this list names every file the
+   lock will cover, but it is not what the user is asked about.
+4. **The question**, last: are these the right criteria for done? Close with this line
+   for the user to paste:
 
 ```
 /goal All tasks in PLAN.md are done: tests green, build without warnings, STATUS.md updated. Or stop after 60 turns.
 ```
+
+If the user changes a criterion, change the tests to match and send the message again;
+nothing is locked until they approve.
 
 The user approves in one of two ways: they say ok, or they paste the `/goal` line;
 whether they say ok or paste the `/goal` line, run the lock first and only then start

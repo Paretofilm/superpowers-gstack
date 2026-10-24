@@ -1,4 +1,4 @@
-## Vibe contract (standing approvals; overrides skill gates) <!-- gstack-vibe-v2 -->
+## Vibe contract (standing approvals; overrides skill gates) <!-- gstack-vibe-v3 -->
 
 This project chose the vibe workflow (`.gstack/workflow`): one intake, autonomous completion, one review by the user.
 A new feature starts with `/superpowers-gstack:vibe` (the procedure), not `superpowers:brainstorming` → `writing-plans`.
@@ -16,9 +16,9 @@ outside the worktree, a force-push or a push to the default branch outside the `
 line, money, a licence, or a real blocker. Decide everything else and log it:
 `Ruling: <choice> — <why> — <cost if wrong>`.
 
-**The one checkpoint is the acceptance tests.** The user reads the test overview once. After their
-ok the tests are locked: never edit a locked test to turn red into green, by any tool; if a test is
-wrong, stop and say which and why. The lock's `verify` must pass before landing.
+**The one checkpoint is the acceptance criteria**, approved once in plain words as what the user will see or be
+able to do — never a test file, test name or code. After their ok the tests behind them are locked: never edit a
+locked test to turn red into green, by any tool; if a test is wrong, stop and say which and why. The lock's `verify` must pass before landing.
 
 **Context.** Keep the main thread under about 150k tokens: one fresh subagent per phase, `STATUS.md`
 updated at every phase boundary. Project knowledge lives in the skill `{{CONTEXT_SKILL}}`

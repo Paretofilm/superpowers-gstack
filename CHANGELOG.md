@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.16.0] - 2026-10-24
+
+**`/vibe` asks the user to approve the acceptance criteria in plain words, not test files.**
+
+At the one checkpoint, Step 3 told the agent to send «a short overview that lists the exact files». In a real vibe project the agent then asked the user to approve `tests/facelift/facelift.test.ts`, which a vibe coder cannot judge: they judge what the feature does, not test code. The checkpoint message now leads with the 5–10 criteria as a numbered list of what the user will see or be able to do, says in one sentence what approving means (the criteria become the definition of done; the tests behind them are locked so no agent can edit a test to turn red into green), keeps the exact test files as optional reading for the curious, and ends with the question about the criteria and the `/goal` line.
+
+### Changed
+- **`skills/vibe/SKILL.md`**: Step 3 is now «Acceptance criteria — the one checkpoint», with the message in four parts in a fixed order; every criterion must be checked by a test and every test must check a criterion before the message is sent; a changed criterion changes the tests and the message is sent again before anything is locked. Step 1 asks for the criteria as observable behaviour in the user's language, never a file, test name or code. The `lock`/`verify` procedure is unchanged.
+- **`skills/adapt/blocks/vibe-contract.md` is now `gstack-vibe-v3`**: the checkpoint paragraph says the user approves the criteria, never a test file. **Projects with the vibe profile get the new text the next time `/superpowers-gstack:adapt` runs**; the skill itself changes at once, because it ships with the plugin.
+- The `/adapt` profile question, the roster, README, the CLAUDE.md routing line and the lock script's docstring describe the checkpoint as the criteria.
+
+### Review
+REVIEW_PLACEHOLDER
+
 ## [3.15.2] - 2026-10-23
 
 **`work-state install` can build a project that uses a code-generating Swift package plug-in.**

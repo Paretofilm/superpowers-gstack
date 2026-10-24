@@ -106,9 +106,22 @@ def test_lessons_come_before_verify_and_landing_and_are_committed():
     assert "Commit the change now, on the feature branch" in VIBE
 
 
-def test_the_overview_lists_the_exact_files_and_the_lock_sha_is_reported():
-    assert "lists the exact files" in VIBE and "`lock` commits what is on disk" in VIBE
+def test_the_checkpoint_asks_about_criteria_and_files_are_optional_reading():
+    step = VIBE.split("## Step 3: Acceptance criteria — the one checkpoint")[1].split("## Step 4")[0]
+    assert "never ask them to approve a test file" in step
+    order = ["**The criteria**", "**What approving means**", "**For the curious**", "**The question**"]
+    assert all(o in step for o in order)
+    assert [step.index(o) for o in order] == sorted(step.index(o) for o in order)
+    assert "No file paths, test names or code in this list" in step
+    assert "definition of done" in step and "turn red into green" in step
+    assert "`lock` commits what is on disk" in step and "not what the user is asked about" in step
+    assert "Every criterion is checked by at least one test" in step
     assert "Send the lock commit SHA" in VIBE
+
+
+def test_intake_writes_the_criteria_as_observable_behaviour():
+    step = VIBE.split("## Step 1: Intake — one round")[1].split("## Step 2")[0]
+    assert "observable behaviour" in step and "never a file, test name or code" in step
 
 
 def test_the_threat_model_is_stated():
@@ -156,11 +169,18 @@ def test_explore_is_read_only_and_uses_the_tier_classifier():
     assert "read-only" in step and "classify-change.py" in step
 
 
-def test_the_contract_names_brainstorm_as_a_start_choice_and_the_marker_is_v2():
+def test_the_contract_names_brainstorm_as_a_start_choice_and_the_marker_is_v3():
     block = (REPO / "skills" / "adapt" / "blocks" / "vibe-contract.md").read_text()
-    assert "gstack-vibe-v2" in block
+    assert "gstack-vibe-v3" in block
     assert "Brainstorm" in block
-    assert "gstack-vibe-v2" in VIBE
+    assert "gstack-vibe-v3" in VIBE
+
+
+def test_the_contract_checkpoint_is_the_criteria_not_a_test_overview():
+    block = " ".join((REPO / "skills" / "adapt" / "blocks" / "vibe-contract.md").read_text().split())
+    assert "The one checkpoint is the acceptance criteria" in block
+    assert "never a test file, test name or code" in block
+    assert "test overview" not in block
 
 
 def test_a_pasted_goal_counts_as_approval_and_the_lock_runs_first():

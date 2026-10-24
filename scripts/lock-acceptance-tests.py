@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """lock-acceptance-tests — keep the acceptance tests the user approved exactly as approved.
 
-/superpowers-gstack:vibe shows the user the acceptance tests once; after their ok the
-tests are the contract for the rest of the feature.
+/superpowers-gstack:vibe shows the user the acceptance criteria once, in plain language;
+after their ok the tests behind them are the contract for the rest of the feature.
 
   lock    commits the test files (`test(acceptance): lock <feature>`) — whatever the
           matched files currently contain; they need not be clean — then adds

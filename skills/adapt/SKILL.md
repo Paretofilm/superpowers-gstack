@@ -257,7 +257,7 @@ merge this run does not do.
 
    > How should this project work?
    >
-   > - **Vibe** (recommended) — one intake round, then the feature is finished autonomously and you review it once. Your one checkpoint on the way is the acceptance tests, which are then locked. Adds the `Vibe contract` section and a project context skill.
+   > - **Vibe** (recommended) — one intake round, then the feature is finished autonomously and you review it once. Your one checkpoint on the way is the acceptance criteria — a short list, in plain words, of what you will see or be able to do when it is done; the tests behind them are then locked. Adds the `Vibe contract` section and a project context skill.
    > - **Classic** — the skills' own approval gates (design, plan, execution method, landing menu), as before.
 
    Write the pin and keep it committable:
