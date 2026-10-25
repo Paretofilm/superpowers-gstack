@@ -956,9 +956,26 @@ def apply_renames(lines: list[str], report: Report) -> list[str]:
     return result
 
 
-# the exact line land-worktree.py reads (fullmatch, no trailing space): a row pointed at land
-# under a line land would not accept is a row that sends the agent to a refusal
-LANDING_MODE_RE = re.compile(r"Landing mode: (solo|pr)")
+LAND_WORKTREE = Path(__file__).with_name("land-worktree.py")
+_land_parse_mode = None
+
+
+def land_mode(text: str):
+    """land-worktree.py's own reading of the `Landing mode:` line — 'solo', 'pr', None or
+    'conflict' — loaded by path like work-state's parser. A row pointed at land under a
+    line land reads differently is a row that sends the agent to a refusal."""
+    global _land_parse_mode
+    if _land_parse_mode is None:
+        import importlib.util
+        if not LAND_WORKTREE.is_file():
+            raise Refusal(f"UNREADABLE: {LAND_WORKTREE} is missing — run `/plugin update superpowers-gstack`")
+        spec = importlib.util.spec_from_file_location("land_worktree_for_adapt", LAND_WORKTREE)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _land_parse_mode = mod.parse_mode
+    return _land_parse_mode(text)
+
+
 READY_RE = re.compile(r"\bready to (merge|ship|land)\b", re.I)
 SHIP_CELL_RE = re.compile(r"^`?/ship`?$")
 READY_ITEM_RE = re.compile(r"^(\s*[-*+]\s+.*\bready to (?:merge|ship|land)\b.*→\s*)`?/ship`?(\s*)$", re.I)
@@ -970,33 +987,37 @@ def apply_landing_route(lines: list[str], report: Report) -> list[str]:
     `## Skill routing`, which the script otherwise keeps as the project's. Under the
     project's own `Landing mode: solo` that row contradicts the decision and sends the
     agent to a pull request, so it is pointed at land. Only that cell, only `/ship`."""
-    mask = fence_mask(lines)
-    managed = _managed_ranges(lines)
-    outside = [not mask[i] and not any(a <= i < b for a, b in managed) for i in range(len(lines))]
-    modes = {m.group(1) for i, line in enumerate(lines)
-             if outside[i] and (m := LANDING_MODE_RE.fullmatch(line.rstrip("\r")))}
-    if modes != {"solo"}:
-        return lines
     sr = next(((i, section_end(lines, i, lvl)) for i, lvl, raw in headings(lines)
                if lvl == 2 and heading_text(raw).lower() == "skill routing"), None)
     if sr is None:
         return lines
-    changed = []
+    mask = fence_mask(lines)
+    managed = _managed_ranges(lines)
+    rewrites = {}
     for i in range(*sr):
-        if not outside[i]:
+        if mask[i] or any(a <= i < b for a, b in managed):
             continue
         line = lines[i]
         if line.lstrip().startswith("|"):
             cells = line.strip().strip("|").split("|")
             if len(cells) >= 2 and READY_RE.search(cells[0]) and SHIP_CELL_RE.match(cells[-1].strip()):
                 cells[-1] = cells[-1].replace(cells[-1].strip(), SOLO_LAND)
-                new = line[:len(line) - len(line.lstrip())] + "|" + "|".join(cells) + "|"
-                changed.append((line, new))
-                lines[i] = new
+                rewrites[i] = line[:len(line) - len(line.lstrip())] + "|" + "|".join(cells) + "|"
         elif (m := READY_ITEM_RE.match(line)):
-            new = f"{m.group(1)}{SOLO_LAND}{m.group(2)}"
-            changed.append((line, new))
-            lines[i] = new
+            rewrites[i] = f"{m.group(1)}{SOLO_LAND}{m.group(2)}"
+    if not rewrites:
+        return lines
+    mode = land_mode("\n".join(lines))
+    if mode != "solo":
+        if mode == "conflict":
+            report.notes.append("Skill routing sends \"ready to merge\" to `/ship`, and CLAUDE.md has both "
+                                "`Landing mode: solo` and `Landing mode: pr`: left as written — keep one line, "
+                                "then re-run `/adapt`")
+        return lines
+    changed = []
+    for i, new in rewrites.items():
+        changed.append((lines[i], new))
+        lines[i] = new
     for old, new in changed:
         report.changes.append(f"Skill routing: `Landing mode: solo`, so `{old.strip()}` now routes to "
                               f"{SOLO_LAND} (the snapshot has the old row)")

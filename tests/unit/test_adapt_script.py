@@ -1906,6 +1906,8 @@ SOLO_ROUTING = ("# P\n\n## Skill routing\n\n### Phase 4 — Ship & maintain\n\n|
     ("", False),
     ("Landing mode: solo\n\nLanding mode: pr", False),   # both: the project has not decided
     ("Landing mode: solo ", False),   # land-worktree.py fullmatches: it would refuse this line
+    # land reads every line outside a fence, marked sections too: a `pr` there makes it a conflict
+    ("Landing mode: solo\n\n## Old block <!-- gstack-old-v1 -->\n\nLanding mode: pr", False),
 ])
 def test_a_ready_to_merge_row_follows_the_projects_landing_mode(tmp_path, mode, landed):
     text_in = SOLO_ROUTING + (f"## P landing\n\n{mode}\n" if mode else "")
@@ -1919,6 +1921,7 @@ def test_a_ready_to_merge_row_follows_the_projects_landing_mode(tmp_path, mode, 
     assert ("- Ready to ship → `/superpowers-gstack:land`" in body) is landed
     assert "| Want post-ship doc updates | `/document-release` |" in body
     assert ("now routes to `/superpowers-gstack:land`" in p.stdout) is landed
+    assert ("has both `Landing mode: solo` and `Landing mode: pr`" in p.stdout) is (mode.count("Landing mode:") == 2)
 
 
 # E: the retired autonomy section in the exact shape sing-replay carries (v2 marker,
