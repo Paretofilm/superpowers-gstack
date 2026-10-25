@@ -11,9 +11,13 @@ touches the file, deterministically:
   2. header     the two HTML comment lines at the top, rewritten every run
   3. retired    a marker-carrying `Autonomy and user interruption` section is
                 removed within its size bound; a grown one is deferred
-  4. renames    retired skill names outside marker-managed sections and fences;
+  4. renames    retired skill names outside marker-managed sections and fences,
+                as `/name`, `superpowers-gstack:name` or a bare name in prose;
                 a roster row or list item that IS a removed skill goes, a prose
                 line that mentions one is kept and reported
+     landing    under `Landing mode: solo`, a Skill routing row or list item that
+                sends "ready to merge/ship/land" to `/ship` is pointed at
+                `/superpowers-gstack:land`; `pr`, no line or both lines: untouched
   5. routing    `--routing-file` is inserted only when `## Skill routing` is absent
   6. blocks     every block in BLOCKS: skip / replace / attribute-then-replace /
                 append, with the growth check (provenance, ratio, volume — any one
@@ -191,6 +195,14 @@ REMOVED_SKILLS = ("ios-visual-explore",)
 def _skill_ref(names) -> re.Pattern:
     alt = "|".join(re.escape(n) for n in names)
     return re.compile(r"(?<![\w/-])/(superpowers-gstack:)?(" + alt + r")(?![\w/-])")
+
+
+def _skill_name_ref(names) -> re.Pattern:
+    """A retired name as a slash command or as a bare name in prose ("Native review
+    skills (`macos-native-review`, ...)"). Not inside a path (`skills/x/SKILL.md`),
+    not with another plugin's prefix, not as a file name (`x.md`)."""
+    alt = "|".join(re.escape(n) for n in names)
+    return re.compile(r"(?<![\w/:-])(/)?(superpowers-gstack:)?(" + alt + r")(?![\w/-]|\.\w)")
 
 
 # --- document primitives ---------------------------------------------------------
@@ -902,7 +914,7 @@ def apply_renames(lines: list[str], report: Report) -> list[str]:
                 continue
             kept_mentions.append(len(out) + 1)
         for olds, new in RENAMES:
-            line, k = _skill_ref(olds).subn(lambda m: f"/{m.group(1) or ''}{new}", line)
+            line, k = _skill_name_ref(olds).subn(lambda m: f"{m.group(1) or ''}{m.group(2) or ''}{new}", line)
             if k:
                 counts[new] = counts.get(new, 0) + k
                 renamed_at.add(len(out))
@@ -939,6 +951,50 @@ def apply_renames(lines: list[str], report: Report) -> list[str]:
     for n in kept_mentions:
         report.notes.append(f"line {n} mentions a retired skill in prose; kept as written — edit it by hand")
     return result
+
+
+LANDING_MODE_RE = re.compile(r"^Landing mode: (solo|pr)\s*$")
+READY_RE = re.compile(r"\bready to (merge|ship|land)\b", re.I)
+SHIP_CELL_RE = re.compile(r"^`?/ship`?$")
+READY_ITEM_RE = re.compile(r"^(\s*[-*+]\s+.*\bready to (?:merge|ship|land)\b.*→\s*)`?/ship`?(\s*)$", re.I)
+SOLO_LAND = "`/superpowers-gstack:land`"
+
+
+def apply_landing_route(lines: list[str], report: Report) -> list[str]:
+    """An older /adapt wrote "Branch is ready to merge to main → `/ship`" into
+    `## Skill routing`, which the script otherwise keeps as the project's. Under the
+    project's own `Landing mode: solo` that row contradicts the decision and sends the
+    agent to a pull request, so it is pointed at land. Only that cell, only `/ship`."""
+    mask = fence_mask(lines)
+    managed = _managed_ranges(lines)
+    outside = [not mask[i] and not any(a <= i < b for a, b in managed) for i in range(len(lines))]
+    modes = {m.group(1) for i, line in enumerate(lines) if outside[i] and (m := LANDING_MODE_RE.match(line))}
+    if modes != {"solo"}:
+        return lines
+    sr = next(((i, section_end(lines, i, lvl)) for i, lvl, raw in headings(lines)
+               if lvl == 2 and heading_text(raw).lower() == "skill routing"), None)
+    if sr is None:
+        return lines
+    changed = []
+    for i in range(*sr):
+        if not outside[i]:
+            continue
+        line = lines[i]
+        if line.lstrip().startswith("|"):
+            cells = line.strip().strip("|").split("|")
+            if len(cells) >= 2 and READY_RE.search(cells[0]) and SHIP_CELL_RE.match(cells[-1].strip()):
+                cells[-1] = cells[-1].replace(cells[-1].strip(), SOLO_LAND)
+                new = line[:len(line) - len(line.lstrip())] + "|" + "|".join(cells) + "|"
+                changed.append((line, new))
+                lines[i] = new
+        elif (m := READY_ITEM_RE.match(line)):
+            new = f"{m.group(1)}{SOLO_LAND}{m.group(2)}"
+            changed.append((line, new))
+            lines[i] = new
+    for old, new in changed:
+        report.changes.append(f"Skill routing: `Landing mode: solo`, so `{old.strip()}` now routes to "
+                              f"{SOLO_LAND} (the snapshot has the old row)")
+    return lines
 
 
 def apply_routing(lines: list[str], ctx: Context, report: Report) -> list[str]:
@@ -1216,6 +1272,7 @@ def merge(text: str | None, ctx: Context) -> tuple[str, Report]:
     lines = apply_header(lines, ctx, report)
     lines = apply_autonomy(lines, report)
     lines = apply_renames(lines, report)
+    lines = apply_landing_route(lines, report)
     lines = apply_routing(lines, ctx, report)
     lines = apply_project_section(lines, ctx, report)
     for blk in BLOCKS:

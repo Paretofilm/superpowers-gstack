@@ -1810,3 +1810,131 @@ def test_write_pin_keeps_a_crlf_gitignore(tmp_path):
     run(proj, "--fresh")
     raw = (proj / ".gitignore").read_bytes()
     assert raw == b"build/\r\n.gstack/\r\n!.gstack/workflow\r\n!.gstack/explainer\r\n"
+
+
+# --- 3.17.0: the sing-replay prompt audit (xcode-tools v11, Skill routing upkeep) ---
+#
+# Each test upgrades the REAL v10 section that 3.12.0–3.16.0 emitted (the fixture is
+# that block, verbatim) and reads what lands. Before v11 every one of them fails.
+
+XCODE_V10 = REPO / "tests" / "fixtures" / "adapt-xcode-tools-v10" / "xcode-tools-v10.md"
+
+
+def _upgraded_xcode_section(tmp_path) -> str:
+    raw = XCODE_V10.read_text()
+    filled = (raw.replace("{{IOS_SIMULATOR}}", "iPhone 17").replace("{{DEVELOPMENT_TEAM}}", "ABCDE12345")
+              .replace("{{E2E_EXECUTOR}}", "host"))
+    head, rest = filled.split("\n", 1)
+    filled = f"{head}<!-- emitted={raw.count(chr(10))} -->\n{rest}"
+    proj = project(tmp_path, claude_md="# P\n\n" + filled, track="macos")
+    p = run(proj, *NATIVE_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert "gstack-xcode-tools-v10" not in text and DEFERRED not in p.stdout, "the v10 section is replaced, not deferred"
+    start = text.index("## Native Apple development tools")
+    nxt = text.find("\n## ", start + 1)
+    return text[start:nxt if nxt != -1 else len(text)]
+
+
+def test_a_generated_entitlements_file_is_never_the_one_to_edit(tmp_path):
+    sec = _upgraded_xcode_section(tmp_path)
+    assert "`entitlements.properties` under the target in `project.yml` (XcodeGen)" in sec
+    assert "generated output and is never edited by hand" in sec
+    assert "`*.entitlements` file (no XcodeGen, or an `entitlements:` with no `properties:`)" in sec
+    assert "grep -n -A3 'entitlements:' project.yml" in sec
+    assert "❌ Editing a `*.entitlements` file that XcodeGen generates" in sec
+    # the three iCloud keys are named as separate entries
+    for key in ("com.apple.developer.icloud-services", "com.apple.developer.icloud-container-identifiers",
+                "com.apple.developer.ubiquity-container-identifiers"):
+        assert key in sec, key
+    # the v10 wording that sent the agent to the generated file is gone
+    assert "container in `*.entitlements` (declarative XML)" not in sec
+    assert "declare entitlements in `*.entitlements` + `project.yml` (XcodeGen) instead" not in sec
+
+
+def test_a_signing_failure_tries_the_provisioning_flag_before_stopping(tmp_path):
+    sec = _upgraded_xcode_section(tmp_path)
+    wf = sec[sec.index("**Capability workflow"):]
+    wf = wf[:wf.index("\n")]
+    step4 = wf[wf.index("(4)"):]
+    assert step4.index("-allowProvisioningUpdates") < step4.index("STOP"), "the flag comes first, the user second"
+    assert "do not stop yet" in step4 and "-allowProvisioningDeviceRegistration" in step4
+    assert "Only if the flag also fails" in step4
+    assert "never loop on a failing signing build" in step4
+    assert "manually signed target it only downloads profiles" in step4
+    assert "The portal requires Apple ID + 2FA that no MCP/CLI tool automates" not in sec
+
+
+def test_automatic_macos_signing_with_a_signed_in_account_is_not_called_broken(tmp_path):
+    sec = _upgraded_xcode_section(tmp_path)
+    assert "automatic `Apple Development` signing does NOT work headlessly on macOS" not in sec
+    assert "Automatic `Apple Development` signing works headlessly on macOS when" in sec
+    assert "is working: leave it as it is" in sec
+    assert "The rule above is for new projects, not a reason to migrate one" in sec
+    assert "When you create a new XcodeGen `project.yml` with a **macOS** app target, it MUST declare" in sec
+    # the rules that stand are still there
+    assert 'NEVER emit `CODE_SIGN_IDENTITY: "-"`' in sec and "iOS apps cannot use Developer ID" in sec
+
+
+# D: an unmarked `## Skill routing` from an older /adapt is the project's, but a renamed
+# skill in prose and a `/ship` row under `Landing mode: solo` are both upgraded.
+
+def test_a_renamed_skill_in_prose_is_renamed_but_a_path_or_file_name_is_not(tmp_path):
+    routing = ("# P\n\n## Skill routing\n\n### Routing Logic\n\n"
+               "3. Native review skills (`macos-native-review`, `ios-native-review`) run BEFORE implementation.\n"
+               "4. Scaffold with superpowers-gstack:ios-e2e-scaffold once.\n"
+               "5. See skills/macos-native-review/SKILL.md and macos-native-review.md for history.\n"
+               "6. other-plugin:ios-native-review is not ours.\n")
+    proj = project(tmp_path, claude_md=routing)
+    run(proj, *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert "(`apple-native-review`, `apple-native-review`) run BEFORE" in text
+    assert "superpowers-gstack:e2e-scaffold once" in text
+    assert "skills/macos-native-review/SKILL.md and macos-native-review.md" in text
+    assert "other-plugin:ios-native-review" in text
+
+
+SOLO_ROUTING = ("# P\n\n## Skill routing\n\n### Phase 4 — Ship & maintain\n\n| When you... | Use |\n|---|---|\n"
+                "| Branch is ready to merge to main | `/ship` |\n"
+                "| Want post-ship doc updates | `/document-release` |\n\n"
+                "### Routing Logic\n\n- Ready to ship → `/ship`\n\n"
+                "```\n| Branch is ready to merge to main | `/ship` |\n```\n\n")
+
+
+@pytest.mark.parametrize("mode,landed", [
+    ("Landing mode: solo", True),
+    ("Landing mode: pr", False),
+    ("", False),
+    ("Landing mode: solo\n\nLanding mode: pr", False),   # both: the project has not decided
+])
+def test_a_ready_to_merge_row_follows_the_projects_landing_mode(tmp_path, mode, landed):
+    text_in = SOLO_ROUTING + (f"## P landing\n\n{mode}\n" if mode else "")
+    proj = project(tmp_path, claude_md=text_in)
+    p = run(proj, *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    fence = text[text.index("```"):]
+    assert "| Branch is ready to merge to main | `/ship` |" in fence, "a fenced copy is never edited"
+    body = text[:text.index("```")]
+    assert ("| Branch is ready to merge to main | `/superpowers-gstack:land` |" in body) is landed
+    assert ("- Ready to ship → `/superpowers-gstack:land`" in body) is landed
+    assert "| Want post-ship doc updates | `/document-release` |" in body
+    assert ("now routes to `/superpowers-gstack:land`" in p.stdout) is landed
+
+
+# E: the retired autonomy section in the exact shape sing-replay carries (v2 marker,
+# H2 with four H3 subsections, 31 lines) goes, Forbidden phrases with it.
+
+def test_a_v2_autonomy_section_with_its_subsections_is_removed_whole(tmp_path):
+    subs = ["The only five reasons to stop and ask", "Do NOT stop to", "Forbidden phrases",
+            "Status updates DURING work, not AS wait-states"]
+    body = ["", "Default to autonomous continuation.", ""]
+    for s in subs:
+        body += [f"### {s}", "", "- a line", "- a line", "- a line", ""]
+    body += ["closing line"]
+    sec = "\n".join(["## Autonomy and user interruption <!-- gstack-autonomy-v2 -->", *body])
+    assert sec.count("\n") + 1 <= 31 + 3
+    proj = project(tmp_path, claude_md="# P\n\n" + sec + "\n\n## P own\n\nkeep\n")
+    p = run(proj, *WEB_SETS)
+    text = (proj / "CLAUDE.md").read_text()
+    assert "Autonomy" not in text and "Forbidden phrases" not in text
+    assert "## P own\n\nkeep" in text
+    assert "removed the retired `Autonomy and user interruption` section" in p.stdout

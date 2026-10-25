@@ -319,11 +319,13 @@ merge this run does not do.
    [from Step 2 — omit what does not apply]
    ```
 
-   If `## Skill routing` already exists, the script leaves it alone (its marker-managed
-   subsections are still upgraded), so write no draft. If the old section routes to
-   skills that no longer exist, the script renames `macos-/ios-native-review` →
-   `apple-native-review` and `macos-/ios-e2e-scaffold` → `e2e-scaffold`, and
-   drops `ios-visual-explore` rows itself.
+   If `## Skill routing` already exists, the script keeps it as the project's (marked
+   subsections are still upgraded), so write no draft. It still renames
+   `macos-/ios-native-review` → `apple-native-review` and `macos-/ios-e2e-scaffold` →
+   `e2e-scaffold` (tables and prose), drops `ios-visual-explore` rows, and under
+   `Landing mode: solo` points a "ready to merge/ship" row at `/superpowers-gstack:land`
+   instead of `/ship`. Everything else in it stays as written: after a skill rename the
+   plugin does not cover, the user edits the section by hand.
 
 6. **Local state.** Files git ignores but the project needs (data, local configuration,
    keys) exist only in the primary checkout, and the `Worktrees and solo landing` block
