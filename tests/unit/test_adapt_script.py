@@ -1840,7 +1840,7 @@ def test_a_generated_entitlements_file_is_never_the_one_to_edit(tmp_path):
     assert "`entitlements.properties` under the target in `project.yml` (XcodeGen)" in sec
     assert "generated output and is never edited by hand" in sec
     assert "`*.entitlements` file (no XcodeGen, or an `entitlements:` with no `properties:`)" in sec
-    assert "grep -n -A3 'entitlements:' project.yml" in sec
+    assert "grep -n -A6 'entitlements:' project.yml" in sec
     assert "❌ Editing a `*.entitlements` file that XcodeGen generates" in sec
     # the three iCloud keys are named as separate entries
     for key in ("com.apple.developer.icloud-services", "com.apple.developer.icloud-container-identifiers",
@@ -1887,7 +1887,7 @@ def test_a_renamed_skill_in_prose_is_renamed_but_a_path_or_file_name_is_not(tmp_
     proj = project(tmp_path, claude_md=routing)
     run(proj, *WEB_SETS)
     text = (proj / "CLAUDE.md").read_text()
-    assert "(`apple-native-review`, `apple-native-review`) run BEFORE" in text
+    assert "Native review skills (`apple-native-review`) run BEFORE" in text, "two old names that became one are one"
     assert "superpowers-gstack:e2e-scaffold once" in text
     assert "skills/macos-native-review/SKILL.md and macos-native-review.md" in text
     assert "other-plugin:ios-native-review" in text
@@ -1905,6 +1905,7 @@ SOLO_ROUTING = ("# P\n\n## Skill routing\n\n### Phase 4 — Ship & maintain\n\n|
     ("Landing mode: pr", False),
     ("", False),
     ("Landing mode: solo\n\nLanding mode: pr", False),   # both: the project has not decided
+    ("Landing mode: solo ", False),   # land-worktree.py fullmatches: it would refuse this line
 ])
 def test_a_ready_to_merge_row_follows_the_projects_landing_mode(tmp_path, mode, landed):
     text_in = SOLO_ROUTING + (f"## P landing\n\n{mode}\n" if mode else "")

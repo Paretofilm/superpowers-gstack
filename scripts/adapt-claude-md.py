@@ -918,6 +918,9 @@ def apply_renames(lines: list[str], report: Report) -> list[str]:
             if k:
                 counts[new] = counts.get(new, 0) + k
                 renamed_at.add(len(out))
+                # two old names that became one: "(`macos-x`, `ios-x`)" reads "(`x`)", not "(`x`, `x`)"
+                twin = r"(`/?(?:superpowers-gstack:)?" + re.escape(new) + r"`)(?:\s*,\s*|\s+(?:and|or)\s+|\s*/\s*)\1"
+                line = re.sub(twin, r"\1", line)
         out.append(line)
     lines = out
     # rows that collapsed into the same skill become one row (keep the first) —
@@ -953,7 +956,9 @@ def apply_renames(lines: list[str], report: Report) -> list[str]:
     return result
 
 
-LANDING_MODE_RE = re.compile(r"^Landing mode: (solo|pr)\s*$")
+# the exact line land-worktree.py reads (fullmatch, no trailing space): a row pointed at land
+# under a line land would not accept is a row that sends the agent to a refusal
+LANDING_MODE_RE = re.compile(r"Landing mode: (solo|pr)")
 READY_RE = re.compile(r"\bready to (merge|ship|land)\b", re.I)
 SHIP_CELL_RE = re.compile(r"^`?/ship`?$")
 READY_ITEM_RE = re.compile(r"^(\s*[-*+]\s+.*\bready to (?:merge|ship|land)\b.*→\s*)`?/ship`?(\s*)$", re.I)
@@ -968,7 +973,8 @@ def apply_landing_route(lines: list[str], report: Report) -> list[str]:
     mask = fence_mask(lines)
     managed = _managed_ranges(lines)
     outside = [not mask[i] and not any(a <= i < b for a, b in managed) for i in range(len(lines))]
-    modes = {m.group(1) for i, line in enumerate(lines) if outside[i] and (m := LANDING_MODE_RE.match(line))}
+    modes = {m.group(1) for i, line in enumerate(lines)
+             if outside[i] and (m := LANDING_MODE_RE.fullmatch(line.rstrip("\r")))}
     if modes != {"solo"}:
         return lines
     sr = next(((i, section_end(lines, i, lvl)) for i, lvl, raw in headings(lines)
