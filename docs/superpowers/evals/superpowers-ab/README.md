@@ -18,7 +18,8 @@ cd /tmp/sp && claude plugin eval . --tag process --runs 3 --model claude-opus-5-
 
 No shell is granted: on the maintainer's Mac a `credential_process` profile in
 `~/.aws/config` makes Bash-granting evals refuse to run, so the cases say there is no
-shell and grade what can be graded without one.
+shell and grade what can be graded without one. Each case's `allowed_tools` lists only
+read-only tools; `--allow-tools Write Edit` adds file writing to every case.
 
 ## Result, 2026-10-25 (Superpowers 7.0.0, Opus 5.5, 3 runs per arm, $3.07)
 
