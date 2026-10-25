@@ -1,5 +1,5 @@
 ---
-description: A request no plugin skill covers must not invoke one
+description: A request no plugin skill covers must not invoke any skill, bare or namespaced
 tags: [trigger]
 max_turns: 4
 timeout_seconds: 180
