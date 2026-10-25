@@ -13,7 +13,7 @@ tests/
     └── test_track_aware_dispatch.sh   ← verifies track-aware routing dispatches correctly
 ```
 
-Unit tests live in `tests/unit/` — all stdlib-only pytest, no API calls. `--unit` also runs the skill-level shell contract tests (`skills/*/tests/required-sections.test.sh`, plain bash, no deps). htmlify has its own `skills/htmlify/tests/` Bun suite.
+Unit tests live in `tests/unit/` — all stdlib-only pytest, no API calls. `--unit` also runs the skill-level shell contract tests (`skills/*/tests/required-sections.test.sh`, plain bash, no deps). htmlify has its own `skills/htmlify/tests/` Bun suite. `bash skills/adapt/tests/run.sh` runs just the adapt skill's tests: its contract test and `tests/unit/test_adapt_script.py`.
 
 ## Running
 
