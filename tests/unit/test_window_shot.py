@@ -37,7 +37,7 @@ def env(tmp_path):
     subprocess.run(["git", "init", "-q"], cwd=project, check=True)
     e = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "HOME": str(tmp_path), "TMPDIR": str(tmp_path),
          "FAKE_COMM": "/b/App.app/Contents/MacOS/App", "FAKE_WID": "4242",
-         "FAKE_ARGS": str(tmp_path / "args")}
+         "FAKE_ARGS": str(tmp_path / "args"), "WINDOW_SHOT_EXPECT": "/b/App.app/Contents/MacOS/App"}
     return project, e
 
 
@@ -103,6 +103,17 @@ def test_expected_executable_must_match_exactly(env):
     assert ok.returncode == 0
     bad = run(project, e, "123", str(project / "b.png"), WINDOW_SHOT_EXPECT="/other/App.app/Contents/MacOS/App")
     assert bad.returncode == 6 and "not" in bad.stderr
+
+
+def test_a_bare_pid_is_refused_without_the_expected_executable(env):
+    """The consent covers the app this session launched. A PID alone cannot show that, so
+    without WINDOW_SHOT_EXPECT the script would capture any app the user has open."""
+    project, e = env
+    pin(project, "host\n")
+    e = {k: v for k, v in e.items() if k != "WINDOW_SHOT_EXPECT"}
+    r = run(project, e, "123", str(project / "a.png"))
+    assert r.returncode == 2 and "WINDOW_SHOT_EXPECT" in r.stderr
+    assert not Path(e["FAKE_ARGS"]).exists(), "no screencapture may run for an unnamed app"
 
 
 def test_no_window_is_exit_4_and_never_falls_back_to_the_screen(env):

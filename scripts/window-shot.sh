@@ -11,13 +11,15 @@
 # `vm`, `off`, a missing file and any other content all refuse; an invalid value is
 # BLOCKED rather than read as `off`, as with .gstack/e2e-executor.
 #
-# Optional: WINDOW_SHOT_EXPECT=<full executable path>. When set, the PID must be
-# running exactly that executable (the `ps -o comm=` proof from verify-and-land
-# Phase 5), so a helper or another copy cannot answer for the build under test.
+# Required: WINDOW_SHOT_EXPECT=<full executable path>. The PID must be running exactly
+# that executable (the `ps -o comm=` proof from verify-and-land Phase 5), so a helper,
+# another copy, or an unrelated app the user has open (Mail, a browser) cannot answer
+# for the build under test. The consent covers the app this session launched, nothing
+# else, and a bare PID cannot show which app that is.
 #
 # Exit codes
 #   0  captured; the path is the last line on stdout
-#   2  usage error, no `host` pin, or an invalid pin
+#   2  usage error (including a missing WINDOW_SHOT_EXPECT), no `host` pin, or an invalid pin
 #   3  not macOS
 #   4  no on-screen window for that PID (minimised, other Space, not up yet, or the
 #      process is gone): retried for ~10 s before giving up
@@ -34,6 +36,8 @@ die() { printf '%s\n' "$2" >&2; exit "$1"; }
 PID=$1; OUT=$2
 case "$PID" in ''|*[!0-9]*) die 2 "USAGE ERROR: <pid> must be a number, got '$PID'";; esac
 case "$OUT" in *.png) ;; *) die 2 "USAGE ERROR: <out.png> must end in .png";; esac
+[ -n "${WINDOW_SHOT_EXPECT:-}" ] \
+  || die 2 "USAGE ERROR: set WINDOW_SHOT_EXPECT to the full executable path of the app this session launched"
 
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 PIN="$ROOT/.gstack/visual-verify"
@@ -54,7 +58,7 @@ fi
 
 ACTUAL=$(ps -o comm= -p "$PID" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 [ -n "$ACTUAL" ] || die 6 "pid $PID is not running"
-if [ -n "${WINDOW_SHOT_EXPECT:-}" ] && [ "$ACTUAL" != "$WINDOW_SHOT_EXPECT" ]; then
+if [ "$ACTUAL" != "$WINDOW_SHOT_EXPECT" ]; then
   die 6 "pid $PID runs '$ACTUAL', not '$WINDOW_SHOT_EXPECT'"
 fi
 
