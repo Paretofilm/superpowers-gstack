@@ -584,3 +584,16 @@ def test_the_runner_dispatches_and_exits_as_documented(platform, pin, rig, env, 
         assert args_file.exists() is xcb_ran, "xcodebuild ran" if args_file.exists() else "xcodebuild did not run"
         if dest is not None:
             assert dest in args_file.read_text()
+
+
+def test_adapt_asks_for_window_capture_consent_once_on_macos():
+    """3.18.1: the consent used to be asked only when a capture was refused, mid-task, or
+    never when previews sufficed. /adapt now asks once on macos/both, next to the executor."""
+    item = ADAPT[ADAPT.index("2b. **Window capture pin**"):ADAPT.index("3. **Placeholders**")]
+    flat = " ".join(item.split())
+    assert "only when track is `macos` or `both`" in flat
+    assert "do not re-ask" in flat and "ask **once**" in flat
+    assert "`host`, `vm` or `off`" in flat
+    assert "never the rest of your screen" in flat
+    assert "with nobody to answer, write no file" in flat
+    assert ADAPT.index("2. **E2E executor pin**") < ADAPT.index("2b. **Window capture pin**")

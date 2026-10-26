@@ -187,7 +187,7 @@ a plugin upgrade, say), this is a plain upgrade: run Steps 5–6 as usual, witho
 `--project-section`; the script leaves the pending section exactly as it is, and the
 marker waits for the spec. **If the stack is decided**, this run is the fill-in: the
 pins exist (the script reads them), so items 4, 6 and 7 below are not asked again
-(item 2, the macOS test executor, is asked now if the platform turned out to be macOS),
+(items 2 and 2b, the macOS test executor and window capture, are asked now if the platform turned out to be macOS),
 and Steps 2–3 collapse into one confirmation with the answer in it:
 
 > I read this as a **[type]** on **[stack]**, tests via `[command]`, [deployed to X /
@@ -247,6 +247,20 @@ merge this run does not do.
    Do not check whether `vm-e2e` is installed before asking — the pin records a project
    decision, not this machine's capabilities. iOS-only and web projects get no file and
    no question.
+2b. **Window capture pin** — only when track is `macos` or `both`, in the same
+   `AskUserQuestion` as item 2 when both are asked. If `.gstack/visual-verify` exists the
+   script validates it; do not re-ask. If it does not exist, ask **once**:
+
+   > May the agent take a picture of the app's window to check a UI change itself, before asking you to look? It captures only the window of the app it launched, never the rest of your screen.
+   >
+   > - **Yes, for this project** (recommended) — the agent looks first, and you are asked only about what it has already seen. The answer is committed, so it holds on every machine that works on this project.
+   > - **Only in the VM rig** — no capture on a developer's own Mac; the agent uses previews and the VM.
+   > - **No** — previews only; the agent asks you to look.
+
+   Write `host`, `vm` or `off` (the options in that order) the same way as item 2, with `visual-verify` in place of
+   `e2e-executor` in every line of that block. The answer is the project owner's standing
+   consent, so it is committed and never guessed: with nobody to answer, write no file
+   (no file means `off`).
 3. **Placeholders** — resolve every token the emitted blocks carry, per
    `blocks/PLACEHOLDERS.md`: `DOMAIN_SENSITIVITY` from Step 3 (every track);
    `IOS_SIMULATOR` and `DEVELOPMENT_TEAM` on native tracks (the resolution commands are

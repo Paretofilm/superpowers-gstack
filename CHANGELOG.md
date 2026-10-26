@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.18.1] - 2026-10-26
+
+**`/adapt` asks once whether the agent may capture the app's window.** In 3.18.0 the consent in `.gstack/visual-verify` was asked only when a capture was refused, in the middle of a task, and never when previews were enough, so a user could not learn that the option existed. Item 2b in Step 4 now asks it on `macos` and `both` tracks, in the same question round as the E2E executor pin: yes for this project (`host`, recommended; the answer is committed, so the option says it holds on every machine that works on the project), only in the VM rig (`vm`), or no (`off`). An existing file is validated and not asked again; with nobody to answer, no file is written, which means `off`. The script still never writes the pin itself.
+
+- `swiftui-view-gate` and chapter 7 of the manual say that `/adapt` asks. A `vm` or `off` pin is the owner's answer and is not asked again; only a missing file (a project adapted before 3.18.1) gets the one question when a capture is refused.
+- Third house (DeepSeek, correctness, $0.015): the option said "on this machine" for a committed, project-wide answer, and the gate would have asked a `vm` or `off` project to write `host` anyway; both fixed. Dropped: unvalidated pin contents (`read_visual_verify` refuses anything but `host`, `vm`, `off`), and prose-anchored tests (the repo's convention).
+- `tests/unit/test_e2e_executor_marker.py`: the question is asked once, only on macOS tracks, after the executor pin.
+
 ## [3.18.0] - 2026-10-26
 
 **A SwiftUI view change is not done until it was looked up, linted and seen, and the agent can look without interrupting the user.** This brings in the rest of pull request #97, which 3.12.0 had deferred with a trigger ("build them if an agent is seen skipping the section"). The maintainer decided to take it in without waiting for that trigger.

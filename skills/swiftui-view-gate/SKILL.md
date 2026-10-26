@@ -82,8 +82,10 @@ Choose the route by cost to the user, cheapest first:
    image that shows nothing (exit 3 not macOS, 4 no window, 5 blank capture, 6 wrong process,
    7 the Swift helper cannot be built). macOS only; `$PID` and `$WANT` are the Phase 5 proof of
    `verify-and-land`. The pin is committed, like `.gstack/e2e-executor`, so every worktree has it.
-   Missing consent is `BLOCKED`: ask the user once to write `host` into `.gstack/visual-verify`, or
-   use route 1 or 4. Read the PNG afterwards; a path is not a look.
+   `/superpowers-gstack:adapt` asks for it once on macOS projects. `vm` or `off` is the
+   owner's answer: use route 1 or 4 and do not ask again. Only a missing file (a project
+   adapted before 3.18.1) earns one question: may `host` be written into
+   `.gstack/visual-verify`? Otherwise use route 1 or 4. Read the PNG afterwards; a path is not a look.
 3. **Computer use** (clicks, typing) needs a per-session approval dialog that a plugin cannot grant.
    Use it only for a flow that must be driven, and prefer a mock backend over live data.
 4. **VM with the E2E mock backend** (`vm-e2e`, `step()` screenshots) for states that need seeding
