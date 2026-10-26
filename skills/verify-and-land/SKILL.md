@@ -62,6 +62,22 @@ three changes of which the user looked at one. If a change has no user-visible
 effect — a refactor, a test — say so: looking is the wrong check for it; the tests
 cover it and the gate covers the rest.
 
+**Name the views the diff touches.** A diff that changes SwiftUI views also needs the
+view gate (`/superpowers-gstack:swiftui-view-gate`), because "it builds" and "the linters
+are clean" are not a look:
+
+```bash
+SKILL_DIR='<the base directory the Skill tool printed when this skill loaded>'
+VG="$SKILL_DIR/../../scripts/view-gate.py"; WS="$SKILL_DIR/../../scripts/window-shot.sh"
+[ -f "$VG" ] || VG=$(ls ~/.claude/plugins/cache/*/superpowers-gstack/*/scripts/view-gate.py 2>/dev/null | sort -V | tail -1)
+[ -f "$WS" ] || WS=$(ls ~/.claude/plugins/cache/*/superpowers-gstack/*/scripts/window-shot.sh 2>/dev/null | sort -V | tail -1)
+VIEW_FILES=$(python3 "$VG" files --base "$DEFAULT_REF") \
+  || { echo "the view gate could not be checked (view-gate.py missing or the base ref does not resolve)" >&2; VIEW_FILES="?"; }
+```
+
+Keep the list. Empty means the gate does not apply; say nothing about it. A failed check
+is not empty: `?` counts as views touched, and the failure is reported in one line.
+
 ## Phase 2 — resolve the container, the scheme, and the destination
 
 **Generate the project first if it is generated.** A `project.yml` is itself an
@@ -240,6 +256,28 @@ the way `VERIFIED_HEAD` is recorded: Phase 7 hands it to `install` as `--quit-pa
 shell variables do not survive from one Bash call to the next, so `$BUILT_PRODUCTS_DIR`
 would be empty by then.
 
+## Phase 5b — look yourself first
+
+Only when `VIEW_FILES` is not empty, `$PID` came out of the Phase 5 proof, **and**
+`.gstack/visual-verify` reads exactly `host`:
+the project owner has said, once, in the repo, that the agent may look at the app it
+launched. The user is the sensor of last resort, so look before asking.
+
+```bash
+WINDOW_SHOT_EXPECT="$WANT" "$WS" "$PID" "${TMPDIR:-/tmp}/verify-$(git rev-parse --short HEAD).png"
+```
+
+Shell variables do not survive from one Bash call to the next: run this in the same call
+as the Phase 5 proof and the Phase 1 lookup of `$WS`, or write the literal PID, executable
+path and script path from those phases in their place.
+
+It captures one window by id, never the display. Read the PNG and list what is on screen,
+including defects nobody asked about (a truncated label, a missing chevron). A defect you
+can fix is fixed first: back to Phase 4, with a new `VERIFIED_HEAD`. A non-zero exit (3 not
+macOS, 4 no window, 5 blank capture, 6 wrong process, 7 the Swift helper cannot be built) or
+a `BLOCKED` pin is one line in the report and no more: go on to the gate and let the user
+look. Never fall back to a whole-display capture. The result belongs in the `View gate:` line.
+
 ## Phase 6 — the human gate
 
 The user is the instrument; a person looking is the entire point. Ask with
@@ -250,7 +288,16 @@ say, per file, whether you *rendered and saw* it (`live-swiftui`, or a screensho
 launched bundle) or only *built* it, appearance unverified. A project adapted since 3.12.0
 carries the five steps (look up, lint, affordance check, see, report) in the "SwiftUI view
 changes" section of its CLAUDE.md; the statement above applies with or without it. A view you did not see is listed as unverified, and the user's yes then covers
-what they looked at, not the whole diff. The options:
+what they looked at, not the whole diff.
+
+**View gate.** When `VIEW_FILES` is not empty, the session must hold a `View gate:` line
+from `/superpowers-gstack:swiftui-view-gate` for these files. Without one, run the gate
+first. If the user waives it, the line reads `View gate: waived by user`. A
+`built, appearance unverified` line is allowed through but named in the yes option, so the
+user knows the branch is landing on their eyes alone. Do not present "ready to land" for
+views with no line at all.
+
+The options:
 
 - **Yes, it works** — asked per observable change when there are several; only when
   all of them hold → Phase 7. Phase 7 then lands without asking again, so settle now
@@ -303,7 +350,8 @@ adds no question of its own when the project has already decided how it lands.
 0. **Check that the yes still applies.** A yes covers the build the user saw and the
    landing they were told about, nothing else. If `git rev-parse HEAD` is no longer
    `VERIFIED_HEAD`, or the landing mode now reads differently from what the Phase 6
-   option said, land nothing and say what changed. A new commit means a new build: go
+   option said, or `VIEW_FILES` is not empty and the session holds no `View gate:` line,
+   land nothing and say what changed. A new commit means a new build: go
    back to Phase 4. A changed mode only invalidates the announcement: go back to Phase 6
    and ask again with the mode as it now reads.
 1. **Push first**, so the verified work exists in more than one place whatever is

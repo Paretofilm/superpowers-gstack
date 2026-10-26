@@ -1,5 +1,30 @@
 # Changelog
 
+## [3.18.0] - 2026-10-26
+
+**A SwiftUI view change is not done until it was looked up, linted and seen, and the agent can look without interrupting the user.** This brings in the rest of pull request #97, which 3.12.0 had deferred with a trigger ("build them if an agent is seen skipping the section"). The maintainer decided to take it in without waiting for that trigger.
+
+Field case (macOS app, 2026-10-13): a dropdown got `.menuIndicator(.hidden)` and looked like static text, and `review_macos_hig` and `review_accessibility` both said clean on a control that was still wrong, because inside `Menu { … } label: { … }` the style `.borderlessButton` discards the custom label. Only a render of the view *in its container* showed it. Design: `docs/superpowers/specs/2026-10-15-swiftui-view-gate-design.md`.
+
+### Added
+- **`/superpowers-gstack:swiftui-view-gate`**: look up the control category in the corpus, lint (`review_macos_hig` for macos/both, `review_accessibility`, `review_liquid_glass` on Liquid Glass; iOS skips the macOS linter), render in the real container and *read the image*, an affordance check, and one closing line: `View gate: rendered and seen` / `built, appearance unverified` / `waived by user`.
+- **`scripts/view-gate.py`**: `nudge` is a `PostToolUse` hook (registered in `hooks/hooks.json`) that reminds the session once per unlinted streak of view edits and never blocks; an edit after a lint earns a new reminder. `files --base REF` lists the view files a diff touches (a `.swift` file declaring a `View`, returning `some View`, or under `Views/` / `Components/`).
+- **`.gstack/visual-verify`** (`host` | `vm` | `off`, no file = `off`): the project owner's standing consent for window capture of an app the agent launched. `scripts/adapt-claude-md.py` validates it like `.gstack/e2e-executor` and never writes it.
+- **`scripts/window-shot.sh <pid> <out.png>`**: finds the window by PID with `CGWindowListCopyWindowInfo` (no permission) and captures that one window with `screencapture -x -o -l`, never the display. Refuses without `host` (exit 2), off macOS (3), without a window after about 10 s (4), on a capture of one uniform colour, which means Screen Recording is not granted (5), for a wrong or dead process (6, with `WINDOW_SHOT_EXPECT`) and when the Swift helper cannot be built (7).
+
+### Changed
+- **`xcode-tools` block v12 → v13**: the "SwiftUI view changes" section names the skill and the reminder, step 4 adds window capture under the `host` pin and says to look before the user does, and step 5 ends the report with the `View gate:` line, without which a diff that touches views is not "ready to land". Lint's stale-marker denylist now covers v0–v12.
+- **`verify-and-land`**: Phase 1 lists the view files the diff touches (a failed lookup counts as views touched); new Phase 5b captures the launched app's window when `.gstack/visual-verify` is `host`; Phase 6 and Phase 7 refuse to present or land "ready to land" for views with no `View gate:` line unless the user waives it.
+- **Manual**: chapter 7 lists the skill and says how to grant window capture.
+
+### Verified
+- `window-shot.sh` on macOS 27 (2026-10-26): the Swift helper compiled with `swiftc`, found the window of a Calculator instance launched for the test by its PID, and captured that window alone (101 kB PNG, content visible, nothing else on the display). `WINDOW_SHOT_EXPECT` matched the full executable path.
+- The failure paths are tested with fakes on `PATH` (`tests/unit/test_window_shot.py`); the nudge and the file list in `tests/unit/test_view_gate.py`.
+
+### Not done
+- `/ship` is gstack's and is not edited; the rule reaches it through the generated CLAUDE.md block.
+- The user's own `PreToolUse` hook on `screencapture` (outside this repo) still points every capture to `vm-run --screenshot`. It does not fire for `window-shot.sh`, which calls `screencapture` from inside a script, but its wording should allow window capture of an app the session launched.
+
 ## [3.17.3] - 2026-10-26
 
 **The emitted `Native Apple development tools` block (`gstack-xcode-tools-v12`) gains a section on macOS unit tests that run inside the app.** Xcode makes the app the test host, so every test run launches the real app with the installed copy's bundle ID and settings. SwiftUI saves the window frame under a key built from the scene's content type, the same in every mode: unless the app prevents it, a test run covers the screen at the user's last window size and writes the test window's frame back into their settings. Found in fagfilm-pipeline on 2026-10-26, where one launch as test host moved the installed app's window from the external display to the main one. The guard there restored the key once, when a view in the window was attached, and SwiftUI wrote it again when the window moved.

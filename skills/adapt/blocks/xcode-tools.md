@@ -1,4 +1,4 @@
-## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v12 -->
+## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v13 -->
 
 Xcode-related operations MUST be performed by the agent — NEVER delegated to the user; the user should never need to open Xcode to verify your work. Prefer MCP tools, falling back to CLI otherwise. Check MCP availability via `ToolSearch` first (deferred tools load on demand); drop to CLI only if the search returns nothing.
 
@@ -81,6 +81,8 @@ testing it with no host (Host Application: None). When the app must host its tes
 A control can compile, pass every linter and still be unusable: a pop-up button with
 `.menuIndicator(.hidden)` and a plain label looks like static text. This applies
 whenever you add or change a `View` in the app target, not only in a design-system package.
+`/superpowers-gstack:swiftui-view-gate` runs the steps below, and a `PostToolUse` reminder
+names it when a view file is edited (a reminder, never a stop).
 
 1. **Look up before writing.** One `mcp__swiftui-rag__search_swiftui_corpus` query for the
    *kind of control* ("pop-up button in a table row"), not for a SwiftUI symbol. Note the one
@@ -92,14 +94,23 @@ whenever you add or change a `View` in the app target, not only in a design-syst
 3. **Affordance check.** Every interactive element shows, without hovering, that it is
    interactive: an indicator on pop-ups and pull-downs, an outline or fill on fields, a
    standard shape on buttons. If a cue is hidden on purpose, say why.
-4. **See it.** On macOS, render the view with `live-swiftui` (`render`, then `screenshot`; it
-   needs a `#Preview`) or launch the built app by absolute path (previous section) and
-   screenshot it. On iOS, run it in the simulator and use `mcp__XcodeBuildMCP__screenshot`.
-   For a list or table, at least one row per state: normal, empty, longest label.
-5. **Report what you saw.** In the final message, say per changed view either *rendered and
-   seen* or *built, appearance unverified* and why. "Follows the HIG" and "matches the system
-   control" need a source from step 1; without one, word it as a choice. A size or opacity you
-   did not look up is a choice, not conformance.
+4. **See it, yourself, before the user does.** Render the view in its real container (the
+   `Menu`, the table row), not the bare subview. Cheapest first: on macOS `live-swiftui`
+   (`render`, then `screenshot`; it needs a `#Preview`; pass `packagePath` explicitly in a
+   worktree); or launch the built app by absolute path (previous section) and capture its
+   window with `scripts/window-shot.sh <pid> <out.png>`, only when `.gstack/visual-verify`
+   reads exactly `host` (`host`, `vm` or `off`; no file is `off`; anything else is
+   `BLOCKED — invalid .gstack/visual-verify`). That file is the project owner's standing
+   consent, committed once, so the agent does not ask each time. On iOS, run it in the
+   simulator and use `mcp__XcodeBuildMCP__screenshot`. Capture one window, never the whole
+   display: a whole-display capture shows whatever else is on the user's screen. For a list
+   or table, at least one row per state: normal, empty, longest label.
+5. **Report what you saw.** Read the image and list what is on it, including defects nobody
+   asked about. End the report with one line: `View gate: rendered and seen`, `View gate:
+   built, appearance unverified` (with the reason) or `View gate: waived by user`. A diff
+   that touches views is not "ready to land" without that line. "Follows the HIG" and
+   "matches the system control" need a source from step 1; without one, word it as a
+   choice. A size or opacity you did not look up is a choice, not conformance.
 
 ### E2E executor — where committed UI tests run
 

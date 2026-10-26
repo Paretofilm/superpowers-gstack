@@ -221,8 +221,10 @@ def test_denylist_catches_a_hardcoded_simulator_model():
      "v10 is stale since 3.17.0 — it said to hand-edit a generated entitlements file and to stop before -allowProvisioningUpdates"),
     ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v11 -->", True,
      "v11 is stale since 3.17.3 — it had no rule that a macOS unit-test host overwrites the installed app's window frame"),
-    ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v12 -->", False,
-     "current xcode-tools; the alternation must not catch v12 — the \\b is load-bearing"),
+    ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v12 -->", True,
+     "v12 is stale since 3.18.0 — it had no swiftui-view-gate skill, window capture or View gate line"),
+    ("## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v13 -->", False,
+     "current xcode-tools; the alternation must not catch v13 — the \\b is load-bearing"),
     ("mode: continuous", False, "the only handoff mode still read"),
     ("run gstack `/review` before landing", False, "the 3.0.0 wording for the Codex pass"),
     # the two sites that must name the retired skill in order to remove it
