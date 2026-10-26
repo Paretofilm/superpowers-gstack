@@ -63,12 +63,14 @@ For a new app, avoid all three by putting the logic in a Swift package or framew
 testing it with no host (Host Application: None). When the app must host its tests:
 
 1. Detect the host with `ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil`,
-   but let the UI-test launch argument win: an app the UI-test runner starts through LaunchServices
-   (`open`, not `XCUIApplication.launch()`) inherits that variable.
+   If the UI tests pass a launch argument of their own (say `--uitest`), let it win: an app the
+   UI-test runner starts through LaunchServices (`open`, not `XCUIApplication.launch()`) inherits
+   that variable.
 2. In host mode, skip start-up side effects and show a placeholder, not the real root view.
 3. Snapshot the `NSWindow Frame SwiftUI.*` keys in `App.init`, before any window exists, and
    restore them on every `UserDefaults.didChangeNotification` for the life of the process — not
-   once: SwiftUI writes the key again after the window is shown and when it moves. Removing the
+   once: SwiftUI writes the key again after the window is shown and when it moves. The restore
+   posts that notification itself, so compare before writing and ignore re-entry. Removing the
    keys after the snapshot makes the window open at a small `.defaultSize`; hide it with
    `orderOut` once a view in it is attached.
 4. Check it: launch the built bundle with `XCTestConfigurationFilePath` set and compare
