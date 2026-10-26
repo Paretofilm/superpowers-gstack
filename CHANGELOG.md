@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.17.3] - 2026-10-26
+
+**The emitted `Native Apple development tools` block (`gstack-xcode-tools-v12`) gains a section on macOS unit tests that run inside the app.** Xcode makes the app the test host, so every test run launches the real app with the installed copy's bundle ID and settings. SwiftUI saves the window frame under a key built from the scene's content type, the same in every mode: unless the app prevents it, a test run covers the screen at the user's last window size and writes the test window's frame back into their settings. Found in fagfilm-pipeline on 2026-10-26, where one launch as test host moved the installed app's window from the external display to the main one. The guard there restored the key once, when a view in the window was attached, and SwiftUI wrote it again when the window moved.
+
+The section says to test logic in a package with no host where possible. Where the app must host its tests, it gives four rules: detect the host by `XCTestConfigurationFilePath` with the UI-test argument winning, keep host mode inert, keep the `NSWindow Frame SwiftUI.*` keys restored on every `UserDefaults.didChangeNotification` (not once), and check it with `defaults read` before and after a launch.
+
+- `scripts/lint-skills.py`: `gstack-xcode-tools-v11` is now a stale marker, so `/adapt` replaces v11 copies.
+
 ## [3.17.2] - 2026-10-25
 
 Upstream sync from the weekly check of 2026-10-19 (#98), landed by hand: the bot numbered it 3.16.0, which was already taken. It brings `VERSIONS.md` to GStack 1.91.146.0 and Superpowers 7.0.0, and the brainstorming, `/cso` and `/ship` descriptions in `README.md` and `skills/adapt/roster.md`. GStack has moved on since (1.91.209.0 on 2026-10-25); the next weekly run picks that up.

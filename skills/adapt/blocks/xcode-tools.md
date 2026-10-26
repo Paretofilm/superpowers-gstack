@@ -1,4 +1,4 @@
-## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v11 -->
+## Native Apple development tools (Xcode workflow) <!-- gstack-xcode-tools-v12 -->
 
 Xcode-related operations MUST be performed by the agent — NEVER delegated to the user; the user should never need to open Xcode to verify your work. Prefer MCP tools, falling back to CLI otherwise. Check MCP availability via `ToolSearch` first (deferred tools load on demand); drop to CLI only if the search returns nothing.
 
@@ -47,6 +47,32 @@ not inspection**:
 
 `/superpowers-gstack:verify-and-land` performs exactly this sequence and then lands it
 by the project's `Landing mode:` line; reach for it rather than re-deriving the steps.
+
+### Unit tests run inside the app (macOS)
+
+Xcode's template makes the app the unit-test host (`TEST_HOST`), so every test run
+launches the real app — same bundle ID, same `UserDefaults` domain as the copy the user
+has installed. A SwiftUI `WindowGroup` opens its window at launch, and SwiftUI saves that
+window's frame under a key built from the scene's content type, which is the same in
+every mode. Unless the app prevents it, a test run opens a window over the user's work at
+the size they last gave the installed app, runs the app's start-up side effects, and
+writes the test window's frame back into their settings: the installed app then opens
+somewhere else.
+
+For a new app, avoid all three by putting the logic in a Swift package or framework and
+testing it with no host (Host Application: None). When the app must host its tests:
+
+1. Detect the host with `ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil`,
+   but let the UI-test launch argument win: an app the UI-test runner starts through LaunchServices
+   (`open`, not `XCUIApplication.launch()`) inherits that variable.
+2. In host mode, skip start-up side effects and show a placeholder, not the real root view.
+3. Snapshot the `NSWindow Frame SwiftUI.*` keys in `App.init`, before any window exists, and
+   restore them on every `UserDefaults.didChangeNotification` for the life of the process — not
+   once: SwiftUI writes the key again after the window is shown and when it moves. Removing the
+   keys after the snapshot makes the window open at a small `.defaultSize`; hide it with
+   `orderOut` once a view in it is attached.
+4. Check it: launch the built bundle with `XCTestConfigurationFilePath` set and compare
+   `defaults read <bundle-id>` before and after. A one-shot restore passes a glance and fails this.
 
 ### SwiftUI view changes — look up, lint, see, then say what you saw
 
