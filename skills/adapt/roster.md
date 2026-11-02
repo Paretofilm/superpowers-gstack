@@ -10,7 +10,7 @@ unless the user asks for it.
 
 | Skill | Consider relevant when... |
 |---|---|
-| `/superpowers:brainstorming` | Almost always — skip only for trivial projects; draws out what you want before proposing anything, plays back what it heard, and sizes the work after it understands what you want |
+| `/superpowers:brainstorming` | Almost always — skip only for trivial projects; digs for context before asking anything, plays back what it heard, asks about the one open thing, and lays out approaches before writing a design doc |
 | `/superpowers:writing-plans` | Almost always — skip only for single-file changes; you review the saved plan before anything runs |
 | `/superpowers:subagent-driven-development` | Projects with 5+ tasks, benefits from parallel TDD |
 | `/superpowers:executing-plans` | Smaller projects (< 5 tasks), or when user wants more control; runs the whole plan then one review at the end |
@@ -23,7 +23,7 @@ unless the user asks for it.
 | `/superpowers:requesting-code-review` | Multi-file changes (runs automatically during SDD, but can be invoked manually) |
 | `/superpowers:receiving-code-review` | After `/review` or PR feedback requires code changes — structures the response with TDD |
 | `/superpowers:writing-skills` | Only for Claude Code plugin/skill projects |
-| `/superpowers:diagnosing-superpowers` | When a session goes wrong — repeated work, ignored plan, skill that didn't fire, surprising bill; reads transcripts on disk with path:line evidence |
+| `/superpowers:diagnosing-superpowers` | When a session goes wrong — repeated work, ignored plan, skill that didn't fire, surprising bill; reads transcripts on disk with path:line evidence; issues it drafts include a human-written summary and confirmation that the problem doesn't happen without Superpowers |
 
 **GStack skills — Phase 1 (Planning):**
 
@@ -34,7 +34,7 @@ unless the user asks for it.
 | `/design-consultation` | New projects defining a design system from scratch (creates DESIGN.md in open format compatible with impeccable and Google Stitch) |
 | `/design-shotgun` | When you want multiple design variants to compare before committing |
 | `/plan-devex-review` | User-started only — a review of developer-facing surfaces (APIs, CLIs, SDKs, libraries) the user asks for; never default routing |
-| `/plan-tune` | Tune plan-skill question preferences (one-time, per-project) |
+| `/plan-tune` | Tune plan-skill question preferences (one-time, per-project); answers to ad-hoc question ids now move dimensions when the skill names the signal key |
 | `/autoplan` | User-started only — chains the CEO, eng and design plan reviews in one pass |
 
 **GStack skills — Phase 3 (Review & QA):**
@@ -42,7 +42,7 @@ unless the user asks for it.
 | Skill | Consider relevant when... |
 |---|---|
 | `/review` | Almost always — pre-merge code review; runs design detector scan first when frontend files are in scope |
-| `/qa <url>` | Projects with a browser-accessible UI (include the URL); drives Aside first, bundled Chromium as fallback |
+| `/qa <url>` | Projects with a browser-accessible UI (include the URL); drives Aside first, bundled Chromium as fallback. Each agent process gets its own tab automatically — use `--session <name>` or `BROWSE_SESSION=<name>` when subagents share one agent process |
 | `/qa-only <url>` | Same, but report-only (no auto-fixes) |
 | `/cso` | Projects handling auth, user data, payments, or external APIs. For security-critical features, run BEFORE `/review`. Daily reports omit candidates without demonstrated in-scope impact; comprehensive mode keeps them as labeled hypotheses |
 | `/design-review` | Projects with visual UI — runs 61 deterministic checks (impeccable engine, consent-gated) before the LLM pass; also scans the rendered DOM on a live URL |
@@ -75,7 +75,7 @@ unless the user asks for it.
 | `/freeze` | Monorepos or projects where edits should be restricted TO a specific directory (allow-list, not block-list) |
 | `/unfreeze` | Clear the `/freeze` boundary mid-session without ending the session |
 | `/guard` | Production / shared-infra work — combines `/careful` warnings with `/freeze` directory lock |
-| `/browse` | Projects needing headless browser interaction beyond QA; drives Aside first, bundled Chromium as fallback |
+| `/browse` | Projects needing headless browser interaction beyond QA; drives Aside first, bundled Chromium as fallback. Each agent process gets its own tab automatically |
 | `/scrape` | Projects pulling data from web pages — prototypes a flow once, codifies it via `/skillify`; drives Aside first |
 | `/skillify` | After a successful `/scrape` — persists the flow as a permanent browser-skill so future calls run in ~200ms |
 | `/open-gstack-browser` | Projects wanting a visible AI-controlled Chromium with live activity feed |
@@ -88,6 +88,7 @@ unless the user asks for it.
 | `/benchmark` | Projects with performance monitoring needs; drives Aside first |
 | `/benchmark-models` | Projects comparing AI model performance |
 | `/codex` | Projects needing second opinions or adversarial code review; defaults to GPT-6 Astra (override with `GSTACK_CODEX_MODEL`) |
+| `/gstack-clean` | Any project accumulating stale `.gstack/` scratch files or large browse logs — reclaims space safely; dry run by default, `--apply` to make changes |
 | `/superpowers-gstack:autoimplement` | Multi-phase plans — one subagent per phase, `/review` + `/pitfall-verification` chained at every phase boundary (`/review` owns the Codex pass; pitfall adds domain inference and the third lens per tier). Active pre-flight reviews the plan body before Phase 1 unless the latest plan commit matches `^(chore\|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]\|$)`. Refuses on <2 phases, missing per-phase commit steps, uncommitted files that overlap the plan's `Files:`, or plans touching migrations/secrets/credentials/.env/.ssh. |
 | `/superpowers-gstack:office-hours-track-aware` | User-started only — reached when the user types `/office-hours` (the intercept below); never default routing. Wraps `/office-hours` with track inference (web vs native), inline platform question, design-doc relocation, and an Artifact preview before the approval gate. **Intercepts `/office-hours`** — see routing-intercept rules below. |
 | `/superpowers-gstack:swiftui-design-consultation` | Native SwiftUI projects — produces DESIGN.md + Swift Package starter; equivalent to /design-consultation for web. Inlines the platform question (iOS/macOS/both) on first run if `.gstack/track` is missing. |

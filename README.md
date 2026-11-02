@@ -289,10 +289,10 @@ Something went wrong?  → /superpowers:diagnosing-superpowers
 | `/plan-eng-review` | Locking architecture |
 | `/plan-design-review` | Validating design |
 | `/plan-devex-review` | Validating developer experience |
-| `/plan-tune` | Tune plan-skill question preferences (one-time, per-project) |
+| `/plan-tune` | Tune plan-skill question preferences (one-time, per-project); answers to ad-hoc questions now move dimensions when the skill names the signal key |
 | `/autoplan` | Chains all three reviews; Eng review runs last, always |
 | `/review` | Pre-merge code review (8 lenses, incl. advisory simplification) |
-| `/qa <url>` | Browser-based testing |
+| `/qa <url>` | Browser-based testing; each agent process now gets its own tab automatically — use `--session <name>` or `BROWSE_SESSION=<name>` when subagents share one process |
 | `/cso` | Security audit (daily reports now omit candidates without demonstrated in-scope impact) |
 | `/design-review` | Visual audit; runs 61 deterministic checks (impeccable engine, consent-gated) before the LLM pass |
 | `/design-consultation` | Design system from scratch; writes open DESIGN.md format |
@@ -315,7 +315,7 @@ Something went wrong?  → /superpowers:diagnosing-superpowers
 | `/freeze` | Restrict edits to one directory |
 | `/unfreeze` | Clear the freeze boundary mid-session |
 | `/guard` | Full safety: `/careful` + `/freeze` combined |
-| `/browse` | Headless browser (Aside first, bundled Chromium fallback) |
+| `/browse` | Headless browser (Aside first, bundled Chromium fallback); each agent gets its own tab automatically |
 | `/open-gstack-browser` | Launch GStack Browser (Chromium + sidebar) |
 | `/pair-agent` | Pair a remote AI agent with your browser; a re-pair with the same `--client` and a narrower `--restrict` revokes the old session immediately |
 | `/setup-browser-cookies` | Import cookies for authenticated tests |
@@ -325,12 +325,13 @@ Something went wrong?  → /superpowers:diagnosing-superpowers
 | `/learn` | Save cross-session learnings |
 | `/setup-gbrain` | Onboard cross-session memory (gbrain) |
 | `/codex` | OpenAI Codex CLI second opinion; defaults to GPT-6 Astra (override with `GSTACK_CODEX_MODEL`) |
+| `/gstack-clean` | Reclaim throwaway files in `.gstack/` (tmp scratch, browse logs); dry run by default, `--apply` to change anything |
 
 ### Superpowers Commands
 
 | Command | When to Use |
 |---------|------------|
-| `/superpowers:brainstorming` | Refining technical approach; draws out what you want before proposing anything — asks one open question first, plays back what it heard, and sizes the work after it understands what you want |
+| `/superpowers:brainstorming` | Refining technical approach; digs for context before asking anything, plays back what it heard, asks about the one thing still open, and lays out approaches before writing a design doc |
 | `/superpowers:writing-plans` | Creating TDD task breakdown; saved plan shown for review before anything runs |
 | `/superpowers:subagent-driven-development` | Executing with subagents + TDD |
 | `/superpowers:executing-plans` | Inline execution (small projects); runs the whole plan, then one review at the end |
@@ -343,7 +344,7 @@ Something went wrong?  → /superpowers:diagnosing-superpowers
 | `/superpowers:requesting-code-review` | Dispatch review subagent (uses `general-purpose` agent with self-contained template) |
 | `/superpowers:receiving-code-review` | Handle review feedback |
 | `/superpowers:writing-skills` | Plugin/skill projects only |
-| `/superpowers:diagnosing-superpowers` | When a session goes wrong — reads transcripts on disk, reports findings with path:line evidence |
+| `/superpowers:diagnosing-superpowers` | When a session goes wrong — reads transcripts on disk, reports findings with path:line evidence; issues it drafts now include a human-written summary and how you confirmed the problem doesn't happen without Superpowers |
 
 ### Model Routing (v0.2)
 

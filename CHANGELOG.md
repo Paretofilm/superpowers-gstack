@@ -1,5 +1,35 @@
 # Changelog
 
+## [3.19.0] - 2026-11-02
+
+**GStack gains `gstack-clean`, browser tab isolation, touch device emulation, a lite skill loadout for Opus 5.5, CEO-only shadow mode, and several bug fixes. Superpowers 7.0.1 retunes brainstorming and trims three skills for compaction survival on Claude Code.**
+
+### GStack (v1.93.7.0)
+
+- **`gstack-clean` reclaims throwaway files in `.gstack/`** (`bin/gstack-clean`, rules in `lib/repo-state-clean.ts`). Dry run by default; pass `--apply` to make any change. Removes `tmp/codex-*` files older than 7 days, trims browse logs to their last 256 KB once they pass 1 MB, and drops old `browse-audit.jsonl` entries with `--audit-days N`. Never touches cookies, the Chromium profile, browser skills, or `browse.json`. Four new result codes (`GSTACK_CLEAN_USAGE`, `GSTACK_CLEAN_TARGET_REFUSED`, `GSTACK_CLEAN_PARTIAL`, `GSTACK_CLEAN_INTERNAL`). (#2627)
+- **Parallel agents no longer take over each other's browser tab.** Each agent process gets its own tab on its first browse command. Name a session with `--session <name>` or `BROWSE_SESSION=<name>`; `BROWSE_SESSION=` opts out. Sessions isolate tabs, not logins (cookies stay shared). Idle sessions close after 120 minutes (`BROWSE_SESSION_IDLE_MINUTES`); at most 16 run at once (`BROWSE_MAX_SESSIONS`). `BROWSE_TAB` and `--tab-id` no longer move the active tab for other callers. (#1961)
+- **QA can now test phone pages with real touch input.** `$B device "iPhone 15"` emulates that phone (size, pixel ratio, touch, mobile UA, `pointer: coarse`) on the current tab only. `$B tap`, `$B swipe`, `$B pinch` and `$B touch down|move|up` send real touch events including multi-finger. `$B device off` restores and `$B device --list` names every profile. New result codes: `BROWSE_SESSION_INVALID`, `BROWSE_SESSION_ROOT_ONLY`, `BROWSE_SESSION_TAB_RESET`, `BROWSE_SESSION_LIMIT`, `BROWSE_DEVICE_UNKNOWN`, `BROWSE_DEVICE_CDP_FAILED`, `BROWSE_TOUCH_NO_DEVICE`. (#3058)
+- **Capy sessions on Claude Opus 5.5 get a `lite` loadout**, about 10.7 KB smaller than the full preamble on land-and-deploy. `gstack-capy-install --model <id>` (or `GSTACK_MODEL=<id>`) selects it. Every other model gets the full skills. `./setup --loadout <name>` applies the same for Claude Code. (GSTA-161)
+- **Shadow mode for the CEO-only decider** (`gstack-config set autoplan_shadow on`): in a driver run that turns it on, every approval gate gets one hidden model prediction per question recorded before the owner answers, for later comparison in gstack-evals taste-replay round 2. Off by default; `autoplan_shadow_model` picks the model (default `claude-opus-5-5`). Shadow calls count against `--spend-cap` under their own ledger ids. (GST-537)
+- **`/plan-tune` learns from answers to ad-hoc question ids** when the skill writes `<gstack-qid:{id};signal={key}>` in the question. Before, only registered ids moved a dimension; most logged answers are on ad-hoc ids so inferred values stayed near 0.5. Unknown or registered-id hints are dropped with `QLOG_SIGNAL_KEY_DROPPED`. (#3442)
+- **`/ship` finding collector reads severity from a finding's own `Severity:` field**, so a severity word in the finding's text (e.g. a plan phase named "P0") no longer raises it to a blocker. A label leading the line or `Blocks: yes` still sets the floor. (GST-976)
+- **Queue refuses a head whose required targeted review is missing or failed** (`QUEUE_RECEIPT_TARGETED_MISSING`). Before, a skipped required reader looked the same as a clean one and `gstack-ship-queue ready` exited 0. (GST-966)
+- **`gstack-restamp` and `gstack-ship-release finish` handle a branch-added row that names the fork-point's version** as stale after the base moves, rewriting it to the new version rather than skipping it. (GST-963)
+- **Security: `qs` pinned to 6.16.2 and `@hono/node-server` to 2.1.6** in `package.json` overrides, past two Medium advisories (GHSA-6pq8-jhm2-2vcw and GHSA-rmxm-3fg6-px4f). Both reach gstack only through the dev/test toolchain; installs since v1.91.231.0 don't contain them. (#3843)
+- **Native cookie import now waits for its browser to actually exit** before reporting cleanup, fixing a Windows sharing-violation race. Cleanup budget raised to 20 s. Three additional flaky tests repaired. (v1.93.2.0)
+- **`gstack-pregate clear --run-url` accepts reusable-workflow lane callers.** A lane whose workflow file runs only through `workflow_call` was refused `workflow_mismatch` since v1.92.62.0. (GST-971)
+
+### Superpowers (v7.0.1)
+
+- **Brainstorming digs for context before asking anything.** In an existing project, or when pointed at a spec, plan, or files, it reads them first and doesn't ask what they already answer. When you've already said what you want, it plays your request back with what it found and asks about the one open thing. Later questions build on your answers. (#2560, #2571)
+- **Brainstorming only offers to skip questions when it started on its own.** If you invoked it by name or with `/brainstorming`, the offer is suppressed. (#2560)
+- **Brainstorming lays out approaches and writes a design doc before building.** It presents two or three ways to build the thing, recommends one, asks you to pick, then writes a design doc before any code is written. (#2571)
+- **`subagent-driven-development` moves the fix loop and supporting sections into `references/`**, read from disk at the step that needs them, so the skill survives compaction at the 20,000-character cut. (#2565)
+- **`writing-skills` moves supporting docs into `references/`.** (#2564)
+- **`executing-plans` drops its Example Workflow**, which repeated rules stated above it. (#2563)
+- **`diagnosing-superpowers` adds a human-written summary field and a "confirmed without Superpowers" field** to issues it drafts, and won't file while the summary is a placeholder. Its prefilled link opens the Bug Report template. (#2569)
+- **Issue and PR templates now ask for a human-written summary under 200 words** and how the reporter confirmed the problem doesn't happen without Superpowers. Agent-written PRs fixing someone else's issue are not accepted unless a maintainer asked. (#2569)
+
 ## [3.18.1] - 2026-10-26
 
 **`/adapt` asks once whether the agent may capture the app's window.** In 3.18.0 the consent in `.gstack/visual-verify` was asked only when a capture was refused, in the middle of a task, and never when previews were enough, so a user could not learn that the option existed. Item 2b in Step 4 now asks it on `macos` and `both` tracks, in the same question round as the E2E executor pin: yes for this project (`host`, recommended; the answer is committed, so the option says it holds on every machine that works on the project), only in the VM rig (`vm`), or no (`off`). An existing file is validated and not asked again; with nobody to answer, no file is written, which means `off`. The script still never writes the pin itself.
