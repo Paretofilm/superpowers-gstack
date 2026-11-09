@@ -74,6 +74,8 @@ git clone https://github.com/garrytan/gstack.git ~/.claude/skills/gstack
 cd ~/.claude/skills/gstack && ./setup
 ```
 
+GStack installs on the **stable channel** by default on new machines (twice-weekly tested releases). Run `gstack-config set update_channel main` to follow every merge instead. Existing installs and Capy crew machines stay on main — nothing switches under you.
+
 ### 2. Install this plugin
 
 ```
@@ -121,9 +123,10 @@ Phase 1 is optional and user-started: since 3.5.0 `/adapt` no longer routes to `
 │                                                  │
 │  /office-hours    → Product framing              │
 │  /plan-ceo-review → Strategic validation         │
-│  /plan-eng-review → Architecture lock            │
 │  /plan-design-review → Design validation         │
-│  /autoplan        → Chains all three reviews     │
+│  /autoplan        → Chains all reviews; also     │
+│                     handles architecture &       │
+│                     engineering-review requests  │
 ├─────────────────────────────────────────────────┤
 │  PHASE 1.5: SPEC REVIEW (this plugin)            │
 │                                                  │
@@ -194,7 +197,7 @@ If a session behaves unexpectedly — repeated work, an ignored plan, a skill th
 ```
 /office-hours          → Frame the idea
 /plan-ceo-review       → Validate scope
-/plan-eng-review       → Lock architecture
+/autoplan              → Architecture & engineering review
   → Save key decisions to docs/
 /clear
 /pitfall-verification  → Spec-level: "will this work?"
@@ -244,7 +247,7 @@ Skip Phase 1, skip `/clear` between phases, skip subagents, skip review speciali
 ### Security-Critical Feature
 
 ```
-/office-hours → /plan-eng-review (security focus)
+/office-hours → /plan-ceo-review (security focus)
 /clear
 /superpowers:brainstorming → /superpowers:writing-plans → SDD
 /clear
@@ -262,12 +265,12 @@ New idea or feature?
   NO  →
     Bug?
       During coding?    → /superpowers:systematic-debugging
-      During QA/prod?   → /investigate (GStack)
+      During QA/prod?   → /superpowers:systematic-debugging
     Scope clear?
       YES → /superpowers:brainstorming
       NO  → /office-hours
 
-Spec or plan written? (after writing-specs / writing-plans / plan-eng-review)
+Spec or plan written? (after writing-specs / writing-plans / autoplan)
   → /pitfall-verification → /quality-review
   → /apple-native-review (platform from .gstack/track)
   → /superpowers-gstack:htmlify explain (the page you review it with)
@@ -286,11 +289,10 @@ Something went wrong?  → /superpowers:diagnosing-superpowers
 |---------|------------|
 | `/office-hours` | Starting something new |
 | `/plan-ceo-review` | Validating scope and strategy |
-| `/plan-eng-review` | Locking architecture |
 | `/plan-design-review` | Validating design |
 | `/plan-devex-review` | Validating developer experience |
 | `/plan-tune` | Tune plan-skill question preferences (one-time, per-project); answers to ad-hoc questions now move dimensions when the skill names the signal key |
-| `/autoplan` | Chains all three reviews; Eng review runs last, always |
+| `/autoplan` | Chains all reviews; also handles architecture and engineering-review requests |
 | `/review` | Pre-merge code review (8 lenses, incl. advisory simplification) |
 | `/qa <url>` | Browser-based testing; each agent process now gets its own tab automatically — use `--session <name>` or `BROWSE_SESSION=<name>` when subagents share one process |
 | `/cso` | Security audit (daily reports now omit candidates without demonstrated in-scope impact) |
@@ -299,7 +301,6 @@ Something went wrong?  → /superpowers:diagnosing-superpowers
 | `/design-shotgun` | Generate multiple design variants |
 | `/design-html` | Finalize design as production HTML/CSS; slop gate runs before screenshots |
 | `/devex-review` | Live developer experience audit |
-| `/investigate` | Bug root cause (QA/production) |
 | `/ship` | Create PR and deploy; design pass runs mechanical scan first |
 | `/land-and-deploy` | Merge and verify |
 | `/canary` | Post-deploy monitoring |
@@ -321,7 +322,7 @@ Something went wrong?  → /superpowers:diagnosing-superpowers
 | `/setup-browser-cookies` | Import cookies for authenticated tests |
 | `/benchmark` | Performance regression detection |
 | `/benchmark-models` | Cross-model benchmark |
-| `/make-pdf` | Markdown to publication-quality PDFs |
+| `/make-pdf` | Markdown to publication-quality PDFs; local images restricted to the markdown's own directory and image files only |
 | `/learn` | Save cross-session learnings |
 | `/setup-gbrain` | Onboard cross-session memory (gbrain) |
 | `/codex` | OpenAI Codex CLI second opinion; defaults to GPT-6 Astra (override with `GSTACK_CODEX_MODEL`) |

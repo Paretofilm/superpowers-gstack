@@ -35,7 +35,7 @@ unless the user asks for it.
 | `/design-shotgun` | When you want multiple design variants to compare before committing |
 | `/plan-devex-review` | User-started only — a review of developer-facing surfaces (APIs, CLIs, SDKs, libraries) the user asks for; never default routing |
 | `/plan-tune` | Tune plan-skill question preferences (one-time, per-project); answers to ad-hoc question ids now move dimensions when the skill names the signal key |
-| `/autoplan` | User-started only — chains the CEO, eng and design plan reviews in one pass |
+| `/autoplan` | User-started only — chains the CEO, design and eng reviews in one pass; also handles architecture and engineering-review requests |
 
 **GStack skills — Phase 3 (Review & QA):**
 
@@ -48,13 +48,12 @@ unless the user asks for it.
 | `/design-review` | Projects with visual UI — runs 61 deterministic checks (impeccable engine, consent-gated) before the LLM pass; also scans the rendered DOM on a live URL |
 | `/design-html` | When you have an approved design and need production HTML/CSS; slop gate runs before screenshots |
 | `/devex-review` | Developer-facing projects — live audit of onboarding flow, docs, CLI help; drives Aside first |
-| `/investigate` | Bugs discovered AFTER Phase 2 — in QA, staging, or production. Do NOT use during Phase 2 implementation (use `/superpowers:systematic-debugging` instead) |
 
 **GStack skills — Phase 4 (Ship & Monitor):**
 
 | Skill | Consider relevant when... |
 |---|---|
-| `/ship` | Projects using git with feature branches and PRs; design detector scan runs first when frontend files are in scope. A `train` block in `.gstack/ship-policy.json` enables merge-train mode for the queue |
+| `/ship` | Projects using git with feature branches and PRs; design detector scan runs first when frontend files are in scope (now also detects Lit/htm templates in .ts/.js files). A `train` block in `.gstack/ship-policy.json` enables merge-train mode for the queue |
 | `/land-and-deploy` | Projects with CI/CD deployment pipelines; post-deploy check drives Aside first |
 | `/canary` | Projects with production monitoring needs; drives Aside first, bundled Chromium as fallback |
 | `/landing-report` | Read-only PR queue + sibling-workspace dashboard (workspace-aware ship) |
@@ -65,7 +64,7 @@ unless the user asks for it.
 | `/setup-gbrain` | Long-running projects wanting cross-session memory (PGLite local or Supabase) |
 | `/sync-gbrain` | Long-running projects with gbrain — keeps the brain current with this repo's code and refreshes CLAUDE.md search guidance |
 | `/health` | Projects with existing linting, type checking, or test suites; scores disclose coverage (checked and unavailable categories); runs with no checks report N/A |
-| `/make-pdf` | Projects needing publication-quality documentation or reports; renders through Aside when available |
+| `/make-pdf` | Projects needing publication-quality documentation or reports; renders through Aside when available; local images restricted to the markdown's own directory and image files only |
 
 **GStack skills — Utility:**
 
@@ -79,7 +78,7 @@ unless the user asks for it.
 | `/scrape` | Projects pulling data from web pages — prototypes a flow once, codifies it via `/skillify`; drives Aside first |
 | `/skillify` | After a successful `/scrape` — persists the flow as a permanent browser-skill so future calls run in ~200ms |
 | `/open-gstack-browser` | Projects wanting a visible AI-controlled Chromium with live activity feed |
-| `/pair-agent` | When pairing a remote AI agent with your browser session |
+| `/pair-agent` | When pairing a remote AI agent with your browser session; tunnel agents restricted to http(s) URLs only |
 | `/setup-browser-cookies` | One-time: import cookies for authenticated `/qa` and `/browse` testing |
 | `/context-handoff` | Long implementation sessions, projects using SDD, or any multi-step workflow |
 | `/superpowers-gstack:htmlify` | `explain`: a visual explainer page after every spec and plan (local file, or an Artifact page per `.gstack/explainer`). Also offline HTML rendering of MD artefacts when the Artifact tool is unavailable. |
