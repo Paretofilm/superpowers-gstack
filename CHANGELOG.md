@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.19.1] - 2026-11-16
+
+**No upstream changes detected this cycle. Versions and documentation remain current.**
+
 ## [3.19.0] - 2026-11-02
 
 **GStack gains `gstack-clean`, browser tab isolation, touch device emulation, a lite skill loadout for Opus 5.5, CEO-only shadow mode, and several bug fixes. Superpowers 7.0.1 retunes brainstorming and trims three skills for compaction survival on Claude Code.**
