@@ -1,5 +1,57 @@
 # Changelog
 
+## [3.20.0] - 2026-11-23
+
+**GStack renames `/verify` to `/build-check`, fixes a policy-invalid blocker on /ship, adds merged-tree CI and a security-hardened land queue, tunes the prompt router, and ships dozens of smaller fixes. Superpowers 7.0.2 further tunes brainstorming, fixes bootstrap delivery on six harnesses, and hardens the SDD and executing-plans helpers.**
+
+### GStack (v1.103.0.0)
+
+- **`/verify` renamed to `/build-check`.** GStack renamed the skill so Claude Code's built-in `/verify` works again. If your config says `disabled_skills: verify`, gstack now reads it as `build-check` automatically. The description and prompt router no longer list "verify my change", leaving those prompts to Claude Code's own skill. The Quick Reference table and roster are updated accordingly.
+- **A base branch whose `review_exclude_paths` list breaks the policy schema no longer stops every `/ship`.** When the only errors are in `review_exclude_paths` or `review_content_patterns` (e.g. 65 patterns past the limit of 64), `gstack-review-plan` sets those keys aside, reviews every file, applies every other key as committed, and prints `REVIEW_EXCLUDE: fallback (WARNING: …)`. The ship receipt records it as `review_exclude_fallback`. Any other invalid key still stops the plan. (GST-3399)
+- **`gstack-ship-queue land` runs `land.merged_checks` in a fresh clone** and stops when a check touches anything land's later git or gh calls read. Land pins the absolute `git` and `gh` binaries, records checkout state, and when a check changes any of them refuses with `QUEUE_LAND_MERGED_CHECKS` and holds the lock. (GST-1747, GST-1766)
+- **`gstack-ship-queue land` can run full CI on the merged tree before landing** via a new `land.merged_ci` key (`{ workflow, profile }`). A red run refuses with `QUEUE_LAND_MERGED_CHECKS`. (GST-3303)
+- **A crashed `gstack-ship-queue land --pin` no longer blocks every other merge.** The lock records the holding process and expires 90 minutes after its last step. New `gstack-ship-queue count` prints how many finished PRs are waiting to merge.
+- **The destructive-command check catches more force pushes and outside deletes** and stops asking about harmless spellings. Force pushes to main are caught when `--no-dry-run` is abbreviated or when `-n` is a push-option value. Relative deletes after `cd` into system folders and device-node removes now ask. Quoting no longer changes the decision: `rm -rf "/home/me/app/dist"` is allowed like its unquoted form. (#4628, #4601)
+- **A skipped or neutral CI run no longer blocks reuse of a passing run on the same commit.** Both `gstack-pregate` and `gstack-ci-carry wait` now pass over skipped and neutral runs; failed, cancelled or still-running runs still block reuse.
+- **`gstack-pregate` reuses every green CI run at your exact code**, not just the first one it checks. Each verified run at HEAD's tree counts, so files the second run already passed don't re-run locally. (GST-3381)
+- **`/ship` on a stacked branch can now clear its remote test gate from a green CI run.** `gstack-pregate clear --run` reads the run profiles of the actual base branch. (GST-3381)
+- **`/ship`'s final CI check no longer requires a rerun just because main moved.** A green pull request run that tested your branch merged onto a newer main now counts when your added and removed lines are byte-identical to what main saw. (GST-3567)
+- **The prompt router stops sending feature requests to the bug-fix skill.** A request whose title asks for something new no longer counts as a bug report because its body mentions an error, unless the title itself names a defect or the body follows an issue template.
+- **`/learn prune` checks every learning, not just the first 100.** `gstack-learnings-search` gains `--all`. (#4215)
+- **`/context-restore` finds Claude Code transcripts under `CLAUDE_CONFIG_DIR`** when a second profile is in use. (#4559)
+- **`browse --session <name> <command>` works with the flag before the command.** (#4662)
+- **`$D setup` accepts Gemini keys that start with `AQ.`**, and saves a key typed with no `--provider` as a Gemini key. (#4239)
+- **`/cso` keeps an audit open after a refused submit** and no longer aborts when a tracked secret-like file such as `.env.example` cannot be read. (#4395)
+- **`/eval-plan` refuses gpt-4o and older-generation models** in every role a plan chooses, and plans frozen from 2026-11-23 require a `grader:` line under Held-out exposure.
+- **`/plan-ceo-review` explains its recommendation by what that mode does** that the next-closest mode wouldn't, instead of by the plan's category.
+- **`/retro` counts a test runner in `tests/` with no test-style name** and stops counting game-engine sidecar files (`.uid`, `.meta`, `.import`) as tests. (#4306)
+- **`/ship` sees every git worktree of a repo when picking a version.** (#4196)
+- **`gstack-gbrain-mcp-verify` no longer misreads a large or slow-to-write SSE reply as broken.** (GST-3543)
+- **Eight skill fixes:** Aside check asks you to open Aside when CLI says it isn't running (#4366); `/test-audit` finds the current branch's eng-review test plan (#4216); `/build-check` explains what to do when a repo declares no checks (#4346); re-running `/ship` on an open PR no longer describes an older head (#4379); `/spec --execute` records the branch its spawned session ships from (#4616); `/design-shotgun` passes the reason for each pick (#4618); `/codex` reads the repository's own `agents/` folder as code (#3924); Captain docs say crew threads read `CREW.md` (#4296).
+- **OpenClaw, Hermes and Dots registrations leave out skills turned off with `disabled_skills`.** (#4548)
+- **`/verify` and `/ship` find tests for two more kinds of source file**: TypeScript NodeNext imports and Rails `app/`/`lib/` paths. (#4398, #4211)
+- **Deleting or renaming a test now checks the files that still list it**, even when another test covers it. (#3536)
+
+### Superpowers (v7.0.2)
+
+- **Brainstorming asks fewer questions, starts by asking why, and shows options with a recommendation** when there's a choice to make. It asks a question only when the answer would change what gets built and nothing already answers it; otherwise it states its call as a proposal you can correct. When you haven't said why you want something, that's the first thing it asks — openly, with no example answers. When there's a named choice, it shows the options and recommends one. (#2644)
+- **`start-server.sh --project-dir .` now works.** The script resolves the directory before `cd`-ing into its own folder. (#2524, #2608)
+- **Copilot on Windows now gets the bootstrap.** `hooks.json` now has a PowerShell form of the SessionStart command. (#2189, #1225, #2592)
+- **The SessionStart hook starts no child processes**, saving tens of milliseconds per startup on Git Bash. (#2081, #2593)
+- **On Unix without bash, `run-hook.cmd` falls back to zsh, or exits quietly.** (#2503, #2594)
+- **Every prompt now gets the bootstrap** in the Pi extension; the first-prompt-only bug also caused Anthropic prompt cache rewrites on the second prompt. (#2083, #2595)
+- **The `skills` filter on the Superpowers package entry works.** `"skills": []` now correctly loads no skills. (#2394, #2402, #2598)
+- **`delegate_task` subagents no longer get the controller's bootstrap.** (#2536, #2596)
+- **OpenCode: the bootstrap tells the model to use bare skill ids** (`brainstorming`, not `superpowers:brainstorming`). (#2583, #2597)
+- **OpenCode: a prompt mentioning `EXTREMELY_IMPORTANT` no longer suppresses the bootstrap.** (#2197, #2600)
+- **OpenCode 2's compaction and generate requests carry the bootstrap.** (#2391, #2601)
+- **Muse's SessionStart hook now runs on Debian and Ubuntu** (runs with `bash` instead of `sh`). (#2528, #2533)
+- **SDD and executing-plans helpers act on the repository of the current directory** and take `-C DIR` to point at another; they stop with exit 2 outside a repository. (#2429, #2606)
+- **The skills say to run helpers by absolute path from your working tree.** (#2525, #2607)
+- **`task-brief` finds tasks with IDs like `A1`, `6b`, and `2.1`** and refuses a brief where an unclosed code fence ran to the end of the plan. (#2459, #2604, #2436, #2605)
+- **On Windows, the helpers print paths PowerShell can open** (`C:/Users/…` instead of `/c/Users/…`). (#2307, #2602)
+- **`systematic-debugging` no longer installs its own test scenarios** next to `SKILL.md`. (#2277, #2654)
+
 ## [3.19.0] - 2026-11-02
 
 **GStack gains `gstack-clean`, browser tab isolation, touch device emulation, a lite skill loadout for Opus 5.5, CEO-only shadow mode, and several bug fixes. Superpowers 7.0.1 retunes brainstorming and trims three skills for compaction survival on Claude Code.**

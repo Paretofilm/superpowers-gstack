@@ -10,7 +10,7 @@ unless the user asks for it.
 
 | Skill | Consider relevant when... |
 |---|---|
-| `/superpowers:brainstorming` | Almost always — skip only for trivial projects; digs for context before asking anything, plays back what it heard, asks about the one open thing, and lays out approaches before writing a design doc |
+| `/superpowers:brainstorming` | Almost always — skip only for trivial projects; digs for context before asking anything, plays back what it heard, asks about the one open thing, and lays out approaches before writing a design doc; asks fewer questions, starts by asking why, and shows options with a recommendation when there's a choice |
 | `/superpowers:writing-plans` | Almost always — skip only for single-file changes; you review the saved plan before anything runs |
 | `/superpowers:subagent-driven-development` | Projects with 5+ tasks, benefits from parallel TDD |
 | `/superpowers:executing-plans` | Smaller projects (< 5 tasks), or when user wants more control; runs the whole plan then one review at the end |
@@ -30,7 +30,7 @@ unless the user asks for it.
 | Skill | Consider relevant when... |
 |---|---|
 | `/office-hours` | User-started only — a product-framing session the user begins by typing it (new product ideas, unclear scope); never default routing. `/superpowers-gstack:office-hours-track-aware` still intercepts it |
-| `/plan-ceo-review` | User-started only — a strategy and scope review the user asks for; never default routing |
+| `/plan-ceo-review` | User-started only — a strategy and scope review the user asks for; never default routing; explains its recommendation by what the mode does that the next-closest mode wouldn't |
 | `/design-consultation` | New projects defining a design system from scratch (creates DESIGN.md in open format compatible with impeccable and Google Stitch) |
 | `/design-shotgun` | When you want multiple design variants to compare before committing |
 | `/plan-devex-review` | User-started only — a review of developer-facing surfaces (APIs, CLIs, SDKs, libraries) the user asks for; never default routing |
@@ -44,7 +44,7 @@ unless the user asks for it.
 | `/review` | Almost always — pre-merge code review; runs design detector scan first when frontend files are in scope |
 | `/qa <url>` | Projects with a browser-accessible UI (include the URL); drives Aside first, bundled Chromium as fallback. Each agent process gets its own tab automatically — use `--session <name>` or `BROWSE_SESSION=<name>` when subagents share one agent process |
 | `/qa-only <url>` | Same, but report-only (no auto-fixes) |
-| `/cso` | Projects handling auth, user data, payments, or external APIs. For security-critical features, run BEFORE `/review`. Daily reports omit candidates without demonstrated in-scope impact; comprehensive mode keeps them as labeled hypotheses |
+| `/cso` | Projects handling auth, user data, payments, or external APIs. For security-critical features, run BEFORE `/review`. Keeps the audit open after a refused submit; no longer aborts when a tracked secret-like file cannot be read |
 | `/design-review` | Projects with visual UI — runs 61 deterministic checks (impeccable engine, consent-gated) before the LLM pass; also scans the rendered DOM on a live URL |
 | `/design-html` | When you have an approved design and need production HTML/CSS; slop gate runs before screenshots |
 | `/devex-review` | Developer-facing projects — live audit of onboarding flow, docs, CLI help; drives Aside first |
@@ -54,14 +54,14 @@ unless the user asks for it.
 
 | Skill | Consider relevant when... |
 |---|---|
-| `/ship` | Projects using git with feature branches and PRs; design detector scan runs first when frontend files are in scope. A `train` block in `.gstack/ship-policy.json` enables merge-train mode for the queue |
+| `/ship` | Projects using git with feature branches and PRs; design detector scan runs first when frontend files are in scope. A base branch whose `review_exclude_paths` list exceeds policy limits falls back to reviewing every file (`review_exclude_fallback`) instead of refusing with `POLICY_INVALID`. A `train` block in `.gstack/ship-policy.json` enables merge-train mode for the queue |
 | `/land-and-deploy` | Projects with CI/CD deployment pipelines; post-deploy check drives Aside first |
 | `/canary` | Projects with production monitoring needs; drives Aside first, bundled Chromium as fallback |
 | `/landing-report` | Read-only PR queue + sibling-workspace dashboard (workspace-aware ship) |
 | `/setup-deploy` | One-time: configure deploy platform (Fly.io, Vercel, Render, etc.) for `/land-and-deploy` |
 | `/document-release` | Projects with documentation to maintain |
-| `/retro` | Team projects with regular sprint cadence |
-| `/learn` | Long-running projects (> 2 weeks) — saves cross-session learnings |
+| `/retro` | Team projects with regular sprint cadence; counts test runners with no test-style name and skips game-engine sidecar files |
+| `/learn` | Long-running projects (> 2 weeks) — saves cross-session learnings; prune now checks every learning, not just the first 100 |
 | `/setup-gbrain` | Long-running projects wanting cross-session memory (PGLite local or Supabase) |
 | `/sync-gbrain` | Long-running projects with gbrain — keeps the brain current with this repo's code and refreshes CLAUDE.md search guidance |
 | `/health` | Projects with existing linting, type checking, or test suites; scores disclose coverage (checked and unavailable categories); runs with no checks report N/A |
@@ -71,11 +71,11 @@ unless the user asks for it.
 
 | Skill | Consider relevant when... |
 |---|---|
-| `/careful` | Projects where destructive commands are risky (production DBs, shared infra) |
+| `/careful` | Projects where destructive commands are risky (production DBs, shared infra); catches more force-push and outside-delete patterns; quoting no longer changes the decision |
 | `/freeze` | Monorepos or projects where edits should be restricted TO a specific directory (allow-list, not block-list) |
 | `/unfreeze` | Clear the `/freeze` boundary mid-session without ending the session |
 | `/guard` | Production / shared-infra work — combines `/careful` warnings with `/freeze` directory lock |
-| `/browse` | Projects needing headless browser interaction beyond QA; drives Aside first, bundled Chromium as fallback. Each agent process gets its own tab automatically |
+| `/browse` | Projects needing headless browser interaction beyond QA; drives Aside first, bundled Chromium as fallback. Each agent process gets its own tab automatically; `--session <name>` flag works before the command name too |
 | `/scrape` | Projects pulling data from web pages — prototypes a flow once, codifies it via `/skillify`; drives Aside first |
 | `/skillify` | After a successful `/scrape` — persists the flow as a permanent browser-skill so future calls run in ~200ms |
 | `/open-gstack-browser` | Projects wanting a visible AI-controlled Chromium with live activity feed |
@@ -84,10 +84,11 @@ unless the user asks for it.
 | `/context-handoff` | Long implementation sessions, projects using SDD, or any multi-step workflow |
 | `/superpowers-gstack:htmlify` | `explain`: a visual explainer page after every spec and plan (local file, or an Artifact page per `.gstack/explainer`). Also offline HTML rendering of MD artefacts when the Artifact tool is unavailable. |
 | `/context-save` | Save progress and working state |
-| `/context-restore` | Resume where you left off |
+| `/context-restore` | Resume where you left off; finds Claude Code transcripts under `CLAUDE_CONFIG_DIR` when a second profile is in use |
 | `/benchmark` | Projects with performance monitoring needs; drives Aside first |
 | `/benchmark-models` | Projects comparing AI model performance |
-| `/codex` | Projects needing second opinions or adversarial code review; defaults to GPT-6 Astra (override with `GSTACK_CODEX_MODEL`) |
+| `/codex` | Projects needing second opinions or adversarial code review; defaults to GPT-6 Astra (override with `GSTACK_CODEX_MODEL`); reads the repository's own `agents/` folder as code |
+| `/build-check` | Run the checks and tests /ship picks until green (renamed from `/verify`; `disabled_skills: verify` in config is automatically read as `build-check` after upgrade) |
 | `/superpowers-gstack:autoimplement` | Multi-phase plans — one subagent per phase, `/review` + `/pitfall-verification` chained at every phase boundary (`/review` owns the Codex pass; pitfall adds domain inference and the third lens per tier). Active pre-flight reviews the plan body before Phase 1 unless the latest plan commit matches `^(chore\|fix)\(plan\):[[:space:]]*pre-flight([[:space:]]\|$)`. Refuses on <2 phases, missing per-phase commit steps, uncommitted files that overlap the plan's `Files:`, or plans touching migrations/secrets/credentials/.env/.ssh. |
 | `/superpowers-gstack:office-hours-track-aware` | User-started only — reached when the user types `/office-hours` (the intercept below); never default routing. Wraps `/office-hours` with track inference (web vs native), inline platform question, design-doc relocation, and an Artifact preview before the approval gate. **Intercepts `/office-hours`** — see routing-intercept rules below. |
 | `/superpowers-gstack:swiftui-design-consultation` | Native SwiftUI projects — produces DESIGN.md + Swift Package starter; equivalent to /design-consultation for web. Inlines the platform question (iOS/macOS/both) on first run if `.gstack/track` is missing. |

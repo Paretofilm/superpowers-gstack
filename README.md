@@ -300,7 +300,7 @@ Something went wrong?  → /superpowers:diagnosing-superpowers
 | `/design-html` | Finalize design as production HTML/CSS; slop gate runs before screenshots |
 | `/devex-review` | Live developer experience audit |
 | `/investigate` | Bug root cause (QA/production) |
-| `/ship` | Create PR and deploy; design pass runs mechanical scan first |
+| `/ship` | Create PR and deploy; design pass runs mechanical scan first; a base branch whose `review_exclude_paths` list exceeds policy limits no longer stops every /ship — it falls back to reviewing every file and records `review_exclude_fallback` |
 | `/land-and-deploy` | Merge and verify |
 | `/canary` | Post-deploy monitoring |
 | `/landing-report` | Read-only PR queue + sibling-workspace dashboard |
@@ -309,28 +309,29 @@ Something went wrong?  → /superpowers:diagnosing-superpowers
 | `/retro` | Sprint retrospective; harvests shortcut-debt markers |
 | `/health` | Code quality dashboard; scores disclose coverage (checked and unavailable categories); runs with no checks report N/A |
 | `/context-save` | Save progress, save state |
-| `/context-restore` | Resume where left off |
+| `/context-restore` | Resume where left off; finds Claude Code transcripts under `CLAUDE_CONFIG_DIR` when a second profile is in use |
 | `/context-handoff` | Write handoff to repo before /clear (cross-machine, no gstack required) |
-| `/careful` | Destructive command warnings |
+| `/careful` | Destructive command warnings; catches more force-push and delete patterns, and quoting no longer changes the decision |
 | `/freeze` | Restrict edits to one directory |
 | `/unfreeze` | Clear the freeze boundary mid-session |
 | `/guard` | Full safety: `/careful` + `/freeze` combined |
-| `/browse` | Headless browser (Aside first, bundled Chromium fallback); each agent gets its own tab automatically |
+| `/browse` | Headless browser (Aside first, bundled Chromium fallback); each agent gets its own tab automatically; `--session <name>` flag now works before the command name too |
 | `/open-gstack-browser` | Launch GStack Browser (Chromium + sidebar) |
 | `/pair-agent` | Pair a remote AI agent with your browser; a re-pair with the same `--client` and a narrower `--restrict` revokes the old session immediately |
 | `/setup-browser-cookies` | Import cookies for authenticated tests |
 | `/benchmark` | Performance regression detection |
 | `/benchmark-models` | Cross-model benchmark |
 | `/make-pdf` | Markdown to publication-quality PDFs |
-| `/learn` | Save cross-session learnings |
+| `/learn` | Save cross-session learnings; prune now checks every learning, not just the first 100 |
 | `/setup-gbrain` | Onboard cross-session memory (gbrain) |
+| `/build-check` | Run the checks and tests /ship picks until green (renamed from `/verify`; `disabled_skills: verify` in your config is automatically read as `build-check` after upgrade) |
 | `/codex` | OpenAI Codex CLI second opinion; defaults to GPT-6 Astra (override with `GSTACK_CODEX_MODEL`) |
 
 ### Superpowers Commands
 
 | Command | When to Use |
 |---------|------------|
-| `/superpowers:brainstorming` | Refining technical approach; digs for context before asking anything, plays back what it heard, asks about the one thing still open, and lays out approaches before writing a design doc |
+| `/superpowers:brainstorming` | Refining technical approach; digs for context before asking anything, plays back what it heard, asks about the one thing still open, and lays out approaches before writing a design doc; asks fewer questions, starts by asking why, and shows options with a recommendation when there's a choice to make |
 | `/superpowers:writing-plans` | Creating TDD task breakdown; saved plan shown for review before anything runs |
 | `/superpowers:subagent-driven-development` | Executing with subagents + TDD |
 | `/superpowers:executing-plans` | Inline execution (small projects); runs the whole plan, then one review at the end |
